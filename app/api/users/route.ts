@@ -4,6 +4,10 @@ import { auditHeaders } from '@/lib/ops/audit';
 import { forbidden, getSessionUser, hashPassword, normalizeEmail, passwordProblem, unauthorized } from '@/lib/auth/auth';
 import { ALL_VIEWS, isOwner, parseRole, type Role } from '@/lib/auth/access';
 import { POS } from '@/lib/shared/report-model';
+import { groupPosPeople, setOwnedTeams, teamChoices, type PosPersonRow } from '@/lib/teams/account-from-pos';
+import { MARKETING_TEAMS_KEY, parseMarketingTeams } from '@/lib/teams/marketing-teams';
+import { refreshTeamSource } from '@/lib/teams/team-source';
+import { WEB_TEAMS_BACKUP_KEY, WEB_TEAMS_KEY, parseWebTeams } from '@/lib/teams/web-teams';
 
 // Tài khoản & phân quyền: chỉ chủ hệ thống (owner) được xem danh sách, tạo, sửa quyền, khóa, đặt lại mật khẩu.
 type UserRow = { id: string; email: string; name: string; role: string; disabled: number; created_at: string; last_login_at: string | null; title: string; manager_id: string | null; views_json: string; pos_ids_json: string; team: string };
@@ -20,6 +24,27 @@ async function employeeLink(userId: string, value: unknown): Promise<D1PreparedS
   const other = await env.DB.prepare("SELECT key FROM app_settings WHERE key LIKE 'user_employee:%' AND value=? AND key<>? LIMIT 1").bind(value, `user_employee:${userId}`).first();
   if (other) return Response.json({ error: 'Hồ sơ đã nối tài khoản khác.' }, { status: 409 });
   return env.DB.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at').bind(`user_employee:${userId}`, value, new Date().toISOString());
+}
+
+const cleanTeamIds = (v: unknown) => Array.isArray(v) && v.length <= 200 ? [...new Set(v.filter((x): x is string => typeof x === 'string' && x.length <= 100))] : null;
+const putSetting = (key: string, value: string, now: string) => env.DB.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at').bind(key, value, now);
+
+/** Team tài khoản phụ trách (ô Mentor / Leader ở trang Chia team), lưu cùng lúc tạo / sửa tài khoản (anh Vũ 03/11/2026). Không đổi gì thì trả []. */
+async function ownedTeamWrites(userId: string, role: string, value: unknown): Promise<D1PreparedStatement[] | Response> {
+  if (value === undefined) return [];
+  const teamIds = cleanTeamIds(value);
+  if (!teamIds) return Response.json({ error: 'Danh sách team không hợp lệ.' }, { status: 400 });
+  const rows = await env.DB.prepare('SELECT key,value FROM app_settings WHERE key IN (?,?)').bind(WEB_TEAMS_KEY, MARKETING_TEAMS_KEY).all<{ key: string; value: string }>();
+  const saved = new Map(rows.results.map((r) => [r.key, r.value]));
+  const web = setOwnedTeams(parseWebTeams(saved.get(WEB_TEAMS_KEY)), userId, role, teamIds);
+  const mkt = setOwnedTeams(parseMarketingTeams(saved.get(MARKETING_TEAMS_KEY)), userId, role, teamIds);
+  if (!web.changed && !mkt.changed) return [];
+  const now = new Date().toISOString();
+  return [
+    putSetting(WEB_TEAMS_BACKUP_KEY, JSON.stringify({ savedAt: now, teams: saved.get(WEB_TEAMS_KEY) ?? null, mkt: saved.get(MARKETING_TEAMS_KEY) ?? null }), now),
+    ...(web.changed ? [putSetting(WEB_TEAMS_KEY, JSON.stringify(web.teams), now)] : []),
+    ...(mkt.changed ? [putSetting(MARKETING_TEAMS_KEY, JSON.stringify(mkt.teams), now)] : []),
+  ];
 }
 
 const parseList = (v: string) => { try { const a = JSON.parse(v || '[]'); return Array.isArray(a) ? a.map(String) : []; } catch { return []; } };
@@ -46,6 +71,15 @@ export async function GET(request: Request) {
     const employees = await env.DB.prepare("SELECT id,code,full_name AS name FROM hr_employees WHERE status<>'da_nghi' ORDER BY full_name").all();
     return Response.json(employees.results, { headers: { 'Cache-Control': 'no-store' } });
   }
+  // Ô "Chọn người trên POS" và "Team người này quản lý" ở form Thêm tài khoản (03/11/2026).
+  if (new URL(request.url).searchParams.get('pos-people') === '1') {
+    const [people, settings] = await env.DB.batch([
+      env.DB.prepare("SELECT u.user_id,MAX(u.name) AS name,u.pos_id,MAX(COALESCE(u.department,'')) AS department,(SELECT t.employee_id FROM hr_pos_team t WHERE t.pos_user_id=u.user_id LIMIT 1) AS employee_id FROM pos_users u WHERE u.user_id<>'' AND u.name<>'' AND u.is_active=1 GROUP BY u.user_id,u.pos_id"),
+      env.DB.prepare('SELECT key,value FROM app_settings WHERE key IN (?,?)').bind(WEB_TEAMS_KEY, MARKETING_TEAMS_KEY),
+    ]);
+    const saved = new Map((settings.results as { key: string; value: string }[]).map((r) => [r.key, r.value]));
+    return Response.json({ people: groupPosPeople(people.results as PosPersonRow[]), teams: teamChoices(parseWebTeams(saved.get(WEB_TEAMS_KEY)), parseMarketingTeams(saved.get(MARKETING_TEAMS_KEY))) }, { headers: { 'Cache-Control': 'no-store' } });
+  }
   const links = await env.DB.prepare("SELECT u.id,COALESCE((SELECT e.id FROM hr_employees e WHERE e.main_user_id=u.id LIMIT 1),(SELECT value FROM app_settings WHERE key='user_employee:'||u.id)) AS employeeId FROM users u").all<{ id: string; employeeId: string | null }>();
   const rows = await env.DB.prepare('SELECT id,email,name,role,disabled,created_at,last_login_at,title,manager_id,views_json,pos_ids_json,team FROM users ORDER BY created_at').all<UserRow>();
   const primary = await primaryOwnerId();
@@ -55,7 +89,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const { error, user: actor } = await requireOwner();
   if (error) return error;
-  let body: { email?: unknown; name?: unknown; password?: unknown; role?: unknown; title?: unknown; managerId?: unknown; views?: unknown; posIds?: unknown; team?: unknown; employeeId?: unknown };
+  let body: { email?: unknown; name?: unknown; password?: unknown; role?: unknown; title?: unknown; managerId?: unknown; views?: unknown; posIds?: unknown; team?: unknown; employeeId?: unknown; manageTeams?: unknown };
   try { body = await request.json(); } catch { return Response.json({ error: 'JSON không hợp lệ.' }, { status: 400 }); }
   const email = normalizeEmail(body.email);
   const name = typeof body.name === 'string' ? body.name.trim().slice(0, 100) : '';
@@ -72,16 +106,19 @@ export async function POST(request: Request) {
   const id = crypto.randomUUID();
   const link = await employeeLink(id, body.employeeId);
   if (link instanceof Response) return link;
+  const owned = await ownedTeamWrites(id, role, body.manageTeams);
+  if (owned instanceof Response) return owned;
   await env.DB.batch([env.DB.prepare('INSERT INTO users (id,email,name,password_hash,role,disabled,created_at,updated_at,title,manager_id,views_json,pos_ids_json,team) VALUES (?,?,?,?,?,0,?,?,?,?,?,?,?)')
     .bind(id, email, name, await hashPassword(body.password), role, now, now, typeof body.title === 'string' ? body.title.trim().slice(0, 80) : '', typeof body.managerId === 'string' && body.managerId ? body.managerId : null,
-      JSON.stringify(cleanViews(body.views) ?? []), JSON.stringify(cleanPos(body.posIds) ?? []), cleanTeam(body.team) ?? 'all'), ...(link ? [link] : [])]);
+      JSON.stringify(cleanViews(body.views) ?? []), JSON.stringify(cleanPos(body.posIds) ?? []), cleanTeam(body.team) ?? 'all'), ...(link ? [link] : []), ...owned]);
+  if (owned.length) await refreshTeamSource(true);
   return Response.json({ ok: true, id }, { headers: auditHeaders(`Tạo ${email} (${name}) · vai trò ${role}`) });
 }
 
 export async function PUT(request: Request) {
   const { error, user: owner } = await requireOwner();
   if (error) return error;
-  let body: { id?: unknown; name?: unknown; role?: unknown; disabled?: unknown; password?: unknown; title?: unknown; managerId?: unknown; views?: unknown; posIds?: unknown; team?: unknown; employeeId?: unknown };
+  let body: { id?: unknown; name?: unknown; role?: unknown; disabled?: unknown; password?: unknown; title?: unknown; managerId?: unknown; views?: unknown; posIds?: unknown; team?: unknown; employeeId?: unknown; manageTeams?: unknown };
   try { body = await request.json(); } catch { return Response.json({ error: 'JSON không hợp lệ.' }, { status: 400 }); }
   const id = typeof body.id === 'string' ? body.id : '';
   const target = await env.DB.prepare('SELECT id,role,email FROM users WHERE id=?').bind(id).first<{ id: string; role: string; email: string }>();
@@ -94,6 +131,8 @@ export async function PUT(request: Request) {
   if (cleanRole(body.role) === 'owner' && !targetIsOwner && !isPrimary) return Response.json({ error: 'Chỉ chủ hệ thống gốc mới cấp được quyền chủ hệ thống.' }, { status: 403 });
   const link = await employeeLink(id, body.employeeId);
   if (link instanceof Response) return link;
+  const owned = canManage ? await ownedTeamWrites(id, cleanRole(body.role) ?? parseRole(target.role), body.manageTeams) : [];
+  if (owned instanceof Response) return owned;
   const sets: string[] = []; const values: (string | number | null)[] = [];
   if (typeof body.name === 'string' && body.name.trim()) { sets.push('name=?'); values.push(body.name.trim().slice(0, 100)); }
   if (typeof body.title === 'string') { sets.push('title=?'); values.push(body.title.trim().slice(0, 80)); }
@@ -110,14 +149,15 @@ export async function PUT(request: Request) {
     if (problem || typeof body.password !== 'string') return Response.json({ error: problem ?? 'Mật khẩu không hợp lệ.' }, { status: 400 });
     sets.push('password_hash=?'); values.push(await hashPassword(body.password));
   }
-  if (!sets.length && !link) return Response.json({ error: 'Không có gì để cập nhật.' }, { status: 400 });
+  if (!sets.length && !link && !owned.length) return Response.json({ error: 'Không có gì để cập nhật.' }, { status: 400 });
   sets.push('updated_at=?'); values.push(new Date().toISOString());
-  const statements = [env.DB.prepare(`UPDATE users SET ${sets.join(',')} WHERE id=?`).bind(...values, id), ...(link ? [link] : [])];
+  const statements = [env.DB.prepare(`UPDATE users SET ${sets.join(',')} WHERE id=?`).bind(...values, id), ...(link ? [link] : []), ...owned];
   // Đổi quyền / khóa / đổi mật khẩu → đăng xuất mọi phiên của người đó để quyền mới có hiệu lực ngay.
   if (canManage && (body.disabled === true || body.password !== undefined || body.views !== undefined || body.posIds !== undefined || body.team !== undefined || body.role !== undefined || body.employeeId !== undefined))
     statements.push(env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(id));
   await env.DB.batch(statements);
-  const changed = sets.filter((x) => x !== 'updated_at=?').map((x) => x.split('=')[0]).map((k) => ({ name: 'tên', title: 'chức danh', manager_id: 'quản lý', role: 'vai trò', views_json: 'trang', pos_ids_json: 'POS', team: 'nhóm', disabled: body.disabled ? 'khóa' : 'mở khóa', password_hash: 'mật khẩu' }[k] ?? k));
+  if (owned.length) await refreshTeamSource(true);
+  const changed = sets.filter((x) => x !== 'updated_at=?').map((x) => x.split('=')[0]).map((k) => ({ name: 'tên', title: 'chức danh', manager_id: 'quản lý', role: 'vai trò', views_json: 'trang', pos_ids_json: 'POS', team: 'nhóm', disabled: body.disabled ? 'khóa' : 'mở khóa', password_hash: 'mật khẩu' }[k] ?? k)).concat(owned.length ? ['team phụ trách'] : []);
   return Response.json({ ok: true }, { headers: auditHeaders(`${target.email}: ${changed.join(', ')}`) });
 }
 

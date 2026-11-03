@@ -10,11 +10,12 @@ import { ALL_VIEWS, ROLE_LABELS, VIEW_LABELS, isOwner, type Role } from '@/lib/a
 import { LEVEL_DEPTS, LEVEL_LABELS, levelsFromViews, teamForLevels, viewsForLevels, type AccessLevel, type DeptKey, type DeptLevels } from '@/lib/auth/access-levels';
 import { POS } from '@/lib/shared/report-model';
 import { TEAM_LABELS, type Team } from '@/lib/teams/team';
+import { ownerField, teamsOwnedBy, teamsWithPerson, type PosPerson, type TeamChoice } from '@/lib/teams/account-from-pos';
 import type { SessionUser } from '@/lib/auth/auth';
 import { StatusChip, TableWrap, dt, scrollToEl, toast } from './ui-kit';
 
 type User = { employeeId: string | null; id: string; email: string; name: string; role: Role; primary?: boolean; disabled: boolean; createdAt: string; lastLoginAt: string | null; title: string; managerId: string | null; views: string[]; posIds: string[]; team: Team };
-type Draft = { employeeId: string; email: string; name: string; password: string; role: Role; title: string; managerId: string; views: string[]; posIds: string[]; team: Team };
+type Draft = { posUserId: string; manageTeams: string[]; employeeId: string; email: string; name: string; password: string; role: Role; title: string; managerId: string; views: string[]; posIds: string[]; team: Team };
 type SurfaceComponent = React.ComponentType<{ title: string; description?: string; children: React.ReactNode; action?: React.ReactNode }>;
 
 const VIEW_GROUPS: [string, string[]][] = [
@@ -35,7 +36,7 @@ const PRESETS: Record<Role, string[]> = {
 const listedViews = new Set(VIEW_GROUPS.flatMap(([, ids]) => ids));
 VIEW_GROUPS.push(['Trang khác', ALL_VIEWS.filter((id) => !listedViews.has(id))]);
 const ROLE_TONE: Record<Role, 'green' | 'blue' | 'purple' | 'gray'> = { owner: 'green', director: 'purple', lead: 'blue', mentor: 'blue', staff: 'gray' };
-const emptyDraft = (): Draft => ({ employeeId: '', email: '', name: '', password: '', role: 'staff', title: '', managerId: '', views: PRESETS.staff, posIds: [], team: 'all' });
+const emptyDraft = (): Draft => ({ posUserId: '', manageTeams: [], employeeId: '', email: '', name: '', password: '', role: 'staff', title: '', managerId: '', views: PRESETS.staff, posIds: [], team: 'all' });
 const CHECK = 'size-3.5 shrink-0 cursor-pointer rounded-[4px] border-line-2 accent-primary';
 const FIELD_LABEL = 'mb-1 block text-xs font-semibold text-ink-2';
 
@@ -43,6 +44,8 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
   const owner = isOwner(currentUser);
   const [employees, setEmployees] = useState<{ id: string; code: string; name: string }[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  // Người trên POS và team đã chia, cho ô "Chọn người trên POS" và "Team người này quản lý" (03/11/2026).
+  const [posData, setPosData] = useState<{ people: PosPerson[]; teams: TeamChoice[] } | null>(null);
   const [draft, setDraft] = useState<Draft>(emptyDraft());
   const [levels, setLevels] = useState<DeptLevels>(() => levelsFromViews(PRESETS.staff, 'all'));
   const [editing, setEditing] = useState<string | null>(null); // id đang sửa; null = form tạo mới
@@ -58,6 +61,8 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
         setUsers(await response.json() as User[]);
         const profiles = await fetch('/api/users?employees=1', { cache: 'no-store' });
         if (profiles.ok) setEmployees(await profiles.json() as typeof employees);
+        const pos = await fetch('/api/users?pos-people=1', { cache: 'no-store' });
+        if (pos.ok) setPosData(await pos.json() as { people: PosPerson[]; teams: TeamChoice[] });
       }
       else toast('Không tải được danh sách tài khoản.', { kind: 'error' });
     } catch { toast('Không tải được danh sách tài khoản.', { kind: 'error' }); }
@@ -75,13 +80,13 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
     } catch (e) { toast(e instanceof Error ? e.message : 'Không gửi được yêu cầu.', { kind: 'error' }); return false; }
     finally { setBusy(false); }
   };
-  const startEdit = (u: User) => { setLevels(levelsFromViews(u.views, u.team)); setEditing(u.id); setDraft({ employeeId: u.employeeId ?? '', email: u.email, name: u.name, password: '', role: u.role, title: u.title, managerId: u.managerId ?? '', views: u.views, posIds: u.posIds, team: u.team }); scrollToEl(document.getElementById('user-form'), { block: 'start' }); };
+  const startEdit = (u: User) => { setLevels(levelsFromViews(u.views, u.team)); setEditing(u.id); setDraft({ posUserId: '', manageTeams: teamsOwnedBy(posData?.teams ?? [], u.id), employeeId: u.employeeId ?? '', email: u.email, name: u.name, password: '', role: u.role, title: u.title, managerId: u.managerId ?? '', views: u.views, posIds: u.posIds, team: u.team }); scrollToEl(document.getElementById('user-form'), { block: 'start' }); };
   const cancelEdit = () => { setLevels(levelsFromViews(PRESETS.staff, 'all')); setEditing(null); setDraft(emptyDraft()); };
   const save = async () => {
     const before = editing ? users.find((u) => u.id === editing)?.role : undefined;
     if (draft.role === 'owner' && before !== 'owner' && !window.confirm(`Cấp quyền CHỦ HỆ THỐNG cho ${draft.name || draft.email}? Người này xem và sửa được mọi thứ (mục tiêu, cấu hình, tài khoản…), trừ tài khoản chủ hệ thống của bạn. Chỉ bạn bỏ được quyền này.`)) return;
     if (before === 'owner' && draft.role !== 'owner' && !window.confirm(`Bỏ quyền chủ hệ thống của ${draft.name || draft.email}? Người này sẽ bị đăng xuất.`)) return;
-    const payload = { employeeId: draft.employeeId, name: draft.name, role: draft.role, title: draft.title, managerId: draft.managerId, views: draft.views, posIds: draft.posIds, team: draft.team };
+    const payload = { employeeId: draft.employeeId, name: draft.name, role: draft.role, title: draft.title, managerId: draft.managerId, views: draft.views, posIds: draft.posIds, team: draft.team, ...(posData ? { manageTeams: ownerField(draft.role) ? draft.manageTeams : [] } : {}) };
     const ok = editing
       ? await call('PUT', { id: editing, ...payload, ...(draft.password ? { password: draft.password } : {}) }, '', `Đã lưu tài khoản ${draft.name || draft.email}.`)
       : await call('POST', { ...payload, email: draft.email, password: draft.password }, '', `Đã tạo tài khoản ${draft.email}.`);
@@ -103,6 +108,14 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
     const governed = new Set(LEVEL_DEPTS.flatMap((dept) => dept.sections.flatMap((section) => section.tabs.map(([id]) => id))));
     setLevels(next);
     setDraft({ ...draft, views: [...new Set([...draft.views.filter((id) => !governed.has(id)), ...viewsForLevels(next)])], team: teamForLevels(next, draft.team) });
+  };
+  /** Chọn người POS: điền tên, POS họ làm, hồ sơ; tích sẵn team có tên họ. Bỏ chọn thì giữ nguyên những gì đã điền. */
+  const pickPosPerson = (id: string) => {
+    const person = posData?.people.find((p) => p.id === id);
+    if (!person) { setDraft({ ...draft, posUserId: '' }); return; }
+    setDraft({ ...draft, posUserId: id, name: person.name, posIds: person.posIds.filter((pid) => POS.some((p) => p.id === pid)),
+      employeeId: person.employeeId && employees.some((e) => e.id === person.employeeId) ? person.employeeId : draft.employeeId,
+      manageTeams: [...new Set([...draft.manageTeams, ...teamsWithPerson(posData?.teams ?? [], id)])] });
   };
   const changeViews = (views: string[]) => { setDraft({ ...draft, views }); setLevels(levelsFromViews(views, draft.team)); };
   const managers = useMemo(() => users.filter((u) => u.role !== 'staff' && u.id !== editing), [users, editing]);
@@ -128,6 +141,15 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
               <h3 className="flex min-w-0 items-center gap-1.5 text-[13px] font-semibold text-ink">{editing ? <Pencil size={14} className="text-ink-3" /> : <UserPlus size={14} className="text-ink-3" />}<span className="truncate">{editing ? `Sửa tài khoản · ${draft.email}` : 'Thêm tài khoản'}</span></h3>
               {editing && <Button type="button" size="sm" variant="ghost" onClick={cancelEdit}><X size={13} />Hủy sửa</Button>}
             </div>
+            {!editing && posData && (
+              <label className="block"><span className={FIELD_LABEL}>Chọn người trên POS <span className="font-normal text-ink-3">(không bắt buộc, giám đốc bỏ trống)</span></span>
+                <select className="block w-full rounded-md border border-line bg-surface p-2 text-[13px]" value={draft.posUserId} onChange={(e) => pickPosPerson(e.target.value)}>
+                  <option value="">Không chọn</option>
+                  {posData.people.map((p) => <option key={p.id} value={p.id}>{p.name} · {p.posIds.map((id) => POS.find((x) => x.id === id)?.name ?? id).join(', ')}</option>)}
+                </select>
+                {draft.posUserId && <span className="mt-1 block text-xs text-ink-3">Đã điền tên, POS được xem và hồ sơ theo người này; team có tên họ được tích sẵn ở ô Team quản lý.</span>}
+              </label>
+            )}
             <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
               <label className="block"><span className={FIELD_LABEL}>Tên hiển thị</span><Input placeholder="VD: Nguyễn Văn A" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} required /></label>
               {!editing && <label className="block"><span className={FIELD_LABEL}>Email</span><Input type="email" placeholder="Còn dùng được, để nhận mã xác minh" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} required /></label>}
@@ -148,6 +170,26 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
                 </Select>
               </div>
             </div>
+            {!editingOwner && posData && ownerField(draft.role) && (
+              <fieldset>
+                <legend className="mb-1.5 text-xs font-semibold text-ink-2">Team người này quản lý <span className="font-normal text-ink-3">({draft.role === 'mentor' ? 'vào ô Mentor' : 'vào ô Leader'} ở trang Chia team)</span></legend>
+                {posData.teams.length ? (
+                  <div className="grid grid-cols-1 gap-x-3 gap-y-0.5 rounded-lg bg-surface-2 p-2.5 sm:grid-cols-2">
+                    {posData.teams.map((t) => {
+                      const field = ownerField(draft.role)!, other = t[field] && t[field] !== editing ? nameOf(t[field]) : '';
+                      return (
+                        <label key={t.id} className="flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 text-[13px] transition-colors duration-[var(--dur)] hover:bg-surface-3">
+                          <input type="checkbox" className={CHECK} checked={draft.manageTeams.includes(t.id)} onChange={() => setDraft({ ...draft, manageTeams: toggle(draft.manageTeams, t.id) })} />
+                          <span className="min-w-0 truncate">{t.name}</span>
+                          <span className="shrink-0 text-xs text-ink-3">{t.dept === 'mkt' ? 'MKT' : t.dept === 'sale' ? 'Sale' : 'CSKH'} · {t.size} người{other ? ` · đang: ${other}` : ''}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : <p className="text-xs text-ink-3">Chưa chia team. Chia ở Cài đặt → Team &amp; tài khoản → Chia team rồi quay lại tích.</p>}
+                <p className="mt-1 text-xs text-ink-3">Lưu thì tài khoản chỉ xem người trong các team đã tích. Team đang có người phụ trách khác sẽ đổi sang tài khoản này.</p>
+              </fieldset>
+            )}
             {!editingOwner && (
               <>
                 <fieldset>
