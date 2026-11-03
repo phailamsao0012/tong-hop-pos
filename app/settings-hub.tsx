@@ -40,12 +40,10 @@ export function SettingsHub({ onOpen, pills }: { onOpen: (s: SettingsSection) =>
   const groups = hits ? [[`${hits.length} mục khớp`, hits] as const] : (['Công ty', 'Của tôi'] as const).map((g) => [g, SECTIONS.filter((s) => s.group === g)] as const);
   return (
     <div className="space-y-5">
-      <div className="relative overflow-hidden rounded-2xl bg-sb p-3 text-sb-ink">
-        <div aria-hidden="true" className="pointer-events-none absolute -right-16 -top-24 size-56 rounded-full bg-[radial-gradient(circle,rgba(217,243,109,.22),transparent_65%)]" />
-        <div className="relative flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3 focus-within:border-lime">
-          <Search size={17} className="shrink-0 text-sb-ink-2" />
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm cài đặt: telegram, mentor, sao lưu…" aria-label="Tìm cài đặt" className="h-10 border-0 bg-transparent px-0 text-[15px] text-sb-ink shadow-none placeholder:text-sb-ink-2 focus-visible:ring-0" />
-        </div>
+      {/* Ô tìm dùng nền thẻ như các mục bên dưới (anh Vũ 03/11/2026: khung xanh đậm không đồng bộ màu). */}
+      <div className="card flex items-center gap-2 px-3 focus-within:border-primary">
+        <Search size={17} className="shrink-0 text-ink-3" />
+        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm cài đặt: telegram, mentor, sao lưu…" aria-label="Tìm cài đặt" className="h-11 border-0 bg-transparent px-0 text-[15px] text-ink shadow-none placeholder:text-ink-3 focus-visible:ring-0" />
       </div>
       {groups.map(([title, list]) => (
         <section key={title}>

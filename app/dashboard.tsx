@@ -163,6 +163,7 @@ const MarketingView = lazy(() => import('./marketing-view').then((m) => ({ defau
 const HrSyncPanel = lazy(() => import('./hr-sync-panel').then((m) => ({ default: m.HrSyncPanel })));
 const MarketingTeamsPanel = lazy(() => import('./marketing-teams-panel').then((m) => ({ default: m.MarketingTeamsPanel })));
 const TeamSheetPanel = lazy(() => import('./team-sheet-panel').then((m) => ({ default: m.TeamSheetPanel })));
+const PermissionTreePanel = lazy(() => import('./permission-tree-panel').then((m) => ({ default: m.PermissionTreePanel })));
 const AiAskView = lazy(() => import('./ai-ask-view').then((m) => ({ default: m.AiAskView })));
 const DispatchView = lazy(() => import('./dispatch-view').then((m) => ({ default: m.DispatchView })));
 const AuditView = lazy(() => import('./audit-view').then((m) => ({ default: m.AuditView })));
@@ -1727,7 +1728,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {!gated && view === 'config' && isOwner(user) && cfgSection !== null && (
             <div className="space-y-5">
               <SettingsSectionHeader section={cfgSection} onBack={() => setCfgSection(null)} pill={pills[cfgSection]} />
-              {cfgSection === 'team' && <><TeamSheetPanel /><MarketingTeamsPanel /><UsersPanel currentUser={user} Surface={Surface} /><HrSyncPanel /></>}
+              {cfgSection === 'team' && <><TeamSheetPanel /><PermissionTreePanel /><MarketingTeamsPanel /><UsersPanel currentUser={user} Surface={Surface} /><HrSyncPanel /></>}
               {cfgSection === 'kpi' && <><TargetsPanel canEdit={isOwner(user)} /><MetricChangesCard /></>}
           {cfgSection === 'data' && (<Surface
             title="Kết nối 6 POS"

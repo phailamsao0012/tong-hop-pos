@@ -160,10 +160,10 @@ export function buildMorningReport(d: MorningData) {
 export type MorningReport = ReturnType<typeof buildMorningReport>;
 
 const arrow = (v: number | null) => (v === null ? '' : v >= 0 ? '▲' : '▼');
-/** "▲ 12%" / "▼ 4%" / "= 0%" / "chưa có số so". */
+/** "▲ 12%" / "▼ 4%" / "= 0%" / "chưa có số" (câu sau đã có chữ "so"). */
 export const morningDeltaLabel = (v: number | null) =>
   v === null
-    ? 'chưa có số so'
+    ? 'chưa có số'
     : Math.round(v) === 0
       ? '= 0%'
       : `${arrow(v)} ${Math.abs(Math.round(v))}%`;

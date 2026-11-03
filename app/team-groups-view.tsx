@@ -22,6 +22,7 @@ import { useApi } from './use-api';
 import { unitFor, useHrUnit } from './team-store';
 import { StaleChip } from './stale-chip';
 import { daysInMonth, fetchTargets, parseMoney, type TargetItem } from './targets-panel';
+import { officeLabel, officeList } from '@/lib/teams/web-teams';
 import {
   ChartCard, EmptyState, ErrorBox, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, delta, dmy, pct, shortMoney, toast, useSort, vi,
 } from './ui-kit';
@@ -131,14 +132,14 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
   const inPos = usePosStaffFilter();
   const allRows = useMemo(() => teamsApi.data && report ? buildRows(teamsApi.data.teams, report.current.byEmployee, report.compare?.byEmployee ?? null, careApi.data?.staff ?? null, inPos) : null, [teamsApi.data, report, careApi.data, inPos]);
   // Chi nhánh = văn phòng của team bên web nhân sự (Hà Nội, Thái Nguyên…). Lọc một chi nhánh thì ẩn "Chưa vào team" / "Chưa gắn hồ sơ".
-  const offices = useMemo(() => [...new Set((allRows ?? []).map((r) => r.office).filter((o): o is string => !!o))].sort((a, b) => a.localeCompare(b, 'vi')), [allRows]);
+  const offices = useMemo(() => [...new Set((allRows ?? []).flatMap((r) => officeList(r.office)))].sort((a, b) => a.localeCompare(b, 'vi')), [allRows]);
   const [branch, setBranch] = useState<string>(ALL);
   const curBranch = branch === ALL || offices.includes(branch) ? branch : ALL;
   // Đang chọn một team (thanh trên cùng): chỉ hiện team đó, mở sẵn từng người.
   const unit = unitFor(useHrUnit(), team);
-  const rows = useMemo(() => allRows && (unit ? allRows.filter((r) => unitIds(unit.id).includes(r.id)) : curBranch === ALL ? allRows : allRows.filter((r) => r.office === curBranch)), [allRows, curBranch, unit]);
+  const rows = useMemo(() => allRows && (unit ? allRows.filter((r) => unitIds(unit.id).includes(r.id)) : curBranch === ALL ? allRows : allRows.filter((r) => officeList(r.office).includes(curBranch))), [allRows, curBranch, unit]);
   const branches = useMemo(() => offices.map((o) => {
-    const list = (allRows ?? []).filter((r) => r.office === o);
+    const list = (allRows ?? []).filter((r) => officeList(r.office).includes(o));
     const s = list.reduce((x, r) => { x.revenue += r.cur.revenue; x.closed += r.cur.closed; x.prev += r.prev?.revenue ?? 0; x.people += r.people.filter((p) => p.active).length; x.selling += r.selling; addCare(x.care, { id: '', assigned: r.care.assigned, neverNoted: r.care.need, over20: 0, notedToday: r.care.notedToday, ownNet: r.care.ownNet, ownOrders: r.care.ownOrders }); return x; },
       { revenue: 0, closed: 0, prev: 0, people: 0, selling: 0, care: noCare() });
     return { office: o, teams: list.length, ...s };
@@ -258,7 +259,7 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
                                 {isOpen ? <ChevronDown size={15} className="mt-0.5 shrink-0" /> : <ChevronRight size={15} className="mt-0.5 shrink-0" />}
                                 <span className="min-w-0">
                                   <b className={`block font-semibold ${r.id === 'none' || r.id === UNLINKED ? 'text-bad' : ''}`}>{r.name}</b>
-                                  <span className="block text-[11px] text-ink-3">{[r.office, r.mentor ? `Mentor ${r.mentor}` : null, r.leader ? `Leader ${r.leader}` : null, r.head ? `TP ${r.head}` : null].filter(Boolean).join(' · ') || (r.id === 'none' ? 'Đang nằm thẳng ở phòng, chưa xếp team' : r.id === UNLINKED ? 'Tài khoản POS chưa gắn với hồ sơ bên web nhân sự' : '—')}</span>
+                                  <span className="block text-[11px] text-ink-3">{[officeLabel(r.office) || null, r.mentor ? `Mentor ${r.mentor}` : null, r.leader ? `Leader ${r.leader}` : null, r.head ? `TP ${r.head}` : null].filter(Boolean).join(' · ') || (r.id === 'none' ? 'Đang nằm thẳng ở phòng, chưa xếp team' : r.id === UNLINKED ? 'Tài khoản POS chưa gắn với hồ sơ bên web nhân sự' : '—')}</span>
                                 </span>
                               </span>
                             </td>

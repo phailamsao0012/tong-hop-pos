@@ -3,17 +3,18 @@
 // Chia team ngay trên web tổng (anh Vũ 21/10/2026: "không dùng theo crm nữa"): dán bảng chia team chép từ Google Sheet, web đọc team,
 // bộ phận, chi nhánh và khớp tên với nhân viên Pancake; anh xem lại, sửa chỗ chưa khớp rồi Lưu. Đọc bảng ở lib/team-sheet.ts.
 import { useEffect, useMemo, useState } from 'react';
-import { ClipboardPaste, Plus, Save, Trash2, UsersRound, X } from 'lucide-react';
+import { ClipboardPaste, MessageCircle, Plus, Save, Trash2, UsersRound, X } from 'lucide-react';
 import { matchStaff, parseTeamSheet, type SheetDept, type StaffPerson } from '@/lib/teams/team-sheet';
-import type { WebTeam } from '@/lib/teams/web-teams';
+import { officeList, toggleOffice, type WebTeam } from '@/lib/teams/web-teams';
 import type { MarketingTeam } from '@/lib/teams/marketing-teams';
+import type { TeamZaloState } from '@/lib/zalo/team-link';
 import { ChartCard, ErrorBox, toast } from './ui-kit';
 
 type Dept = SheetDept | 'skip';
 type Member = { name: string; ids: string[] };
 type Draft = { key: string; id: string | null; name: string; dept: Dept; office: string | null; members: Member[]; mentorUserId?: string | null; leaderUserId?: string | null };
 type Account = { id: string; name: string; role: 'mentor' | 'lead' };
-type Data = { source: 'hr' | 'web'; teams: WebTeam[]; mkt: MarketingTeam[]; people: StaffPerson[]; accounts?: Account[] };
+type Data = { source: 'hr' | 'web'; teams: WebTeam[]; mkt: MarketingTeam[]; people: StaffPerson[]; accounts?: Account[]; zalo?: TeamZaloState[] };
 
 const DEPTS: [Dept, string][] = [['sale', 'Sale'], ['cskh', 'CSKH'], ['mkt', 'MKT'], ['skip', 'Bỏ qua']];
 const OFFICES = ['Hà Nội', 'Thái Nguyên'];
@@ -48,6 +49,8 @@ export function TeamSheetPanel() {
   const [draft, setDraft] = useState<Draft[]>([]);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Mã nối Zalo vừa cấp, theo tài khoản (03/11/2026).
+  const [zaloCode, setZaloCode] = useState<Record<string, string>>({});
   const nameOf = useMemo(() => new Map((data?.people ?? []).map((p) => [p.id, p.name])), [data]);
   const demo = typeof location !== 'undefined' && (location.hostname.startsWith('demo.') || location.hostname === 'localhost');
 
@@ -84,6 +87,17 @@ export function TeamSheetPanel() {
   const missing = kept.reduce((n, t) => n + t.members.filter((m) => !m.ids.length).length, 0);
   const placed = kept.reduce((n, t) => n + t.members.filter((m) => m.ids.length).length, 0);
 
+  const zaloOf = (userId: string) => data?.zalo?.find((z) => z.userId === userId);
+  async function linkZalo(teamId: string, userId: string) {
+    try {
+      const r = await fetch('/api/web-teams/zalo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ teamId, userId }) });
+      const body = await r.json() as { linked?: boolean; code?: string; teamName?: string; error?: string };
+      if (!r.ok) { toast(body.error ?? 'Không gắn được Zalo.', { kind: 'error' }); return; }
+      if (body.linked) { toast('Người này đã nối Zalo rồi.'); return; }
+      if (body.code) setZaloCode((c) => ({ ...c, [userId]: body.code! }));
+      setData((d) => d && ({ ...d, zalo: [...(d.zalo ?? []).filter((z) => z.userId !== userId), { userId, linked: false, teamName: body.teamName ?? '' }] }));
+    } catch { toast('Không gắn được Zalo.', { kind: 'error' }); }
+  }
   async function save() {
     // Một người chỉ thuộc một team MKT: gặp lần sau thì bỏ.
     const mktSeen = new Set<string>();
@@ -107,7 +121,16 @@ export function TeamSheetPanel() {
     } finally { setSaving(false); }
   }
 
-  const peopleFor = (dept: Dept) => (data?.people ?? []).filter((p) => dept === 'skip' || new RegExp(dept === 'mkt' ? 'mkt|marketing' : dept === 'cskh' ? 'cskh|chăm sóc' : 'sale|bán hàng', 'iu').test(`${p.name} ${p.department ?? ''}`));
+  const fits = (dept: Dept, p: { name: string; department: string | null }) => dept === 'skip' || new RegExp(dept === 'mkt' ? 'mkt|marketing' : dept === 'cskh' ? 'cskh|chăm sóc' : 'sale|bán hàng', 'iu').test(`${p.name} ${p.department ?? ''}`);
+  const peopleFor = (dept: Dept) => (data?.people ?? []).filter((p) => fits(dept, p));
+  // Lead, mentor thường không có hậu tố bộ phận: vẫn chọn được ở nhóm "Người khác" và được tính doanh số khi đã vào team (03/11/2026).
+  const peopleOptions = (dept: Dept) => {
+    const others = dept === 'skip' ? [] : (data?.people ?? []).filter((p) => !fits(dept, p));
+    return <>
+      {peopleFor(dept).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+      {others.length > 0 && <optgroup label="Người khác (lead, mentor…)">{others.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>}
+    </>;
+  };
 
   return (
     <ChartCard icon={UsersRound} title="Chia team" subtitle={data?.source === 'hr' ? 'Đang lấy team từ web nhân sự. Lưu ở đây thì chuyển sang chia trên web tổng.' : 'Team Sale, CSKH, MKT chia trên web tổng'}>
@@ -149,7 +172,7 @@ export function TeamSheetPanel() {
                   ))}
                   <span className="mx-1 h-4 w-px bg-[var(--line)]" />
                   {OFFICES.map((o) => (
-                    <button key={o} type="button" onClick={() => edit(t.key, { office: t.office === o ? null : o })} className={`rounded-full border px-2 py-0.5 ${t.office === o ? 'border-[var(--primary)] bg-tint font-semibold text-primary' : 'text-ink-2'}`}>{o}</button>
+                    <button key={o} type="button" onClick={() => edit(t.key, { office: toggleOffice(t.office, o) })} aria-pressed={officeList(t.office).includes(o)} className={`rounded-full border px-2 py-0.5 ${officeList(t.office).includes(o) ? 'border-[var(--primary)] bg-tint font-semibold text-primary' : 'text-ink-2'}`}>{o}</button>
                   ))}
                 </div>
                 {(t.dept === 'sale' || t.dept === 'cskh') && (
@@ -161,6 +184,7 @@ export function TeamSheetPanel() {
                           <option value="">chưa gán</option>
                           {(data.accounts ?? []).filter((a) => a.role === role || a.id === t[field]).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                         </select>
+                        {t[field] && t.id && <ZaloButton linked={zaloOf(t[field]!)} code={zaloCode[t[field]!]} disabled={dirty} onClick={() => void linkZalo(t.id!, t[field]!)} />}
                       </label>
                     ))}
                   </div>
@@ -179,7 +203,7 @@ export function TeamSheetPanel() {
                         if (id) edit(t.key, { members: t.members.map((x, j) => j === i ? { name: nameOf.get(id) ?? x.name, ids: [id] } : x) });
                       }}>
                         <option value="">chọn…</option>
-                        {peopleFor(t.dept).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        {peopleOptions(t.dept)}
                       </select>
                       <button type="button" aria-label={`Bỏ ${m.name}`} className="grid size-4 place-items-center rounded-full hover:text-ink" onClick={() => edit(t.key, { members: t.members.filter((_, j) => j !== i) })}><X size={11} /></button>
                     </span>
@@ -189,7 +213,7 @@ export function TeamSheetPanel() {
                     if (id) edit(t.key, { members: [...t.members, { name: nameOf.get(id) ?? id, ids: [id] }] });
                   }}>
                     <option value="">+ thêm người</option>
-                    {peopleFor(t.dept).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    {peopleOptions(t.dept)}
                   </select>
                 </div>
               </div>
@@ -204,5 +228,17 @@ export function TeamSheetPanel() {
         </div>
       )}
     </ChartCard>
+  );
+}
+
+/** Nút Zalo cạnh Mentor / Leader: đã nối thì hiện dấu xanh, chưa thì bấm lấy mã 6 số nhắn cho bot. Không bắt buộc. */
+function ZaloButton({ linked, code, disabled, onClick }: { linked?: TeamZaloState; code?: string; disabled: boolean; onClick: () => void }) {
+  if (linked?.linked) return <span className="inline-flex items-center gap-0.5 rounded-full bg-tint px-1.5 py-0.5 text-[11px] font-semibold text-primary" title={`Đã nối Zalo · báo cáo theo ${linked.teamName}`}><MessageCircle size={11} />Zalo</span>;
+  if (code) return <span className="rounded-full border border-[var(--primary)] px-1.5 py-0.5 text-[11px] text-ink" title="Nhắn mã này cho bot Zalo · hết hạn sau 24 giờ">Nhắn bot: <b className="num text-primary">{code}</b></span>;
+  return (
+    <button type="button" disabled={disabled} onClick={onClick} title={disabled ? 'Lưu cách chia team trước' : 'Lấy mã nối Zalo'}
+      className="inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[11px] text-ink-2 hover:border-[var(--primary)] hover:text-primary disabled:opacity-50">
+      <MessageCircle size={11} />Gắn Zalo
+    </button>
   );
 }
