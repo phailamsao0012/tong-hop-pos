@@ -6,6 +6,7 @@ import { maybeZaloTick, zaloTeamSnapshot, zaloMorningData } from '../lib/zalo/za
 import { saveContact, createTask, createMeeting, writeZaloSetting, DEFAULT_ZALO_SETTINGS, type Contact } from '../lib/zalo/zalo-work';
 import { overviewReport } from '../lib/reports/overview-report';
 import { resolveHrUnit } from '../lib/teams/hr-unit';
+import { millions } from '../lib/kpi/kpi-pace';
 const at = (time: string) => Date.parse(`2026-10-27T${time}:00+07:00`);
 async function fixture() {
   const { raw, db } = emptyDb({ DEMO_MODE: '1' });
@@ -30,8 +31,8 @@ void test('Z4 clock: morning once, slot deltas at 12/17/22, disabled reports', a
   await f.tick('07:59'); assert.equal(f.messages.length, 0);
   await f.tick('08:00'); assert.equal(f.messages.length, 1); assert.match(f.messages[0].text, /Doanh số hôm qua: 90 tr/);
   await f.tick('08:00'); await f.tick('08:01'); assert.equal(f.messages.length, 1);
-  await f.tick('12:00'); assert.match(f.messages[1].text, /khung 8h–12h/); assert.match(f.messages[1].text, /Doanh số khung: 400/); assert.match(f.messages[1].text, /Đơn chốt: 4/);
-  await f.tick('17:00'); await f.tick('22:00'); assert.match(f.messages.at(-2)!.text, /khung 17h–22h/); assert.match(f.messages.at(-2)!.text, /Doanh số khung: 500/);
+  await f.tick('12:00'); assert.match(f.messages[1].text, /^📊 Team demo\nBáo cáo 12h thứ Ba 27\/10 · số từ 0h tới 12h\nDoanh số tới 12h: 0 tr/); assert.match(f.messages[1].text, /Đơn chốt 12 ·/);
+  await f.tick('17:00'); await f.tick('22:00'); assert.match(f.messages.at(-2)!.text, /Báo cáo 22h/); assert.match(f.messages.at(-2)!.text, /Đơn chốt 22/); assert.match(f.messages.at(-1)!.text, /^Doanh số các team\nTeam demo · khung 17h–22h: 500/);
   await writeZaloSetting(f.db, 'zalo_settings_v1', { ...DEFAULT_ZALO_SETTINGS, slotReports: false });
   await writeZaloSetting(f.db, 'zalo_tick_v1', { morningTest: 'anh-1' }); f.messages.length = 0; await f.tick('12:00'); assert.equal(f.messages.length, 0);
 });
@@ -48,10 +49,10 @@ void test('báo cáo 8h: gửi ảnh kèm chữ; Zalo không nhận ảnh thì g
   await f.tick('09:31'); assert.equal(f.photos.length, 1);
 });
 void test('Z4 missing snapshot explicitly says from start of day; morning disabled still captures 08', async () => {
-  const f = await fixture(); await f.tick('12:00'); assert.match(f.messages[0].text, /từ đầu ngày tới 12h/);
+  const f = await fixture(); await f.tick('12:00'); assert.match(f.messages[0].text, /số từ 0h tới 12h/); assert.match(f.messages[1].text, /từ đầu ngày tới 12h|khung 8h–12h/);
   await writeZaloSetting(f.db, 'zalo_tick_v1', {});
   await writeZaloSetting(f.db, 'zalo_settings_v1', { ...DEFAULT_ZALO_SETTINGS, morningBrief: false });
-  f.messages.length = 0; await f.tick('08:00'); assert.equal(f.messages.length, 0); await f.tick('12:00'); assert.match(f.messages[0].text, /Doanh số khung: 400/);
+  f.messages.length = 0; await f.tick('08:00'); assert.equal(f.messages.length, 0); await f.tick('12:00'); assert.match(f.messages[0].text, /Đơn chốt 12/); assert.match(f.messages[1].text, /khung 8h–12h: 400/);
 });
 void test('Z4 due alerts go to recipient and assigner; meeting reminds once except declined/cancelled', async () => {
   const f = await fixture();
@@ -78,7 +79,7 @@ void test('Z4 real demo D1 revenue equals overviewReport for exactly the same te
   const report = await overviewReport({ posIds: [], start: '2026-10-27', end: '2026-10-27', team: scope.team, unit: scope.unit });
   const snapshot = await zaloTeamSnapshot(leader, '2026-10-27'); assert.equal(snapshot!.total, report.current.total.closedNet);
   const messages: string[] = []; await maybeZaloTick(at('12:00'), { db: f.db, send: async (_chat, text) => { messages.push(text); }, sendPhoto: async (_chat, _url, caption) => { messages.push(caption); return true; } });
-  assert.match(messages[0], new RegExp(`Doanh số khung: ${report.current.total.closedNet.toLocaleString('vi-VN')}`));
+  assert.match(messages[0], new RegExp(`Doanh số tới 12h: ${millions(report.current.total.closedNet)}`));
   // Báo cáo 8h: doanh số hôm qua khớp báo cáo tổng quan cùng team, cùng ngày.
   const morning = await zaloMorningData(leader, '2026-10-28');
   assert.equal(morning!.days.find((d) => d.day === '2026-10-27')?.net ?? 0, report.current.total.closedNet);
@@ -125,7 +126,7 @@ void test('báo cáo 12h/17h/22h: leader và sếp đều nhận ảnh kèm ch�
   const leader = f.photos.find((p) => p.chat === f.leader.id), boss = f.photos.find((p) => p.chat === f.boss.id);
   assert.ok(leader && boss);
   assert.match(leader.url, /\/api\/zalo\/anh\/[0-9a-f]{32}$/);
-  assert.match(leader.caption, /khung 8h–12h/); assert.match(leader.caption, /Doanh số khung: 400/);
+  assert.match(leader.caption, /Báo cáo 12h thứ Ba 27\/10/); assert.match(leader.caption, /Đơn chốt 12 ·/);
   assert.match(boss.caption, /^Doanh số các team\nTeam demo · khung 8h–12h: 400 · Luỹ kế: 1\.200/);
   assert.equal(f.messages.length, 0);
 });
@@ -140,6 +141,6 @@ void test('báo cáo ca: Leader gắn tài khoản nhận ảnh của từng tea
   await f.tick('08:00'); f.photos.length = 0;
   await f.tick('12:00');
   const mine = f.photos.filter((p) => p.chat === f.leader.id).map((p) => p.caption.split('\n')[0]);
-  assert.deepEqual(mine, ['Doanh số team Team A khung 8h–12h', 'Doanh số team Team B khung 8h–12h']);
+  assert.deepEqual(mine, ['📊 Team A', '📊 Team B']);
   assert.match(f.photos.find((p) => p.chat === f.boss.id)!.caption, /Team A[\s\S]*Team B|Team B[\s\S]*Team A/);
 });

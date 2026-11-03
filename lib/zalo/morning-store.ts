@@ -1,7 +1,7 @@
 // Báo cáo 8h đã tính, giữ 3 ngày để Zalo tải ảnh qua /api/zalo/anh/<mã>. Mã ngẫu nhiên 32 ký tự là chìa khoá duy nhất
 // (Zalo không gửi kèm đăng nhập); hết 3 ngày thì ảnh không mở được nữa và bị xoá ở lượt dọn 2h sáng.
 import type { MorningReport } from '@/lib/zalo/morning-report';
-import type { BossSlotReport, SlotReport } from '@/lib/zalo/slot-report';
+import type { BossSlotReport } from '@/lib/zalo/slot-report';
 // Ảnh báo cáo theo ca 12h/17h/22h dùng chung kho này (03/11/2026), phân biệt bằng trường kind.
 
 const PREFIX = 'zalo_img:';
@@ -10,7 +10,7 @@ const iso = (ms: number) => new Date(ms).toISOString();
 
 export async function saveMorningImage(
   db: D1Database,
-  report: MorningReport | SlotReport | BossSlotReport,
+  report: MorningReport | BossSlotReport,
   now = Date.now(),
 ) {
   const id = crypto.randomUUID().replace(/-/g, '');

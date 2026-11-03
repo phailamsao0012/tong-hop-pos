@@ -1,7 +1,11 @@
 // Gắn Zalo cho Mentor / Leader ngay ở trang Chia team (anh Vũ 03/11/2026).
 // Mỗi tài khoản đăng nhập có một người nhận việc Zalo (kind 'leader'), gắn với team đầu tiên được bấm.
 // Team không có Leader vẫn chạy bình thường: không bắt buộc gắn ai.
-import { WEB_TEAMS_KEY, parseWebTeams, type WebTeam } from '@/lib/teams/web-teams';
+import {
+  WEB_TEAMS_KEY,
+  parseWebTeams,
+  type WebTeam,
+} from '@/lib/teams/web-teams';
 import {
   createPairCode,
   saveContact,
@@ -126,15 +130,71 @@ export async function linkSavedTeamZalo(
  * nhận báo cáo của MỌI team mình là Mentor hoặc Leader ở trang Chia team; người nhận cũ (không gắn tài khoản,
  * hoặc chưa phụ trách team nào) nhận theo team của mình như trước. Mỗi phần tử là người nhận, mang team cần báo.
  */
-export function reportTargets(contacts: Contact[], teams: WebTeam[]): Contact[] {
-  return contacts.flatMap((c) => {
-    const mine = c.user_id ? teams.filter((t) => t.mentorUserId === c.user_id || t.leaderUserId === c.user_id) : [];
+export function reportTargets(
+  contacts: Contact[],
+  teams: WebTeam[],
+  directors: Contact[] = [],
+): Contact[] {
+  const list = contacts.flatMap((c) => {
+    const mine = c.user_id
+      ? teams.filter(
+          (t) => t.mentorUserId === c.user_id || t.leaderUserId === c.user_id,
+        )
+      : [];
     if (!mine.length) return c.team_id ? [c] : [];
-    return mine.map((t) => ({ ...c, team_id: t.id, team_name: t.name, dept: t.dept }));
+    return mine.map((t) => ({
+      ...c,
+      team_id: t.id,
+      team_name: t.name,
+      dept: t.dept,
+    }));
   });
+  // Giám đốc kinh doanh (anh Vũ 03/11/2026: "cả giám đốc kinh doanh là anh Nghĩa nữa") nhận ảnh của mọi team.
+  const all = new Map<
+    string,
+    Pick<Contact, 'team_id' | 'team_name' | 'dept'>
+  >();
+  for (const t of teams)
+    all.set(t.id, { team_id: t.id, team_name: t.name, dept: t.dept });
+  for (const c of list)
+    if (!all.has(c.team_id!))
+      all.set(c.team_id!, {
+        team_id: c.team_id,
+        team_name: c.team_name,
+        dept: c.dept,
+      });
+  return [
+    ...list,
+    ...directors.flatMap((d) => [...all.values()].map((t) => ({ ...d, ...t }))),
+  ];
 }
 
-export async function loadReportTargets(db: D1Database, contacts: Contact[]) {
-  const saved = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(WEB_TEAMS_KEY).first<{ value: string }>();
-  return reportTargets(contacts, parseWebTeams(saved?.value));
+/** leaders: người nhận kind 'leader'; bosses: người nhận kind 'boss' (chỉ ai có tài khoản vai trò Giám đốc mới nhận từng team). */
+export async function loadReportTargets(
+  db: D1Database,
+  leaders: Contact[],
+  bosses: Contact[] = [],
+) {
+  const saved = await db
+    .prepare('SELECT value FROM app_settings WHERE key=?')
+    .bind(WEB_TEAMS_KEY)
+    .first<{ value: string }>();
+  const ids = bosses.map((b) => b.user_id).filter((x): x is string => !!x);
+  const directorIds = ids.length
+    ? new Set(
+        (
+          await db
+            .prepare(
+              `SELECT id FROM users WHERE disabled=0 AND role='director' AND id IN (${ids.map(() => '?').join(',')})`,
+            )
+            .bind(...ids)
+            .all<{ id: string }>()
+        ).results.map((r) => r.id),
+      )
+    : new Set<string>();
+  return reportTargets(
+    leaders,
+    parseWebTeams(saved?.value),
+    bosses.filter((b) => b.user_id && directorIds.has(b.user_id)),
+  );
 }
