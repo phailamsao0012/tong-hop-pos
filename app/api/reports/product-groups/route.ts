@@ -126,10 +126,10 @@ export async function GET(request: Request) {
     unk: `${WH_CONFIRMED_SQL()} AND NULLIF(o.first_confirmed_by,'') IS NULL`,
     st: 'o.status_code=17',
     pending: `o.status_code=17 AND NOT ${WH_CONFIRMED_SQL()}`,
-    // Khách đã nhận (anh Vũ 03/11/2026): trong số đơn chốt, đơn nay ở Đã nhận hoặc Đã thu tiền.
+    // Đơn đã nhận (anh Vũ 03/11/2026): trong số đơn chốt, đơn nay ở Đã nhận hoặc Đã thu tiền.
     delivered: 'o.status_code IN (3,16)',
   };
-  // Tiền khách đã trả: giá trị đơn khách đã nhận; Đã thu tiền là phần Pancake đã đối soát với hãng vận chuyển. Cùng lượt quét, không đọc thêm.
+  // Tiền khách đã trả: giá trị đơn đã nhận; Đã thu tiền là phần Pancake đã đối soát với hãng vận chuyển. Cùng lượt quét, không đọc thêm.
   const moneyColumns = {
     deliveredNet: `CASE WHEN o.status_code IN (3,16) THEN ${NET} ELSE 0 END`,
     paidNet: `CASE WHEN o.status_code=16 THEN ${NET} ELSE 0 END`,
@@ -533,7 +533,7 @@ export async function GET(request: Request) {
       closed: status.isDefault
         ? 'Đơn chốt = từ Chờ xác nhận trở đi, theo ngày chốt (lần đầu vào Chờ xác nhận hoặc sau đó).'
         : `Đơn chốt theo bộ lọc trạng thái: ${status.label}.`,
-      delivered: 'Khách đã nhận = trong số Đơn chốt trong kỳ, đơn nay ở trạng thái Đã nhận hoặc Đã thu tiền. Tiền khách đã trả = tổng giá trị các đơn đó; dòng nhỏ Đã thu tiền là phần Pancake đã đối soát với hãng vận chuyển (trạng thái Đã thu tiền). Kỳ ngắn thì số còn thấp vì đơn chưa giao tới.',
+      delivered: 'Đơn đã nhận = trong số Đơn chốt trong kỳ, đơn nay ở trạng thái Đã nhận hoặc Đã thu tiền. Tiền khách đã trả = tổng giá trị các đơn đó; dòng nhỏ Đã thu tiền là phần Pancake đã đối soát với hãng vận chuyển (trạng thái Đã thu tiền). Kỳ ngắn thì số còn thấp vì đơn chưa giao tới.',
       packed: 'Đang đóng hàng = trong số Đơn chốt ở cột bên cạnh, bao nhiêu đơn đã được kho chuyển sang Đang đóng hàng (kể cả đơn đã đi tiếp: chờ chuyển, đã gửi, đã nhận, hoàn). Tỷ lệ = Đang đóng hàng ÷ Đơn chốt. Dữ liệu Pancake không ghi riêng bước kho gọi khách, nên đây là bước kho đầu tiên đo được.',
       whConfirmed:
         'Đã XN kho = trong số Đơn chốt ở cột bên cạnh, bao nhiêu đơn được kho hoặc vận đơn chuyển sang Đã xác nhận (người bấm khác người chốt và biết rõ là ai). Đơn người chốt tự bấm hoặc không rõ người bấm không tính. Tỷ lệ = Đã XN kho ÷ Đơn chốt. Còn Chờ xác nhận chỉ tính đơn chưa từng được xác nhận, để không cộng hai lần đơn đã xác nhận rồi quay lại Chờ xác nhận.',

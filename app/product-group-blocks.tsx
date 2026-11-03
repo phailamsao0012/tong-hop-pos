@@ -460,7 +460,7 @@ type Sum = {
   unknownConfirmer: number;
   waiting: number;
   waitingUnconfirmed: number;
-  /** Khách đã nhận (Đã nhận + Đã thu tiền) trong số đơn chốt; tiền các đơn đó; phần đã thu tiền (03/11/2026). */
+  /** Đơn đã nhận (Đã nhận + Đã thu tiền) trong số đơn chốt; tiền các đơn đó; phần đã thu tiền (03/11/2026). */
   delivered?: number;
   deliveredNet?: number;
   paidNet?: number;
@@ -1002,8 +1002,8 @@ export function SaleGroupBlock({
                   />
                   {rates && <><SortTh k="__ret" label="Hoàn" sort={sort} title="Tỷ lệ hoàn, cùng cách tính ô Hoàn đầu trang · đỏ từ 7%, vàng từ 5%, xanh dưới 5%" /><SortTh k="__cancel" label="Hủy" sort={sort} title="Đơn hủy ÷ đơn lên, cùng cách tính ô Hủy đầu trang · đỏ từ 7%, vàng từ 5%, xanh dưới 5%" /></>}
                   <SortTh k="closedNet" label="Doanh thu" sort={sort} />
-                  <SortTh k="delivered" label="Khách đã nhận" sort={sort} title="Trong số Đơn chốt trong kỳ, đơn nay ở Đã nhận hoặc Đã thu tiền" />
-                  <SortTh k="deliveredNet" label="Tiền khách trả" sort={sort} title="Tổng giá trị các đơn khách đã nhận · dòng nhỏ: phần Pancake đã thu tiền từ hãng vận chuyển" />
+                  <SortTh k="delivered" label="Đơn đã nhận" sort={sort} title="Trong số Đơn chốt trong kỳ, đơn nay ở Đã nhận hoặc Đã thu tiền" />
+                  <SortTh k="deliveredNet" label="Tiền khách trả" sort={sort} title="Tổng giá trị các đơn đã nhận · dòng nhỏ: phần Pancake đã thu tiền từ hãng vận chuyển" />
                   <SortTh k="__cmp" label="So cùng kỳ" sort={sort} />
                   {labels.map((l) => (
                     <SortTh key={l} k={l} label={l} sort={sort} />
@@ -1555,7 +1555,7 @@ export function SaleGroupBlock({
   );
 }
 
-/** Hai cột Khách đã nhận / Tiền khách trả ở bảng Từng nhân viên (anh Vũ 03/11/2026). */
+/** Hai cột Đơn đã nhận / Tiền khách trả ở bảng Từng nhân viên (anh Vũ 03/11/2026). */
 function DeliveredCells({ name, c, definition }: { name?: string; c: Sum; definition?: string }) {
   const d = c.delivered ?? 0, net = c.deliveredNet ?? 0, paid = c.paidNet ?? 0;
   const rate = c.closed ? (d / c.closed) * 100 : null;
@@ -1575,8 +1575,8 @@ function DeliveredCells({ name, c, definition }: { name?: string; c: Sum; defini
   return (
     <>
       <td className="n font-semibold">
-        <Why title={`${name} · khách đã nhận`} rows={[['Đơn chốt trong kỳ', `${vi.format(c.closed)} đơn`], ['Khách đã nhận', `${vi.format(d)} đơn`], ['Tiền khách đã trả', money(net)], ['Trong đó đã thu tiền', money(paid)]]} definition={definition ?? ''}>
-          <button type="button" aria-label={`${name} · ${vi.format(d)} đơn khách đã nhận`} className="cursor-help text-right">
+        <Why title={`${name} · đơn đã nhận`} rows={[['Đơn chốt trong kỳ', `${vi.format(c.closed)} đơn`], ['Đơn đã nhận', `${vi.format(d)} đơn`], ['Tiền khách đã trả', money(net)], ['Trong đó đã thu tiền', money(paid)]]} definition={definition ?? ''}>
+          <button type="button" aria-label={`${name} · ${vi.format(d)} đơn đã nhận`} className="cursor-help text-right">
             {vi.format(d)}
             <span className="block text-[11px] font-normal text-ink-3">{pct(rate, 0)} · {vi.format(d)}/{vi.format(c.closed)} đơn chốt</span>
           </button>
