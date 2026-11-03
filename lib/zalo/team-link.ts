@@ -1,7 +1,7 @@
 // Gắn Zalo cho Mentor / Leader ngay ở trang Chia team (anh Vũ 03/11/2026).
 // Mỗi tài khoản đăng nhập có một người nhận việc Zalo (kind 'leader'), gắn với team đầu tiên được bấm.
 // Team không có Leader vẫn chạy bình thường: không bắt buộc gắn ai.
-import { WEB_TEAMS_KEY, parseWebTeams } from '@/lib/teams/web-teams';
+import { WEB_TEAMS_KEY, parseWebTeams, type WebTeam } from '@/lib/teams/web-teams';
 import {
   createPairCode,
   saveContact,
@@ -119,4 +119,22 @@ export async function linkSavedTeamZalo(
       now,
     ),
   };
+}
+
+/**
+ * Báo cáo Zalo gửi theo team (anh Vũ 03/11/2026: "leader mentor đều được nhận"): người nhận gắn với tài khoản web
+ * nhận báo cáo của MỌI team mình là Mentor hoặc Leader ở trang Chia team; người nhận cũ (không gắn tài khoản,
+ * hoặc chưa phụ trách team nào) nhận theo team của mình như trước. Mỗi phần tử là người nhận, mang team cần báo.
+ */
+export function reportTargets(contacts: Contact[], teams: WebTeam[]): Contact[] {
+  return contacts.flatMap((c) => {
+    const mine = c.user_id ? teams.filter((t) => t.mentorUserId === c.user_id || t.leaderUserId === c.user_id) : [];
+    if (!mine.length) return c.team_id ? [c] : [];
+    return mine.map((t) => ({ ...c, team_id: t.id, team_name: t.name, dept: t.dept }));
+  });
+}
+
+export async function loadReportTargets(db: D1Database, contacts: Contact[]) {
+  const saved = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(WEB_TEAMS_KEY).first<{ value: string }>();
+  return reportTargets(contacts, parseWebTeams(saved?.value));
 }

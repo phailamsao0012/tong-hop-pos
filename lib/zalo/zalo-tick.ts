@@ -7,6 +7,7 @@ import { createZaloSender, sendZaloPhoto } from '@/lib/zalo/zalo';
 import { saveMorningImage, pruneMorningImages } from '@/lib/zalo/morning-store';
 import { webOrigin } from '@/lib/notify/origin';
 import { logMessage, pruneMessages, type ChatKind } from '@/lib/zalo/zalo-chat';
+import { loadReportTargets } from '@/lib/zalo/team-link';
 import { buildBossSlotReport, buildSlotReport, bossSlotText, slotText, type BossSlotReport, type BossSlotTeam, type SlotReport } from '@/lib/zalo/slot-report';
 import { buildMorningReport, morningText, type MorningData, type MorningReport } from '@/lib/zalo/morning-report';
 
@@ -103,10 +104,13 @@ export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database
   };
   const sendMorning = (c: Contact, report: MorningReport, prefix = '') => sendImage(c, report, prefix + morningText(report), 'báo cáo 8h');
   if (morning || slot) {
-    const bossTeams: BossSlotTeam[] = [];
-    for (const leader of leaders) {
+    const bossTeams = new Map<string, BossSlotTeam>();
+    // Một team có thể có cả Mentor và Leader nhận: số của team chỉ tính một lần.
+    const teamNumbers = new Map<string, Promise<Snapshot | null>>();
+    for (const leader of await loadReportTargets(db, leaders)) {
       try {
-        const current = await snapshot(leader, day); if (!current) continue;
+        if (!teamNumbers.has(leader.team_id!)) teamNumbers.set(leader.team_id!, snapshot(leader, day));
+        const current = await teamNumbers.get(leader.team_id!)!; if (!current) continue;
         const snaps = (state.snap ??= {}), teamSnaps = snaps[leader.team_id!] ??= {};
         if (slot) {
           const previousHour = hour === '12' ? '08' : hour === '17' ? '12' : '17', previous = teamSnaps[previousHour];
@@ -115,7 +119,7 @@ export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database
           const label = previous ? `khung ${Number(previousHour)}h–${Number(hour)}h` : `từ đầu ngày tới ${Number(hour)}h`;
           const report = buildSlotReport({ team: leader.team_name, slot: label, hour, day, total, cumulative: current.total, orders: current.orders - (previous?.orders ?? 0), people });
           await sendImage(leader, report, slotText(report), `báo cáo ${Number(hour)}h`);
-          bossTeams.push({ team: leader.team_name, total, cumulative: current.total });
+          bossTeams.set(leader.team_id!, { team: leader.team_name, total, cumulative: current.total });
         }
         teamSnaps[hour] = current;
         if (morning && settings.morningBrief) {
@@ -131,9 +135,9 @@ export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database
         }
       } catch { console.error('zalo team report failed'); }
     }
-    if (slot && bossTeams.length) {
+    if (slot && bossTeams.size) {
       const previousHour = hour === '12' ? '08' : hour === '17' ? '12' : '17';
-      const report = buildBossSlotReport(`khung ${Number(previousHour)}h–${Number(hour)}h`, hour, day, bossTeams);
+      const report = buildBossSlotReport(`khung ${Number(previousHour)}h–${Number(hour)}h`, hour, day, [...bossTeams.values()]);
       for (const boss of contacts.filter(c => c.kind === 'boss')) await sendImage(boss, report, bossSlotText(report), `báo cáo ${Number(hour)}h`);
     }
     if (morning) state.morning = day;

@@ -129,3 +129,17 @@ void test('báo cáo 12h/17h/22h: leader và sếp đều nhận ảnh kèm ch�
   assert.match(boss.caption, /^Doanh số các team\nTeam demo · khung 8h–12h: 400 · Luỹ kế: 1\.200/);
   assert.equal(f.messages.length, 0);
 });
+void test('báo cáo ca: Leader gắn tài khoản nhận ảnh của từng team mình quản ở Chia team', async () => {
+  const f = await fixture();
+  f.raw.prepare("UPDATE zalo_contacts SET user_id='lead-1' WHERE id=?").run(f.leader.id);
+  await writeZaloSetting(f.db, 'web_teams_v1', [
+    { id: 'wt_a', name: 'Team A', dept: 'sale', office: null, memberIds: [], leaderUserId: 'lead-1' },
+    { id: 'wt_b', name: 'Team B', dept: 'sale', office: null, memberIds: [], leaderUserId: 'lead-1' },
+  ]);
+  f.photoOk.value = true;
+  await f.tick('08:00'); f.photos.length = 0;
+  await f.tick('12:00');
+  const mine = f.photos.filter((p) => p.chat === f.leader.id).map((p) => p.caption.split('\n')[0]);
+  assert.deepEqual(mine, ['Doanh số team Team A khung 8h–12h', 'Doanh số team Team B khung 8h–12h']);
+  assert.match(f.photos.find((p) => p.chat === f.boss.id)!.caption, /Team A[\s\S]*Team B|Team B[\s\S]*Team A/);
+});
