@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
-import { isOwner } from '@/lib/auth/access';
+import { isOwner, parseAccess } from '@/lib/auth/access';
 import { auditHeaders } from '@/lib/ops/audit';
 import { MARKETING_TEAMS_KEY, parseMarketingTeams, validateMarketingTeams } from '@/lib/teams/marketing-teams';
 import { TEAM_SOURCE_KEY, refreshTeamSource } from '@/lib/teams/team-source';
@@ -29,8 +29,12 @@ export async function GET() {
   // Tài khoản đăng nhập vai trò Mentor / Trưởng nhóm để gán phụ trách team (31/10/2026).
   const accounts = await env.DB.prepare("SELECT id,COALESCE(NULLIF(name,''),email) AS name,role FROM users WHERE role IN ('mentor','lead') AND disabled=0 ORDER BY name")
     .all<{ id: string; name: string; role: string }>();
+  // Sơ đồ quyền (03/11/2026): mọi tài khoản đang mở trừ chủ hệ thống, với bộ phận và POS được cấp.
+  const viewerRows = await env.DB.prepare("SELECT id,COALESCE(NULLIF(name,''),email) AS name,role,team,pos_ids_json FROM users WHERE disabled=0 AND role<>'owner' ORDER BY name")
+    .all<{ id: string; name: string; role: string; team: string | null; pos_ids_json: string | null }>();
   return Response.json({
     accounts: accounts.results,
+    viewers: viewerRows.results.map((r) => { const a = parseAccess(r); return { id: r.id, name: r.name, role: a.role, team: a.team === 'all' ? null : a.team, posIds: a.posIds }; }),
     source: values.get(TEAM_SOURCE_KEY) === 'hr' ? 'hr' : 'web',
     teams: parseWebTeams(values.get(WEB_TEAMS_KEY)),
     mkt: parseMarketingTeams(values.get(MARKETING_TEAMS_KEY)),
