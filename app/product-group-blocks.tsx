@@ -460,6 +460,10 @@ type Sum = {
   unknownConfirmer: number;
   waiting: number;
   waitingUnconfirmed: number;
+  /** Khách đã nhận (Đã nhận + Đã thu tiền) trong số đơn chốt; tiền các đơn đó; phần đã thu tiền (03/11/2026). */
+  delivered?: number;
+  deliveredNet?: number;
+  paidNet?: number;
 };
 type Cell = Sum & {
   closeRate: number | null;
@@ -651,6 +655,9 @@ export function SaleGroupBlock({
             unknownConfirmer: a.unknownConfirmer + b.unknownConfirmer,
             waiting: a.waiting + b.waiting,
             waitingUnconfirmed: a.waitingUnconfirmed + b.waitingUnconfirmed,
+            delivered: (a.delivered ?? 0) + (b.delivered ?? 0),
+            deliveredNet: (a.deliveredNet ?? 0) + (b.deliveredNet ?? 0),
+            paidNet: (a.paidNet ?? 0) + (b.paidNet ?? 0),
           }
         : a;
     const fin = (c: Sum, denom = c.created): Cell => ({
@@ -743,6 +750,8 @@ export function SaleGroupBlock({
                   ? (x.closeRate ?? -1)
                   : sort.key === 'packedRate'
                     ? (x.packedRate ?? -1)
+                    : sort.key === 'delivered' || sort.key === 'deliveredNet'
+                      ? (x[sort.key] ?? 0)
                     : sort.key === '__cmp'
                       ? (cmpDeltas.get(x.sellerId) ?? -Infinity)
                       : sort.key === '__ret' || sort.key === '__cancel'
@@ -969,7 +978,7 @@ export function SaleGroupBlock({
             </button>
           </div>
           <TableWrap
-            minWidth={820 + labels.length * 100}
+            minWidth={1020 + labels.length * 100}
             maxHeight="34rem"
             stickyFirst
           >
@@ -993,6 +1002,8 @@ export function SaleGroupBlock({
                   />
                   {rates && <><SortTh k="__ret" label="Hoàn" sort={sort} title="Tỷ lệ hoàn, cùng cách tính ô Hoàn đầu trang · đỏ từ 7%, vàng từ 5%, xanh dưới 5%" /><SortTh k="__cancel" label="Hủy" sort={sort} title="Đơn hủy ÷ đơn lên, cùng cách tính ô Hủy đầu trang · đỏ từ 7%, vàng từ 5%, xanh dưới 5%" /></>}
                   <SortTh k="closedNet" label="Doanh thu" sort={sort} />
+                  <SortTh k="delivered" label="Khách đã nhận" sort={sort} title="Trong số Đơn chốt trong kỳ, đơn nay ở Đã nhận hoặc Đã thu tiền" />
+                  <SortTh k="deliveredNet" label="Tiền khách trả" sort={sort} title="Tổng giá trị các đơn khách đã nhận · dòng nhỏ: phần Pancake đã thu tiền từ hãng vận chuyển" />
                   <SortTh k="__cmp" label="So cùng kỳ" sort={sort} />
                   {labels.map((l) => (
                     <SortTh key={l} k={l} label={l} sort={sort} />
@@ -1150,6 +1161,7 @@ export function SaleGroupBlock({
                         </span>
                       </Why>
                     </td>
+                    <DeliveredCells name={s.name} c={s} definition={r.definitions.delivered} />
                     <td className="n">
                       <button
                         type="button"
@@ -1260,6 +1272,9 @@ export function SaleGroupBlock({
                       waiting: a.waiting + x.waiting,
                       waitingUnconfirmed:
                         a.waitingUnconfirmed + x.waitingUnconfirmed,
+                      delivered: a.delivered + (x.delivered ?? 0),
+                      deliveredNet: a.deliveredNet + (x.deliveredNet ?? 0),
+                      paidNet: a.paidNet + (x.paidNet ?? 0),
                     }),
                     {
                       closed: 0,
@@ -1273,6 +1288,9 @@ export function SaleGroupBlock({
                       unknownConfirmer: 0,
                       waiting: 0,
                       waitingUnconfirmed: 0,
+                      delivered: 0,
+                      deliveredNet: 0,
+                      paidNet: 0,
                     },
                   );
                   const packedRate = T.closed
@@ -1328,6 +1346,7 @@ export function SaleGroupBlock({
                         </td>
                         {rates && <RateCells v={rates.get('')} />}
                         <td className="n">{shortMoney(T.closedNet)}</td>
+                        <DeliveredCells c={T} />
                         <td className="n">
                           {cmp.api.data
                             ? (() => {
@@ -1533,5 +1552,40 @@ export function SaleGroupBlock({
         </div>
       )}
     </ChartCard>
+  );
+}
+
+/** Hai cột Khách đã nhận / Tiền khách trả ở bảng Từng nhân viên (anh Vũ 03/11/2026). */
+function DeliveredCells({ name, c, definition }: { name?: string; c: Sum; definition?: string }) {
+  const d = c.delivered ?? 0, net = c.deliveredNet ?? 0, paid = c.paidNet ?? 0;
+  const rate = c.closed ? (d / c.closed) * 100 : null;
+  const body = (
+    <>
+      <td className="n font-semibold">
+        {vi.format(d)}
+        <span className="block text-[11px] font-normal text-ink-3">{pct(rate, 0)} · {vi.format(d)}/{vi.format(c.closed)} đơn chốt</span>
+      </td>
+      <td className="n">
+        {shortMoney(net)}
+        <span className="block text-[11px] font-normal text-ink-3">đã thu tiền {shortMoney(paid)}</span>
+      </td>
+    </>
+  );
+  if (!name) return body;
+  return (
+    <>
+      <td className="n font-semibold">
+        <Why title={`${name} · khách đã nhận`} rows={[['Đơn chốt trong kỳ', `${vi.format(c.closed)} đơn`], ['Khách đã nhận', `${vi.format(d)} đơn`], ['Tiền khách đã trả', money(net)], ['Trong đó đã thu tiền', money(paid)]]} definition={definition ?? ''}>
+          <button type="button" aria-label={`${name} · ${vi.format(d)} đơn khách đã nhận`} className="cursor-help text-right">
+            {vi.format(d)}
+            <span className="block text-[11px] font-normal text-ink-3">{pct(rate, 0)} · {vi.format(d)}/{vi.format(c.closed)} đơn chốt</span>
+          </button>
+        </Why>
+      </td>
+      <td className="n">
+        {shortMoney(net)}
+        <span className="block text-[11px] font-normal text-ink-3">đã thu tiền {shortMoney(paid)}</span>
+      </td>
+    </>
   );
 }

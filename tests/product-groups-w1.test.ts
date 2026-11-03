@@ -94,7 +94,8 @@ void test('W1: JSON demo bỏ trường mới khớp nguyên bản sau X1 ở m�
   for (const { params, hash } of snapshots) {
     const r = await report(params);
     // R2 chỉ thêm trường; vẫn so toàn bộ các trường cũ với snapshot gốc.
-    const r2Fields = ['packed', 'packedRate', 'confirmedNotPacked', 'cancelledBeforePack'];
+    // 03/11 thêm khách đã nhận / tiền khách trả: cũng chỉ thêm trường.
+    const r2Fields = ['packed', 'packedRate', 'confirmedNotPacked', 'cancelledBeforePack', 'delivered', 'deliveredNet', 'paidNet'];
     const old = JSON.parse(JSON.stringify(r, (key, value: unknown) =>
       r2Fields.includes(key) ? undefined : value)) as {
       staffTotal?: unknown;
