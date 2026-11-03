@@ -53,8 +53,8 @@ const both = (own: string, other: string) => `(SELECT user_id FROM ${own} AS l W
 export const WORKING = "user_id NOT IN (SELECT pos_user_id FROM hr_pos_team WHERE status='da_nghi')";
 /** Mã người đã nghỉ theo web nhân sự, để bỏ khỏi bảng xếp hạng theo người. */
 export const LEFT_STAFF_SQL = "SELECT pos_user_id AS user_id FROM hr_pos_team WHERE status='da_nghi'";
-/** Một dòng pos_users còn trên POS: Pancake còn trả về ở lượt đồng bộ người dùng mới nhất và chưa bị khoá. Bảng p = pos_users, s = pos_shops. */
-export const PRESENT_ON_POS = "p.is_active=1 AND (s.users_synced_at IS NULL OR p.fetched_at>=s.users_synced_at)";
+/** Một dòng pos_users còn trên POS: chưa bị khoá; người Pancake không trả nữa được syncUsers khoá (is_active=0). Bảng p = pos_users, s = pos_shops (giữ cho câu gọi cũ). */
+export const PRESENT_ON_POS = "p.is_active=1";
 /**
  * Người đã bị xoá (hoặc khoá) khỏi mọi POS (anh Vũ 02/11/2026: "những người đã xóa khỏi pos thì loại danh sách doanh số với KPI, còn dữ liệu vẫn để thế").
  * Chỉ dùng để bỏ khỏi bảng theo người và danh sách KPI; đơn, tổng cửa hàng, tổng bộ phận giữ nguyên.
