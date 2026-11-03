@@ -1,4 +1,6 @@
-export type MarketingTeam = { id: string; name: string; memberIds: string[]; office?: string | null; mentor?: string | null; /** Tên thành viên theo web nhân sự, gồm cả người chưa gắn tài khoản POS. */ memberNames?: string[] };
+export type MarketingTeam = { id: string; name: string; memberIds: string[]; office?: string | null; mentor?: string | null; /** Tên thành viên theo web nhân sự, gồm cả người chưa gắn tài khoản POS. */ memberNames?: string[];
+  /** Tài khoản đăng nhập phụ trách team, để gắn Zalo (anh Vũ 03/11/2026). Không đổi quyền xem. */
+  mentorUserId?: string | null; leaderUserId?: string | null };
 
 export const MARKETING_TEAMS_KEY = 'marketing_teams_v1';
 export const UNASSIGNED_TEAM = '__unassigned';
@@ -30,7 +32,10 @@ export function validateMarketingTeams(input: unknown): { teams?: MarketingTeam[
       if (!userId || userId.length > 100 || hasControl(userId) || members.has(userId)) return { error: 'Một nhân viên chỉ được thuộc một team Marketing.' };
       members.add(userId); memberIds.push(userId);
     }
-    ids.add(id); names.add(name.toLocaleLowerCase('vi')); teams.push({ id, name, memberIds });
+    const account = (v: unknown) => typeof v === 'string' && v.trim() ? v.trim() : null;
+    const mentorUserId = account(row.mentorUserId), leaderUserId = account(row.leaderUserId);
+    if ([mentorUserId, leaderUserId].some((x) => x && (x.length > 100 || hasControl(x)))) return { error: `Team ${name}: tài khoản phụ trách không hợp lệ.` };
+    ids.add(id); names.add(name.toLocaleLowerCase('vi')); teams.push({ id, name, memberIds, ...(mentorUserId ? { mentorUserId } : {}), ...(leaderUserId ? { leaderUserId } : {}) });
   }
   return { teams };
 }

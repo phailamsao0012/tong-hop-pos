@@ -4,7 +4,7 @@ import { linkTeamZalo, teamZaloStates } from '@/lib/zalo/team-link';
 
 // D1 giả tối giản: chỉ đủ cho các câu lệnh của team-link + saveContact + createPairCode.
 type Row = Record<string, unknown>;
-function fakeDb() {
+function fakeDb(saved: Record<string, string> = {}, users: Row[] = []) {
   const contacts: Row[] = [];
   const settings = new Map<string, string>();
   const stmt = (sql: string, args: unknown[] = []) => ({
@@ -25,6 +25,8 @@ function fakeDb() {
       if (/FROM zalo_contacts WHERE id=\?/.test(sql))
         return (contacts.find((c) => c.id === args[0] && c.active === 1) ??
           null) as T;
+      if (/FROM users WHERE id=\?/.test(sql))
+        return (users.find((u) => u.id === args[0]) ?? null) as T;
       if (/app_settings/.test(sql)) {
         const v = settings.get('zalo_pair_v1');
         return (v ? { value: v } : null) as T;
@@ -32,6 +34,12 @@ function fakeDb() {
       return null as T;
     },
     async all<T>() {
+      if (/SELECT key,value FROM app_settings/.test(sql))
+        return {
+          results: Object.entries(saved)
+            .filter(([k]) => args.includes(k))
+            .map(([key, value]) => ({ key, value })) as T[],
+        };
       return {
         results: contacts.filter(
           (c) => c.kind === 'leader' && c.active === 1 && c.user_id,
@@ -154,4 +162,22 @@ void test('báo cáo Zalo: Giám đốc kinh doanh nhận ảnh của mọi team
   const director = { ...base, kind: 'boss' as const, id: 'boss-1', name: 'Giám đốc', user_id: 'dir' };
   const teams = [{ id: 'wt_1', name: 'Team 1', dept: 'sale' as const, office: null, memberIds: [] }];
   assert.deepEqual(reportTargets([leader], teams, [director]).map((c) => `${c.id}:${c.team_id}`), ['k1:hr_9', 'boss-1:wt_1', 'boss-1:hr_9']);
+});
+
+void test('gắn Zalo cho Mentor team MKT: tìm team MKT đã lưu, người nhận việc không gắn bộ phận', async () => {
+  const { linkSavedTeamZalo } = await import('@/lib/zalo/team-link');
+  const { db, contacts } = fakeDb(
+    {
+      marketing_teams_v1: JSON.stringify([
+        { id: 'mkt_1', name: 'MKT A', memberIds: ['p1'], mentorUserId: 'u9' },
+      ]),
+    },
+    [{ id: 'u9', name: 'Mentor MKT' }],
+  );
+  const out = await linkSavedTeamZalo(db, 'mkt_1', 'u9');
+  assert.ok(!('error' in out));
+  assert.equal(contacts[0].team_id, 'mkt_1');
+  assert.equal(contacts[0].dept, '');
+  const wrong = await linkSavedTeamZalo(db, 'mkt_1', 'u8');
+  assert.ok('error' in wrong);
 });
