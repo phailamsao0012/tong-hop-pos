@@ -366,7 +366,7 @@ export default {
         const declared = response.headers.get(AUDIT_HEADER);
         let action = auditKind.action, detail = request.method === 'GET' ? auditBody : summarizeBody(auditBody);
         if (declared) { const d = decodeURIComponent(declared); const i = d.indexOf('|'); if (i > 0) { action = d.slice(0, i); detail = d.slice(i + 1); } else detail = d; }
-        ctx.waitUntil(audit({ action, target: auditKind.target, userId: auditUser.userId, email: auditUser.email, name: auditUser.displayName, detail, status: response.status, request }));
+        ctx.waitUntil(audit({ action, target: auditKind.target, userId: auditUser.userId, email: auditUser.email, name: auditUser.actingAs ? `${auditUser.displayName} (do ${auditUser.actingAs.ownerName} xem như)` : auditUser.displayName, detail, status: response.status, request }));
       }
       return response;
     } finally {

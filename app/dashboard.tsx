@@ -1541,6 +1541,12 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
             </button>
           </div>
         </header>}
+        {user.actingAs && (
+          <button type="button" className="fixed right-3 bottom-[calc(env(safe-area-inset-bottom,0px)+76px)] z-50 rounded-full md:bottom-3 border border-line bg-surface/95 px-3 py-1.5 text-xs font-semibold text-ink shadow-float backdrop-blur"
+            onClick={async () => { await clearSnapshots(); await fetch('/api/auth/act-as', { method: 'DELETE' }); window.location.href = '/'; }}>
+            Thoát xem như
+          </button>
+        )}
         {presenting && (
           <div className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 rounded-full border border-line bg-surface/95 px-2 py-1.5 text-[13px] text-ink shadow-float backdrop-blur">
             <button type="button" className="rounded-full p-1.5 transition-colors duration-[var(--dur)] hover:bg-surface-2" title="Trang trước (←)" aria-label="Trang trước" onClick={() => { const i = PRESENT_VIEWS.indexOf(view); setView(PRESENT_VIEWS[(i - 1 + PRESENT_VIEWS.length) % PRESENT_VIEWS.length]); window.scrollTo({ top: 0 }); }}><ChevronLeft size={16} /></button>
