@@ -107,7 +107,16 @@ export function TeamSheetPanel() {
     } finally { setSaving(false); }
   }
 
-  const peopleFor = (dept: Dept) => (data?.people ?? []).filter((p) => dept === 'skip' || new RegExp(dept === 'mkt' ? 'mkt|marketing' : dept === 'cskh' ? 'cskh|chăm sóc' : 'sale|bán hàng', 'iu').test(`${p.name} ${p.department ?? ''}`));
+  const fits = (dept: Dept, p: { name: string; department: string | null }) => dept === 'skip' || new RegExp(dept === 'mkt' ? 'mkt|marketing' : dept === 'cskh' ? 'cskh|chăm sóc' : 'sale|bán hàng', 'iu').test(`${p.name} ${p.department ?? ''}`);
+  const peopleFor = (dept: Dept) => (data?.people ?? []).filter((p) => fits(dept, p));
+  // Lead, mentor thường không có hậu tố bộ phận: vẫn chọn được ở nhóm "Người khác" và được tính doanh số khi đã vào team (03/11/2026).
+  const peopleOptions = (dept: Dept) => {
+    const others = dept === 'skip' ? [] : (data?.people ?? []).filter((p) => !fits(dept, p));
+    return <>
+      {peopleFor(dept).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+      {others.length > 0 && <optgroup label="Người khác (lead, mentor…)">{others.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>}
+    </>;
+  };
 
   return (
     <ChartCard icon={UsersRound} title="Chia team" subtitle={data?.source === 'hr' ? 'Đang lấy team từ web nhân sự. Lưu ở đây thì chuyển sang chia trên web tổng.' : 'Team Sale, CSKH, MKT chia trên web tổng'}>
@@ -179,7 +188,7 @@ export function TeamSheetPanel() {
                         if (id) edit(t.key, { members: t.members.map((x, j) => j === i ? { name: nameOf.get(id) ?? x.name, ids: [id] } : x) });
                       }}>
                         <option value="">chọn…</option>
-                        {peopleFor(t.dept).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        {peopleOptions(t.dept)}
                       </select>
                       <button type="button" aria-label={`Bỏ ${m.name}`} className="grid size-4 place-items-center rounded-full hover:text-ink" onClick={() => edit(t.key, { members: t.members.filter((_, j) => j !== i) })}><X size={11} /></button>
                     </span>
@@ -189,7 +198,7 @@ export function TeamSheetPanel() {
                     if (id) edit(t.key, { members: [...t.members, { name: nameOf.get(id) ?? id, ids: [id] }] });
                   }}>
                     <option value="">+ thêm người</option>
-                    {peopleFor(t.dept).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    {peopleOptions(t.dept)}
                   </select>
                 </div>
               </div>

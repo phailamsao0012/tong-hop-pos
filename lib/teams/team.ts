@@ -72,8 +72,11 @@ export const COUNTED_STAFF_KEY = 'counted_staff_extra';
 // Tên Xuân Nghĩa ghi cả dạng dựng sẵn (NFC) lẫn dạng tách dấu (NFD) để không lệch theo cách Pancake lưu.
 export const COUNTED_NAME = `(name LIKE '%sale%' OR name LIKE '%cskh%' OR name LIKE '%mkt%' OR name LIKE '%Xuân Nghĩa%' OR name LIKE '%XUÂN NGHĨA%' OR name LIKE '%${'Xuân Nghĩa'.normalize('NFD')}%')`;
 const COUNTED_EXTRA = `user_id IN (SELECT value FROM json_each((SELECT CASE WHEN json_valid(value) THEN value ELSE '[]' END FROM app_settings WHERE key='${COUNTED_STAFF_KEY}')))`;
+// Người đã xếp vào một team ở Cài đặt → Chia team (Sale/CSKH lẫn MKT) luôn được tính, kể cả lead, mentor có tên không mang hậu tố
+// (anh Vũ 03/11/2026: "anh đắc đạt làm lead thì mặc định ... vẫn tính doanh thu, vẫn tính mọi thứ phát sinh từ tài khoản pos").
+const COUNTED_IN_TEAM = `user_id IN (SELECT m.value FROM app_settings s, json_each(s.value) t, json_each(t.value, '$.memberIds') m WHERE s.key IN ('web_teams_v1','marketing_teams_v1') AND json_valid(s.value))`;
 /** Điều kiện trên một dòng pos_users: người này được tính doanh số. */
-export const COUNTED = `(${COUNTED_NAME} OR ${COUNTED_EXTRA})`;
+export const COUNTED = `(${COUNTED_NAME} OR ${COUNTED_EXTRA} OR ${COUNTED_IN_TEAM})`;
 export const COUNTED_STAFF = `(SELECT DISTINCT user_id FROM pos_users WHERE ${COUNTED})`;
 /** ` AND <cột người> được tính` (đơn chưa có người giữ nguyên, vì không thuộc ai). Dùng cho số doanh thu khi xem tất cả. */
 export const countedFilter = (column: string) => ` AND (NULLIF(${column},'') IS NULL OR ${column} IN ${COUNTED_STAFF})`;
@@ -87,7 +90,7 @@ export const countedCase = (column: string) => `CASE WHEN NULLIF(${column},'') I
 const baseTeamSubquery = (team: Team, counted: boolean) => team === 'all' ? null
   : hrTeams
     ? `(SELECT DISTINCT user_id FROM pos_users WHERE ${WORKING}${counted ? ` AND ${COUNTED}` : ''} AND CASE WHEN user_id IN (SELECT pos_user_id FROM hr_pos_team) THEN user_id IN (SELECT pos_user_id FROM hr_pos_team WHERE team='${team}') ELSE ${CONDITIONS[team]} END)`
-    : `(SELECT DISTINCT user_id FROM pos_users WHERE ${WORKING}${counted ? ` AND ${COUNTED}` : ''} AND ${CONDITIONS[team]})`;
+    : `(SELECT DISTINCT user_id FROM pos_users WHERE ${WORKING}${counted ? ` AND ${COUNTED}` : ''} AND (${CONDITIONS[team]} OR ${inWebTeamOf(team)}))`;
 export const teamSubquery = (team: Team, counted = true) => {
   const own = baseTeamSubquery(team, counted), lens = lensNow();
   if (!lens || lens === team) return inScope(own);
@@ -95,6 +98,8 @@ export const teamSubquery = (team: Team, counted = true) => {
   return inScope(own ? both(own, other) : other);
 };
 /** Biểu thức SQL team Pancake của một dòng pos_users ('sale' / 'cskh' / NULL), dùng khi đối chiếu với web nhân sự. */
+/** Người đã xếp vào team Sale/CSKH trên web tổng thuộc bộ phận đó dù bộ phận Pancake khác (lead, mentor; 03/11/2026). */
+const inWebTeamOf = (team: Exclude<Team, 'all'>) => `user_id IN (SELECT m.value FROM app_settings s, json_each(s.value) t, json_each(t.value, '$.memberIds') m WHERE s.key='web_teams_v1' AND json_valid(s.value) AND json_extract(t.value, '$.dept')='${team}')`;
 export const pancakeTeamCase = `CASE WHEN ${CONDITIONS.sale} THEN 'sale' WHEN ${CONDITIONS.cskh} THEN 'cskh' END`;
 /**
  * Một team cụ thể bên web nhân sự (đơn vị kind=team, anh Vũ 10/10/2026: "xem được thông số theo team"). Đã kiểm tồn tại ở lib/hr-unit.ts;
