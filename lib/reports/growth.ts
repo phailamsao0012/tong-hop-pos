@@ -6,7 +6,7 @@ import { daysBetween, vnRangeUtc } from '@/lib/shared/report-time';
 import { COUNTED_STAFF } from '@/lib/teams/team';
 import { toIso } from '@/lib/teams/hr-link';
 import { trendQuery } from '@/lib/reports/trend-period';
-import type { GrowthData, GrowthDept, GrowthPerson, JoinSource } from '@/lib/reports/growth-calc';
+import { plausibleJoin, type GrowthData, type GrowthDept, type GrowthPerson, type JoinSource } from '@/lib/reports/growth-calc';
 
 /** Ngày vào sửa tay nằm chung people_meta.joinedAt (khóa cũ của trang Con người). */
 export const PEOPLE_META_KEY = 'people_meta';
@@ -39,7 +39,7 @@ export async function growthData(db: D1Database, dept: GrowthDept, start: string
   const names = new Map<string, string>(), created = new Map<string, string>();
   for (const u of users.results) {
     if (u.name && !names.has(u.user_id)) names.set(u.user_id, u.name.replace(/\s+/g, ' ').trim());
-    const c = vnDay(toIso(u.source_created_at));
+    const c = plausibleJoin(vnDay(toIso(u.source_created_at)));
     if (c && (!created.has(u.user_id) || c < created.get(u.user_id)!)) created.set(u.user_id, c);
   }
   const hrMap = new Map(hr.results.map((r) => [r.id, r]));
@@ -55,7 +55,7 @@ export async function growthData(db: D1Database, dept: GrowthDept, start: string
   const people: GrowthPerson[] = Object.keys(series).map((id) => {
     const h = hrMap.get(id);
     const hand = manual[id]?.joinedAt && DAY.test(manual[id].joinedAt!) ? manual[id].joinedAt!.slice(0, 10) : null;
-    const fromHr = h?.joined_on && DAY.test(h.joined_on) ? h.joined_on.slice(0, 10) : null;
+    const fromHr = plausibleJoin(h?.joined_on);
     // Ngày có đơn đầu tiên chỉ đáng tin khi nằm sau đầu khoảng xem (trước đó có thể đã có đơn).
     const firstDay = first.get(id)!;
     const pick: [string | null, JoinSource][] = [[hand, 'tay'], [fromHr, 'nhan-su'], [created.get(id) ?? null, 'pancake'], [firstDay > start ? firstDay : null, 'don-dau']];
