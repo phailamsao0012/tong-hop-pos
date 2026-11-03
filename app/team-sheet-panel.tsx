@@ -61,7 +61,7 @@ export function TeamSheetPanel() {
       setData(body);
       const names = new Map(body.people.map((p) => [p.id, p.name]));
       setDraft([
-        ...body.mkt.map((t): Draft => ({ key: nextKey(), id: t.id, name: t.name, dept: 'mkt', office: null, members: membersOf(t.memberIds, names) })),
+        ...body.mkt.map((t): Draft => ({ key: nextKey(), id: t.id, name: t.name, dept: 'mkt', office: null, members: membersOf(t.memberIds, names), mentorUserId: t.mentorUserId ?? null, leaderUserId: t.leaderUserId ?? null })),
         ...body.teams.map((t): Draft => ({ key: nextKey(), id: t.id, name: t.name, dept: t.dept, office: t.office, members: membersOf(t.memberIds, names), mentorUserId: t.mentorUserId ?? null, leaderUserId: t.leaderUserId ?? null })),
       ]);
     }).catch(() => setError('Không tải được danh sách team.'));
@@ -73,7 +73,7 @@ export function TeamSheetPanel() {
     const teams = parseTeamSheet(source);
     if (!teams.length) { toast('Chưa đọc được team nào. Anh chép cả cột tên nhóm, tên team và cột "1. Họ tên".', { kind: 'error' }); return; }
     // Dán lại bảng: team trùng tên giữ người phụ trách đã gán.
-    const owners = new Map(data.teams.map((w) => [`${w.dept}:${w.name.trim().toLocaleLowerCase('vi')}`, w]));
+    const owners = new Map<string, { mentorUserId?: string | null; leaderUserId?: string | null }>([...data.teams.map((w) => [`${w.dept}:${w.name.trim().toLocaleLowerCase('vi')}`, w] as const), ...data.mkt.map((w) => [`mkt:${w.name.trim().toLocaleLowerCase('vi')}`, w] as const)]);
     setDraft(teams.map((t): Draft => {
       const was = owners.get(`${t.dept}:${t.name.trim().toLocaleLowerCase('vi')}`);
       return { key: nextKey(), id: null, name: t.name, dept: t.dept ?? 'skip', office: t.office, members: t.members.map((name) => ({ name, ids: matchStaff(name, t.dept, data.people) })), mentorUserId: was?.mentorUserId ?? null, leaderUserId: was?.leaderUserId ?? null };
@@ -104,6 +104,7 @@ export function TeamSheetPanel() {
     const mkt = kept.filter((t) => t.dept === 'mkt').map((t) => ({
       id: t.id?.startsWith('mkt_') ? t.id : `mkt_${uuid()}`, name: t.name.trim(),
       memberIds: t.members.flatMap((m) => m.ids).filter((id) => !mktSeen.has(id) && !!mktSeen.add(id)),
+      mentorUserId: t.mentorUserId ?? null, leaderUserId: t.leaderUserId ?? null,
     }));
     const teams = kept.filter((t) => t.dept === 'sale' || t.dept === 'cskh').map((t) => ({
       id: t.id?.startsWith('wt_') ? t.id : `wt_${uuid()}`, name: t.name.trim(), dept: t.dept, office: t.office, memberIds: [...new Set(t.members.flatMap((m) => m.ids))],
@@ -113,12 +114,23 @@ export function TeamSheetPanel() {
     try {
       const r = await fetch('/api/web-teams', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ teams, mkt }) });
       const body = await r.json() as { error?: string; teams?: WebTeam[]; mkt?: MarketingTeam[] };
-      if (!r.ok) { toast(body.error ?? 'Không lưu được.', { kind: 'error' }); return; }
+      if (!r.ok) { toast(body.error ?? 'Không lưu được.', { kind: 'error' }); return null; }
       setData((d) => d && { ...d, source: 'web', teams: body.teams ?? [], mkt: body.mkt ?? [] });
       setDraft((d) => d.filter((t) => t.dept !== 'skip').map((t) => ({ ...t, id: (t.dept === 'mkt' ? mkt : teams).find((x) => x.name === t.name.trim())?.id ?? t.id })));
       setDirty(false);
       toast('Đã lưu chia team. Ô Team và các trang Sale, CSKH, MKT dùng bảng này từ giờ.', { kind: 'ok' });
-    } finally { setSaving(false); }
+      return { teams, mkt };
+    } catch { toast('Không lưu được.', { kind: 'error' }); return null; } finally { setSaving(false); }
+  }
+  /** Bấm Gắn Zalo: team chưa lưu thì lưu luôn rồi cấp mã, khỏi phải bấm Lưu trước (anh Vũ 03/11/2026). */
+  async function zaloFor(t: Draft, userId: string) {
+    let teamId = t.id;
+    if (dirty || !teamId) {
+      const saved = await save();
+      if (!saved) return;
+      teamId = (t.dept === 'mkt' ? saved.mkt : saved.teams).find((x) => x.name === t.name.trim())?.id ?? null;
+    }
+    if (teamId) await linkZalo(teamId, userId);
   }
 
   const fits = (dept: Dept, p: { name: string; department: string | null }) => dept === 'skip' || new RegExp(dept === 'mkt' ? 'mkt|marketing' : dept === 'cskh' ? 'cskh|chăm sóc' : 'sale|bán hàng', 'iu').test(`${p.name} ${p.department ?? ''}`);
@@ -175,7 +187,7 @@ export function TeamSheetPanel() {
                     <button key={o} type="button" onClick={() => edit(t.key, { office: toggleOffice(t.office, o) })} aria-pressed={officeList(t.office).includes(o)} className={`rounded-full border px-2 py-0.5 ${officeList(t.office).includes(o) ? 'border-[var(--primary)] bg-tint font-semibold text-primary' : 'text-ink-2'}`}>{o}</button>
                   ))}
                 </div>
-                {(t.dept === 'sale' || t.dept === 'cskh') && (
+                {t.dept !== 'skip' && (
                   <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
                     {([['mentorUserId', 'Mentor', 'mentor'], ['leaderUserId', 'Leader', 'lead']] as const).map(([field, label, role]) => (
                       <label key={field} className="inline-flex items-center gap-1 text-ink-3">{label}
@@ -184,7 +196,7 @@ export function TeamSheetPanel() {
                           <option value="">chưa gán</option>
                           {(data.accounts ?? []).filter((a) => a.role === role || a.id === t[field]).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                         </select>
-                        {t[field] && t.id && <ZaloButton linked={zaloOf(t[field]!)} code={zaloCode[t[field]!]} disabled={dirty} onClick={() => void linkZalo(t.id!, t[field]!)} />}
+                        <ZaloButton linked={t[field] ? zaloOf(t[field]!) : undefined} code={t[field] ? zaloCode[t[field]!] : undefined} disabled={saving || !t[field]} label={label} onClick={() => { if (t[field]) void zaloFor(t, t[field]!); }} />
                       </label>
                     ))}
                   </div>
@@ -232,11 +244,11 @@ export function TeamSheetPanel() {
 }
 
 /** Nút Zalo cạnh Mentor / Leader: đã nối thì hiện dấu xanh, chưa thì bấm lấy mã 6 số nhắn cho bot. Không bắt buộc. */
-function ZaloButton({ linked, code, disabled, onClick }: { linked?: TeamZaloState; code?: string; disabled: boolean; onClick: () => void }) {
+function ZaloButton({ linked, code, disabled, label, onClick }: { linked?: TeamZaloState; code?: string; disabled: boolean; label: string; onClick: () => void }) {
   if (linked?.linked) return <span className="inline-flex items-center gap-0.5 rounded-full bg-tint px-1.5 py-0.5 text-[11px] font-semibold text-primary" title={`Đã nối Zalo · báo cáo theo ${linked.teamName}`}><MessageCircle size={11} />Zalo</span>;
   if (code) return <span className="rounded-full border border-[var(--primary)] px-1.5 py-0.5 text-[11px] text-ink" title="Nhắn mã này cho bot Zalo · hết hạn sau 24 giờ">Nhắn bot: <b className="num text-primary">{code}</b></span>;
   return (
-    <button type="button" disabled={disabled} onClick={onClick} title={disabled ? 'Lưu cách chia team trước' : 'Lấy mã nối Zalo'}
+    <button type="button" disabled={disabled} onClick={onClick} title={disabled ? `Chọn ${label} trước` : 'Lấy mã nối Zalo (tự lưu chia team nếu chưa lưu)'}
       className="inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[11px] text-ink-2 hover:border-[var(--primary)] hover:text-primary disabled:opacity-50">
       <MessageCircle size={11} />Gắn Zalo
     </button>
