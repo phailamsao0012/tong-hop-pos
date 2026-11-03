@@ -7,6 +7,13 @@ export type GrowthDept = typeof GROWTH_DEPTS[number];
 export const GROWTH_DEPT_LABELS: Record<GrowthDept, string> = { sale: 'Sale', cskh: 'CSKH', mkt: 'Marketing', vandon: 'Vận đơn' };
 /** Ngày vào lấy theo thứ tự: sửa tay → web nhân sự → ngày tạo tài khoản Pancake → ngày có đơn đầu tiên trong khoảng xem. */
 export type JoinSource = 'tay' | 'nhan-su' | 'pancake' | 'don-dau';
+/**
+ * Ngày vào hợp lý: đúng dạng YYYY-MM-DD và không trước 2010 (anh Vũ 03/11/2026: người vào 12/2025 hiện T274 vì
+ * một nguồn ghi năm sai). Ngày vô lý thì bỏ qua, dùng nguồn kế tiếp.
+ */
+export const JOIN_FLOOR = '2010-01-01';
+export const plausibleJoin = (d: string | null | undefined): string | null =>
+  d && /^\d{4}-\d{2}-\d{2}/.test(d) && d.slice(0, 10) >= JOIN_FLOOR ? d.slice(0, 10) : null;
 export const JOIN_SOURCE_LABELS: Record<JoinSource, string> = { tay: 'sửa tay', 'nhan-su': 'web nhân sự', pancake: 'tạo tài khoản Pancake', 'don-dau': 'ngày có đơn đầu tiên' };
 export type GrowthPerson = { id: string; name: string; joined: string | null; source: JoinSource | null; left: string | null };
 /** d: số ngày tính từ start, v: giá trị chính (doanh số; Vận đơn là số đơn xác nhận), n: số đơn. */

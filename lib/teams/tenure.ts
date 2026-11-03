@@ -2,7 +2,7 @@
 // Ngày vào lấy theo thứ tự: sửa tay (trang Tăng trưởng) → web nhân sự → ngày tạo tài khoản Pancake → ngày có đơn đầu tiên.
 import { toIso } from '@/lib/teams/hr-link';
 import { PEOPLE_META_KEY } from '@/lib/reports/growth';
-import type { JoinSource } from '@/lib/reports/growth-calc';
+import { plausibleJoin, type JoinSource } from '@/lib/reports/growth-calc';
 
 const DAY = /^\d{4}-\d{2}-\d{2}/;
 const vnDay = (iso: string | null) => (iso ? new Date(Date.parse(iso) + 7 * 3600000).toISOString().slice(0, 10) : null);
@@ -18,7 +18,8 @@ export type Tenure = { joined: string; source: JoinSource; t: number };
 
 /** Chọn ngày vào theo thứ tự ưu tiên; không có nguồn nào thì null. */
 export function pickJoined(sources: [string | null | undefined, JoinSource][]): { joined: string; source: JoinSource } | null {
-  for (const [d, source] of sources) if (d && DAY.test(d)) return { joined: d.slice(0, 10), source };
+  // Sửa tay giữ nguyên; nguồn tự động phải là ngày hợp lý.
+  for (const [d, source] of sources) { const ok = source === 'tay' ? (d && DAY.test(d) ? d.slice(0, 10) : null) : plausibleJoin(d); if (ok) return { joined: ok, source }; }
   return null;
 }
 
@@ -44,7 +45,7 @@ export async function staffTenure(db: D1Database, today: string): Promise<Record
     const chunk = missing.slice(i, i + 90);
     const rows = await db.prepare(`SELECT seller_id AS id, MIN(day) AS day FROM stats_daily_seller_product WHERE seller_id IN (${chunk.map(() => '?').join(',')}) AND orders>0 GROUP BY 1`)
       .bind(...chunk).all<{ id: string; day: string }>();
-    for (const r of rows.results) { const t = tenureMonths(r.day, today); if (t !== null) out[r.id] = { joined: r.day, source: 'don-dau', t }; }
+    for (const r of rows.results) { if (!plausibleJoin(r.day)) continue; const t = tenureMonths(r.day, today); if (t !== null) out[r.id] = { joined: r.day, source: 'don-dau', t }; }
   }
   return out;
 }
