@@ -4,6 +4,7 @@ import { isOwner, parseAccess } from '@/lib/auth/access';
 import { auditHeaders } from '@/lib/ops/audit';
 import { MARKETING_TEAMS_KEY, parseMarketingTeams, validateMarketingTeams } from '@/lib/teams/marketing-teams';
 import { TEAM_SOURCE_KEY, refreshTeamSource } from '@/lib/teams/team-source';
+import { teamZaloStates } from '@/lib/zalo/team-link';
 import { WEB_TEAMS_BACKUP_KEY, WEB_TEAMS_KEY, parseWebTeams, validateWebTeams } from '@/lib/teams/web-teams';
 
 // Trang Chia team (Cài đặt, chỉ chủ hệ thống): team Sale / CSKH / MKT chia ngay trên web tổng, thay web nhân sự (anh Vũ 21/10/2026).
@@ -38,6 +39,8 @@ export async function GET() {
     source: values.get(TEAM_SOURCE_KEY) === 'hr' ? 'hr' : 'web',
     teams: parseWebTeams(values.get(WEB_TEAMS_KEY)),
     mkt: parseMarketingTeams(values.get(MARKETING_TEAMS_KEY)),
+    // Zalo của Mentor / Leader (03/11/2026): ai đã nối, ai chưa.
+    zalo: await teamZaloStates(env.DB),
     people: staff.results.map((r) => ({ id: r.user_id, name: r.name, department: r.department || null })),
   }, { headers: { 'Cache-Control': 'private, no-store' } });
 }

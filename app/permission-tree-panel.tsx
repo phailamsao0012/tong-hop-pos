@@ -69,7 +69,7 @@ export function PermissionTreeView({ tree }: { tree: PermissionTree }) {
         </div>
         {leaders.length > 0 && <><Down /><div className="flex flex-wrap items-start justify-center gap-6 border-t-2 border-[var(--line-2)] pt-4">{leaders}</div></>}
       </div>
-      {tree.loneMentors.length > 0 && <Group title="Mentor chưa có Leader" list={tree.loneMentors} />}
+      {tree.loneMentors.length > 0 && <Group title="Team không có Leader (vẫn chạy bình thường)" list={tree.loneMentors} />}
       {tree.others.length > 0 && <Group title="Tài khoản khác" list={tree.others} />}
     </div>
   );
