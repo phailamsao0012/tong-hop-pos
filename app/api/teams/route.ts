@@ -3,7 +3,7 @@ import { getSessionUser, unauthorized } from '@/lib/auth/auth';
 import { MENTOR_SQL, groupTeams, mentorMap, type DeptRow, type TeamRow } from '@/lib/teams/hr-teams';
 import { mktTeams } from '@/lib/teams/mkt-teams-source';
 import { todayVn } from '@/lib/shared/report-time';
-import { WEB_TEAMS_KEY, overlayWebTeams, parseWebTeams } from '@/lib/teams/web-teams';
+import { WEB_TEAMS_KEY, WEB_TEAM_ID, overlayWebTeams, parseWebTeams } from '@/lib/teams/web-teams';
 import type { HrTeamGroup } from '@/lib/teams/hr-teams';
 
 // Team Sale / CSKH theo web nhân sự: ?team=sale|cskh → các team, Leader, Mentor, Trưởng phòng và tài khoản POS của từng người (người đã nghỉ không tính).
@@ -36,7 +36,8 @@ export async function GET(request: Request) {
   const group = (team: 'sale' | 'cskh') => overlay(team).teams;
   if (params.get('list') === '1') {
     const depts: ('sale' | 'cskh')[] = asked === 'sale' || asked === 'cskh' ? [asked] : ['sale', 'cskh'];
-    const teams: ListTeam[] = depts.flatMap((dept) => { const o = overlay(dept); return o.teams.filter((t) => t.id !== 'none').map((t) => listTeam(t.id, t.name, t.office, dept, t.mentor ?? null, t.members.map((m) => ({ id: m.posUserId, name: m.name })), o.parent.get(t.id) ?? null)); });
+    // Đã chia team ở Cài đặt → Chia team thì ô Team chỉ hiện đúng các team đó (anh Vũ 03/11/2026: "toàn tên lạ"), không kèm team cũ của web nhân sự.
+    const teams: ListTeam[] = depts.flatMap((dept) => { const o = saved.some((t) => t.dept === dept) ? onlyWeb(overlay(dept)) : overlay(dept); return o.teams.filter((t) => t.id !== 'none').map((t) => listTeam(t.id, t.name, t.office, dept, t.mentor ?? null, t.members.map((m) => ({ id: m.posUserId, name: m.name })), o.parent.get(t.id) ?? null)); });
     if (asked !== 'sale' && asked !== 'cskh') {
       const mkt = await mktTeams(env.DB);
       teams.push(...mkt.teams.map((t) => listTeam(t.id, t.name, t.office ?? null, 'mkt', t.mentor ?? null, t.memberNames ? t.memberNames.map((name) => ({ id: '', name })) : t.memberIds.map((id) => ({ id, name: nameOf.get(id) ?? id })))));
@@ -54,6 +55,11 @@ type ListTeam = { id: string; name: string; office: string | null; dept: 'sale' 
 function listTeam(id: string, name: string, office: string | null, dept: ListTeam['dept'], mentor: string | null, refs: { id: string; name: string }[], group: string | null = null): ListTeam {
   const members = [...new Set(refs.map((r) => r.name).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi'));
   return { id, name, office, dept, people: members.length, mentor, members, memberRefs: refs.filter((r) => r.name), group };
+}
+
+/** Chỉ giữ team chia trên web tổng (mã wt_), bỏ thư mục mẹ theo team web nhân sự. */
+function onlyWeb<G extends { id: string }>(o: { teams: G[]; parent: Map<string, string> }) {
+  return { teams: o.teams.filter((t) => WEB_TEAM_ID.test(t.id)), parent: new Map<string, string>() };
 }
 
 async function staffNames() {
