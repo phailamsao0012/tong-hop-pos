@@ -1,6 +1,8 @@
 // Báo cáo 8h đã tính, giữ 3 ngày để Zalo tải ảnh qua /api/zalo/anh/<mã>. Mã ngẫu nhiên 32 ký tự là chìa khoá duy nhất
 // (Zalo không gửi kèm đăng nhập); hết 3 ngày thì ảnh không mở được nữa và bị xoá ở lượt dọn 2h sáng.
 import type { MorningReport } from '@/lib/zalo/morning-report';
+import type { BossSlotReport } from '@/lib/zalo/slot-report';
+// Ảnh báo cáo theo ca 12h/17h/22h dùng chung kho này (03/11/2026), phân biệt bằng trường kind.
 
 const PREFIX = 'zalo_img:';
 const KEEP_MS = 3 * 86400000;
@@ -8,7 +10,7 @@ const iso = (ms: number) => new Date(ms).toISOString();
 
 export async function saveMorningImage(
   db: D1Database,
-  report: MorningReport,
+  report: MorningReport | BossSlotReport,
   now = Date.now(),
 ) {
   const id = crypto.randomUUID().replace(/-/g, '');
@@ -19,11 +21,11 @@ export async function saveMorningImage(
   return id;
 }
 
-export async function loadMorningImage(
+export async function loadMorningImage<T = MorningReport>(
   db: D1Database,
   id: string,
   now = Date.now(),
-): Promise<MorningReport | null> {
+): Promise<T | null> {
   if (!/^[0-9a-f]{32}$/.test(id)) return null;
   const row = await db
     .prepare('SELECT value,updated_at FROM app_settings WHERE key=?')
@@ -31,7 +33,7 @@ export async function loadMorningImage(
     .first<{ value: string; updated_at: string }>();
   if (!row || now - Date.parse(row.updated_at) > KEEP_MS) return null;
   try {
-    return JSON.parse(row.value) as MorningReport;
+    return JSON.parse(row.value) as T;
   } catch {
     return null;
   }

@@ -130,3 +130,28 @@ void test('gắn Zalo lần hai dùng lại người cũ, đã nối thì báo �
     { userId: 'u1', linked: true, teamName: 'Team 1' },
   ]);
 });
+
+void test('báo cáo Zalo: Leader nhận mọi team mình quản, Mentor nhận team mình, người cũ nhận như trước', async () => {
+  const { reportTargets } = await import('@/lib/zalo/team-link');
+  const base = { kind: 'leader' as const, leader_id: null, pos_seller_ids: '[]', chat_id: 'c', active: 1 };
+  const contacts = [
+    { ...base, id: 'k1', name: 'Leader', user_id: 'lead', team_id: 'wt_1', team_name: 'Team 1', dept: 'sale' },
+    { ...base, id: 'k2', name: 'Mentor', user_id: 'men', team_id: 'wt_2', team_name: 'Team 2', dept: 'sale' },
+    { ...base, id: 'k3', name: 'Cũ', user_id: null, team_id: 'hr_9', team_name: 'Team cũ', dept: 'cskh' },
+  ];
+  const teams = [
+    { id: 'wt_1', name: 'Team 1', dept: 'sale' as const, office: null, memberIds: [], leaderUserId: 'lead' },
+    { id: 'wt_2', name: 'Team 2', dept: 'sale' as const, office: null, memberIds: [], leaderUserId: 'lead', mentorUserId: 'men' },
+    { id: 'wt_3', name: 'Team 3', dept: 'cskh' as const, office: null, memberIds: [] },
+  ];
+  assert.deepEqual(reportTargets(contacts, teams).map((c) => `${c.id}:${c.team_id}`), ['k1:wt_1', 'k1:wt_2', 'k2:wt_2', 'k3:hr_9']);
+});
+
+void test('báo cáo Zalo: Giám đốc kinh doanh nhận ảnh của mọi team', async () => {
+  const { reportTargets } = await import('@/lib/zalo/team-link');
+  const base = { leader_id: null, pos_seller_ids: '[]', chat_id: 'c', active: 1, dept: '', team_name: '', team_id: null };
+  const leader = { ...base, kind: 'leader' as const, id: 'k1', name: 'Leader', user_id: null, team_id: 'hr_9', team_name: 'Team cũ', dept: 'cskh' };
+  const director = { ...base, kind: 'boss' as const, id: 'boss-1', name: 'Giám đốc', user_id: 'dir' };
+  const teams = [{ id: 'wt_1', name: 'Team 1', dept: 'sale' as const, office: null, memberIds: [] }];
+  assert.deepEqual(reportTargets([leader], teams, [director]).map((c) => `${c.id}:${c.team_id}`), ['k1:hr_9', 'boss-1:wt_1', 'boss-1:hr_9']);
+});

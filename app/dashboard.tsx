@@ -1518,7 +1518,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           <button type="button" className="btn icon ml-auto md:hidden" title="Tìm khách" aria-label="Tìm khách" onClick={() => setView('customers')}><Search size={15} /></button>
           {user.team === 'all' && <TeamSwitch size="sm" />}
           <BranchSwitch />
-          {(canView(user, 'sale-teams') || canView(user, 'cskh-teams') || canView(user, 'van-don')) && <HrTeamPicker />}
+          {(canView(user, 'sale-teams') || canView(user, 'cskh-teams') || canView(user, 'van-don')) && <HrTeamPicker section={activeDept} />}
           {/* Trang Vận đơn không dùng bộ lọc trạng thái, và Vận đơn không có chữ "chốt" (anh Vũ 10/10/2026). */}
           {view !== 'van-don' && <GlobalStatusFilter className="hidden md:inline-flex" />}
           <MetricSettingsButton className="hidden lg:inline-flex" />

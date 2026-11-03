@@ -29,6 +29,12 @@ export type MorningData = {
   overdue: MorningTask[];
   dueToday: MorningTask[];
   meetings?: string[];
+  /**
+   * Báo cáo theo ca (anh Vũ 03/11/2026: ca 12h/17h/22h dùng đúng kiểu ảnh 8h). Khi có: "hôm qua" trong d.today−1
+   * thực chất là HÔM NAY tính tới giờ này, và mọi ngày trong days là số CÙNG GIỜ của ngày đó; ngày không có số thì
+   * không so (ghi "chưa có số"), không coi là 0.
+   */
+  slotHour?: string;
 };
 
 const WEEKDAYS = [
@@ -68,15 +74,20 @@ export function buildMorningReport(d: MorningData) {
   const cur = at(y),
     prev = at(addDays(y, -1)),
     lastWeek = at(addDays(y, -7));
+  const slot = d.slotHour ? Number(d.slotHour) : null;
+  // Ca: chỉ so với ngày có số thật cùng giờ.
+  const known = (day: string) => slot === null || byDay.has(day);
+  const hasPrev = known(addDays(y, -1)),
+    hasLastWeek = known(addDays(y, -7));
   const week = Array.from({ length: 7 }, (_, i) => at(addDays(y, i - 6)));
   const weekBefore = Array.from({ length: 7 }, (_, i) =>
     at(addDays(y, i - 13)),
   );
   const avg = (r: MorningDay) => (r.orders ? r.net / r.orders : null);
   const avgNow = avg(cur),
-    avgPrev = avg(prev);
+    avgPrev = hasPrev ? avg(prev) : null;
   const rateNow = rateOf(cur),
-    ratePrev = rateOf(prev);
+    ratePrev = hasPrev ? rateOf(prev) : null;
   const daysInMonth = new Date(
     Date.UTC(Number(y.slice(0, 4)), Number(y.slice(5, 7)), 0),
   ).getUTCDate();
@@ -112,18 +123,35 @@ export function buildMorningReport(d: MorningData) {
   return {
     team: d.team,
     dept: d.dept,
-    title: `Báo cáo sáng ${weekday(d.today)} ${dm(d.today)} · số của ngày ${dm(y)}`,
+    title:
+      slot === null
+        ? `Báo cáo sáng ${weekday(d.today)} ${dm(d.today)} · số của ngày ${dm(y)}`
+        : `Báo cáo ${slot}h ${weekday(y)} ${dm(y)} · số từ 0h tới ${slot}h`,
+    headline: slot === null ? 'Doanh số hôm qua' : `Doanh số tới ${slot}h`,
     yesterday: cur.net,
-    vsPrev: pct(cur.net, prev.net),
-    vsLastWeek: pct(cur.net, lastWeek.net),
-    lastWeekLabel: `${weekday(addDays(y, -7))} tuần trước`,
+    vsPrev: hasPrev ? pct(cur.net, prev.net) : null,
+    vsLastWeek: hasLastWeek ? pct(cur.net, lastWeek.net) : null,
+    prevLabel: slot === null ? 'hôm trước' : 'cùng giờ hôm qua',
+    lastWeekLabel:
+      slot === null
+        ? `${weekday(addDays(y, -7))} tuần trước`
+        : `cùng giờ ${weekday(addDays(y, -7))} tuần trước`,
+    /** Ca: biểu đồ là số cùng giờ; chưa đủ 3 ngày có số thì ẩn. */
+    chart: slot === null || week.filter((r) => byDay.has(r.day)).length >= 3,
+    chartLabel:
+      slot === null
+        ? '— 7 ngày · - - tuần trước'
+        : `— 7 ngày, cùng ${slot}h · - - tuần trước`,
     week: week.map((r) => ({ day: r.day, net: r.net })),
     weekBefore: weekBefore.map((r) => r.net),
     tiles: withDeltaLabels([
       {
         label: 'Đơn chốt',
         value: vn(cur.orders),
-        delta: prev.orders || cur.orders ? cur.orders - prev.orders : null,
+        delta:
+          hasPrev && (prev.orders || cur.orders)
+            ? cur.orders - prev.orders
+            : null,
         unit: 'đơn' as const,
       },
       d.dept === 'sale'
@@ -187,7 +215,7 @@ export function morningText(r: MorningReport) {
   const lines = [
     `📊 ${r.team}`,
     r.title,
-    `Doanh số hôm qua: ${millions(r.yesterday)} (${morningDeltaLabel(r.vsPrev)} so hôm trước · ${morningDeltaLabel(r.vsLastWeek)} so ${r.lastWeekLabel})`,
+    `${r.headline}: ${millions(r.yesterday)} (${morningDeltaLabel(r.vsPrev)} so ${r.prevLabel} · ${morningDeltaLabel(r.vsLastWeek)} so ${r.lastWeekLabel})`,
     r.tiles
       .map(
         (t) =>

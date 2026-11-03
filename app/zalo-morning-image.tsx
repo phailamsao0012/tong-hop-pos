@@ -178,7 +178,7 @@ export function MorningImage({ r }: { r: MorningReport }) {
       >
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <div style={{ fontSize: 20, color: C.muted }}>Doanh số hôm qua</div>
+            <div style={{ fontSize: 20, color: C.muted }}>{r.headline}</div>
             <div style={{ fontSize: 56, fontWeight: 700, lineHeight: 1.15 }}>
               {millions(r.yesterday)}
             </div>
@@ -186,7 +186,7 @@ export function MorningImage({ r }: { r: MorningReport }) {
               <Delta
                 size={20}
                 v={r.vsPrev}
-                label={`${morningDeltaLabel(r.vsPrev)} so hôm trước`}
+                label={`${morningDeltaLabel(r.vsPrev)} so ${r.prevLabel}`}
               />
             </div>
             <div style={{ display: 'flex', marginTop: 4 }}>
@@ -204,22 +204,50 @@ export function MorningImage({ r }: { r: MorningReport }) {
               alignItems: 'flex-end',
             }}
           >
-            <div style={{ fontSize: 15, color: C.muted, marginBottom: 4 }}>
-              — 7 ngày · - - tuần trước
-            </div>
-            <Spark r={r} />
-            <div
-              style={{
-                display: 'flex',
-                width: 300,
-                justifyContent: 'space-between',
-                fontSize: 16,
-                color: C.muted,
-              }}
-            >
-              <span>{dm(r.week[0].day)}</span>
-              <span>{dm(r.week[6].day)}</span>
-            </div>
+            {r.chart ? (
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'flex-end',
+                }}
+              >
+                <div style={{ fontSize: 15, color: C.muted, marginBottom: 4 }}>
+                  {r.chartLabel}
+                </div>
+                <Spark r={r} />
+                <div
+                  style={{
+                    display: 'flex',
+                    width: 300,
+                    justifyContent: 'space-between',
+                    fontSize: 16,
+                    color: C.muted,
+                  }}
+                >
+                  <span>{dm(r.week[0].day)}</span>
+                  <span>{dm(r.week[6].day)}</span>
+                </div>
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: 'flex',
+                  width: 300,
+                  height: 150,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  textAlign: 'center',
+                  fontSize: 16,
+                  color: C.muted,
+                  background: C.soft,
+                  borderRadius: 14,
+                  padding: 16,
+                }}
+              >
+                Biểu đồ cùng giờ các ngày sẽ hiện sau vài ngày có số.
+              </div>
+            )}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 16, marginTop: 22 }}>

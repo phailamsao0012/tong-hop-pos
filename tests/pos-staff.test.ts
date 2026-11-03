@@ -11,9 +11,9 @@ const staff = [
 ];
 
 void test('pos-staff: chọn một POS chỉ còn người của POS đó, người ở 2 POS vẫn hiện', () => {
-  assert.deepEqual(staffInPos(staff, ['p1'], ALL).map((s) => s.id), ['a', 'c', 'd']);
-  assert.deepEqual(staffInPos(staff, ['p2'], ALL).map((s) => s.id), ['b', 'c', 'd']);
-  assert.deepEqual(staffInPos(staff, ['p3'], ALL).map((s) => s.id), ['d']);
+  assert.deepEqual(staffInPos(staff, ['p1'], ALL).map((s) => s.id), ['a', 'c']);
+  assert.deepEqual(staffInPos(staff, ['p2'], ALL).map((s) => s.id), ['b', 'c']);
+  assert.deepEqual(staffInPos(staff, ['p3'], ALL).map((s) => s.id), []);
 });
 
 void test('pos-staff: chọn đủ POS hoặc chưa chọn thì giữ nguyên', () => {
@@ -25,5 +25,5 @@ void test('pos-staff: hàm lọc theo mã người dùng cho bảng team, KPI', 
   assert.equal(posStaffFilter(staff, ALL, ALL), null);
   assert.equal(posStaffFilter(staff, [], ALL), null);
   const f = posStaffFilter(staff, ['p2'], ALL)!;
-  assert.deepEqual(['a', 'b', 'c', 'd', 'la'].filter(f), ['b', 'c', 'd', 'la']);
+  assert.deepEqual(['a', 'b', 'c', 'd', 'la'].filter(f), ['b', 'c']);
 });

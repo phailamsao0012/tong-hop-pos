@@ -16,7 +16,8 @@ const DEPT_LABEL = { mkt: 'Team MKT', sale: 'Team Sale', cskh: 'Team CSKH' } as 
 /** "Sale HN · Team Đại Bàng" → "Team Đại Bàng" cho nút nhỏ; tên đầy đủ ở danh sách. */
 const shortName = (name: string) => name.split(' · ').pop() ?? name;
 
-export function HrTeamPicker({ className = '' }: { className?: string }) {
+/** section: bộ phận đang mở ở thanh bên (sale / cskh / mkt / …); mở mục nào chỉ hiện team của mục đó (anh Vũ 03/11/2026). */
+export function HrTeamPicker({ className = '', section }: { className?: string; section?: string }) {
   const selectedMkt = useMktTeam();
   const mktApi = useApi<{ teams: { id: string; name: string }[] }>('/api/marketing-teams');
   const unit = useHrUnit();
@@ -28,9 +29,11 @@ export function HrTeamPicker({ className = '' }: { className?: string }) {
     if (!inPos || !t.memberRefs) return t;
     const members = [...new Set(t.memberRefs.filter((r) => !r.id || inPos(r.id)).map((r) => r.name))].sort((a, b) => a.localeCompare(b, 'vi'));
     return { ...t, members, people: members.length };
-  }).filter((t) => !inPos || t.people > 0 || t.id === unit?.id || t.dept === 'mkt');
+  }).filter((t) => !inPos || t.people > 0 || t.id === unit?.id);
+  // Bộ lọc chồng lên nhau (anh Vũ 03/11/2026): POS → mục đang mở → nút Sale/CSKH → team.
+  const showMkt = section === 'mkt' || (section !== 'sale' && section !== 'cskh' && team === 'all');
   if (!teams.length && !unit && !mktApi.data?.teams.length) return null;
-  const depts = (['sale', 'cskh'] as const).filter((d) => team === 'all' || team === d || unit?.dept === d);
+  const depts = (['sale', 'cskh'] as const).filter((d) => section !== 'mkt' && (section === 'sale' || section === 'cskh' ? section === d : team === 'all' || team === d) || unit?.dept === d);
   const pick = (t: TeamItem | null) => { if (t?.dept === 'mkt') return; setHrUnit(t ? { id: t.id, name: t.name, dept: t.dept } satisfies HrUnit : null); };
   return (
     <Popover>
@@ -43,11 +46,15 @@ export function HrTeamPicker({ className = '' }: { className?: string }) {
           className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-surface-2 ${unit ? 'text-ink' : 'bg-tint font-semibold text-primary'}`}>
           <Check size={14} className={unit ? 'invisible' : ''} aria-hidden="true" />Mọi team{team !== 'all' ? ` ${DEPT_LABEL[team]}` : ''}
         </button>
+        {showMkt && <>
         <p className="mt-1 border-t px-2 pt-2 text-[11px] font-semibold text-ink-3">Team MKT</p>
         {[...(mktApi.data?.teams ?? []), { id: '__unassigned', name: 'Không thuộc team MKT' }].map((t) => {
           const full = teams.find((x) => x.dept === 'mkt' && x.id === t.id);
+          // Đang lọc POS mà team MKT không còn ai ở POS đó thì ẩn (trừ team đang chọn).
+          if (inPos && t.id !== '__unassigned' && !full && selectedMkt?.id !== t.id) return null;
           return <TeamRow key={t.id} t={{ office: null, people: 0, mentor: null, ...full, id: t.id, name: t.name, dept: 'mkt' }} child={false} on={selectedMkt?.id === t.id} onPick={() => setMktTeam(t)} />;
         })}
+        </>}
         {/* Lọc mẹ-con (anh Vũ 21/10/2026): mỗi người phụ trách là một nhóm (Team C Mơ), bấm tên nhóm xem gộp, bấm mũi tên xổ các team con (Sale HN, Sale TN của người đó).
             Nhóm theo mentor hoặc đuôi tên team, xem lib/team-picker-groups.ts. */}
         {depts.map((d) => {
