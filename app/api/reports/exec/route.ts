@@ -16,11 +16,15 @@ export async function GET(request: Request) {
   const requested = (p.get('posIds') ?? '').split(',').filter(Boolean);
   if (requested.some((id) => !valid.has(id))) return Response.json({ error: 'POS không hợp lệ.' }, { status: 400 });
   const posIds = requested.length ? requested : [...valid];
-  const today = todayVn();
-  const month = today.slice(0, 7);
+  // ?month=YYYY-MM: theo tháng của kỳ đang chọn (anh Vũ 04/11/2026 "chọn tháng trước rồi mà xu hướng vẫn tháng 11").
+  // Tháng đã qua thì tính trọn tháng; tháng này hoặc sai dạng thì như cũ (tới hôm nay).
+  const now = todayVn();
+  const asked = p.get('month') ?? '';
+  const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(asked) && asked < now.slice(0, 7) ? asked : now.slice(0, 7);
   const monthStart = `${month}-01`;
-  const day = Number(today.slice(8, 10));
   const daysInMonth = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
+  const today = month === now.slice(0, 7) ? now : `${month}-${String(daysInMonth).padStart(2, '0')}`;
+  const day = Number(today.slice(8, 10));
   const prevStart = (() => { const d = new Date(`${monthStart}T00:00:00Z`); d.setUTCMonth(d.getUTCMonth() - 1); return d.toISOString().slice(0, 10); })();
   const prevDays = new Date(Date.UTC(Number(prevStart.slice(0, 4)), Number(prevStart.slice(5, 7)), 0)).getUTCDate();
   const prevEnd = addDays(prevStart, Math.min(day, prevDays) - 1);
