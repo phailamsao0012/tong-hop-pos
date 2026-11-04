@@ -1,4 +1,4 @@
-import { COUNTED_STAFF, teamSubquery } from '@/lib/teams/team';
+import { COUNTED_STAFF, leadSellerFilter, teamSubquery, type Team } from '@/lib/teams/team';
 import { NET } from '@/lib/reports/stats';
 import { mktStatsReady } from '@/lib/reports/stats-mkt';
 import { MARKETING_TEAMS_KEY, UNASSIGNED_TEAM, parseMarketingTeams } from '@/lib/teams/marketing-teams';
@@ -57,12 +57,12 @@ export function trendNotes(rows: (ReturnType<typeof metrics> & { key: string; pa
 }
 
 /** fromStats: đọc số đơn / doanh số MKT từ bảng tính sẵn stats_daily_mkt (đã điền đủ lịch sử) thay vì quét đơn gốc. */
-export function trendQueries(posIds: string[], start: string, end: string, fromStats = false) {
+export function trendQueries(posIds: string[], start: string, end: string, fromStats = false, team: Team = 'all') {
   const range = vnRangeUtc(start, end), ph = posIds.map(() => '?').join(',');
   const scope = `o.pos_id IN (${ph})`, mk = "NULLIF(TRIM(o.marketer_id),'')";
   const net = NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1');
   return [
-    { sql: `SELECT ${mk} AS m, date(MIN(o.created_at), '+7 hours') AS day FROM raw_pos_orders o WHERE ${scope} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7 AND ${mk} IS NOT NULL AND o.phone IS NOT NULL GROUP BY 1,o.phone`, binds: [...posIds, range.startUtc, range.endUtc] },
+    { sql: `SELECT ${mk} AS m, date(MIN(o.created_at), '+7 hours') AS day FROM raw_pos_orders o WHERE ${scope} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7 AND ${mk} IS NOT NULL AND o.phone IS NOT NULL${leadSellerFilter('o.seller_id', team)} GROUP BY 1,o.phone`, binds: [...posIds, range.startUtc, range.endUtc] },
     fromStats
       ? { sql: `SELECT NULLIF(TRIM(s.marketer_id),'') AS m, s.day, SUM(s.orders) AS newOrders, SUM(s.net) AS newNet FROM stats_daily_mkt s WHERE s.pos_id IN (${ph}) AND s.day>=? AND s.day<=? AND s.marketer_id IN ${COUNTED_STAFF} AND s.seller_id IN ${teamSubquery('sale')} GROUP BY 1,2`, binds: [...posIds, start, end] }
       : { sql: `SELECT ${mk} AS m, date(o.first_confirmed_at, '+7 hours') AS day, COUNT(*) AS newOrders, SUM(${net}) AS newNet FROM raw_pos_orders o WHERE ${scope} AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,6,7) AND ${mk} IS NOT NULL AND o.marketer_id IN ${COUNTED_STAFF} AND o.seller_id IN ${teamSubquery('sale')} GROUP BY 1,2`, binds: [...posIds, range.startUtc, range.endUtc] },
@@ -78,7 +78,7 @@ export async function mktTrend(opts: { start: string; end: string; posIds: strin
   const fromStats = await mktStatsReady(db);
   const [costs, leads, closed, setting] = await db.batch([
     db.prepare('SELECT marketer_id AS m, day, SUM(amount) AS cost FROM ad_costs WHERE day>=? AND day<=? GROUP BY 1,2').bind(opts.start, opts.end),
-    ...trendQueries(opts.posIds, opts.start, opts.end, fromStats).map(q => db.prepare(q.sql).bind(...q.binds)),
+    ...trendQueries(opts.posIds, opts.start, opts.end, fromStats, opts.team === 'sale' || opts.team === 'cskh' ? opts.team : 'all').map(q => db.prepare(q.sql).bind(...q.binds)),
     db.prepare('SELECT value FROM app_settings WHERE key=?').bind(MARKETING_TEAMS_KEY),
   ]);
   const teams = parseMarketingTeams((setting.results[0] as { value?: string } | undefined)?.value);

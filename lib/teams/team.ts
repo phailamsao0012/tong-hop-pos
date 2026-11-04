@@ -135,3 +135,8 @@ export const teamFilter = (column: string, team: Team, counted = true, unit: HrU
   const q = unit && !unit.branchOnly ? unitSubquery(unit, counted) : teamSubquery(team, counted);
   return (q ? ` AND ${column} IN ${q}` : '') + (unit?.branchOnly ? branchFilter(column, unit.branch ?? null) : '');
 };
+/** Số về MKT (anh Vũ 04/11/2026, ý sếp): đơn chia cho Sale là số Sale, chia cho CSKH là số CSKH; chưa chia hoặc chia người ngoài
+ *  Sale / CSKH không tính. Nút Sale / CSKH chỉ lấy bên đó, Tất cả lấy cả hai. */
+export const leadSellerFilter = (column: string, team: Team = 'all') =>
+  team === 'sale' || team === 'cskh' ? ` AND ${column} IN ${teamSubquery(team)}` : ` AND (${column} IN ${teamSubquery('sale')} OR ${column} IN ${teamSubquery('cskh')})`;
+

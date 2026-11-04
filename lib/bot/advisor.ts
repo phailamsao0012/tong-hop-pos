@@ -1,5 +1,5 @@
 import { addDays, daysBetween, todayVn, vnRangeUtc } from '@/lib/shared/report-time';
-import { teamFilter, WORKING } from '@/lib/teams/team';
+import { leadSellerFilter, teamFilter, WORKING } from '@/lib/teams/team';
 import type { TrendOptions, TrendDept, TrendPoint } from '@/lib/reports/trend-period';
 import { POS } from '@/lib/shared/report-model';
 
@@ -108,7 +108,7 @@ export function advisorLeadsQuery(posIds: string[], start: string, end: string, 
   return { sql: `SELECT date(o.created_at,'+7 hours') AS day, o.marketer_id, COUNT(DISTINCT o.phone) AS n
     FROM raw_pos_orders o INDEXED BY idx_raw_orders_pos_created_status_phone
     WHERE o.pos_id IN (${posIds.map(() => '?').join(',')}) AND o.created_at>=? AND o.created_at<?
-    AND o.status_code<>7 AND NULLIF(TRIM(o.marketer_id),'') IS NOT NULL${filter}
+    AND o.status_code<>7 AND NULLIF(TRIM(o.marketer_id),'') IS NOT NULL ${leadSellerFilter('o.seller_id')}${filter}
     GROUP BY 1,2`, binds: [...posIds, range.startUtc, range.endUtc] };
 }
 

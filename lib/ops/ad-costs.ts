@@ -4,7 +4,7 @@
 import { env } from 'cloudflare:workers';
 import { NET } from '@/lib/reports/stats';
 import { vnRangeUtc } from '@/lib/shared/report-time';
-import { COUNTED_STAFF, teamSubquery, type Team } from '@/lib/teams/team';
+import { COUNTED_STAFF, leadSellerFilter, teamSubquery, type Team } from '@/lib/teams/team';
 
 // Nhớ bằng cờ, không giữ Promise dùng chung giữa các yêu cầu (yêu cầu bị hủy giữa chừng làm yêu cầu khác chờ mãi).
 // Các lệnh đều IF NOT EXISTS / kiểm tra cột trước, chạy trùng khi hai yêu cầu cùng lúc vẫn an toàn.
@@ -90,7 +90,7 @@ export async function mktSummary(opts: { posIds: string[]; start: string; end: s
   const mk = "NULLIF(TRIM(marketer_id),'')";
   const [costs, leads, closed] = await db.batch([
     db.prepare('SELECT marketer_id, SUM(amount) AS amount FROM ad_costs WHERE day>=? AND day<=? GROUP BY marketer_id').bind(opts.start, opts.end),
-    db.prepare(`SELECT ${mk} AS marketer_id, COUNT(*) AS orders, COUNT(DISTINCT phone) AS phones FROM raw_pos_orders WHERE pos_id IN (${ph}) AND created_at>=? AND created_at<? AND status_code<>7 AND ${mk} IS NOT NULL GROUP BY 1`).bind(...opts.posIds, startUtc, endUtc),
+    db.prepare(`SELECT ${mk} AS marketer_id, COUNT(*) AS orders, COUNT(DISTINCT phone) AS phones FROM raw_pos_orders WHERE pos_id IN (${ph}) AND created_at>=? AND created_at<? AND status_code<>7 AND ${mk} IS NOT NULL ${leadSellerFilter('seller_id', opts.team)} GROUP BY 1`).bind(...opts.posIds, startUtc, endUtc),
     db.prepare(`SELECT ${mk} AS marketer_id, COUNT(*) AS closed, COALESCE(SUM(${NET}),0) AS net, ${newSplitSql()} FROM raw_pos_orders WHERE pos_id IN (${ph}) AND first_confirmed_at>=? AND first_confirmed_at<? AND status_code NOT IN (0,17,6,7) AND ${mk} IS NOT NULL AND marketer_id IN ${COUNTED_STAFF} GROUP BY 1`).bind(...opts.posIds, startUtc, endUtc),
   ]);
   const m = new Map<string, MktRow>();
@@ -111,7 +111,7 @@ export async function roasReport(opts: { posIds: string[]; start: string; end: s
   const [costs, entries, leads, closed, names, daily] = await db.batch([
     db.prepare('SELECT marketer_id, SUM(amount) AS amount, COUNT(*) AS n FROM ad_costs WHERE day>=? AND day<=? GROUP BY marketer_id').bind(opts.start, opts.end),
     db.prepare('SELECT id, day, marketer_id, amount, campaign, note, created_at FROM ad_costs WHERE day>=? AND day<=? ORDER BY day DESC, created_at DESC LIMIT 500').bind(opts.start, opts.end),
-    db.prepare(`SELECT ${mk} AS marketer_id, COUNT(*) AS orders, COUNT(DISTINCT phone) AS phones, SUM(status_code NOT IN (0,17,6,7)) AS closed_leads FROM raw_pos_orders WHERE pos_id IN (${ph}) AND created_at>=? AND created_at<? AND status_code<>7 AND ${mk} IS NOT NULL GROUP BY 1`).bind(...opts.posIds, startUtc, endUtc),
+    db.prepare(`SELECT ${mk} AS marketer_id, COUNT(*) AS orders, COUNT(DISTINCT phone) AS phones, SUM(status_code NOT IN (0,17,6,7)) AS closed_leads FROM raw_pos_orders WHERE pos_id IN (${ph}) AND created_at>=? AND created_at<? AND status_code<>7 AND ${mk} IS NOT NULL ${leadSellerFilter('seller_id', opts.team)} GROUP BY 1`).bind(...opts.posIds, startUtc, endUtc),
     db.prepare(`SELECT ${mk} AS marketer_id, COUNT(*) AS closed, COALESCE(SUM(${NET}),0) AS net, ${newSplitSql()}, SUM(status_code IN (4,5,15)) AS returned FROM raw_pos_orders WHERE pos_id IN (${ph}) AND first_confirmed_at>=? AND first_confirmed_at<? AND status_code NOT IN (0,17,6,7) AND ${mk} IS NOT NULL AND marketer_id IN ${COUNTED_STAFF} GROUP BY 1`).bind(...opts.posIds, startUtc, endUtc),
     db.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE name<>'' GROUP BY user_id"),
     db.prepare('SELECT day, SUM(amount) AS amount FROM ad_costs WHERE day>=? AND day<=? GROUP BY day ORDER BY day').bind(opts.start, opts.end),
