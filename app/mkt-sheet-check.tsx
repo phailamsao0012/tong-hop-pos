@@ -4,6 +4,7 @@
 // Sheet: cột SĐT, Đơn, DT marketer tự ghi (lib/sheet-costs.ts lưu ở sheet_mkt_stats). POS: đơn Pancake có Marketer (lib/mkt-sheet-check.ts).
 // Chưa biết sheet ghi theo ngày tạo đơn hay ngày chốt, cả CSKH hay chỉ Sale: cho chọn mốc ngày và hiện POS tách New / CSKH, kèm gợi ý cột nào khớp nhất.
 import { useMemo, useState, type ReactNode } from 'react';
+import { usePosStaffFilter } from './pos-store';
 import { CalendarDays, Check, FileSpreadsheet, UserRound, X } from 'lucide-react';
 import { EmptyState, SegmentedControl, SortTh, StatusChip, TableWrap, dmy, money, shortMoney, useSort, vi } from './ui-kit';
 import type { Tone } from './ui-kit';
@@ -67,6 +68,8 @@ export function MktSheetCheck({ start, end, posIds }: { start: string; end: stri
   const [targetPick, setTarget] = useState<Target | null>(null);
   const [view, setView] = useState<View>('marketer');
   const [picked, setPicked] = useState<string | null>(null);
+  // Chọn POS nào chỉ hiện người có tài khoản trên POS đó (anh Vũ 04/11/2026); tổng giữ nguyên.
+  const onPos = usePosStaffFilter();
   const url = useMemo(() => `/api/marketing/sheet-check?${new URLSearchParams({ start, end, posIds: posIds.join(',') })}`, [start, end, posIds]);
   const { data, loading, error, reload } = useApi<Data>(url, { keep: true });
   const sort = useSort<SortKey>('sRev');
@@ -112,7 +115,7 @@ export function MktSheetCheck({ start, end, posIds }: { start: string; end: stri
     }
     return [...byDay.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([day, x]) => ({ ...x, id: day, name: dmy(day) }));
   };
-  const lines: Line[] = view === 'marketer' ? data.marketers.map((m) => ({ id: m.id, name: m.name, counted: m.counted, ...(byMarketer.get(m.id) ?? zeroRow()) })) : dayLines();
+  const lines: Line[] = view === 'marketer' ? data.marketers.filter((m) => !onPos || onPos(m.id)).map((m) => ({ id: m.id, name: m.name, counted: m.counted, ...(byMarketer.get(m.id) ?? zeroRow()) })) : dayLines();
   const val = (r: Line, k: SortKey) => {
     const p = r[basis], q = pick(p, target);
     switch (k) {

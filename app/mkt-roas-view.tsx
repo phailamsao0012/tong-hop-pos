@@ -3,7 +3,7 @@
 // Chi phí & ROAS (giai đoạn 3c · 26/09/2026): marketer / trưởng team nhập chi phí quảng cáo theo ngày (tay hoặc file Excel theo mẫu),
 // web ghép với số và đơn chốt của từng marketer để ra ROAS, chi phí / số, chi phí / đơn chốt.
 import { useTeam } from './team-store';
-import { usePosIds } from './pos-store';
+import { usePosIds, usePosStaffFilter } from './pos-store';
 import { usePeriod } from './period-store';
 import { AiPackButton } from './ai-pack';
 import { useMemo, useRef, useState } from 'react';
@@ -50,7 +50,9 @@ export function MktRoasView({ owner = false }: { owner?: boolean }) {
   const fileRef = useRef<HTMLInputElement>(null);
   type K = 'newNet' | 'cskhNet' | 'newOrders' | 'costShare' | 'cost' | 'net' | 'roas' | 'phones' | 'costPerLead' | 'closed' | 'costPerClosed' | 'closeRate' | 'returnRate';
   const sort = useSort<K>('net');
-  const rows = useMemo(() => sort.apply(r?.rows ?? [], (x, k) => x[k]), [r, sort]);
+  // Chọn POS nào chỉ hiện người có tài khoản trên POS đó (anh Vũ 04/11/2026); tổng giữ nguyên.
+  const onPos = usePosStaffFilter();
+  const rows = useMemo(() => sort.apply((r?.rows ?? []).filter((x) => !onPos || onPos(x.marketerId)), (x, k) => x[k]), [r, sort, onPos]);
   const dailyMax = Math.max(1, ...(r?.daily ?? []).map((d) => d.amount));
   // Đủ mọi ngày trong kỳ (ngày chưa nhập = 0) để thanh không bị kéo giãn khi mới có vài ngày.
   const days = useMemo(() => { const out: { day: string; amount: number }[] = []; const m = new Map((r?.daily ?? []).map((d) => [d.day, d.amount]));

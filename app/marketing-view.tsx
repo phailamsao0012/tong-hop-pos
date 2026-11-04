@@ -1,7 +1,7 @@
 'use client';
 import { AdvisorPanel } from './advisor-panel';
 
-import { usePosIds } from './pos-store';
+import { usePosIds, usePosStaffFilter } from './pos-store';
 import { usePeriod } from './period-store';
 import { ICON } from './icons';
 import { useEffect, useMemo, useState } from 'react';
@@ -67,10 +67,13 @@ function FilterSelect({ label, value, onChange, options }: { label: string; valu
   </Select>;
 }
 
-function MarketingTeamSelect({ teams, value, onChange, label = 'Team Marketing' }: { teams: MarketingTeam[]; value: string; onChange: (value: string) => void; label?: string }) {
-  return <Select value={value} items={{ __all: 'Tất cả team MKT', __unassigned: 'Chưa phân nhóm', ...Object.fromEntries(teams.map((t) => [t.id, `${t.name} · ${t.memberIds.length} người`])) }} onValueChange={(v) => onChange(String(v))}>
+function MarketingTeamSelect({ teams, value, onChange, label = 'Team Marketing', onPos }: { teams: MarketingTeam[]; value: string; onChange: (value: string) => void; label?: string; onPos?: ((id: string) => boolean) | null }) {
+  // Đang chọn POS: chỉ đếm và chỉ hiện team có người trên POS đó (anh Vũ 04/11/2026).
+  const count = (t: MarketingTeam) => onPos ? t.memberIds.filter(onPos).length : t.memberIds.length;
+  teams = onPos ? teams.filter((t) => count(t) > 0 || t.id === value) : teams;
+  return <Select value={value} items={{ __all: 'Tất cả team MKT', __unassigned: 'Chưa phân nhóm', ...Object.fromEntries(teams.map((t) => [t.id, `${t.name} · ${count(t)} người`])) }} onValueChange={(v) => onChange(String(v))}>
     <SelectTrigger className="min-w-48" aria-label={label}><SelectValue /></SelectTrigger>
-    <SelectContent><SelectItem value="__all">Tất cả team MKT</SelectItem><SelectItem value="__unassigned">Chưa phân nhóm</SelectItem>{teams.map((t) => <SelectItem key={t.id} value={t.id}>{t.name} · {t.memberIds.length} người</SelectItem>)}</SelectContent>
+    <SelectContent><SelectItem value="__all">Tất cả team MKT</SelectItem><SelectItem value="__unassigned">Chưa phân nhóm</SelectItem>{teams.map((t) => <SelectItem key={t.id} value={t.id}>{t.name} · {count(t)} người</SelectItem>)}</SelectContent>
   </Select>;
 }
 
@@ -95,6 +98,9 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
   const [productKey, setProductKey] = useState('__all');
   const [source, setSource] = useState('__all');
   const sort = useSort<SortKey>('rank');
+  // Chọn POS nào chỉ hiện người có tài khoản trên POS đó (anh Vũ 04/11/2026: "chỉ có tên của các thành viên trong pos đó thôi");
+  // tổng đơn duy nhất giữ nguyên như các mục khác (#113).
+  const onPos = usePosStaffFilter();
   useEffect(() => {
     void fetch('/api/marketing-teams', { cache: 'no-store' }).then((r) => r.ok ? r.json() as Promise<{ teams: MarketingTeam[] }> : { teams: [] }).then((body) => setMarketingTeams(body.teams)).catch(() => undefined);
   }, []);
@@ -114,7 +120,7 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
   }, [start, end, posIds, team, basis, stage, branch, marketingTeamId, marketerId, sellerId, careId, productKey, source]);
   const { data, at, stale, loading, error, reload } = useApi<Report>(url, { keep: false });
   const s = data?.summary;
-  const sortedRows = useMemo(() => sort.apply((data?.byMarketer ?? []).map((r) => ({ ...r, ...(!otherStages ? r.stageMetrics[rankStage] : {}) })), (r, k) => {
+  const sortedRows = useMemo(() => sort.apply((data?.byMarketer ?? []).filter((r) => !onPos || onPos(r.marketerId)).map((r) => ({ ...r, ...(!otherStages ? r.stageMetrics[rankStage] : {}) })), (r, k) => {
     switch (k) {
       case 'name': return r.marketerName;
       case 'team': return r.marketingTeamName;
@@ -136,8 +142,16 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
       case 'returned': return r.returnedOrders + r.cancelledOrders;
       default: return 0;
     }
-  }), [data, sort, rankStage, otherStages]);
-  const sortedTeamRows = useMemo(() => sort.apply((data?.byTeam ?? []).map((r) => ({ ...r, ...(!otherStages ? r.stageMetrics[rankStage] : {}) })), (r, k) => {
+  }), [data, sort, rankStage, otherStages, onPos]);
+  const sortedTeamRows = useMemo(() => sort.apply((data?.byTeam ?? []).map((r) => {
+    if (!onPos) return r;
+    // Số marketer chỉ đếm người trên POS; team không còn ai trên POS và không có đơn thì ẩn.
+    const configured = marketingTeams.find((t) => t.id === r.marketingTeamId);
+    const inTeam = (id: string) => configured ? configured.memberIds.includes(id) : !marketingTeams.some((t) => t.memberIds.includes(id));
+    const members = (data?.byMarketer ?? []).filter((m) => inTeam(m.marketerId) && onPos(m.marketerId)).length;
+    const onPosMembers = configured ? configured.memberIds.filter(onPos).length : members;
+    return onPosMembers || members || r.createdOrders || r.orders ? { ...r, marketerCount: members } : null;
+  }).filter((r): r is NonNullable<typeof r> => !!r).map((r) => ({ ...r, ...(!otherStages ? r.stageMetrics[rankStage] : {}) })), (r, k) => {
     switch (k) {
       case 'name': case 'team': return r.marketingTeamName;
       case 'created': return r.createdOrders;
@@ -158,7 +172,7 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
       case 'returned': return r.returnedOrders + r.cancelledOrders;
       default: return 0;
     }
-  }), [data, sort, rankStage, otherStages]);
+  }), [data, sort, rankStage, otherStages, onPos, marketingTeams]);
   const rows = rankByStage(sortedRows.map((r) => ({ ...r, rankName: r.marketerName, ...(otherStages ? { stageMetrics: { ...r.stageMetrics, [stage]: { orders: r.orders, net: r.net } } } : {}) })), otherStages ? stage : rankStage)
     .map((r) => ({ ...r, ...(!otherStages ? r.stageMetrics[rankStage] : {}) }));
   const teamRows = rankByStage(sortedTeamRows.map((r) => ({ ...r, rankName: r.marketingTeamName, ...(otherStages ? { stageMetrics: { ...r.stageMetrics, [stage]: { orders: r.orders, net: r.net } } } : {}) })), otherStages ? stage : rankStage)
@@ -220,14 +234,14 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
       <TrendNotes depts={['mkt']} mktTeam={marketingTeamId} />
       <Toolbar>
         <span className="px-1 text-[12.5px] font-semibold text-ink-2">Cách tính</span>
-        <MarketingTeamSelect teams={marketingTeams} value={marketingTeamId} onChange={(v) => { setMarketingTeamId(v); setMarketerId('__all'); }} />
+        <MarketingTeamSelect teams={marketingTeams} onPos={onPos} value={marketingTeamId} onChange={(v) => { setMarketingTeamId(v); setMarketerId('__all'); }} />
         <Select value={basis} items={BASES} onValueChange={(v) => setBasis(v as Basis)}>
           <SelectTrigger className="min-w-48" aria-label="Mốc thời gian"><SelectValue /></SelectTrigger>
           <SelectContent>{Object.entries(BASES).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
         </Select>
-        <FilterSelect label="marketer" value={marketerId} onChange={setMarketerId} options={data?.marketerOptions ?? []} />
-        <FilterSelect label="Sale" value={sellerId} onChange={setSellerId} options={data?.sellerOptions ?? []} />
-        <FilterSelect label="CSKH" value={careId} onChange={setCareId} options={data?.careOptions ?? []} />
+        <FilterSelect label="marketer" value={marketerId} onChange={setMarketerId} options={(data?.marketerOptions ?? []).filter((x) => !onPos || onPos(x.id))} />
+        <FilterSelect label="Sale" value={sellerId} onChange={setSellerId} options={(data?.sellerOptions ?? []).filter((x) => !onPos || onPos(x.id))} />
+        <FilterSelect label="CSKH" value={careId} onChange={setCareId} options={(data?.careOptions ?? []).filter((x) => !onPos || onPos(x.id))} />
         <Select value={productKey} items={{ __all: 'Tất cả sản phẩm', ...Object.fromEntries((data?.productOptions ?? []).map((x) => [x.key, x.name])) }} onValueChange={(v) => setProductKey(String(v))}>
           <SelectTrigger className="min-w-56" aria-label="Sản phẩm"><SelectValue /></SelectTrigger>
           <SelectContent><SelectItem value="__all">Tất cả sản phẩm</SelectItem>{(data?.productOptions ?? []).map((x) => <SelectItem key={x.key} value={x.key}>{x.name} · {vi.format(x.orders)} đơn</SelectItem>)}</SelectContent>
@@ -282,7 +296,7 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
               <button type="button" className={`rounded-md px-3 py-1.5 text-xs font-semibold ${rankingMode === 'team' ? 'bg-primary text-white' : 'text-ink-2 hover:bg-surface-2'}`} aria-pressed={rankingMode === 'team'} onClick={() => { setRankingMode('team'); if (sort.key === 'team') sort.setKey('net'); }}>Theo team</button>
               <button type="button" className={`rounded-md px-3 py-1.5 text-xs font-semibold ${rankingMode === 'marketer' ? 'bg-primary text-white' : 'text-ink-2 hover:bg-surface-2'}`} aria-pressed={rankingMode === 'marketer'} onClick={() => setRankingMode('marketer')}>Theo nhân viên</button>
             </fieldset>
-            <MarketingTeamSelect teams={marketingTeams} value={marketingTeamId} label="Lọc team trong xếp hạng" onChange={(v) => { setMarketingTeamId(v); setMarketerId('__all'); }} />
+            <MarketingTeamSelect teams={marketingTeams} onPos={onPos} value={marketingTeamId} label="Lọc team trong xếp hạng" onChange={(v) => { setMarketingTeamId(v); setMarketerId('__all'); }} />
             <Select value={sort.key} items={rankingMode === 'team' ? TEAM_SORTS : SORTS} onValueChange={(v) => sort.setKey(v as SortKey)}><SelectTrigger className="min-w-44" aria-label="Sắp xếp xếp hạng Marketing"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(rankingMode === 'team' ? TEAM_SORTS : SORTS).filter(([k]) => rankingMode !== 'team' || k !== 'team').map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent></Select>
           </div>}>
           {rankingMode === 'team' ? (teamRows.length ? <>
