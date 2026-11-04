@@ -778,3 +778,7 @@
   .task-row { flex-wrap: wrap; }
   .task-row > span:first-child { flex-basis: 100%; }
 }
+
+/* Trạng thái nhân viên (app/staff-name.tsx, anh Vũ 04/11/2026): tạm nghỉ vàng, đã nghỉ đỏ, ở mọi chỗ có tên. */
+[data-st="paused"] { color: var(--st-paused) !important; }
+[data-st="left"] { color: var(--bad) !important; }

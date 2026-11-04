@@ -78,3 +78,48 @@ export function StaffStatusPanel() {
     </ChartCard>
   );
 }
+
+const norm = (s: string) => s.normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase();
+const SUFFIX = /\s+(sale|cskh|mkt)$/;
+/**
+ * Tô màu tên ở MỌI chỗ trên web (anh Vũ 04/11/2026: "ở bất kì đâu cũng phải hiện, không phải chỉ ở mục tài khoản"):
+ * chữ nào đúng bằng tên một nhân viên tạm nghỉ / đã nghỉ thì gắn data-st lên thẻ bọc nó (CSS tô vàng / đỏ). Chỉ gắn thuộc tính,
+ * không đổi cây React; tên vẽ trong biểu đồ canvas thì không tô được. Khớp cả tên bỏ hậu tố SALE / CSKH / MKT nếu không trùng ai.
+ */
+export function StatusPainter() {
+  const map = useStaffStatus();
+  const [emps, setEmps] = useState<Employee[] | null>(null);
+  const any = Object.keys(map).length > 0;
+  useEffect(() => { if (any && !emps) void apiJson<Employee[]>('/api/employees?team=all').then(setEmps).catch(() => undefined); }, [any, emps]);
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const byName = new Map<string, Exclude<StaffStatus, 'working'>>();
+    const bare = new Map<string, Exclude<StaffStatus, 'working'> | null>();
+    for (const e of emps ?? []) {
+      const s = map[e.id], k = norm(e.name), b = k.replace(SUFFIX, '');
+      if (s) byName.set(k, s);
+      if (b !== k) bare.set(b, bare.has(b) && bare.get(b) !== (s ?? null) ? null : (s ?? null));
+    }
+    for (const [b, s] of bare) if (s && !byName.has(b)) byName.set(b, s);
+    const ownText = (el: Element) => { let t = ''; for (const n of el.childNodes) if (n.nodeType === 3) t += n.textContent ?? ''; return norm(t); };
+    const paint = () => {
+      for (const el of document.querySelectorAll('[data-st]')) { const s = byName.get(ownText(el)); if (s) { if (el.getAttribute('data-st') !== s) el.setAttribute('data-st', s); } else { el.removeAttribute('data-st'); if (Object.values(STAFF_STATUSES).includes(el.getAttribute('title') as never)) el.removeAttribute('title'); } }
+      if (!byName.size) return;
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        const raw = n.textContent ?? '';
+        if (raw.length < 3 || raw.length > 80) continue;
+        const el = n.parentElement;
+        if (!el || el.closest('script,style,textarea,[contenteditable]')) continue;
+        const s = byName.get(ownText(el));
+        if (s && el.getAttribute('data-st') !== s) { el.setAttribute('data-st', s); if (!el.getAttribute('title')) el.setAttribute('title', STAFF_STATUSES[s]); }
+      }
+    };
+    paint();
+    let t = 0;
+    const ob = new MutationObserver(() => { clearTimeout(t); t = window.setTimeout(paint, 200); });
+    ob.observe(document.body, { childList: true, subtree: true, characterData: true });
+    return () => { ob.disconnect(); clearTimeout(t); };
+  }, [emps, map]);
+  return null;
+}
