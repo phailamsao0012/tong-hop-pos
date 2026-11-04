@@ -1,6 +1,7 @@
 import { addUsage, cycleSummary, observeD1, type UsageDay } from '@/lib/ops/d1-usage';
 import { DurableObject } from 'cloudflare:workers';
 import { DEFAULT_BUDGET, WRITE_LIMIT_ERROR, buildStatsMonth, runScheduledSync } from '@/lib/pancake/sync';
+import { MKT_EPOCH, MKT_READY_KEY, buildMktMonth } from '@/lib/reports/stats-mkt';
 import { SELLER_PRODUCT_EPOCH, SELLER_PRODUCT_READY_KEY, SENT_AT_EPOCH, SENT_AT_READY_KEY, buildSellerProductMonth, countSentEstimatedMonth, fillClosedAtMonth, fillSentAtMonth } from '@/lib/reports/stats';
 import { DAY_EXPR } from '@/lib/reports/stats';
 import { buildCustomerStatsMonth } from '@/lib/reports/customer-stats';
@@ -43,6 +44,9 @@ type State = {
   /** (POS:tháng) còn phải điền stats_daily_seller_product (migration 0042); null = chưa liệt kê. */
   sellerProductPending?: string[] | null;
   sellerProductEpoch?: number;
+  /** (POS:tháng) còn phải điền stats_daily_mkt (migration 0050); null = chưa liệt kê. */
+  mktPending?: string[] | null;
+  mktEpoch?: number;
   /** (POS:tháng) còn phải điền giờ gửi first_sent_at (migration 0043); null = chưa liệt kê. */
   sentPending?: string[] | null;
   sentEpoch?: number;
@@ -76,6 +80,7 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
     if (state.statsEpoch !== STATS_EPOCH) { state.statsEpoch = STATS_EPOCH; state.statsPending = null; }
     if (state.customerEpoch !== CUSTOMER_EPOCH) { state.customerEpoch = CUSTOMER_EPOCH; state.customerPending = null; }
     if (state.sellerProductEpoch !== SELLER_PRODUCT_EPOCH) { state.sellerProductEpoch = SELLER_PRODUCT_EPOCH; state.sellerProductPending = null; }
+    if (state.mktEpoch !== MKT_EPOCH) { state.mktEpoch = MKT_EPOCH; state.mktPending = null; }
     if (state.sentEpoch !== SENT_AT_EPOCH) { state.sentEpoch = SENT_AT_EPOCH; state.sentPending = null; }
     return state;
   }
@@ -211,6 +216,21 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
       if (hadPending && !s.sellerProductPending.length) {
         await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at WHERE app_settings.value IS NOT excluded.value')
           .bind(SELLER_PRODUCT_READY_KEY, String(SELLER_PRODUCT_EPOCH), new Date().toISOString()).run();
+      }
+    }
+    // Số MKT theo ngày xác nhận (0050): điền tháng cũ, mới trước cũ sau, ngắn như trên; xong thì ghi cờ để Xu hướng đọc bảng này.
+    if (!s.statsPending.length && !s.customerPending.length && !s.sellerProductPending?.length) {
+      if (s.mktPending == null) s.mktPending = await listMonths();
+      const hadPending = s.mktPending.length > 0;
+      while (s.mktPending.length && light()) {
+        const [posId, month] = s.mktPending[0].split(':');
+        writes += await buildMktMonth(db, posId, month);
+        s.mktPending.shift();
+        await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes });
+      }
+      if (hadPending && !s.mktPending.length) {
+        await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at WHERE app_settings.value IS NOT excluded.value')
+          .bind(MKT_READY_KEY, String(MKT_EPOCH), new Date().toISOString()).run();
       }
     }
     // Giờ gửi first_sent_at (0043, Vận đơn theo ngày gửi hàng): điền đơn cũ sau cùng, ngắn như trên; xong thì ghi cờ để Vận đơn đổi cách tính.

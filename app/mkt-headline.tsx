@@ -7,6 +7,7 @@
 // (người / team dùng chung bộ lọc với bảng marketer bên dưới; sản phẩm sheet chỉ lọc khối này).
 // Theo bộ lọc kỳ + POS chung của web. Số liệu: lib/mkt-analytics.ts.
 import { useMemo, useState } from 'react';
+import { usePosStaffFilter } from './pos-store';
 import { ArrowRight, BadgeDollarSign, CalendarDays, Check, CheckCircle2, Coins, Megaphone, Package, Phone, TrendingUp, UsersRound, UserRound, Wallet, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Area, Bar, BarChart, CartesianGrid, ComposedChart, LabelList, XAxis, YAxis } from 'recharts';
@@ -233,6 +234,8 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
   const [product, setProduct] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('people');
   const seg = useTeam();
+  // Chọn POS nào chỉ hiện người có tài khoản trên POS đó (anh Vũ 04/11/2026); tổng giữ nguyên.
+  const onPos = usePosStaffFilter();
   const url = useMemo(() => {
     const p = new URLSearchParams({ start, end, posIds: posIds.join(',') });
     if (seg !== 'all') p.set('team', seg);
@@ -267,7 +270,7 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
   const pickProduct = (id: string) => setProduct(id === product ? null : id);
   const teamName = new Map(data.teams.map((t) => [t.id, t.name]));
 
-  const people: Row[] = data.people.filter((r) => !teamId || marketerId || r.picked)
+  const people: Row[] = data.people.filter((r) => (!teamId || marketerId || r.picked) && (!onPos || onPos(r.id)))
     .map((r) => ({ id: r.id, name: r.name, sub: teamName.get(r.teamId) ?? (r.teamId === '__unassigned' ? 'Chưa phân team' : undefined), m: r, prevNet: r.prevNet, active: r.id === marketerId, dim: !!marketerId && r.id !== marketerId }));
   const teams: Row[] = data.teams.map((t) => ({ id: t.id, name: t.name, sub: `${vi.format(t.people)} marketer`, m: t, prevNet: t.prevNet, active: t.id === teamId && !marketerId }));
   const products: Row[] = data.products.map((r) => ({ id: r.product, name: productName(r.product), m: r, active: r.product === product,

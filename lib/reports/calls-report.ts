@@ -27,11 +27,35 @@ export async function parseCallsParams(p: URLSearchParams): Promise<CallsOpts | 
   return { posIds: requested.length ? requested : POS.map((x) => x.id), start, end, team: unitScope.team, unit: unitScope.unit };
 }
 
+type Coverage = { customers: number; notes: number; first_note: string | null; last_fetch: string | null };
+/** Lưu sẵn 15 phút (app_settings) số khách / số ghi chú đã gom ở đầu trang Cuộc gọi: câu đếm đọc hơn 1 triệu dòng mỗi lần
+ *  (số đo D1 04/11/2026), mà số này chỉ để biết dữ liệu đã gom tới đâu. */
+export const COVERAGE_TTL_MS = 15 * 60 * 1000;
+export function freshCoverage(value: string | null | undefined, now: number): Coverage | null {
+  if (!value) return null;
+  try {
+    const c = JSON.parse(value) as { at?: number; cov?: Coverage };
+    return typeof c.at === 'number' && c.cov && now - c.at <= COVERAGE_TTL_MS && c.at <= now ? c.cov : null;
+  } catch { return null; }
+}
+export async function callsCoverage(db: D1Database, posIds: string[], now = Date.now()): Promise<Coverage> {
+  const key = `calls_coverage:${[...posIds].sort().join(',')}`;
+  const saved = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(key).first<{ value: string }>();
+  const cached = freshCoverage(saved?.value, now);
+  if (cached) return cached;
+  const ph = posIds.map(() => '?').join(',');
+  const cov = await db.prepare(`SELECT (SELECT COUNT(*) FROM pos_customers WHERE pos_id IN (${ph})) AS customers, (SELECT COUNT(*) FROM customer_notes WHERE pos_id IN (${ph})) AS notes, (SELECT MIN(created_at) FROM customer_notes WHERE pos_id IN (${ph})) AS first_note, (SELECT MAX(fetched_at) FROM customer_notes WHERE pos_id IN (${ph})) AS last_fetch`)
+    .bind(...posIds, ...posIds, ...posIds, ...posIds).first<Coverage>() ?? { customers: 0, notes: 0, first_note: null, last_fetch: null };
+  await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at')
+    .bind(key, JSON.stringify({ at: now, cov }), new Date(now).toISOString()).run();
+  return cov;
+}
+
 export async function callsReport({ posIds, start, end, team, unit }: CallsOpts) {
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const ph = posIds.map(() => '?').join(',');
   const tf = teamFilter('n.author_id', team, false, unit);
-  const [[daily, orders, names, assigned, coverage, cursors, unknownAuthors], pendingCustomers] = await Promise.all([env.DB.batch([
+  const [[daily, orders, names, assigned, cursors, unknownAuthors], pendingCustomers, cov] = await Promise.all([env.DB.batch([
     // Ghi chú theo người viết × ngày.
     env.DB.prepare(`SELECT n.author_id, MAX(n.author_name) AS author_name, ${VN_DAY('n.created_at')} AS day, COUNT(*) AS notes, COUNT(DISTINCT n.pos_id||':'||COALESCE(n.customer_id,n.phone)) AS customers
       FROM customer_notes n WHERE n.pos_id IN (${ph}) AND n.created_at>=? AND n.created_at<?${tf} GROUP BY 1,3`).bind(...posIds, startUtc, endUtc),
@@ -42,11 +66,10 @@ export async function callsReport({ posIds, start, end, team, unit }: CallsOpts)
     env.DB.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE name<>'' GROUP BY user_id"),
     // Data đang cầm: số khách đang được phân công cho từng nhân viên (từ mục Khách hàng Pancake).
     env.DB.prepare(`SELECT assigned_user_id AS author_id, COUNT(*) AS assigned FROM pos_customers WHERE pos_id IN (${ph}) AND assigned_user_id IS NOT NULL${teamFilter('assigned_user_id', team, false, unit)} GROUP BY 1`).bind(...posIds),
-    env.DB.prepare(`SELECT (SELECT COUNT(*) FROM pos_customers WHERE pos_id IN (${ph})) AS customers, (SELECT COUNT(*) FROM customer_notes WHERE pos_id IN (${ph})) AS notes, (SELECT MIN(created_at) FROM customer_notes WHERE pos_id IN (${ph})) AS first_note, (SELECT MAX(fetched_at) FROM customer_notes WHERE pos_id IN (${ph})) AS last_fetch`).bind(...posIds, ...posIds, ...posIds, ...posIds),
     env.DB.prepare(`SELECT id, customer_cursor FROM pos_shops WHERE id IN (${ph})`).bind(...posIds),
     // Ghi chú trong kỳ mà người viết không khớp nhân viên nào (pos_users) → bị bỏ khi lọc Sale/CSKH; hiện để biết vì sao số lệch.
     env.DB.prepare(`SELECT COUNT(*) AS n, COUNT(DISTINCT author_name) AS authors FROM customer_notes WHERE pos_id IN (${ph}) AND created_at>=? AND created_at<? AND (author_id IS NULL OR author_id NOT IN (SELECT DISTINCT user_id FROM pos_users))`).bind(...posIds, startUtc, endUtc),
-  ]), countPendingNotes(env.DB, posIds)]);
+  ]), countPendingNotes(env.DB, posIds), callsCoverage(env.DB, posIds)]);
   const nameMap = new Map((names.results as { user_id: string; name: string; department: string | null }[]).map((r) => [r.user_id, r]));
   const assignedMap = new Map((assigned.results as { author_id: string; assigned: number }[]).map((r) => [r.author_id, Number(r.assigned)]));
   const orderMap = new Map((orders.results as { author_id: string | null; day: string; orders: number; net: number }[]).map((r) => [`${r.author_id ?? ''}|${r.day}`, { orders: Number(r.orders), net: Number(r.net ?? 0) }]));
@@ -71,7 +94,6 @@ export async function callsReport({ posIds, start, end, team, unit }: CallsOpts)
     s.byDay[day] = { notes: 0, customers: 0, orders: o.orders, net: o.net };
     s.orders += o.orders; s.net += o.net;
   }
-  const cov = coverage.results[0] as { customers: number; notes: number; first_note: string | null; last_fetch: string | null };
   const unknown = unknownAuthors.results[0] as { n: number; authors: number } | undefined;
   return {
     period: { start, end, days },

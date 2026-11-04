@@ -7,6 +7,8 @@
 import { VN_OFFSET_HOURS, addDays, vnDayStartUtc } from '@/lib/shared/report-time';
 import type { SourceOrder } from '@/lib/pancake/pancake';
 import { SENT_CODES } from '@/lib/reports/shipping-lines';
+import { diffStatements, run, upsertStatement } from '@/lib/reports/stats-write';
+import { ensureMktSchema, mktReads, mktStatements } from '@/lib/reports/stats-mkt';
 
 // Ba giai đoạn đơn thống nhất toàn hệ thống (anh Vũ 08/10/2026): new (Mới) → chốt (Chờ xác nhận, Đã xác nhận, kho / in)
 // → chuyển hàng (Đang đóng hàng, Chờ chuyển, Đã gửi hàng); sau đó là kết quả giao: đã nhận, hoàn, hủy.
@@ -75,27 +77,10 @@ const sellerProductSql = `SELECT ${dayExpr('o.first_closed_at')} AS day, COALESC
   WHERE o.pos_id=? AND o.first_closed_at>=? AND o.first_closed_at<? AND o.${CLOSED} GROUP BY 1, 2, 3, 4`;
 const sellerProductExisting = `SELECT id, ${SELLER_PRODUCT_COLUMNS.join(',')} FROM stats_daily_seller_product WHERE pos_id=? AND day>=? AND day<=?`;
 
-/** Câu ghi cho stats_daily_seller_product của một khoảng ngày: so với dòng đang có, chỉ ghi dòng mới / đổi và xóa dòng không còn
- *  (mỗi lượt đồng bộ phần lớn dòng không đổi nên gần như không tốn lượt ghi). */
+/** Câu ghi cho stats_daily_seller_product của một khoảng ngày (chỉ ghi dòng mới / đổi, xóa dòng không còn). */
 function sellerProductStatements(db: D1Database, posId: string, range: { start: string; end: string }, rows: Row[], existing: Row[], now: string) {
-  const statements: D1PreparedStatement[] = [];
-  const old = new Map(existing.map((r) => [String(r.id), r]));
-  const keep = new Set<string>();
-  for (const r of rows) {
-    const day = String(r.day);
-    if (day < range.start || day > range.end) continue;
-    const key = { pos_id: posId, day, seller_id: String(r.seller_id ?? ''), product_id: String(r.product_id ?? ''), name: String(r.name ?? '') };
-    const id = Object.values(key).join(':');
-    keep.add(id);
-    const values = Object.fromEntries(SELLER_PRODUCT_COLUMNS.map((c) => [c, Number(r[c] ?? 0)]));
-    const prev = old.get(id);
-    if (prev && SELLER_PRODUCT_COLUMNS.every((c) => Number(prev[c] ?? 0) === values[c])) continue;
-    statements.push(upsertStatement(db, 'stats_daily_seller_product', key, values, now));
-  }
-  const gone = [...old.keys()].filter((id) => !keep.has(id));
-  for (let i = 0; i < gone.length; i += 500)
-    statements.push(db.prepare('DELETE FROM stats_daily_seller_product WHERE id IN (SELECT value FROM json_each(?))').bind(JSON.stringify(gone.slice(i, i + 500))));
-  return statements;
+  const keyOf = (r: Row) => ({ pos_id: posId, day: String(r.day), seller_id: String(r.seller_id ?? ''), product_id: String(r.product_id ?? ''), name: String(r.name ?? '') });
+  return diffStatements(db, 'stats_daily_seller_product', keyOf, SELLER_PRODUCT_COLUMNS, range, rows, existing, now);
 }
 
 /** Khóa app_settings: tháng cũ của stats_daily_seller_product đã điền xong (bộ hẹn giờ ghi giá trị = SELLER_PRODUCT_EPOCH). */
@@ -174,34 +159,16 @@ function dayRanges(days: Set<string>): { start: string; end: string }[] {
   return ranges;
 }
 
-function upsertStatement(db: D1Database, table: string, key: Record<string, string>, values: Record<string, number | string>, now: string) {
-  const cols = [...Object.keys(key), ...Object.keys(values), 'updated_at'];
-  const valueCols = Object.keys(values);
-  return db.prepare(
-    `INSERT INTO ${table} (id,${cols.join(',')}) VALUES (?${cols.map(() => ',?').join('')})
-     ON CONFLICT(id) DO UPDATE SET ${valueCols.map((c) => `${c}=excluded.${c}`).join(',')},updated_at=excluded.updated_at
-     WHERE ${valueCols.map((c) => `${table}.${c} IS NOT excluded.${c}`).join(' OR ')}`,
-  ).bind(Object.values(key).join(':'), ...Object.values(key), ...Object.values(values), now);
-}
-
-async function run(db: D1Database, statements: D1PreparedStatement[]) {
-  let writes = 0;
-  for (let i = 0; i < statements.length; i += 100) {
-    const results = await db.batch(statements.slice(i, i + 100));
-    for (const r of results) writes += Number(r.meta?.rows_written ?? 0);
-  }
-  return writes;
-}
-
 /** Tính lại số liệu cho các (POS, ngày) đã đổi. Trả về số dòng ghi. */
 export async function rebuildStats(db: D1Database, dirty: DirtyBuckets) {
   await ensureStatsSchema(db);
+  await ensureMktSchema(db);
   const now = new Date().toISOString();
   let writes = 0;
   for (const [posId, days] of dirty) {
     for (const range of dayRanges(days)) {
       const startUtc = vnDayStartUtc(range.start), endUtc = vnDayStartUtc(addDays(range.end, 1));
-      const [createdRows, closedRows, closedQty, assignedRows, sellerProductRows, sellerProductOld] = await db.batch([
+      const [createdRows, closedRows, closedQty, assignedRows, sellerProductRows, sellerProductOld, mktRows, mktOld] = await db.batch([
         db.prepare(`SELECT ${dayExpr('created_at')} AS day, COALESCE(seller_id,'') AS seller_id, ${createdSelect}
           FROM raw_pos_orders WHERE pos_id=? AND created_at>=? AND created_at<? GROUP BY 1, 2`).bind(posId, startUtc, endUtc),
         db.prepare(`SELECT ${dayExpr('first_closed_at')} AS day, COALESCE(seller_id,'') AS seller_id, ${closedSelect}
@@ -215,6 +182,8 @@ export async function rebuildStats(db: D1Database, dirty: DirtyBuckets) {
         // stats_daily_product cộng lại từ đây.
         db.prepare(sellerProductSql).bind(posId, startUtc, endUtc),
         db.prepare(sellerProductExisting).bind(posId, range.start, range.end),
+        // Số MKT theo ngày xác nhận (stats_daily_mkt, 0050).
+        ...mktReads(db, posId, range),
       ]);
       // Gộp ba cơ sở theo (ngày, người bán).
       const merged = new Map<string, Record<string, number>>();
@@ -261,6 +230,7 @@ export async function rebuildStats(db: D1Database, dirty: DirtyBuckets) {
         }
       }
       statements.push(...sellerProductStatements(db, posId, range, sellerProductRows.results as Row[], sellerProductOld.results as Row[], now));
+      statements.push(...mktStatements(db, posId, range, mktRows.results as Row[], mktOld.results as Row[], now));
       // Xóa dòng của người bán / sản phẩm không còn xuất hiện trong ngày đó.
       for (let d = range.start; d <= range.end; d = addDays(d, 1)) {
         const sellers = keepSellers.get(d) ?? [];
