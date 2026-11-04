@@ -1,5 +1,5 @@
 'use client';
-import { TenureBadge } from './tenure-badge';
+import { StaffName } from './staff-name';
 import { AdvisorPanel } from './advisor-panel';
 
 // Tổng quan từng bộ phận (Sale / CSKH): tình hình kinh doanh của riêng bộ phận đó — doanh thu, đơn chốt, GTTB, tỷ lệ chốt,
@@ -872,7 +872,7 @@ export function TeamOverviewView({
                       <tr key={r.sellerId}>
                         <td className="num text-[11px] text-ink-4">{i + 1}</td>
                         <td className="text-left font-medium text-ink">
-                          {r.name}<TenureBadge id={r.sellerId} />
+                          <StaffName id={r.sellerId} name={r.name} />
                           {r.department && (
                             <span className="block text-[11px] font-normal text-ink-3">
                               {r.department}
