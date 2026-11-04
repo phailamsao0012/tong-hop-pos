@@ -4,6 +4,7 @@
 // có gì lạ (không nhận người bán, đơn đổi khác) thì tự tắt POS đó và ghi lỗi.
 import { env } from 'cloudflare:workers';
 import { getOrder, listOrdersPage, pancakeSend, type SourceOrder } from '@/lib/pancake/pancake';
+import { guardReadOnly } from '@/lib/ops/read-only';
 import { MAX_PER_RUN, customerLabel, parseMode, pickCandidates, roundRobin, sellerOf, type DispatchMode, type Staff } from '@/lib/zalo/dispatch-core';
 import { WORKING } from '@/lib/teams/team';
 
@@ -69,6 +70,7 @@ async function runPos(p: PosRow, apiKey: string, now: Date) {
     } else {
       const orderId = String(order.id);
       try {
+        guardReadOnly('ghi lên Pancake');
         await pancakeSend('PUT', `/shops/${p.shop_id}/orders/${encodeURIComponent(orderId)}`, apiKey, { assigning_seller_id: s.id });
         const after = await getOrder(p.shop_id, orderId, apiKey);
         const got = sellerOf(after);

@@ -1,5 +1,6 @@
 // Mọi lần gọi Zalo đi qua đây; demo chỉ ghi hộp thư D1.
 import { env } from 'cloudflare:workers';
+import { guardReadOnly, isReadOnly } from '@/lib/ops/read-only';
 
 export async function webhookSecret(token: string) {
   const bytes = new TextEncoder();
@@ -7,6 +8,7 @@ export async function webhookSecret(token: string) {
   return Array.from(new Uint8Array(await crypto.subtle.sign('HMAC', key, bytes.encode('zalo-webhook-v1'))), b => b.toString(16).padStart(2, '0')).join('');
 }
 async function call(token: string, method: string, body: unknown, timeoutMs = 10000) {
+  guardReadOnly('gọi Zalo');
   const response = await fetch(`https://bot-api.zaloplatforms.com/bot${token}/${method}`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs),
   });
@@ -47,6 +49,7 @@ export async function deleteWebhook(token: string | undefined) {
 }
 type ZaloRaw = { ok?: boolean; result?: unknown; error_code?: unknown; description?: unknown };
 async function raw(token: string, method: string, body: unknown, timeoutMs = 10000): Promise<{ http: number; body: ZaloRaw | string }> {
+  if (isReadOnly()) return { http: 0, body: 'bản chỉ xem: không gọi Zalo' };
   try {
     const response = await fetch(`https://bot-api.zaloplatforms.com/bot${token}/${method}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs),

@@ -1,9 +1,10 @@
 // Gửi tin qua Telegram Bot API. Token bot nằm trong biến bí mật TELEGRAM_BOT_TOKEN.
 import { env } from 'cloudflare:workers';
+import { guardReadOnly } from '@/lib/ops/read-only';
 
 const API = 'https://api.telegram.org';
 /** Bản demo (số ảo) không bao giờ gửi Telegram thật, kể cả khi lỡ đặt token cho Worker demo. */
-const guardDemo = () => { if (env.DEMO_MODE === '1') throw new Error('demo: không gửi Telegram'); };
+const guardDemo = () => { if (env.DEMO_MODE === '1') throw new Error('demo: không gửi Telegram'); guardReadOnly('gửi Telegram'); };
 /** protect: tin có dữ liệu cá nhân (hồ sơ khách, ứng viên, CV) — Telegram chặn chuyển tiếp và lưu (protect_content). */
 export type SendOptions = { protect?: boolean };
 const protectField = (o?: SendOptions) => (o?.protect ? { protect_content: true } : {});
@@ -67,6 +68,7 @@ export async function webhookInfo(token: string) {
 }
 
 export async function setCommands(token: string, commands: { command: string; description: string }[]) {
+  guardDemo();
   await fetch(`${API}/bot${token}/setMyCommands`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ commands }), signal: AbortSignal.timeout(10000),
   });
