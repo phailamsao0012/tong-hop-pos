@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { POS } from '@/lib/shared/report-model';
 import { PosChips } from './overview-view';
+import { CARE_BASKETS, parseCareBasket, type CareBasket } from '@/lib/reports/care-basket';
 import { useApi } from './use-api';
 import { LadderMembers, LadderTable, ladderExtras, type LadderLine, type LadderPick } from './ladder-table';
 import { StaleChip } from './stale-chip';
@@ -60,6 +61,7 @@ export function CareView() {
   const [q, setQ] = useState('');
   const [query, setQuery] = useState('');
   const [minDays, setMinDays] = useState(0);
+  const [basket, setBasket] = useState<CareBasket>('all');
   const [sort, setSort] = useState('note_old');
   const [page, setPage] = useState(1);
   const [viewAll, setViewAll] = useState(false);
@@ -75,8 +77,8 @@ export function CareView() {
   useEffect(() => { void fetch(`/api/employees?team=${team}`).then((r) => r.ok ? r.json() as Promise<Employee[]> : []).then(setEmployees).catch(() => undefined); }, [team]);
   // Ô tìm: chờ 300 ms sau phím cuối rồi mới tìm (Enter tìm ngay).
   useEffect(() => { const t = window.setTimeout(() => setQuery(q.trim()), 300); return () => clearTimeout(t); }, [q]);
-  useEffect(() => { setPage(1); }, [posIds, assigned, query, minDays, sort, team]);
-  const params = useCallback((size: number, pg: number) => new URLSearchParams({ posIds: posIds.join(','), assigned, q: query, minDays: String(minDays), sort, size: String(size), page: String(pg), team }), [posIds, assigned, query, minDays, sort, team]);
+  useEffect(() => { setPage(1); }, [posIds, assigned, query, minDays, sort, team, basket]);
+  const params = useCallback((size: number, pg: number) => new URLSearchParams({ posIds: posIds.join(','), assigned, q: query, minDays: String(minDays), sort, size: String(size), page: String(pg), team, ...(basket !== 'all' ? { basket } : {}) }), [posIds, assigned, query, minDays, sort, team, basket]);
   // Số "lần cuối" hiện ngay từ trình duyệt (useApi), máy chủ trả số mới thì thay; đổi bộ lọc / gõ tìm / đổi trang thì tải lại theo URL mới (request cũ bị huỷ).
   const url = useMemo(() => `/api/reports/care?${params(viewAll ? 5000 : PAGE_SIZE, viewAll ? 1 : page)}`, [params, page, viewAll]);
   const { data: report, at, stale, loading, error, reload: refetch } = useApi<Report>(url);
@@ -116,7 +118,7 @@ export function CareView() {
       const staffName = assigned === 'all' ? 'Tất cả nhân viên' : assigned === '__none' ? 'Chưa phân công' : employees.find((e) => e.id === assigned)?.name ?? assigned;
       const noteCell = (n?: Note) => n ? `${dt(n.createdAt, true)} · ${n.author}: ${n.message}` : '';
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
-        [`Khách theo nhân viên · ${staffName}${noteFilterText(minDays)} · xuất ${dt(new Date().toISOString().slice(0, 19), true)}`],
+        [`Khách theo nhân viên · ${staffName}${noteFilterText(minDays)}${basket !== 'all' ? ` · ${CARE_BASKETS[basket]}` : ''} · xuất ${dt(new Date().toISOString().slice(0, 19), true)}`],
         [`${vi.format(body.total)} khách${body.total > 20000 ? ' (chỉ xuất 20.000 dòng đầu theo thứ tự đang chọn)' : ''}`], [],
         ['Tên khách hàng', 'SĐT', 'POS', 'Phân công cho', 'Lần note cuối', 'Số ngày chưa note', 'Số ghi chú', 'Ghi chú mới nhất', 'Ghi chú trước đó', 'Ghi chú trước nữa', 'Thẻ khách hàng', 'Đã nhận (đơn)', 'Số tiền đã chi', 'Lần mua cuối', 'Tổng đơn', 'Tạo hồ sơ'],
         ...body.rows.map((r) => [r.name, r.phone ?? '', r.posName, r.assignedName ?? '', r.lastNoteAt ? dt(r.lastNoteAt, true) : 'Chưa note', r.daysSinceNote ?? 'Chưa note', r.noteCount, noteCell(r.notes[0]), noteCell(r.notes[1]), noteCell(r.notes[2]), r.tags.join(', '), r.succeedOrders, r.purchased, r.lastOrderAt ? dt(r.lastOrderAt, true) : '', r.orderCount, r.insertedAt ? dt(r.insertedAt) : '']),
@@ -163,6 +165,11 @@ export function CareView() {
           <SelectContent>{DAY_OPTIONS.map((d) => <SelectItem key={d} value={d}>{dayLabel(d)}</SelectItem>)}</SelectContent>
         </Select>
         <Input type="number" min={0} className="w-24" placeholder="Số ngày" aria-label="Số ngày khác" value={minDays > 0 ? minDays : ''} onChange={(e) => setMinDays(Math.max(0, Number(e.target.value) || 0))} />
+        <span className="px-1 text-sm font-semibold text-ink-2">Đã mua</span>
+        <Select value={basket} items={CARE_BASKETS} onValueChange={(v) => setBasket(parseCareBasket(String(v)))}>
+          <SelectTrigger className="min-w-44" aria-label="Lọc theo hàng khách đã mua"><SelectValue /></SelectTrigger>
+          <SelectContent>{Object.entries(CARE_BASKETS).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
+        </Select>
         <span className="px-1 text-sm font-semibold text-ink-2">Sắp xếp</span>
         <Select value={sort} items={SORT_LABELS} onValueChange={(v) => setSort(String(v))}>
           <SelectTrigger className="min-w-40" aria-label="Sắp xếp"><SelectValue /></SelectTrigger>
@@ -231,7 +238,7 @@ export function CareView() {
           )}
           {oneStaff && <CareLadderBlock assigned={assigned} name={assignedLabel} posIds={posIds} />}
           <div className={`grid gap-4 ${selected ? '2xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]' : ''}`}>
-            <ChartCard icon={MessageSquareText} title={`Danh sách khách · ${vi.format(report.total)}`} subtitle={`${assignedLabel}${noteFilterText(minDays)}${query ? ` · "${query}"` : ''} · bấm một dòng để xem toàn bộ ghi chú`}
+            <ChartCard icon={MessageSquareText} title={`Danh sách khách · ${vi.format(report.total)}`} subtitle={`${assignedLabel}${noteFilterText(minDays)}${basket !== 'all' ? ` · ${CARE_BASKETS[basket]}` : ''}${query ? ` · "${query}"` : ''} · bấm một dòng để xem toàn bộ ghi chú`}
               action={<span className="num text-xs text-ink-3">{viewAll ? 'Toàn bộ' : `Trang ${report.page}/${pages}`}</span>} bodyClassName="transition-opacity duration-[var(--dur)]">
               {report.rows.length ? (
                 <TableWrap maxHeight="42rem" minWidth={600}>
