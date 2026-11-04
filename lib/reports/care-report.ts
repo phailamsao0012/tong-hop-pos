@@ -5,6 +5,7 @@ import { env } from 'cloudflare:workers';
 import { POS } from '@/lib/shared/report-model';
 import { teamFilter, type Team } from '@/lib/teams/team';
 import { customerBackfillProgress } from '@/lib/pancake/customers-sync';
+import { careBasketSql, parseCareBasket, type CareBasket } from '@/lib/reports/care-basket';
 
 type Row = { id: string; pos_id: string; customer_id: string; name: string; phone: string | null; assigned_user_id: string | null; level: string | null; order_count: number; succeed_order_count: number; purchased_amount: number; last_order_at: string | null; inserted_at: string | null; tags_json: string; note_count: number; last_note_at: string | null; days_since_note: number | null };
 type NoteRow = { id: string; pos_id: string; customer_id: string; author_id: string | null; author_name: string | null; message: string; created_at: string; rn: number };
@@ -16,7 +17,7 @@ const CARE_SORTS: Record<string, string> = {
   name: 'c.name COLLATE NOCASE ASC',
 };
 
-export type CareOpts = { posIds: string[]; assigned: string; q: string; minDays: number; size: number; page: number; sort: string };
+export type CareOpts = { posIds: string[]; assigned: string; q: string; minDays: number; size: number; page: number; sort: string; basket?: CareBasket };
 
 /** Đọc bộ lọc từ URL (route và lượt làm nóng cache dùng chung); POS sai thì trả câu báo lỗi. */
 export function parseCareParams(p: URLSearchParams): CareOpts | { error: string } {
@@ -33,10 +34,10 @@ export function parseCareParams(p: URLSearchParams): CareOpts | { error: string 
   const page = Math.max(1, Number(p.get('page') ?? 1) || 1);
   // Object.hasOwn: chặn sort=constructor / __proto__ (thuộc tính kế thừa) lọt vào ORDER BY gây lỗi 500.
   const sort = Object.hasOwn(CARE_SORTS, p.get('sort') ?? '') ? (p.get('sort') as string) : 'note_old';
-  return { posIds, assigned, q, minDays, size, page, sort };
+  return { posIds, assigned, q, minDays, size, page, sort, basket: parseCareBasket(p.get('basket')) };
 }
 
-export async function careReport({ posIds, assigned, q, minDays, size, page, sort }: CareOpts) {
+export async function careReport({ posIds, assigned, q, minDays, size, page, sort, basket = 'all' }: CareOpts) {
   // Trang Khách theo nhân viên chỉ dành cho CSKH (yêu cầu 21/09/2026): bỏ qua nút Tất cả/Sale, luôn lọc nhân viên CSKH.
   const team: Team = 'cskh';
   const never = minDays === -1;
@@ -51,6 +52,8 @@ export async function careReport({ posIds, assigned, q, minDays, size, page, sor
   if (q) { where.push('(c.name LIKE ? OR c.phone LIKE ? OR c.phones_json LIKE ?)'); binds.push(`%${q}%`, `%${q}%`, `%${q}%`); }
   if (never) where.push('c.last_note_at IS NULL');
   else if (minDays > 0) { where.push('(c.last_note_at IS NULL OR c.last_note_at<?)'); binds.push(cutoff(minDays)); }
+  // Lọc theo hàng đã mua: nối customer_stats theo khoá pos:phone (một dòng mỗi khách), chỉ khi có chọn.
+  if (basket !== 'all') where.push(`c.phone IS NOT NULL AND EXISTS (SELECT 1 FROM customer_stats cs WHERE cs.id=c.pos_id||':'||c.phone${careBasketSql(basket)})`);
   const whereSql = `WHERE ${where.join(' AND ')}${tf}`;
 
   const [list, summary, staff, names, shops] = await env.DB.batch([
@@ -99,7 +102,7 @@ export async function careReport({ posIds, assigned, q, minDays, size, page, sor
   const ownByStaff = new Map(ownStaff.results.map((r) => [r.id, r]));
   const closed = { orders: Number(closedRow?.o ?? 0), net: Number(closedRow?.n ?? 0) };
   return {
-    page, size, total: Number(sum?.total ?? 0), minDays, sort, backfill,
+    page, size, total: Number(sum?.total ?? 0), minDays, sort, basket, backfill,
     summary: { total, neverNoted: Number(sum?.never_noted ?? 0), over20: Number(sum?.over20 ?? 0), buyers: Number(sum?.buyers ?? 0), purchased: Number(sum?.purchased ?? 0), closedOrders: closed.orders, closedNet: closed.net, ownOrders: Number(ownRow?.o ?? 0), ownNet: Number(ownRow?.n ?? 0) },
     staff: (staff.results as { assigned_user_id: string; n: number; never_noted: number; over7: number; over20: number; noted_today: number }[]).map((s) => ({
       id: s.assigned_user_id, name: nameMap.get(s.assigned_user_id)?.name ?? s.assigned_user_id, department: nameMap.get(s.assigned_user_id)?.department ?? null,
@@ -116,6 +119,7 @@ export async function careReport({ posIds, assigned, q, minDays, size, page, sor
     definitions: {
       note: 'Ghi chú trao đổi = ghi chú nhân viên viết trên hồ sơ khách ở Pancake (mục Khách hàng). Mọi cuộc gọi đều phải ghi chú, nên "lần note cuối" = lần chăm sóc gần nhất.',
       days: '"N ngày chưa note" tính từ ghi chú mới nhất của bất kỳ ai; khách chưa có ghi chú nào được đưa vào danh sách và đánh dấu "Chưa note".',
+      basket: '"Chỉ mua kháng sinh": mọi sản phẩm khách đã mua trong đơn thành công là Gentadox / Detox (POS Siêu Vô Gạo thêm Oxy + Bổ huyết, Bio Nano Shield). "Chỉ mua combo SK + GK": mọi sản phẩm đã mua là SK, GK hoặc Godkill. Hàng tặng không tính.',
       source: 'Đã nhận, số tiền đã chi, lần mua cuối, thẻ và người phân công lấy đúng theo hồ sơ khách Pancake (cập nhật theo đồng bộ khách hàng, vài phút một lần).',
     },
   };
