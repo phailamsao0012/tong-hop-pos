@@ -23,8 +23,9 @@ export type AttentionItem = { level: 'high' | 'medium' | 'info'; text: string; v
 const TEAM_COLORS: Record<string, string> = { sale: 'var(--series-1)', cskh: 'var(--series-2)', mkt: 'var(--series-3)' };
 const tr = (n: number) => Math.round(n / 1e4) / 100; // triệu, 2 số lẻ
 
-export function useExec(posIds: string[]) {
-  return useApi<Exec>(useMemo(() => `/api/reports/exec?${new URLSearchParams({ posIds: posIds.join(',') })}`, [posIds]), { refreshMs: 5 * 60000 });
+/** month: tháng của kỳ đang chọn (YYYY-MM); bỏ trống = tháng này. */
+export function useExec(posIds: string[], month?: string) {
+  return useApi<Exec>(useMemo(() => `/api/reports/exec?${new URLSearchParams({ posIds: posIds.join(','), ...(month ? { month } : {}) })}`, [posIds, month]), { refreshMs: 5 * 60000 });
 }
 
 /** Tiến độ tháng: cộng dồn thực tế, đường mục tiêu (0 → mục tiêu), nét đứt dự báo tới cuối tháng. */
@@ -82,7 +83,7 @@ export function MonthPace({ exec, goal, onOpen }: { exec: ReturnType<typeof useE
           </ChartContainer>
           <dl className="m-0 grid grid-cols-2 gap-3 text-[12.5px] lg:grid-cols-1">
             <div><dt className="text-ink-3">Đã đạt</dt><dd className="m-0"><b className="num text-lg text-ink">{shortMoney(calc.done)}</b>{goal > 0 && <span className="ml-1 text-ink-2">{pct(calc.done / goal * 100, 0)} mục tiêu</span>}</dd></div>
-            <div><dt className="text-ink-3">Dự báo cuối tháng</dt><dd className="m-0"><b className="num text-lg text-ink">{shortMoney(calc.forecast)}</b>{goal > 0 && <span className={`ml-1 ${calc.forecast >= goal ? 'text-good' : 'text-bad'}`}>{pct(calc.forecast / goal * 100, 0)}</span>}</dd></div>
+            {calc.left > 0 && <div><dt className="text-ink-3">Dự báo cuối tháng</dt><dd className="m-0"><b className="num text-lg text-ink">{shortMoney(calc.forecast)}</b>{goal > 0 && <span className={`ml-1 ${calc.forecast >= goal ? 'text-good' : 'text-bad'}`}>{pct(calc.forecast / goal * 100, 0)}</span>}</dd></div>}
             <div><dt className="text-ink-3">{calc.need !== null ? `Cần mỗi ngày (${calc.left} ngày còn lại)` : 'Trung bình mỗi ngày'}</dt><dd className="m-0"><b className="num text-ink">{shortMoney(calc.need ?? calc.perDay)}</b>{calc.need !== null && <span className="ml-1 text-ink-3">đang {shortMoney(calc.perDay)}/ngày</span>}</dd></div>
             <div><dt className="text-ink-3">So cùng kỳ tháng trước</dt><dd className="m-0 flex items-center gap-1.5"><span className="num text-ink">{shortMoney(d.prevTotal.net)}</span><DeltaPill value={delta(d.total.net, d.prevTotal.net)} /></dd></div>
             {!goal && <p className="col-span-full m-0 text-[11.5px] text-ink-3">Chưa đặt mục tiêu tháng cho các POS này (Cấu hình → Mục tiêu tháng) nên chưa vẽ đường mục tiêu.</p>}

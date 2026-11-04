@@ -248,7 +248,7 @@ export function CenterView({ onNavigate, canRegenerateAi = false, canForecast = 
   const syncBad = sync.filter((s) => posIds.includes(s.posId) && (s.lastError || !s.lastSyncAt || loadedAt - Date.parse(s.lastSyncAt) > 15 * 60000));
   const alerts = shift?.alerts ?? [];
   // Màn Điều hành (giai đoạn 2b): tiến độ tháng hiện tại + ba bộ phận + việc cần xử lý gom từ các khối đã tải.
-  const exec = useExec(posIds);
+  const exec = useExec(posIds, targetMonth);
   const aiApi = useApi<{ summary: AiSummaryView }>('/api/ai/summary', { refreshMs: 10 * 60000 });
   const regenerateAi = async () => { toast('AI đang viết tóm tắt…'); const res = await fetch('/api/ai/summary', { method: 'POST' }); if (!res.ok) toast('Không tạo được tóm tắt', { kind: 'error' }); aiApi.reload(); };
   const ex = exec.data;
