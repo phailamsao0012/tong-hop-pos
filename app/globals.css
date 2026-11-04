@@ -67,7 +67,7 @@
   --bg:#F4F7F1; --surface:#FFFFFF; --surface-2:#EDF2E9; --surface-3:#E4EBDF; --card-line:var(--line); --line:#DFE7DB; --line-2:#d5dfd6; --line-3:#c9d6ca;
   --ink:#0F2318; --ink-2:#4A6153; --ink-3:#596D62; --ink-4:#5D6C63;
   --primary:#17684B; --primary-2:#145a41; --primary-ink:#FFFFFF; --accent-ink:var(--primary); --ring:#17684B; --tint:rgba(23,104,75,.12); --tint-2:#eef7f1;
-  --good:#147745; --good-bg:rgba(27,175,122,.12); --bad:#B83332; --bad-bg:rgba(240,128,119,.12); --warn:#B24700; --warn-bg:rgba(255,138,61,.12);
+  --good:#147745; --good-bg:rgba(27,175,122,.12); --bad:#B83332; --bad-bg:rgba(240,128,119,.12); --warn:#B24700; --warn-bg:rgba(255,138,61,.12); --st-paused:#9A7000;
   --sb:#0F3328; --sb-ink:#E8F5EC; --sb-ink-2:#A7C6B3; --sb-ink-3:#7F9A8B; --sb-line:#2b5d4e; --sb-accent:#255947; --sb-hover:#1a4a3b; --sb-box:#1b4c3b; --sb-panel:rgba(217,243,109,.06); --lime:#D9F36D; --lime-ink:#0F3328;
   --t-green-bg:#e4f5ea; --t-green:#17684b; --t-blue-bg:#e6f0fb; --t-blue:#266CC1; --t-orange-bg:#fdeee4; --t-orange:#B34F23; --t-teal-bg:#e1f5f0; --t-teal:#0D7C65;
   --t-red-bg:#fdeaea; --t-red:#C03D3C; --t-purple-bg:#ede9f9; --t-purple:#5b48b8; --t-gray-bg:#eef1ee; --t-gray:#5d7266; --t-lime-bg:#f1f8d6; --t-lime:#5a7a12;
@@ -89,7 +89,7 @@
   --bg:#0A1310; --surface:#11211A; --surface-2:#182D23; --surface-3:#20392D; --card-line:#24402F; --line:#24402F; --line-2:#2f4638; --line-3:#375547;
   --ink:#ECF3EC; --ink-2:#A8BDAF; --ink-3:#8DA195; --ink-4:#92A096;
   --primary:#D9F36D; --primary-2:#D9F36D; --primary-ink:#0F3328; --accent-ink:var(--primary); --ring:#D9F36D; --tint:rgba(217,243,109,.16); --tint-2:#1a3d2f;
-  --good:#5FCF8F; --good-bg:rgba(95,207,143,.16); --bad:#F08077; --bad-bg:rgba(240,128,119,.16); --warn:#FF8A3D; --warn-bg:rgba(255,138,61,.16);
+  --good:#5FCF8F; --good-bg:rgba(95,207,143,.16); --bad:#F08077; --bad-bg:rgba(240,128,119,.16); --warn:#FF8A3D; --warn-bg:rgba(255,138,61,.16); --st-paused:#F2C94C;
   --sb:#0F3328; --sb-ink:#E8F5EC; --sb-ink-2:#A7C6B3; --sb-ink-3:#7F9A8B; --sb-line:#1f3a2e; --sb-accent:#1b3429; --sb-hover:#152820; --sb-box:#12261d; --sb-panel:rgba(217,243,109,.05);
   --t-green-bg:#1c4634; --t-green:#8bd5ab; --t-blue-bg:#1d3a5c; --t-blue:#8fbdf0; --t-orange-bg:#4a2a1a; --t-orange:#f2a27c; --t-teal-bg:#173f38; --t-teal:#6fd3bb;
   --t-red-bg:#4a2320; --t-red:#f39a94; --t-purple-bg:#2d2750; --t-purple:#b3a6ee; --t-gray-bg:#22342b; --t-gray:#b5caba; --t-lime-bg:#2e3a12; --t-lime:#cfe27a;
@@ -778,3 +778,7 @@
   .task-row { flex-wrap: wrap; }
   .task-row > span:first-child { flex-basis: 100%; }
 }
+
+/* Trạng thái nhân viên (app/staff-name.tsx, anh Vũ 04/11/2026): tạm nghỉ vàng, đã nghỉ đỏ, ở mọi chỗ có tên. */
+[data-st="paused"] { color: var(--st-paused) !important; }
+[data-st="left"] { color: var(--bad) !important; }

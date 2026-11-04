@@ -84,6 +84,7 @@ import type { SessionUser } from '@/lib/auth/auth';
 
 import { SecurityPanel } from './security-panel';
 
+import { StaffStatusPanel, StatusPainter } from './staff-name';
 import { TEAM_LABELS, useMktTeam, setHrUnit, setPageDept, setTeam, useHrUnit, useTeamChoice } from './team-store';
 import { HrTeamPicker } from './hr-team-picker';
 import { BranchSwitch } from './branch-switch';
@@ -1510,6 +1511,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
       </Sidebar>
       <SidebarInset className="min-w-0 bg-canvas">
         <Spotlight />
+        <StatusPainter />
         <IdleLock paused={presenting} owner={user.role === 'owner'} onLogout={async () => { await clearSnapshots(); await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/login'; }} />
         {user.role !== 'owner' && <Watermark text={`${user.displayName} · ${user.email} · ${today()}`} />}
         {/* Màn 1280–1440 (có thanh bên): tên web chỉ hiện từ 1700px, chữ "Trình chiếu" từ 2xl, để thanh trên không tràn (QA 08/10). */}
@@ -1744,7 +1746,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {!gated && view === 'config' && isOwner(user) && cfgSection !== null && (
             <div className="space-y-5">
               <SettingsSectionHeader section={cfgSection} onBack={() => setCfgSection(null)} pill={pills[cfgSection]} />
-              {cfgSection === 'team' && <><TeamSheetPanel /><PermissionTreePanel /><MarketingTeamsPanel /><UsersPanel currentUser={user} Surface={Surface} /><HrSyncPanel /></>}
+              {cfgSection === 'team' && <><TeamSheetPanel /><StaffStatusPanel /><PermissionTreePanel /><MarketingTeamsPanel /><UsersPanel currentUser={user} Surface={Surface} /><HrSyncPanel /></>}
               {cfgSection === 'kpi' && <><TargetsPanel canEdit={isOwner(user)} /><MetricChangesCard /></>}
           {cfgSection === 'data' && (<Surface
             title="Kết nối 6 POS"

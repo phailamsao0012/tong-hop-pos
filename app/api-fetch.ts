@@ -91,3 +91,11 @@ export function installApiFetch() {
     return send(input, init, outer, method === 'GET');
   };
 }
+
+/** Gọi API trả JSON cho trang mới (luật 3, tests/arch): lỗi thì ném câu báo của máy chủ. */
+export async function apiJson<T>(path: `/api/${string}`, method: 'GET' | 'PUT' | 'POST' = 'GET', body?: unknown): Promise<T> {
+  const r = await fetch(path, method === 'GET' ? { cache: 'no-store' } : { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}) });
+  const d = await r.json().catch(() => ({})) as T & { error?: string };
+  if (!r.ok) throw new Error(d.error ?? `Lỗi máy chủ (${r.status}).`);
+  return d;
+}
