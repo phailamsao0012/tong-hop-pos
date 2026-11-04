@@ -16,6 +16,7 @@ import { refreshTeamSource } from '@/lib/teams/team-source';
 import { withSegLens } from '@/lib/shared/seg-lens';
 import { maybeNightlyBackup } from '@/lib/ops/backup';
 import { demoBlocked, installDemo, isDemo } from '@/lib/demo/mode';
+import { isReadOnly, readOnlyBlocked } from '@/lib/ops/read-only';
 import { checkScheduler } from '@/lib/bot/watch';
 import { WARM_BUDGET_MS, WARM_PATHS, pickWarm, warmBody, type RecentReport } from '@/lib/reports/report-warm';
 
@@ -315,6 +316,11 @@ export default {
       const blocked = demoBlocked(request.method, pathname);
       if (blocked) return Response.json({ error: blocked }, { status: 403 });
     }
+    // Bản PC chạy song song (THP_READ_ONLY=1, chỉ đặt ở PC): chặn mọi lệnh sửa và webhook, chỉ cho đăng nhập + xem.
+    if (isReadOnly()) {
+      const blocked = readOnlyBlocked(request.method, pathname);
+      if (blocked) return Response.json({ error: blocked }, { status: 403 });
+    }
     // Nguồn team cho báo cáo (Pancake hay web nhân sự): đọc lại tối đa mỗi phút.
     if (pathname.startsWith('/api/')) await refreshTeamSource();
     // Phân quyền tập trung: mọi API (trừ đăng nhập/webhook) được thu hẹp theo POS/nhóm của tài khoản, phần không được cấp thì chặn.
@@ -379,6 +385,15 @@ export default {
   // Cron Trigger chỉ "đánh thức" bộ hẹn giờ DO; DO là nơi duy nhất chạy đồng bộ (không chạy chồng hai lượt lên D1).
   // Cron chạy mỗi phút cho báo đơn kẹt; các việc cũ vẫn giữ nhịp 5 phút. Chia số đã bỏ 21/10/2026 (dữ liệu cũ giữ nguyên).
   async scheduled(controller: ScheduledController, env: Cloudflare.Env, ctx: ExecutionContext) {
+    // Bản PC chỉ xem: chỉ đồng bộ Pancake, kéo web nhân sự và làm nóng báo cáo. Nhắn tin, AI, sao lưu R2 để web chính làm (tránh trùng).
+    if (isReadOnly()) {
+      ctx.waitUntil(warmRecentReports(env, ctx).catch((error) => console.error('warm reports failed', error)));
+      if (new Date(controller.scheduledTime).getUTCMinutes() % 5 !== 0) return;
+      await refreshTeamSource();
+      ctx.waitUntil(scheduler(env).kick().catch((error) => console.error('scheduler kick failed', error)));
+      if (env.HR_SHARED_SECRET) ctx.waitUntil(pullHr());
+      return;
+    }
     ctx.waitUntil(import('@/lib/zalo/zalo-poll').then((m) => m.maybeZaloPoll()).catch(() => console.error('zalo poll failed')));
     ctx.waitUntil(import('@/lib/zalo/zalo-tick').then((m) => m.maybeZaloTick(controller.scheduledTime)).catch(() => console.error('zalo tick failed')));
     ctx.waitUntil(import('@/lib/bot/stuck-alert').then((m) => m.maybeStuckAlert(controller.scheduledTime)).catch((error) => console.error('stuck alert failed', error)));

@@ -33,6 +33,8 @@ declare namespace Cloudflare {
     DEMO_MODE?: string;
     /** "1": sau đồng bộ trả ngay bản báo cáo gần nhất, tính lại ngầm một lượt (worker.ts cachedReport). Hiện chỉ bật ở bản demo. */
     THP_SWR?: string;
+    /** "1" chỉ ở bản PC chạy song song (lib/ops/read-only.ts): chặn mọi lệnh sửa, không nhắn tin ra ngoài. Cloudflare không đặt. */
+    THP_READ_ONLY?: string;
     /** OAuth client ID (loại Web) trên Google Cloud cho nút Đăng nhập bằng Google; trống thì ẩn nút. Không phải bí mật. */
     GOOGLE_CLIENT_ID?: string;
     /** Kho R2 riêng tư cho sao lưu đêm (lib/backup.ts). Hiện chỉ bản demo có; web thật chưa gắn thì sao lưu ghi "chưa cấu hình". */

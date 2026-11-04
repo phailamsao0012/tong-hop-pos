@@ -1,9 +1,11 @@
 import { env } from 'cloudflare:workers';
+import { guardReadOnly } from '@/lib/ops/read-only';
 
 // Gửi thư qua Brevo (api.brevo.com). Cần bí mật BREVO_API_KEY và địa chỉ gửi MAIL_FROM đã xác minh trên Brevo.
 export const mailConfigured = () => !!(env.BREVO_API_KEY?.trim() && env.MAIL_FROM?.trim());
 
 export async function sendMail(to: string, subject: string, html: string, text?: string) {
+  guardReadOnly('gửi thư');
   const key = env.BREVO_API_KEY?.trim(), from = env.MAIL_FROM?.trim();
   if (!key || !from) throw new Error('Chưa cấu hình gửi thư (BREVO_API_KEY, MAIL_FROM).');
   const r = await fetch('https://api.brevo.com/v3/smtp/email', {
