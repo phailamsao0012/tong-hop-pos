@@ -14,6 +14,8 @@ import { todayVn } from '@/lib/shared/report-time';
 import type { HrTeamGroup } from '@/lib/teams/hr-teams';
 import { unitIds } from '@/lib/teams/team';
 import { usePeriod } from './period-store';
+import { ManagerChip } from './manager-chip';
+import { managedBy } from '@/lib/teams/managed-by';
 import { usePosIds, usePosStaffFilter } from './pos-store';
 import { useMetricSettings } from './metric-settings';
 import { PeriodToolbar, PosChips, type OverviewReport } from './overview-view';
@@ -146,6 +148,12 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
   }), [offices, allRows]);
   const total = rows?.reduce((s, r) => s + r.cur.revenue, 0) ?? 0;
   const sort = useSort<'name' | 'revenue' | 'share' | 'closed' | 'aov' | 'rate' | 'perHead' | 'people' | 'data' | 'need' | 'today' | 'own'>('revenue');
+  // Số người Leader / Mentor quản lý: cộng mọi team họ cầm trong bộ phận (theo POS đang chọn), không theo chi nhánh đang lọc.
+  const managed = useMemo(() => {
+    const list = (allRows ?? []).filter((r) => r.id !== 'none' && r.id !== UNLINKED);
+    const names = (r: Row) => r.people.filter((p) => p.active).map((p) => p.name);
+    return { mentor: managedBy(list, (r) => r.mentor, names), leader: managedBy(list, (r) => r.leader, names) };
+  }, [allRows]);
   const shown = useMemo(() => rows ? sort.apply(rows, (r, k) => k === 'name' ? r.name : k === 'revenue' || k === 'share' ? r.cur.revenue : k === 'closed' ? r.cur.closed
     : k === 'aov' ? aov(r.cur) : k === 'rate' ? rate(r.cur, ms.rateBase) : k === 'people' ? r.selling
     : k === 'data' ? r.care.assigned : k === 'need' ? r.care.need : k === 'today' ? r.care.notedToday : k === 'own' ? r.care.ownNet
@@ -259,7 +267,11 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
                                 {isOpen ? <ChevronDown size={15} className="mt-0.5 shrink-0" /> : <ChevronRight size={15} className="mt-0.5 shrink-0" />}
                                 <span className="min-w-0">
                                   <b className={`block font-semibold ${r.id === 'none' || r.id === UNLINKED ? 'text-bad' : ''}`}>{r.name}</b>
-                                  <span className="block text-[11px] text-ink-3">{[officeLabel(r.office) || null, r.mentor ? `Mentor ${r.mentor}` : null, r.leader ? `Leader ${r.leader}` : null, r.head ? `TP ${r.head}` : null].filter(Boolean).join(' · ') || (r.id === 'none' ? 'Đang nằm thẳng ở phòng, chưa xếp team' : r.id === UNLINKED ? 'Tài khoản POS chưa gắn với hồ sơ bên web nhân sự' : '—')}</span>
+                                  <span className="flex flex-wrap items-center gap-x-1 text-[11px] text-ink-3">{[officeLabel(r.office) || null,
+                                    r.mentor ? <ManagerChip key="m" label="Mentor" name={r.mentor} people={managed.mentor.get(r.mentor) ?? []} /> : null,
+                                    r.leader ? <ManagerChip key="l" label="Leader" name={r.leader} people={managed.leader.get(r.leader) ?? []} /> : null,
+                                    r.head ? `TP ${r.head}` : null].filter(Boolean).flatMap((x, i) => i ? [' · ', x] : [x])}
+                                  {!officeLabel(r.office) && !r.mentor && !r.leader && !r.head && (r.id === 'none' ? 'Đang nằm thẳng ở phòng, chưa xếp team' : r.id === UNLINKED ? 'Tài khoản POS chưa gắn với hồ sơ bên web nhân sự' : '—')}</span>
                                 </span>
                               </span>
                             </td>
@@ -301,14 +313,14 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
 }
 
 /** KPI tháng theo team (chủ hệ thống): đặt doanh thu / đơn chốt mục tiêu, xem tiến độ từ đầu tháng và dự báo cuối tháng. */
-type KpiTeam = { id: string; name: string; mentor?: string | null; leader: string | null; people: { id: string }[] };
+type KpiTeam = { id: string; name: string; mentor?: string | null; leader: string | null; people: { id: string; name: string; active: boolean }[] };
 
 /** KPI team đặt ngay ở trang KPI (anh Vũ 21/10/2026: "set kpi cho team đâu chưa thấy nhỉ"); cùng khối với trang Theo team. */
 export function TeamKpiPanel({ team }: { team: Dept }) {
   const api = useApi<{ teams: HrTeamGroup[] }>(`/api/teams?team=${team}`);
   const inPos = usePosStaffFilter();
   const teams = useMemo<KpiTeam[]>(() => (api.data?.teams ?? []).filter((t) => t.id !== 'none' && t.id !== UNLINKED)
-    .map((t) => ({ id: t.id, name: t.name, mentor: t.mentor ?? null, leader: t.leader, people: t.members.filter((m) => !inPos || inPos(m.posUserId)).map((m) => ({ id: m.posUserId })) })).filter((t) => !inPos || t.people.length), [api.data, inPos]);
+    .map((t) => ({ id: t.id, name: t.name, mentor: t.mentor ?? null, leader: t.leader, people: t.members.filter((m) => !inPos || inPos(m.posUserId)).map((m) => ({ id: m.posUserId, name: m.name, active: m.active })) })).filter((t) => !inPos || t.people.length), [api.data, inPos]);
   if (!teams.length) return null;
   return <TeamKpi team={team} teams={teams} />;
 }
@@ -316,6 +328,11 @@ export function TeamKpiPanel({ team }: { team: Dept }) {
 function TeamKpi({ team, teams }: { team: Dept; teams: KpiTeam[] }) {
   const today = todayVn();
   const [month, setMonth] = useState(today.slice(0, 7));
+  const managed = useMemo(() => {
+    const names = (t: KpiTeam) => t.people.filter((p) => p.active).map((p) => p.name);
+    return { mentor: managedBy(teams, (t) => t.mentor, names), leader: managedBy(teams, (t) => t.leader, names) };
+  }, [teams]);
+
   const last = `${month}-${String(daysInMonth(month)).padStart(2, '0')}`;
   const end = last < today ? last : today;
   const elapsed = month < today.slice(0, 7) ? daysInMonth(month) : Math.max(1, Number(today.slice(8, 10)));
@@ -380,7 +397,8 @@ function TeamKpi({ team, teams }: { team: Dept; teams: KpiTeam[] }) {
                 const pers = personal(t);
                 return (
                   <tr key={t.id}>
-                    <td><b className="font-semibold">{t.name}</b><span className="block text-[11px] text-ink-3">{[t.mentor ? `Mentor ${t.mentor}` : null, t.leader ? `Leader ${t.leader}` : null].filter(Boolean).join(' · ')}</span></td>
+                    <td><b className="font-semibold">{t.name}</b><span className="flex flex-wrap items-center gap-x-1 text-[11px] text-ink-3">{[t.mentor ? <ManagerChip key="m" label="Mentor" name={t.mentor} people={managed.mentor.get(t.mentor) ?? []} /> : null,
+                      t.leader ? <ManagerChip key="l" label="Leader" name={t.leader} people={managed.leader.get(t.leader) ?? []} /> : null].filter(Boolean).flatMap((x, i) => i ? [' · ', x] : [x])}</span></td>
                     <td className="r"><Input className="num ml-auto h-8 w-32 text-right" inputMode="numeric" value={val(t, 'revenue')} placeholder="vd 500tr" onChange={(e) => set(t.id, 'revenue', e.target.value)} aria-label={`Doanh thu mục tiêu ${t.name}`} /></td>
                     {isSale && <td className="r"><span className="inline-flex items-center gap-1"><Input className="num ml-auto h-8 w-16 text-right" inputMode="decimal" value={val(t, 'rate')} placeholder="vd 35" onChange={(e) => set(t.id, 'rate', e.target.value)} aria-label={`Tỉ lệ chốt mục tiêu ${t.name}`} /><span className="text-xs text-ink-3">%</span></span></td>}
                     <td className="r num">{monthApi.data ? <>{shortMoney(d.revenue)}<span className="block text-[11px] text-ink-3">{vi.format(d.closed)} đơn{isSale && rate !== null ? <> · <span className={goalRate ? (rate >= goalRate ? 'text-good' : 'text-bad') : ''}>chốt {pct(rate, 1)}</span>{goalRate ? ` / ${pct(goalRate, 1)}` : ''}</> : null}</span></> : '…'}</td>

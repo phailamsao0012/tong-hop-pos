@@ -9,6 +9,8 @@ import { officeList, toggleOffice, type WebTeam } from '@/lib/teams/web-teams';
 import type { MarketingTeam } from '@/lib/teams/marketing-teams';
 import type { TeamZaloState } from '@/lib/zalo/team-link';
 import { ChartCard, ErrorBox, toast } from './ui-kit';
+import { ManagerChip } from './manager-chip';
+import { managedBy } from '@/lib/teams/managed-by';
 
 type Dept = SheetDept | 'skip';
 type Member = { name: string; ids: string[] };
@@ -47,6 +49,11 @@ export function TeamSheetPanel() {
   const [error, setError] = useState('');
   const [text, setText] = useState('');
   const [draft, setDraft] = useState<Draft[]>([]);
+  // Số người mỗi tài khoản Mentor / Leader đang cầm, cộng mọi team (cả team chưa lưu) (anh Vũ 04/11/2026).
+  const managed = useMemo(() => {
+    const names = (t: Draft) => t.dept === 'skip' ? [] : t.members.filter((m) => m.ids.length).map((m) => m.name);
+    return { mentorUserId: managedBy(draft, (t) => t.mentorUserId, names), leaderUserId: managedBy(draft, (t) => t.leaderUserId, names) };
+  }, [draft]);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   // Mã nối Zalo vừa cấp, theo tài khoản (03/11/2026).
@@ -196,6 +203,7 @@ export function TeamSheetPanel() {
                           <option value="">chưa gán</option>
                           {(data.accounts ?? []).filter((a) => a.role === role || a.id === t[field]).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                         </select>
+                        {t[field] && <ManagerChip onlyCount label={label} name={(data.accounts ?? []).find((a) => a.id === t[field])?.name ?? ''} people={managed[field].get(t[field]!) ?? []} />}
                         <ZaloButton linked={t[field] ? zaloOf(t[field]!) : undefined} code={t[field] ? zaloCode[t[field]!] : undefined} disabled={saving || !t[field]} label={label} onClick={() => { if (t[field]) void zaloFor(t, t[field]!); }} />
                       </label>
                     ))}
