@@ -4,7 +4,7 @@
 // Hàng tặng (thành tiền 0) không tính là "đã mua". Cùng quy tắc tên với nhóm sản phẩm ở Tổng quan (lib/pancake/order-segments.ts).
 import { ANTIBIOTIC_EXTRA_POS } from '@/lib/pancake/order-segments';
 
-export const CARE_BASKETS = { all: 'Mọi khách', ks: 'Chỉ mua kháng sinh', skgk: 'Chỉ mua combo SK + GK' } as const;
+export const CARE_BASKETS = { all: 'Mọi khách', ks: 'Chỉ mua kháng sinh', skgk: 'Chỉ mua SK GK (Sát khuẩn Godkill)' } as const;
 export type CareBasket = keyof typeof CARE_BASKETS;
 export const parseCareBasket = (v: string | null): CareBasket => v === 'ks' || v === 'skgk' ? v : 'all';
 
