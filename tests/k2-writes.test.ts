@@ -98,8 +98,9 @@ void test('K2: three demo days and 24 hours of all sync stages, HR and dispatch 
         stage = 'dispatch';
         await dispatch.runDispatch(new Date());
       }
+      // stats_daily_mkt (0050) ra đời sau bản cũ nên bản cũ không ghi; bảng này so với đơn gốc ở tests/mkt-stats.test.ts.
       const tables = ['pos_users', 'pos_products', 'pos_customers', 'customer_notes', 'raw_pos_orders', 'raw_pos_order_items', 'customer_stats', 'customer_seller_stats',
-        ...fixture.raw.prepare("SELECT name FROM sqlite_master WHERE type='table' AND (name LIKE 'stats_daily%' OR name LIKE 'hr_%') ORDER BY name").all().map((r) => String(r.name))];
+        ...fixture.raw.prepare("SELECT name FROM sqlite_master WHERE type='table' AND (name LIKE 'stats_daily%' OR name LIKE 'hr_%') AND name<>'stats_daily_mkt' ORDER BY name").all().map((r) => String(r.name))];
       const snapshots = Object.fromEntries(tables.map((table) => [table, fixture.raw.prepare(`SELECT * FROM ${table} ORDER BY 1`).all().map((r) => {
         const row = { ...r }; delete row.fetched_at;
         if (table.startsWith('stats_') || table === 'customer_stats' || table === 'customer_seller_stats') delete row.updated_at;

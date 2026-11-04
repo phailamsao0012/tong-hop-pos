@@ -4,18 +4,18 @@ import { isOwner } from '@/lib/auth/access';
 import { MARKETING_TEAMS_KEY, validateMarketingTeams } from '@/lib/teams/marketing-teams';
 
 import { mktTeams } from '@/lib/teams/mkt-teams-source';
+import { marketerIds } from '@/lib/teams/marketer-ids';
 
 export async function GET() {
   if (!(await getSessionUser())) return unauthorized();
   const resolved = await mktTeams(env.DB);
-  const [staff, marketers] = await env.DB.batch([
-    env.DB.prepare("SELECT user_id,MAX(name) AS name,MAX(COALESCE(department,'')) AS department,MAX(is_active) AS active FROM pos_users WHERE user_id<>'' GROUP BY user_id ORDER BY name"),
-    env.DB.prepare("SELECT DISTINCT TRIM(marketer_id) AS user_id FROM raw_pos_orders WHERE marketer_id IS NOT NULL AND TRIM(marketer_id)<>''"),
+  const [staff, marketerIdSet] = await Promise.all([
+    env.DB.prepare("SELECT user_id,MAX(name) AS name,MAX(COALESCE(department,'')) AS department,MAX(is_active) AS active FROM pos_users WHERE user_id<>'' GROUP BY user_id ORDER BY name").all(),
+    marketerIds(env.DB),
   ]);
-  const marketerIds = new Set((marketers.results as { user_id: string }[]).map((r) => r.user_id));
   return Response.json({
     teams: resolved.teams, source: resolved.source,
-    people: (staff.results as { user_id: string; name: string; department: string; active: number }[]).map((r) => ({ id: r.user_id, name: r.name || `NV ${r.user_id.slice(0, 8)}`, department: r.department || null, active: !!r.active, marketer: marketerIds.has(r.user_id) || /mkt|marketing/i.test(r.department) })),
+    people: (staff.results as { user_id: string; name: string; department: string; active: number }[]).map((r) => ({ id: r.user_id, name: r.name || `NV ${r.user_id.slice(0, 8)}`, department: r.department || null, active: !!r.active, marketer: marketerIdSet.has(r.user_id) || /mkt|marketing/i.test(r.department) })),
   }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
