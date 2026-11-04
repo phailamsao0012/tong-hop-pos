@@ -84,6 +84,7 @@ import type { SessionUser } from '@/lib/auth/auth';
 
 import { SecurityPanel } from './security-panel';
 
+import { StaffStatusPanel, StatusPainter } from './staff-name';
 import { TEAM_LABELS, useMktTeam, setHrUnit, setPageDept, setTeam, useHrUnit, useTeamChoice } from './team-store';
 import { HrTeamPicker } from './hr-team-picker';
 import { BranchSwitch } from './branch-switch';
@@ -144,6 +145,7 @@ const CallsView = lazy(() => import('./calls-view').then((m) => ({ default: m.Ca
 import { GlobalStatusFilter } from './status-filter';
 import { MetricChangesCard, MetricSettingsButton } from './metric-settings';
 import { SettingsHub, SettingsSectionHeader, useSettingsPills, type SettingsSection } from './settings-hub';
+import { savedSettingsSection, useStayOnReload } from './stay-on-reload';
 import { IdleLock, Watermark } from './idle-lock';
 const TeamOverviewView = lazy(() => import('./team-overview-view').then((m) => ({ default: m.TeamOverviewView })));
 const OriginView = lazy(() => import('./origin-view').then((m) => ({ default: m.OriginView })));
@@ -437,6 +439,7 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
 type NavGroup = { title: string; ids: View[]; accent?: boolean; color: string; icon: typeof Activity; solo?: boolean; depts?: string[] };
 const DEPT_ICONS: Record<string, typeof Activity> = { sale: UsersRound, cskh: HeartHandshake, mkt: Megaphone, 'van-don': Truck, khach: UserCheck, 'giao-viec': UsersRound, 'cai-dat': Settings2 };
 // Trang riêng của Sale / CSKH (trang dùng chung với bộ phận khác như Lý do hoàn thì không tính): chọn bộ phận kia ở thanh trên thì chỉ tính người thuộc cả hai.
+const DEPT_PAGE_KEYS = ['sale', 'cskh', 'mkt', 'van-don'];
 const PAGE_DEPT = new Map<string, 'sale' | 'cskh'>(DEPT_LAYOUT.flatMap((d) => d.key === 'sale' || d.key === 'cskh'
   ? d.sections.flatMap((s) => s.tabs.map(([id]) => id)).filter((id) => DEPT_LAYOUT.filter((o) => o.sections.some((s) => s.tabs.some(([t]) => t === id))).length === 1).map((id) => [id, d.key as 'sale' | 'cskh'] as const)
   : []));
@@ -908,6 +911,10 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
     setScope({ posIds: user.posIds, team: lockedTeam });
     if (lockedTeam !== 'all') setTeam(lockedTeam);
   }, [user.posIds, lockedTeam]);
+  // Nút Tất cả / Sale / CSKH chỉ ở trang chung (Tổng quan…); vào riêng Sale, CSKH, Marketing, Vận đơn thì ẩn nút và bỏ lựa chọn,
+  // trang tự tính theo bộ phận của nó (anh Vũ 04/11/2026: "khi tôi ấn vào bộ phận sale riêng, thì bỏ cái đó đi").
+  const deptPage = !!activeDept && DEPT_PAGE_KEYS.includes(activeDept);
+  useEffect(() => { if (deptPage && lockedTeam === 'all' && !hrUnit && team !== 'all') setTeam('all'); }, [deptPage, view]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!canView(user, view)) {
       const first = NAV_GROUPS.flatMap((g) => g.ids).find((id) => canView(user, id));
@@ -1464,6 +1471,10 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   // Cài đặt gọn lại (anh Vũ 31/10/2026): trang đầu là mục lục, bấm mục mới mở phần chỉnh.
   const [cfgSection, setCfgSection] = useState<SettingsSection | null>(null);
   const openSettings = (section: SettingsSection) => { setCfgSection(section); goTo('config'); };
+  // Chủ hệ thống: F5 đứng nguyên trang, mục Cài đặt và chỗ đang cuộn (anh Vũ 04/11/2026).
+  const stay = isOwner(user) && !user.actingAs;
+  useStayOnReload(stay, view, cfgSection);
+  useEffect(() => { if (stay) { const c = savedSettingsSection('config'); if (c && view === 'config') setCfgSection(c as SettingsSection); } }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const pills = useSettingsPills(view === 'config' && isOwner(user));
   const updatedText = !gated && view === 'raw-orders'
     ? dateText(rawSync[rawPosId]?.fetchedAt ?? null)
@@ -1500,6 +1511,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
       </Sidebar>
       <SidebarInset className="min-w-0 bg-canvas">
         <Spotlight />
+        <StatusPainter />
         <IdleLock paused={presenting} owner={user.role === 'owner'} onLogout={async () => { await clearSnapshots(); await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/login'; }} />
         {user.role !== 'owner' && <Watermark text={`${user.displayName} · ${user.email} · ${today()}`} />}
         {/* Màn 1280–1440 (có thanh bên): tên web chỉ hiện từ 1700px, chữ "Trình chiếu" từ 2xl, để thanh trên không tràn (QA 08/10). */}
@@ -1516,7 +1528,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               className="field pl-8" />
           </form>
           <button type="button" className="btn icon ml-auto md:hidden" title="Tìm khách" aria-label="Tìm khách" onClick={() => setView('customers')}><Search size={15} /></button>
-          {user.team === 'all' && <TeamSwitch size="sm" />}
+          {user.team === 'all' && !deptPage && <TeamSwitch size="sm" />}
           <BranchSwitch />
           {(canView(user, 'sale-teams') || canView(user, 'cskh-teams') || canView(user, 'van-don')) && <HrTeamPicker section={activeDept} />}
           {/* Trang Vận đơn không dùng bộ lọc trạng thái, và Vận đơn không có chữ "chốt" (anh Vũ 10/10/2026). */}
@@ -1734,7 +1746,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {!gated && view === 'config' && isOwner(user) && cfgSection !== null && (
             <div className="space-y-5">
               <SettingsSectionHeader section={cfgSection} onBack={() => setCfgSection(null)} pill={pills[cfgSection]} />
-              {cfgSection === 'team' && <><TeamSheetPanel /><PermissionTreePanel /><MarketingTeamsPanel /><UsersPanel currentUser={user} Surface={Surface} /><HrSyncPanel /></>}
+              {cfgSection === 'team' && <><TeamSheetPanel /><StaffStatusPanel /><PermissionTreePanel /><MarketingTeamsPanel /><UsersPanel currentUser={user} Surface={Surface} /><HrSyncPanel /></>}
               {cfgSection === 'kpi' && <><TargetsPanel canEdit={isOwner(user)} /><MetricChangesCard /></>}
           {cfgSection === 'data' && (<Surface
             title="Kết nối 6 POS"

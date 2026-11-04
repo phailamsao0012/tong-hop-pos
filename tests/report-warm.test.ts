@@ -34,8 +34,9 @@ void test('bộ lọc Xu hướng: POS mặc định là tất cả, nhóm hàng
 
 void test('bộ lọc Khách theo nhân viên: giới hạn trang, sắp xếp lạ về note_old, minDays=-1 là chưa note', () => {
   const all = POS.map((x) => x.id);
-  assert.deepEqual(parseCareParams(new URLSearchParams('posIds=&assigned=all&q=&minDays=0&sort=note_old&size=50&page=1&team=cskh')), { posIds: all, assigned: 'all', q: '', minDays: 0, size: 50, page: 1, sort: 'note_old' });
-  assert.deepEqual(parseCareParams(new URLSearchParams('minDays=-1&sort=__proto__&size=99999&page=0&q=%20abc%20')), { posIds: all, assigned: 'all', q: 'abc', minDays: -1, size: 20000, page: 1, sort: 'note_old' });
+  assert.deepEqual(parseCareParams(new URLSearchParams('posIds=&assigned=all&q=&minDays=0&sort=note_old&size=50&page=1&team=cskh')), { posIds: all, assigned: 'all', q: '', minDays: 0, size: 50, page: 1, sort: 'note_old', basket: 'all' });
+  assert.deepEqual(parseCareParams(new URLSearchParams('minDays=-1&sort=__proto__&size=99999&page=0&q=%20abc%20')), { posIds: all, assigned: 'all', q: 'abc', minDays: -1, size: 20000, page: 1, sort: 'note_old', basket: 'all' });
+  assert.equal((parseCareParams(new URLSearchParams('basket=ks')) as { basket: string }).basket, 'ks');
   assert.deepEqual(parseCareParams(new URLSearchParams('posIds=khong_co')), { error: 'POS không hợp lệ.' });
 });
 

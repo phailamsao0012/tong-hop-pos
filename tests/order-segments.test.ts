@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
-import { EMPTY_ORDER_FILTERS, orderFilterSql, parseOrderFilters, segmentedStats, type OrderFilters } from '../lib/pancake/order-segments';
+import { EMPTY_ORDER_FILTERS, orderFilterSql, parseOrderFilters, segmentedStats, segmentsFor, type OrderFilters } from '../lib/pancake/order-segments';
 import type { Team } from '../lib/teams/team';
 
 function fixture() {
@@ -99,5 +99,29 @@ void test('Source and product filters intersect, marketer IDs stay bound, and ot
   assert.ok(!f.sql.includes('OR 1=1'));
   assert.deepEqual(f.binds,["x' OR 1=1--"]);
   assert.equal(metrics(db,{orderOrigin:'mkt',marketerId:"x' OR 1=1--"})[0].closed,null);
+  db.close();
+});
+
+void test('POS Oxytetra chỉ có một nhóm Combo Oxytetra + Bổ đậm đặc; bốn nhóm cộng lại bằng tổng (anh Vũ 04/11/2026)', () => {
+  const db = fixture();
+  const add = (id: string, pos: string, item: string) => {
+    db.prepare('INSERT INTO raw_pos_orders VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(id,pos,'care',null,'[]','2026-09-22T03:00:00','2026-09-22T03:00:00','2026-09-22T03:00:00',1,1000,800,200,20,820,'2026-09-22T03:00:00');
+    db.prepare('INSERT INTO raw_pos_order_items VALUES (?,?,?,?,?,?,?)').run(id,'p',item,0,1,800,0);
+  };
+  add('oxy-1','oxytetra','GENTADOX'); add('oxy-2','oxytetra','COMBO OXYTETRA + BỔ ĐẬM ĐẶC');
+  const net = (pos: string[], k: 'all' | 'gentadox' | 'skgk' | 'khac' | 'oxy') => {
+    const v = segmentedStats(pos,'2026-09-21T17:00:00','2026-09-22T17:00:00','cskh',{ ...EMPTY_ORDER_FILTERS, productSegment: k });
+    return Number((db.prepare(v.sql + 'SELECT SUM(closed_orders) AS closed FROM stats_daily').get(...v.binds) as { closed: number | null }).closed ?? 0);
+  };
+  assert.equal(net(['oxytetra'],'oxy'),2);
+  assert.equal(net(['oxytetra'],'gentadox'),0);
+  assert.equal(net(['oxytetra'],'khac'),0);
+  assert.equal(net(['one'],'oxy'),0);
+  const both = ['one','oxytetra'];
+  const parts = segmentsFor(both).map((k) => net(both,k)).reduce((a,b)=>a+b,0);
+  assert.equal(parts,net(both,'all'));
+  assert.deepEqual(segmentsFor(['oxytetra']),['oxy']);
+  assert.deepEqual(segmentsFor(['one']),['gentadox','skgk','khac']);
+  assert.deepEqual(segmentsFor(both),['gentadox','skgk','khac','oxy']);
   db.close();
 });

@@ -2,6 +2,7 @@
 
 // So sánh nhân viên: hiệu suất đội ngũ (tỷ lệ chốt, đơn chia), scatter đơn chia × tỷ lệ chốt,
 // góc nhìn nhanh (nổi bật / cần hỗ trợ / cân bằng data) và bảng chi tiết có sparkline.
+import { StaffName } from './staff-name';
 import { usePosIds } from './pos-store';
 import { compareText } from '@/lib/shared/periods';
 import { usePeriod } from './period-store';
@@ -403,7 +404,7 @@ export function CompareView() {
                             <span className="num w-5 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span>
                             <button type="button" aria-pressed={picked} onClick={() => toggle(r.sellerId)}
                               className={`flex min-w-0 items-center gap-2 rounded-md text-[13px] font-medium transition-colors duration-[var(--dur)] ease-[var(--ease)] hover:text-primary ${picked ? 'text-primary' : 'text-ink'}`}>
-                              <Avatar name={r.name} size="sm" /><span className="truncate">{r.name}</span>
+                              <Avatar name={r.name} size="sm" /><span className="truncate"><StaffName id={r.sellerId} name={r.name} tenure={false} /></span>
                             </button>
                             <HoverReveal>
                               <Tooltip content={picked ? 'Bỏ khỏi so sánh' : 'Thêm vào so sánh (tối đa 8 người)'}>

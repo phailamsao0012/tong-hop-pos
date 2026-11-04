@@ -2,15 +2,25 @@ import { CLOSED, NET, STAT_COLUMNS, STATUS_GROUPS, dayExpr } from '@/lib/reports
 import { countedFilter, teamFilter, type HrUnit, type Team } from '@/lib/teams/team';
 import { parseStatus, statusSql, type StatusFilter } from '@/lib/pancake/order-status';
 
-export type ProductSegment = 'all' | 'gentadox' | 'skgk' | 'khac';
-export const SEGMENT_KEYS = ['gentadox', 'skgk', 'khac'] as const;
+export type ProductSegment = 'all' | 'gentadox' | 'skgk' | 'khac' | 'oxy';
+export const SEGMENT_KEYS = ['gentadox', 'skgk', 'khac', 'oxy'] as const;
+export type SegmentKey = typeof SEGMENT_KEYS[number];
+/** POS chỉ bán một combo (anh Vũ 04/11/2026: "bên pos oxytetra chỉ bán duy nhất combo oxytetra và bổ đậm đặc, không có cái khác"):
+ *  mọi đơn POS này là một nhóm riêng, không chia vào Kháng sinh / SK GK / Khác. */
+export const COMBO_OXY_POS = 'oxytetra';
+/** Nhóm đơn cần hiện theo POS đang chọn: chỉ POS Oxytetra thì chỉ nhóm Combo; không có POS đó thì bỏ nhóm Combo. */
+export function segmentsFor(posIds: readonly string[]): SegmentKey[] {
+  const hasOxy = posIds.includes(COMBO_OXY_POS);
+  if (hasOxy && posIds.length === 1) return ['oxy'];
+  return hasOxy ? [...SEGMENT_KEYS] : SEGMENT_KEYS.filter((k) => k !== 'oxy');
+}
 export const isSegment = (v: string | null): v is typeof SEGMENT_KEYS[number] => (SEGMENT_KEYS as readonly (string | null)[]).includes(v);
 export type OrderOrigin = 'all' | 'self' | 'mkt';
 export type OrderFilters = { productSegment: ProductSegment; orderOrigin: OrderOrigin; marketerId: string; status: StatusFilter };
 // Anh Vũ 29/10/2026: kháng sinh là Gentadox + Detox, SK GK là SK, GK, Godkill; loại khác báo "Khác" và ghi rõ sản phẩm.
 // Anh Vũ 31/10/2026: Oxy + Bổ huyết và Bio Nano Shield cũng là kháng sinh, nhưng chỉ ở POS Siêu Vô Gạo ("oxy pos khác không cần quan tâm").
-// Mỗi đơn chỉ thuộc một nhóm: có kháng sinh → kháng sinh; không thì có SK / GK → SK GK; còn lại → Khác.
-export const PRODUCT_SEGMENTS = { all: 'Tất cả sản phẩm', gentadox: 'Kháng sinh', skgk: 'SK GK', khac: 'Khác' };
+// Mỗi đơn chỉ thuộc một nhóm: đơn POS Oxytetra → Combo Oxytetra + Bổ đậm đặc; còn lại có kháng sinh → kháng sinh; không thì có SK / GK → SK GK; còn lại → Khác.
+export const PRODUCT_SEGMENTS = { all: 'Tất cả sản phẩm', gentadox: 'Kháng sinh', skgk: 'SK GK', khac: 'Khác', oxy: 'Combo Oxytetra + Bổ đậm đặc' };
 /** POS duy nhất tính Oxy + Bổ huyết và Bio Nano Shield là kháng sinh. */
 export const ANTIBIOTIC_EXTRA_POS = 'sieu-vo-gao';
 export const ORDER_ORIGINS = { all: 'Cả hai nguồn', self: 'Tự ups · không MKT', mkt: 'Từ MKT' };
@@ -37,9 +47,11 @@ export function orderFilterSql(filters: OrderFilters, team: Team, alias = 'o') {
   // SK, GK là chữ riêng trong tên (như loại đơn ở Vận đơn, lib/shipping-lines.ts); thiếu sản phẩm khớp thì theo nhãn đơn SK + GK.
   const word = `(' '||REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(si.name),'+',' '),'-',' '),'(',' '),')',' '),'/',' ')||' ')`;
   const skgk = `(${item(`${word} LIKE '% sk %' OR ${word} LIKE '% gk %' OR LOWER(si.name) LIKE '%godkill%' OR LOWER(si.name) LIKE '%god kill%'`)} OR EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(${alias}.tags_json) THEN ${alias}.tags_json ELSE '[]' END) st WHERE REPLACE(UPPER(TRIM(json_extract(st.value,'$.name'))),' ','')='SK+GK'))`;
-  if (filters.productSegment === 'gentadox') conditions.push(antibiotic);
-  if (filters.productSegment === 'skgk') conditions.push(`NOT ${antibiotic} AND ${skgk}`);
-  if (filters.productSegment === 'khac') conditions.push(`NOT ${antibiotic} AND NOT ${skgk}`);
+  const notOxy = `${alias}.pos_id<>'${COMBO_OXY_POS}'`;
+  if (filters.productSegment === 'gentadox') conditions.push(`${notOxy} AND ${antibiotic}`);
+  if (filters.productSegment === 'skgk') conditions.push(`${notOxy} AND NOT ${antibiotic} AND ${skgk}`);
+  if (filters.productSegment === 'khac') conditions.push(`${notOxy} AND NOT ${antibiotic} AND NOT ${skgk}`);
+  if (filters.productSegment === 'oxy') conditions.push(`${alias}.pos_id='${COMBO_OXY_POS}'`);
   if (team === 'cskh') {
     if (filters.orderOrigin === 'self') conditions.push(`${marketerValue(alias)} IS NULL`);
     if (filters.orderOrigin === 'mkt') conditions.push(`${marketerValue(alias)} IS NOT NULL`);
