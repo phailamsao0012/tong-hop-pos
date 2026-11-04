@@ -8,7 +8,7 @@ import { NET, PRODUCT_COLUMNS, STAT_COLUMNS, STATUS_GROUPS, sellerProductStatsRe
 import { parseCursor } from '@/lib/pancake/sync';
 import { HIDDEN_STAFF_SQL, countedFilter, teamFilter, usingHrTeams, type HrUnit, type Team } from '@/lib/teams/team';
 
-import { SEGMENT_KEYS, EMPTY_ORDER_FILTERS, closedDate, closedWhere, orderFilterSql, segmentedStats, type OrderFilters } from '@/lib/pancake/order-segments';
+import { segmentsFor, EMPTY_ORDER_FILTERS, closedDate, closedWhere, orderFilterSql, segmentedStats, type OrderFilters } from '@/lib/pancake/order-segments';
 
 type Row = Record<string, number | string | null>;
 const sumColumns = STAT_COLUMNS.map((c) => `SUM(${c}) AS ${c}`).join(',');
@@ -189,8 +189,9 @@ async function buildLensReport(database: D1Database, options: OverviewOptions, l
     const v = segmentedStats(posIds, startUtc, endUtc, team, f, employeeIds, null, unit);
     return db.prepare(v.sql + `SELECT ${group ? 'marketer_id,' : ''}${sumColumns} FROM stats_daily ${group}`).bind(...v.binds);
   };
+  const segs = segmentsFor(posIds);
   const [productSummaries, originSummary] = await Promise.all([
-    options.team === 'sale' ? db.batch(SEGMENT_KEYS.map(productSegment => querySummary({ ...filters, productSegment }))) : null,
+    options.team === 'sale' ? db.batch(segs.map(productSegment => querySummary({ ...filters, productSegment }))) : null,
     options.team === 'cskh' ? querySummary({ ...filters, orderOrigin: 'all', marketerId: '' }, 'cskh', 'GROUP BY marketer_id').all<Row>() : null,
   ]);
   const nameMap = new Map(names.results.map((r) => [r.user_id, r.name]));
@@ -217,7 +218,7 @@ async function buildLensReport(database: D1Database, options: OverviewOptions, l
     productSegments: productSummaries ? productSummaries.map((r, i) => {
       const m = toMetrics(r.results[0] as Row ?? null);
       m.rateOrders = allTotal.orders; m.rateAssigned = allTotal.assignedOrders;
-      return { key: SEGMENT_KEYS[i], ...m };
+      return { key: segs[i], ...m };
     }) : [],
     origins: originSummary ? originSummary.results.map(r => ({ marketerId: String(r.marketer_id ?? ''), marketerName: r.marketer_id ? nameMap.get(String(r.marketer_id)) ?? `MKT ${r.marketer_id}` : 'Tự ups', ...toMetrics(r) })) : [],
     generatedAt: new Date().toISOString(),
@@ -242,7 +243,7 @@ async function buildLensReport(database: D1Database, options: OverviewOptions, l
       closed: 'Đơn chốt, Doanh thu, SL bán thực, Số khách xếp theo ngày CHỐT đơn (lần đầu vào Chờ xác nhận hoặc sau đó): gồm mọi đơn từ Chờ xác nhận trở đi (đã xác nhận, đóng gói, chờ chuyển, đang giao, đã nhận, kể cả hoàn). Đơn mới, Hủy, Xóa không tính. Ô Đơn chốt trên Pancake không tính Chờ xác nhận nên có thể thấp hơn.',
       revenue: 'Doanh thu = tổng tiền đơn chốt sau khi trừ giảm giá / quà tặng (chưa gồm phí vận chuyển). GTTB = doanh thu ÷ đơn chốt.',
       quantity: 'SL bán thực = tổng số lượng sản phẩm trong đơn chốt. Số khách = số SĐT khác nhau có đơn chốt.',
-      segments: 'Kháng sinh: đơn có sản phẩm Gentadox hoặc Detox không phải quà tặng; riêng POS Siêu Vô Gạo tính thêm Oxy + Bổ huyết và Bio Nano Shield. SK GK: đơn có SK, GK hoặc Godkill (hay gắn nhãn SK + GK) mà không có kháng sinh. Khác: mọi đơn còn lại. Mỗi đơn chỉ thuộc một nhóm nên ba nhóm cộng lại bằng tổng. Doanh thu là toàn bộ đơn thuộc nhóm.',
+      segments: 'Combo Oxytetra + Bổ đậm đặc: mọi đơn POS Oxytetra (POS này chỉ bán combo đó). Các POS khác: Kháng sinh: đơn có sản phẩm Gentadox hoặc Detox không phải quà tặng; riêng POS Siêu Vô Gạo tính thêm Oxy + Bổ huyết và Bio Nano Shield. SK GK: đơn có SK, GK hoặc Godkill (hay gắn nhãn SK + GK) mà không có kháng sinh. Khác: mọi đơn còn lại. Mỗi đơn chỉ thuộc một nhóm nên ba nhóm cộng lại bằng tổng. Doanh thu là toàn bộ đơn thuộc nhóm.',
       origin: 'Chỉ áp dụng CSKH: không có Marketer = tự ups; có Marketer = từ MKT. Lọc nguồn và người MKT áp dụng đồng thời cho mọi chỉ số, bảng, biểu đồ và kỳ so sánh trong báo cáo.',
       overviewRate: 'Tỷ lệ chốt tổng quan = đơn chốt trong kỳ ÷ đơn tạo mới trong kỳ. Hai số dùng ngày chốt và ngày tạo tương ứng; có thể vượt 100% khi chốt đơn cũ. Không có đơn tạo mới thì tỷ lệ để trống.',
       rate: 'Tỷ lệ chốt nhân viên = đơn chốt trong kỳ ÷ đơn chia trong kỳ (đơn được giao cho nhân viên đó theo thời điểm giao người bán).',

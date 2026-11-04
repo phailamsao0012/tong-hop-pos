@@ -8,17 +8,17 @@
 // Mỗi đơn chỉ thuộc một nhóm (lib/order-segments.ts), nên cột Tổng là doanh số thật.
 import { Pill } from 'lucide-react';
 import { closeRateOf } from '@/lib/reports/metrics';
-import { PRODUCT_SEGMENTS, SEGMENT_KEYS } from '@/lib/pancake/order-segments';
+import { PRODUCT_SEGMENTS, SEGMENT_KEYS, segmentsFor } from '@/lib/pancake/order-segments';
 import type { OverviewReport } from './overview-view';
 import { useMetricSettings } from './metric-settings';
 import { ChartCard, DeltaPill, EmptyState, SkeletonTable, SortTh, TableWrap, delta, pct, shortMoney, useSort, vi } from './ui-kit';
 import { useApi } from './use-api';
 
 type Seg = typeof SEGMENT_KEYS[number];
-const LABEL: Record<Seg, string> = { gentadox: PRODUCT_SEGMENTS.gentadox, skgk: PRODUCT_SEGMENTS.skgk, khac: PRODUCT_SEGMENTS.khac };
-const COLOR: Record<Seg, string> = { gentadox: 'var(--primary)', skgk: 'var(--t-blue)', khac: 'var(--t-orange)' };
+const LABEL: Record<Seg, string> = { gentadox: PRODUCT_SEGMENTS.gentadox, skgk: PRODUCT_SEGMENTS.skgk, khac: PRODUCT_SEGMENTS.khac, oxy: PRODUCT_SEGMENTS.oxy };
+const COLOR: Record<Seg, string> = { gentadox: 'var(--primary)', skgk: 'var(--t-blue)', khac: 'var(--t-orange)', oxy: 'var(--t-purple, #6d4bc3)' };
 type SortKey = 'name' | Seg | `${Seg}N` | 'total';
-const url = (q: string, seg: Seg) => `/api/reports/overview?${q}&groupBy=day&compare=previous&productSegment=${seg}`;
+const url = (q: string, seg: Seg, segs: Seg[]) => segs.includes(seg) ? `/api/reports/overview?${q}&groupBy=day&compare=previous&productSegment=${seg}` : null;
 
 /** Sản phẩm trong đơn nhóm Khác, gộp các POS theo tên, xếp theo tiền chốt. */
 function otherProducts(r: OverviewReport | null) {
@@ -30,28 +30,31 @@ function otherProducts(r: OverviewReport | null) {
 /** q: cùng bộ lọc kỳ / POS / team với các ô khác của trang (không kèm groupBy, compare). */
 export function SaleSegmentBlock({ q, periodLabel }: { q: string; periodLabel: string }) {
   const ms = useMetricSettings();
+  // POS Oxytetra chỉ bán Combo Oxytetra + Bổ đậm đặc (anh Vũ 04/11/2026): chỉ hiện nhóm có trong các POS đang chọn.
+  const segs = segmentsFor((new URLSearchParams(q).get('posIds') ?? '').split(',').filter(Boolean));
   const reports: Record<Seg, OverviewReport | null> = {
-    gentadox: useApi<OverviewReport>(url(q, 'gentadox')).data,
-    skgk: useApi<OverviewReport>(url(q, 'skgk')).data,
-    khac: useApi<OverviewReport>(url(q, 'khac')).data,
+    gentadox: useApi<OverviewReport>(url(q, 'gentadox', segs)).data,
+    skgk: useApi<OverviewReport>(url(q, 'skgk', segs)).data,
+    khac: useApi<OverviewReport>(url(q, 'khac', segs)).data,
+    oxy: useApi<OverviewReport>(url(q, 'oxy', segs)).data,
   };
   const sort = useSort<SortKey>('total');
   const people = new Map<string, { id: string; name: string } & Record<Seg | `${Seg}N`, number>>();
-  for (const seg of SEGMENT_KEYS) for (const r of reports[seg]?.current.byEmployee ?? []) {
+  for (const seg of segs) for (const r of reports[seg]?.current.byEmployee ?? []) {
     if (!r.sellerId) continue;
-    const p = people.get(r.sellerId) ?? { id: r.sellerId, name: r.name, gentadox: 0, skgk: 0, khac: 0, gentadoxN: 0, skgkN: 0, khacN: 0 };
+    const p = people.get(r.sellerId) ?? { id: r.sellerId, name: r.name, gentadox: 0, skgk: 0, khac: 0, oxy: 0, gentadoxN: 0, skgkN: 0, khacN: 0, oxyN: 0 };
     p[seg] = r.closedNet; p[`${seg}N`] = r.closedOrders;
     people.set(r.sellerId, p);
   }
-  const total = (r: Record<Seg, number>) => r.gentadox + r.skgk + r.khac;
-  const rows = sort.apply([...people.values()].filter((p) => p.gentadoxN || p.skgkN || p.khacN), (r, k) => k === 'total' ? total(r) : r[k]);
-  const max = Math.max(1, ...rows.map((r) => Math.max(r.gentadox, r.skgk, r.khac)));
-  const loading = SEGMENT_KEYS.some((s) => !reports[s]);
+  const total = (r: Record<Seg, number>) => r.gentadox + r.skgk + r.khac + r.oxy;
+  const rows = sort.apply([...people.values()].filter((p) => p.gentadoxN || p.skgkN || p.khacN || p.oxyN), (r, k) => k === 'total' ? total(r) : r[k]);
+  const max = Math.max(1, ...rows.map((r) => Math.max(r.gentadox, r.skgk, r.khac, r.oxy)));
+  const loading = segs.some((s) => !reports[s]);
   const others = otherProducts(reports.khac);
   return (
-    <ChartCard icon={Pill} title="Kháng sinh, SK GK và Khác" subtitle={`${periodLabel} · đơn chốt theo ngày chốt · bấm tiêu đề cột để xếp`}>
+    <ChartCard icon={Pill} title={segs.map((k) => LABEL[k]).join(segs.length > 2 ? ', ' : ' và ')} subtitle={`${periodLabel} · đơn chốt theo ngày chốt · bấm tiêu đề cột để xếp`}>
       <div className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(min(100%,15rem),1fr))]">
-        {SEGMENT_KEYS.map((seg) => {
+        {segs.map((seg) => {
           const r = reports[seg], cur = r?.current.total, prev = r?.compare?.total;
           return (
             <div key={seg} className="rounded-xl border border-line p-4" style={{ borderTop: `3px solid ${COLOR[seg]}` }}>
@@ -83,7 +86,7 @@ export function SaleSegmentBlock({ q, periodLabel }: { q: string; periodLabel: s
             <table className="tbl">
               <thead><tr>
                 <SortTh k="name" label="Nhân viên" sort={sort} align="left" />
-                {SEGMENT_KEYS.map((seg) => [
+                {segs.map((seg) => [
                   <SortTh key={seg} k={seg} label={PRODUCT_SEGMENTS[seg]} sort={sort} />,
                   <SortTh key={`${seg}N`} k={`${seg}N`} label="Đơn" sort={sort} />,
                 ])}
@@ -92,7 +95,7 @@ export function SaleSegmentBlock({ q, periodLabel }: { q: string; periodLabel: s
               <tbody>{rows.map((r) => (
                 <tr key={r.id}>
                   <td className="text-left font-medium">{r.name}</td>
-                  {SEGMENT_KEYS.map((seg) => [
+                  {segs.map((seg) => [
                     <td key={seg} className="num r text-right">
                       {shortMoney(r[seg])}
                       <span className="mt-1 ml-auto block h-1 rounded-full" style={{ width: `${Math.max(2, r[seg] / max * 100)}%`, background: COLOR[seg], opacity: r[seg] ? 1 : 0.15 }} />
