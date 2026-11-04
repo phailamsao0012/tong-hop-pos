@@ -144,6 +144,7 @@ const CallsView = lazy(() => import('./calls-view').then((m) => ({ default: m.Ca
 import { GlobalStatusFilter } from './status-filter';
 import { MetricChangesCard, MetricSettingsButton } from './metric-settings';
 import { SettingsHub, SettingsSectionHeader, useSettingsPills, type SettingsSection } from './settings-hub';
+import { savedSettingsSection, useStayOnReload } from './stay-on-reload';
 import { IdleLock, Watermark } from './idle-lock';
 const TeamOverviewView = lazy(() => import('./team-overview-view').then((m) => ({ default: m.TeamOverviewView })));
 const OriginView = lazy(() => import('./origin-view').then((m) => ({ default: m.OriginView })));
@@ -1464,6 +1465,10 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   // Cài đặt gọn lại (anh Vũ 31/10/2026): trang đầu là mục lục, bấm mục mới mở phần chỉnh.
   const [cfgSection, setCfgSection] = useState<SettingsSection | null>(null);
   const openSettings = (section: SettingsSection) => { setCfgSection(section); goTo('config'); };
+  // Chủ hệ thống: F5 đứng nguyên trang, mục Cài đặt và chỗ đang cuộn (anh Vũ 04/11/2026).
+  const stay = isOwner(user) && !user.actingAs;
+  useStayOnReload(stay, view, cfgSection);
+  useEffect(() => { if (stay) { const c = savedSettingsSection('config'); if (c && view === 'config') setCfgSection(c as SettingsSection); } }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const pills = useSettingsPills(view === 'config' && isOwner(user));
   const updatedText = !gated && view === 'raw-orders'
     ? dateText(rawSync[rawPosId]?.fetchedAt ?? null)
