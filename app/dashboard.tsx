@@ -438,6 +438,7 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
 type NavGroup = { title: string; ids: View[]; accent?: boolean; color: string; icon: typeof Activity; solo?: boolean; depts?: string[] };
 const DEPT_ICONS: Record<string, typeof Activity> = { sale: UsersRound, cskh: HeartHandshake, mkt: Megaphone, 'van-don': Truck, khach: UserCheck, 'giao-viec': UsersRound, 'cai-dat': Settings2 };
 // Trang riêng của Sale / CSKH (trang dùng chung với bộ phận khác như Lý do hoàn thì không tính): chọn bộ phận kia ở thanh trên thì chỉ tính người thuộc cả hai.
+const DEPT_PAGE_KEYS = ['sale', 'cskh', 'mkt', 'van-don'];
 const PAGE_DEPT = new Map<string, 'sale' | 'cskh'>(DEPT_LAYOUT.flatMap((d) => d.key === 'sale' || d.key === 'cskh'
   ? d.sections.flatMap((s) => s.tabs.map(([id]) => id)).filter((id) => DEPT_LAYOUT.filter((o) => o.sections.some((s) => s.tabs.some(([t]) => t === id))).length === 1).map((id) => [id, d.key as 'sale' | 'cskh'] as const)
   : []));
@@ -909,6 +910,10 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
     setScope({ posIds: user.posIds, team: lockedTeam });
     if (lockedTeam !== 'all') setTeam(lockedTeam);
   }, [user.posIds, lockedTeam]);
+  // Nút Tất cả / Sale / CSKH chỉ ở trang chung (Tổng quan…); vào riêng Sale, CSKH, Marketing, Vận đơn thì ẩn nút và bỏ lựa chọn,
+  // trang tự tính theo bộ phận của nó (anh Vũ 04/11/2026: "khi tôi ấn vào bộ phận sale riêng, thì bỏ cái đó đi").
+  const deptPage = !!activeDept && DEPT_PAGE_KEYS.includes(activeDept);
+  useEffect(() => { if (deptPage && lockedTeam === 'all' && !hrUnit && team !== 'all') setTeam('all'); }, [deptPage, view]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!canView(user, view)) {
       const first = NAV_GROUPS.flatMap((g) => g.ids).find((id) => canView(user, id));
@@ -1521,7 +1526,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               className="field pl-8" />
           </form>
           <button type="button" className="btn icon ml-auto md:hidden" title="Tìm khách" aria-label="Tìm khách" onClick={() => setView('customers')}><Search size={15} /></button>
-          {user.team === 'all' && <TeamSwitch size="sm" />}
+          {user.team === 'all' && !deptPage && <TeamSwitch size="sm" />}
           <BranchSwitch />
           {(canView(user, 'sale-teams') || canView(user, 'cskh-teams') || canView(user, 'van-don')) && <HrTeamPicker section={activeDept} />}
           {/* Trang Vận đơn không dùng bộ lọc trạng thái, và Vận đơn không có chữ "chốt" (anh Vũ 10/10/2026). */}
