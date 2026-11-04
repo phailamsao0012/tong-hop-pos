@@ -5,7 +5,7 @@
 import { env } from 'cloudflare:workers';
 import { ensureSheetCostSchema } from '@/lib/ops/sheet-costs';
 import { NET } from '@/lib/reports/stats';
-import { COUNTED_STAFF, type Team, teamFilter, teamSubquery } from '@/lib/teams/team';
+import { COUNTED_STAFF, type Team, leadSellerFilter, teamFilter, teamSubquery } from '@/lib/teams/team';
 import { bucketExpr, vnRangeUtc } from '@/lib/shared/report-time';
 
 export type PosSide = { orders: number; phones: number; closed: number; net: number; sale: number; cskh: number; other: number; saleClosed: number; cskhClosed: number };
@@ -33,7 +33,7 @@ export async function mktSheetCheck(opts: { posIds: string[]; start: string; end
   const split = (cond: string) => `COALESCE(SUM(CASE WHEN ${cond} AND o.seller_id IN ${saleSub} THEN ${net} ELSE 0 END),0) AS sale,
     COALESCE(SUM(CASE WHEN ${cond} AND o.seller_id IN ${cskhSub} THEN ${net} ELSE 0 END),0) AS cskh,
     SUM(CASE WHEN ${cond} AND o.seller_id IN ${saleSub} THEN 1 ELSE 0 END) AS sale_closed, SUM(CASE WHEN ${cond} AND o.seller_id IN ${cskhSub} THEN 1 ELSE 0 END) AS cskh_closed`;
-  // Số về, đơn tạo: mọi marketer (như ô Số ở số chính); doanh thu, đơn chốt: chỉ marketer được tính doanh số.
+  // Số về, đơn tạo: mọi marketer, chỉ đơn chia cho Sale / CSKH theo nút (anh Vũ 04/11/2026, ý sếp); doanh thu, đơn chốt: chỉ marketer được tính doanh số.
   const base = `o.pos_id IN (${ph}) AND ${mk} IS NOT NULL`;
 
   const [sheetRows, confRows, createdRows, nameRows, sources] = await db.batch([
@@ -46,7 +46,7 @@ export async function mktSheetCheck(opts: { posIds: string[]; start: string; end
     // Mốc ngày tạo đơn: đơn tạo trong ngày, SĐT khác nhau, và bao nhiêu đơn trong số đó tới nay đã chốt.
     db.prepare(`SELECT ${mk} AS m, ${bucketExpr('o.created_at', 'day')} AS d, COUNT(*) AS orders, COUNT(DISTINCT NULLIF(TRIM(o.phone),'')) AS phones,
       SUM(CASE WHEN ${closedNow} THEN 1 ELSE 0 END) AS closed, COALESCE(SUM(CASE WHEN ${closedNow} THEN ${net} ELSE 0 END),0) AS net, ${split(closedNow)}
-      FROM raw_pos_orders o WHERE ${base} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7 GROUP BY 1,2`)
+      FROM raw_pos_orders o WHERE ${base} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7${leadSellerFilter('o.seller_id', opts.team ?? 'all')} GROUP BY 1,2`)
       .bind(...opts.posIds, cur.startUtc, cur.endUtc),
     db.prepare(`SELECT user_id, MAX(name) AS name, MAX(user_id IN ${COUNTED_STAFF}) AS counted FROM pos_users WHERE name<>'' GROUP BY user_id`),
     db.prepare("SELECT MAX(received_at) AS at, COUNT(*) AS n FROM sheet_cost_sources"),

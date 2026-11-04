@@ -8,7 +8,7 @@ import { mktTeams } from '@/lib/teams/mkt-teams-source';
 import { env } from 'cloudflare:workers';
 import { ensureAdCostSchema, mktTotal, emptyNewSplit, newSplitSql, type NewSplit } from '@/lib/ops/ad-costs';
 import { NET } from '@/lib/reports/stats';
-import { COUNTED_STAFF, type Team, teamSubquery } from '@/lib/teams/team';
+import { COUNTED_STAFF, type Team, leadSellerFilter, teamSubquery } from '@/lib/teams/team';
 import { MARKETING_TEAMS_KEY, UNASSIGNED_TEAM } from '@/lib/teams/marketing-teams';
 import { MAIN_GROUPS, mainGroupSql } from '@/lib/reports/product-groups';
 import { addDays, bucketExpr, comparePeriod, compareWindow, daysBetween, vnRangeUtc } from '@/lib/shared/report-time';
@@ -115,12 +115,13 @@ export async function mktAnalytics(opts: { posIds: string[]; start: string; end:
   };
 
   // Doanh thu MKT chỉ tính Marketer được tính doanh số (tên có hậu tố MKT…; anh Vũ 10/10/2026 tách doanh thu Sale / CSKH / MKT,
-  // mọi trang cùng một số MKT). Chi phí và số về vẫn tính đủ mọi người, nên Marketer chưa có hậu tố hiện chi phí mà doanh thu 0 (xem trang Doanh thu ngoài hậu tố).
+  // mọi trang cùng một số MKT). Chi phí tính đủ mọi người (số về chỉ đơn chia Sale / CSKH, 04/11/2026), nên Marketer chưa có hậu tố hiện chi phí mà doanh thu 0 (xem trang Doanh thu ngoài hậu tố).
   // Nút Sale / CSKH đầu trang (anh Vũ 12/10/2026 "doanh thu sale là doanh thu new, cskh là doanh thu của cskh"): lọc đơn chốt theo người bán trên đơn,
-  // cùng cách với bảng marketer bên dưới (teamFilter người bán). Số về, đơn tạo và chi phí là của Marketing nên không đổi theo nút.
+  // cùng cách với bảng marketer bên dưới (teamFilter người bán). Chi phí là của Marketing nên không đổi theo nút; số về theo nút từ 04/11/2026.
   const team = opts.team ?? 'all';
   const closedWhere = (from: string, to: string) => [`o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,6,7) AND ${mk} IS NOT NULL AND o.marketer_id IN ${COUNTED_STAFF}`, [...opts.posIds, from, to]] as const;
-  const leadWhere = (from: string, to: string) => [`o.pos_id IN (${ph}) AND o.created_at>=? AND o.created_at<? AND o.status_code<>7 AND ${mk} IS NOT NULL`, [...opts.posIds, from, to]] as const;
+  // Số về: đơn chia Sale là số Sale, chia CSKH là số CSKH, chưa chia / người khác không tính; theo nút Sale / CSKH (anh Vũ 04/11/2026, ý sếp).
+  const leadWhere = (from: string, to: string) => [`o.pos_id IN (${ph}) AND o.created_at>=? AND o.created_at<? AND o.status_code<>7 AND ${mk} IS NOT NULL ${leadSellerFilter('o.seller_id', team)}`, [...opts.posIds, from, to]] as const;
   const net = NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1');
   const [cw, cb] = closedWhere(cur.startUtc, cur.endUtc), [lw, lb] = leadWhere(cur.startUtc, cur.endUtc);
   const [pcw, pcb] = closedWhere(win.startUtc, win.endUtc), [plw, plb] = leadWhere(win.startUtc, win.endUtc);

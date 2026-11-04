@@ -10,7 +10,7 @@ import { NET } from '@/lib/reports/stats';
 import { ORDER_STATUS } from '@/lib/pancake/pancake';
 import { STAGES, SOURCE_FIELD, itemKey, productExists, saleItemPredicate, stageSql, type MarketingStage } from '@/lib/reports/marketing-report';
 import { MARKETING_TEAMS_KEY, parseMarketingTeams, UNASSIGNED_TEAM, marketingTeamFilter, marketingTeamGroupSql } from '@/lib/teams/marketing-teams';
-import { parseTeam, COUNTED_STAFF, teamFilter, teamSubquery } from '@/lib/teams/team';
+import { parseTeam, COUNTED_STAFF, teamFilter, teamSubquery, leadSellerFilter } from '@/lib/teams/team';
 import { RANK_STAGES, type RankStage } from '@/lib/reports/mkt-rank';
 
 const BASES = ['created', 'confirmed'] as const;
@@ -84,13 +84,15 @@ export async function GET(request: Request) {
   if (productKey) { extra.push(productExists('o')); extraBinds.push(productKey); }
   if (source) { extra.push(`${SOURCE_FIELD}=?`); extraBinds.push(source); }
   // Chỉ Marketer được tính doanh số (tên có hậu tố MKT…, lib/team.ts).
-  const scoped = `o.pos_id IN (${ph}) AND ${marketer} IS NOT NULL AND ${marketer} IN ${COUNTED_STAFF}${marketingTeam.sql}${teamFilter('o.seller_id', team)}${extra.length ? ` AND ${extra.join(' AND ')}` : ''}`;
+  const scopeWith = (sellerSql: string) => `o.pos_id IN (${ph}) AND ${marketer} IS NOT NULL AND ${marketer} IN ${COUNTED_STAFF}${marketingTeam.sql}${sellerSql}${extra.length ? ` AND ${extra.join(' AND ')}` : ''}`;
+  const scoped = scopeWith(teamFilter('o.seller_id', team));
   const period = `${timeCol}>=? AND ${timeCol}<?`;
   const selectedWhere = `${scoped} AND ${period} AND ${stageSql(stage)}`;
   const selectedBinds = [...posIds, ...marketingTeam.binds, ...extraBinds, startUtc, endUtc];
 
   // Phễu luôn là cohort đơn tạo trong kỳ. Đây là phần Pancake có đủ trên đơn, không suy ra lead chưa tạo đơn.
-  const cohortWhere = `${scoped} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7`;
+  // Số về: đơn chia cho Sale là số Sale, chia cho CSKH là số CSKH, chưa chia / người khác không tính (anh Vũ 04/11/2026, ý sếp).
+  const cohortWhere = `${scopeWith(leadSellerFilter('o.seller_id', team))} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7`;
   const cohortBinds = [...posIds, ...marketingTeam.binds, ...extraBinds, startUtc, endUtc];
   const cskhSellers = teamSubquery('cskh')!, saleSellers = teamSubquery('sale')!;
   const sums = `COUNT(*) AS orders,COUNT(DISTINCT NULLIF(TRIM(o.phone),'')) AS phones,COALESCE(SUM(COALESCE(o.current_total,0)),0) AS gross,COALESCE(SUM(${NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1')}),0) AS net,
