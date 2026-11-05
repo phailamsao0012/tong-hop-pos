@@ -17,7 +17,7 @@ const CANCEL_BY = `CASE WHEN o.status_code=6 AND o.first_confirmed_at IS NULL TH
 const REASON = `CASE WHEN o.status_code=6 AND o.first_confirmed_at IS NULL THEN (SELECT TRIM(SUBSTR(json_extract(t.value,'$.name'), INSTR(json_extract(t.value,'$.name'), ':')+1))
   FROM json_each(CASE WHEN json_valid(o.tags_json) THEN o.tags_json ELSE '[]' END) t WHERE json_extract(t.value,'$.name') LIKE 'VĐ:%' OR json_extract(t.value,'$.name') LIKE 'Vận đơn:%' LIMIT 1) END`;
 
-function estimatedIn(row: { value?: string } | undefined, start: string, end: string) {
+export function estimatedIn(row: { value?: string } | undefined, start: string, end: string) {
   let map: Record<string, number> = {};
   try { map = JSON.parse(row?.value ?? '{}') as Record<string, number>; } catch { return 0; }
   return Object.entries(map).filter(([m]) => m >= start.slice(0, 7) && m <= end.slice(0, 7)).reduce((a, [, n]) => a + Number(n || 0), 0);

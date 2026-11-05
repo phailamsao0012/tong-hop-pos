@@ -28,7 +28,7 @@ type ConfirmationSourceRow = {
 };
 // Mọi giá trị tiền ở đây là doanh thu sau giảm giá/quà tặng (net_total), không dùng tổng hàng chưa trừ.
 const numberValue = (value: unknown) => Number(value ?? 0);
-const normalizedPhone = (value: string) => {
+export const normalizedPhone = (value: string) => {
   const digits = value.replace(/\D/g, '');
   return digits.length === 11 && digits.startsWith('84') ? `0${digits.slice(2)}` : digits;
 };

@@ -11,7 +11,7 @@ type Row = { seller_id: string | null; pos_id: string; status_code: number; n: n
 export type Bucket = { orders: number; net: number; gross: number };
 const BUCKETS = ['closed', 'processing', 'shipping', 'delivered', 'returned', 'cancelled', 'shipped', 'confirmed', 'packing', 'waiting', 'other', 'unconfirmed', 'pending'] as const;
 export type BucketKey = typeof BUCKETS[number];
-const bucketOf = (code: number): BucketKey[] => {
+export const bucketOf = (code: number): BucketKey[] => {
   if (code === 0) return ['unconfirmed'];
   if (code === 17) return ['closed', 'processing', 'pending']; // Chờ xác nhận: đã chốt (08/10/2026), chưa xác nhận
   if (code === 6) return ['closed', 'cancelled'];
