@@ -2,7 +2,7 @@ import { env } from 'cloudflare:workers';
 import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
 import { isOwner } from '@/lib/auth/access';
 import { POS } from '@/lib/shared/report-model';
-import { canWriteTarget, mergeTargetAov, mergeTargetRates, targetStaff, listTargets, parseTargetCosts, visibleTargets } from '@/lib/kpi/targets';
+import { canWriteTarget, managedTeams, mergeTargetAov, mergeTargetRates, targetStaff, listTargets, parseTargetCosts, visibleTargets } from '@/lib/kpi/targets';
 import { audit } from '@/lib/ops/audit';
 
 // KPI team/POS chỉ chủ hệ thống; KPI cá nhân kiểm quyền từng người.
@@ -21,7 +21,9 @@ export async function GET(request: Request) {
   })()]);
   if (isOwner(user)) return Response.json({ month, items, previous: prev }, { headers: { 'Cache-Control': 'private, no-store' } });
   const ids = user.role === 'staff' ? [] : await targetStaff(env.DB, user);
-  return Response.json({ month, items: await visibleTargets(env.DB, user, items, ids), previous: { ...prev, items: await visibleTargets(env.DB, user, prev.items, ids) }, ...(user.role === 'staff' ? {} : { editable: ids }) }, { headers: { 'Cache-Control': 'private, no-store' } });
+  // Leader / mentor / giám đốc: thấy KPI của team mình cầm (chỉ xem, đặt KPI team vẫn chỉ chủ hệ thống).
+  const teams = await managedTeams(env.DB, user);
+  return Response.json({ month, items: await visibleTargets(env.DB, user, items, ids, teams), previous: { ...prev, items: await visibleTargets(env.DB, user, prev.items, ids, teams) }, teams, ...(user.role === 'staff' ? {} : { editable: ids }) }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
 export async function PUT(request: Request) {

@@ -826,8 +826,8 @@ installApiFetch();
 export default function Dashboard({ user, initialView, demo = false }: { user: SessionUser; initialView?: string; demo?: boolean }) {
   const [workBoss, setWorkBoss] = useState(false);
   useEffect(() => { let live = true; fetch('/api/giao-viec/me', { cache: 'no-store' }).then(r => r.json() as Promise<{ boss?: boolean }>).then(d => { if (live) setWorkBoss(d.boss === true); }).catch(() => {}); return () => { live = false; }; }, []);
-  // KPI team chỉ chủ hệ thống (như API /api/targets); các tab Giao việc khác theo người được giao việc.
-  const canNavigate = useCallback((id: string) => id === 'giao-viec-kpi' ? workBoss && isOwner(user) : id.startsWith('giao-viec') ? workBoss : canView(user, id), [workBoss, user]);
+  // KPI team: chủ hệ thống đặt; leader / mentor / giám đốc xem KPI team mình cầm (05/11/2026). Các tab Giao việc khác theo người được giao việc.
+  const canNavigate = useCallback((id: string) => id === 'giao-viec-kpi' ? workBoss || ['director', 'lead', 'mentor'].includes(user.role) : id.startsWith('giao-viec') ? workBoss : canView(user, id), [workBoss, user]);
   setSnapshotScope(user.userId);
   // Trang mở thẳng bằng ?view= chỉ biết ở trình duyệt: phần phụ thuộc trang hiện tại ngoài Suspense (thanh tab bộ phận) vẽ sau khi gắn để khớp HTML máy chủ.
   const [mounted, setMounted] = useState(false);
@@ -1743,7 +1743,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {!gated && workBoss && view === 'giao-viec-chat' && <GiaoViecChatView />}
           {!gated && workBoss && view === 'giao-viec-hop' && <GiaoViecHopView />}
           {!gated && workBoss && view === 'giao-viec-zalo' && <GiaoViecZaloView />}
-          {!gated && workBoss && view === 'giao-viec-kpi' && <GiaoViecKpiView owner={isOwner(user)} onOpen={(v) => goTo(v)} />}
+          {!gated && canNavigate('giao-viec-kpi') && view === 'giao-viec-kpi' && <GiaoViecKpiView owner={isOwner(user)} onOpen={(v) => goTo(v)} />}
           {!gated && workBoss && view === 'giao-viec-bao-cao' && <GiaoViecBaoCaoView />}
           {!gated && view === 'audit' && isOwner(user) && <AuditView />}
           {!gated && view === 'dispatch' && isOwner(user) && <DispatchView />}

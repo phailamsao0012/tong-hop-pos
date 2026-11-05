@@ -127,3 +127,27 @@ void test('API KPI: chủ lưu TB đơn team; trang KPI cũ lưu doanh thu khôn
     assert.equal((await put('2026-11', [{ scope: 'team', refId: 'team-a', revenue: 1, aov: 1 }], ['team:team-a'])).status, 403);
   } finally { logout(); raw.close(); }
 });
+
+void test('API KPI: leader thấy KPI team mình cầm (chỉ xem), không thấy team khác; nhân viên không thấy team nào', async () => {
+  const { raw } = emptyDb();
+  const put = (items: unknown[], only: string[]) => PUT(new Request('http://local/api/targets', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ month: '2026-11', items, only }) }));
+  type Body = { items: { scope: string; refId: string; revenue: number; aov?: number | null }[]; teams: string[] | null };
+  const get = async () => (await (await GET(new Request('http://local/api/targets?month=2026-11'))).json()) as Body;
+  try {
+    await loginAs(raw, 'owner');
+    assert.equal((await put([{ scope: 'team', refId: 'team-a', revenue: 300_000_000, aov: 450_000 }, { scope: 'team', refId: 'team-b', revenue: 200_000_000 }], ['team:team-a', 'team:team-b'])).status, 200);
+    assert.equal((await get()).teams ?? null, null, 'chủ: mọi team');
+    logout();
+    const lead = await loginAs(raw, 'lead', { team: 'sale' });
+    raw.prepare("INSERT INTO hr_employees (id,code,full_name,status,main_user_id) VALUES ('e-lead','L1','Leader ảo','dang_lam',?)").run(lead);
+    raw.prepare("INSERT INTO hr_pos_team (pos_user_id,employee_id,employee_name,team,department_id,leader_employee_id,status) VALUES ('p1','e1','Nhân viên ảo 1','sale','team-a','e-lead','dang_lam'), ('p2','e2','Nhân viên ảo 2','sale','team-b','e-khac','dang_lam')").run();
+    const body = await get();
+    assert.deepEqual(body.teams, ['team-a']);
+    assert.deepEqual(body.items.filter((i) => i.scope === 'team').map((i) => [i.refId, i.revenue, i.aov]), [['team-a', 300_000_000, 450_000]]);
+    assert.equal((await put([{ scope: 'team', refId: 'team-a', revenue: 1 }], ['team:team-a'])).status, 403, 'leader không đặt KPI team');
+    logout(); await loginAs(raw, 'staff');
+    const staff = await get();
+    assert.deepEqual(staff.teams, []);
+    assert.equal(staff.items.some((i) => i.scope === 'team'), false);
+  } finally { logout(); raw.close(); }
+});

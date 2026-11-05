@@ -2,7 +2,8 @@
 
 // KPI team (Giao việc, anh Vũ 28/10/2026): KPI doanh thu, trung bình đơn, tỉ lệ chốt cho CẢ TEAM; leader tự chia cho nhân sự, web không chia.
 // KPI lưu chung một chỗ với trang KPI → Theo team và tiến độ KPI ở Tổng quan (bảng targets + app_settings target_rate / target_aov), không có
-// chỗ lưu thứ hai. KPI team chỉ chủ hệ thống xem và đặt, như trước (API /api/targets lọc dòng team cho người khác).
+// chỗ lưu thứ hai. Chủ hệ thống đặt KPI team; leader / mentor chỉ xem KPI team mình cầm để tự chia cho từng người (anh Vũ 05/11/2026,
+// API /api/targets trả dòng team và danh sách team của người xem).
 // Bộ phận, chi nhánh, team: dùng nút Tất cả / Sale / CSKH và chi nhánh ở thanh trên cùng (team-store), không vẽ nút riêng.
 // Mở phần tổng quan trước, ô đặt KPI sau, chữ giải thích cuối trang. Cách quy KPI tháng về kỳ: lib/kpi/team-kpi.ts.
 import { useEffect, useId, useMemo, useState } from 'react';
@@ -30,6 +31,7 @@ type Dept = 'sale' | 'cskh';
 const LABEL: Record<Dept, string> = { sale: 'Sale', cskh: 'CSKH' };
 type Team = { id: string; name: string; leader: string | null; ids: string[] };
 type Target = TargetItem & { aov?: number | null };
+type TargetsResp = { items: Target[]; teams?: string[] | null };
 type Field = 'revenue' | 'aov' | 'rate';
 type Branches = { offices: { id: string; name: string }[]; teams: { id: string; officeId: string }[] };
 const mmyyyy = (m: string) => `${m.slice(5)}/${m.slice(0, 4)}`;
@@ -135,14 +137,16 @@ export function GiaoViecKpiView({ owner, onOpen }: { owner: boolean; onOpen?: (v
   const reportUrl = (dept: Dept) => (ok && !future
     ? `/api/reports/overview?${new URLSearchParams({ start: period.start, end, posIds: POS.map((p) => p.id).join(','), team: dept, compare: 'none' })}`
     : null);
-  const depts = [useDept(owner && choice !== 'cskh', 'sale', reportUrl('sale')), useDept(owner && choice !== 'sale', 'cskh', reportUrl('cskh'))]
+  const depts = [useDept(choice !== 'cskh', 'sale', reportUrl('sale')), useDept(choice !== 'sale', 'cskh', reportUrl('cskh'))]
     .filter((d) => (d.dept === 'sale' ? choice !== 'cskh' : choice !== 'sale'));
 
   // Chi nhánh / team chọn ở thanh trên: chỉ hiện team thuộc phạm vi đó.
-  const branches = useApi<Branches>(owner && branch ? '/api/reports/overview?branches=1' : null);
+  const branches = useApi<Branches>(branch ? '/api/reports/overview?branches=1' : null);
   const picked = unit && !unit.branchOnly ? unit : null;
   const scopeReady = !branch || !!branches.data;
-  const inScope = (id: string) => (picked ? picked.id.split(',').includes(id) : branch ? !!branches.data?.teams.some((t) => t.id === id && t.officeId === branch) : true);
+  // Người không phải chủ: chỉ team mình cầm (máy chủ trả danh sách).
+  const [mine, setMine] = useState<string[] | null>(null);
+  const inScope = (id: string) => (!owner && !mine?.includes(id) ? false : picked ? picked.id.split(',').includes(id) : branch ? !!branches.data?.teams.some((t) => t.id === id && t.officeId === branch) : true);
   const scopeName = picked ? picked.name : branch ? branches.data?.offices.find((o) => o.id === branch)?.name ?? '' : '';
   const teamsOf = (d: (typeof depts)[number]): Team[] => (d.teams.data?.teams ?? []).filter((t) => t.id !== 'none' && t.id !== 'unlinked' && inScope(t.id))
     .map((t) => ({ id: t.id, name: t.name, leader: t.leader, ids: t.members.map((m) => m.posUserId) }));
@@ -152,14 +156,18 @@ export function GiaoViecKpiView({ owner, onOpen }: { owner: boolean; onOpen?: (v
   const [targetError, setTargetError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
   useEffect(() => {
-    if (!owner || !monthsKey) return;
+    if (!monthsKey) return;
     let live = true;
-    void Promise.all(monthsKey.split(',').map((m) => apiJson<{ items: Target[] }>(`/api/targets?month=${m}`).then((b) => [m, b.items] as const)))
-      .then((list) => { if (live) { setTargets((x) => ({ ...x, ...Object.fromEntries(list) })); setTargetError(''); } })
+    void Promise.all(monthsKey.split(',').map((m) => apiJson<TargetsResp>(`/api/targets?month=${m}`).then((b) => [m, b] as const)))
+      .then((list) => {
+        if (!live) return;
+        setTargets((x) => ({ ...x, ...Object.fromEntries(list.map(([m, b]) => [m, b.items])) }));
+        setMine(list[0]?.[1].teams ?? null); setTargetError('');
+      })
       .catch((e: Error) => { if (live) setTargetError(e.message); });
     return () => { live = false; };
-  }, [owner, monthsKey, reloadKey]);
-  const targetsReady = months.every((m) => targets[m]);
+  }, [monthsKey, reloadKey]);
+  const targetsReady = months.every((m) => targets[m]) && (owner || mine !== null);
   const stored = (month: string, teamId: string) => targets[month]?.find((i) => i.scope === 'team' && i.refId === teamId);
   const goalOf = (teamId: string) => periodTarget(Object.fromEntries(months.map((m) => [m, stored(m, teamId)])), period);
   const pace = elapsedShare(period, today);
@@ -202,14 +210,6 @@ export function GiaoViecKpiView({ owner, onOpen }: { owner: boolean; onOpen?: (v
     onOpen(dept === 'sale' ? 'sale-overview' : 'cskh-overview');
   } : undefined);
 
-  if (!owner) {
-    return (
-      <section className="min-w-0 space-y-4">
-        <EmptyState text="KPI team chỉ chủ hệ thống xem và đặt trên web. Leader nhận tiến độ KPI team trong báo cáo Zalo buổi sáng và tự chia KPI cho từng người." />
-      </section>
-    );
-  }
-
   const quick = matchQuick(period, today);
   return (
     <section className="min-w-0 space-y-4">
@@ -247,7 +247,7 @@ export function GiaoViecKpiView({ owner, onOpen }: { owner: boolean; onOpen?: (v
               : targetError ? <ErrorBox error={targetError} onRetry={() => { setTargetError(''); setReloadKey((k) => k + 1); }} />
               : !ok ? null
               : !d.teams.data || !targetsReady || !scopeReady || (!future && !rows) ? <SkeletonTable rows={3} cols={3} />
-              : !teams.length ? <EmptyState text={scopeName ? `Không có team ${label} trong phạm vi đang chọn ở thanh trên.` : `Chưa có team ${label}. Chia team ở Cài đặt → Chia team hoặc bên web nhân sự trước.`} />
+              : !teams.length ? <EmptyState text={!owner ? `Chưa có team ${label} nào anh / chị cầm. Team gán ở Cài đặt → Team hoặc theo Leader bên web nhân sự.` : scopeName ? `Không có team ${label} trong phạm vi đang chọn ở thanh trên.` : `Chưa có team ${label}. Chia team ở Cài đặt → Chia team hoặc bên web nhân sự trước.`} />
               : (
                 <div className="space-y-4">
                   <div className={`grid gap-3 ${sale ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
@@ -268,7 +268,7 @@ export function GiaoViecKpiView({ owner, onOpen }: { owner: boolean; onOpen?: (v
         );
       })}
 
-      {ok && targetsReady && scopeReady && editMonth && depts.map((d) => {
+      {owner && ok && targetsReady && scopeReady && editMonth && depts.map((d) => {
         const sale = d.dept === 'sale', label = LABEL[d.dept], teams = teamsOf(d);
         if (!teams.length) return null;
         const dirty = teams.some((t) => draft[`${editMonth}:${t.id}`]);
@@ -302,6 +302,7 @@ export function GiaoViecKpiView({ owner, onOpen }: { owner: boolean; onOpen?: (v
 
       <Definitions items={[
         'KPI đặt theo tháng cho cả team (doanh thu, trung bình đơn, tỉ lệ chốt); leader tự chia cho từng người, web không chia.',
+        'Chủ hệ thống đặt KPI team. Leader / mentor chỉ xem KPI các team mình cầm (gán ở Cài đặt → Team, hoặc là Leader bên web nhân sự).',
         'KPI lưu chung với trang KPI → Theo team, tiến độ KPI ở Tổng quan và báo cáo Zalo buổi sáng: sửa ở đây thì các nơi đó đổi theo.',
         'Bộ phận, chi nhánh, team: theo nút Tất cả / Sale / CSKH và chi nhánh ở thanh trên cùng.',
         'Doanh thu đơn chốt: của người trong team, cộng mọi POS, từ ngày đầu kỳ tới hôm nay, cùng cách tính với Tổng quan Sale / CSKH. Dòng tổng = cộng các team đang hiện.',

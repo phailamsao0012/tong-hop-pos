@@ -71,11 +71,27 @@ export function withTargetAov(rows: TargetRow[], aov: Record<string, number>, up
   return out;
 }
 
-export async function visibleTargets(db: D1Database, user: Access, items: TargetRow[], ids: string[] | null): Promise<TargetRow[]> {
+/** Team mà người này cầm (anh Vũ 05/11/2026: leader / mentor xem KPI team của mình để tự chia cho từng người). null = mọi team (chủ hệ thống).
+ *  Team gán ở Cài đặt → Team (teamScope), hoặc team web nhân sự mà người này là Leader; giám đốc thêm các team của bộ phận mình. Nhân viên: không team nào. */
+export async function managedTeams(db: D1Database, user: Access & { userId: string }): Promise<string[] | null> {
+  if (user.role === 'owner') return null;
+  if (user.teamScope) return [...user.teamScope.ids];
+  if (user.role !== 'director' && user.role !== 'lead' && user.role !== 'mentor') return [];
+  const rows = await db.prepare(`SELECT DISTINCT t.department_id AS id FROM hr_pos_team t
+    LEFT JOIN hr_employees e ON e.id=t.leader_employee_id
+    WHERE t.department_id IS NOT NULL AND t.department_id<>'' AND t.status<>'da_nghi' AND (
+      e.main_user_id=? OR t.leader_employee_id=(SELECT value FROM app_settings WHERE key='user_employee:'||?)
+      OR (?='director' AND ?<>'all' AND t.team=?))`)
+    .bind(user.userId, user.userId, user.role, user.team, user.team).all<{ id: string }>();
+  return rows.results.map((r) => r.id).sort();
+}
+
+export async function visibleTargets(db: D1Database, user: Access, items: TargetRow[], ids: string[] | null, teams: string[] | null = []): Promise<TargetRow[]> {
   if (user.role === 'owner') return items;
-  if (user.role === 'mentor' && !user.teamScope) return items.filter((item) => item.scope === 'employee' && !!ids?.includes(item.refId));
+  const mine = (item: TargetRow) => item.scope === 'team' && !!teams?.includes(item.refId);
+  if (user.role === 'mentor' && !user.teamScope) return items.filter((item) => mine(item) || (item.scope === 'employee' && !!ids?.includes(item.refId)));
   const cskh = new Set((await db.prepare(`SELECT user_id FROM ${teamSubquery('cskh', false)} AS t`).all<{ user_id: string }>()).results.map((row) => row.user_id));
-  return items.filter((item) => item.scope === 'pos' || (item.scope === 'employee' && (!cskh.has(item.refId) || (user.role !== 'staff' && !!ids?.includes(item.refId)))));
+  return items.filter((item) => mine(item) || item.scope === 'pos' || (item.scope === 'employee' && (!cskh.has(item.refId) || (user.role !== 'staff' && !!ids?.includes(item.refId)))));
 }
 
 export type TargetRow = { scope: 'pos' | 'employee' | 'team'; refId: string; revenue: number; closedOrders: number; workingDays: number | null; updatedAt: string; costCeiling?: number | null; closeRate?: number | null; aov?: number | null };
