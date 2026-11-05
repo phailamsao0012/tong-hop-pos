@@ -31,8 +31,6 @@
   "app/api/reports/care/notes/route.ts",
   "app/api/reports/customer-detail/route.ts",
   "app/api/reports/customers/route.ts",
-  "app/api/reports/marketing/route.ts",
-  "app/api/reports/product-groups/route.ts",
   "app/api/sync/pos/route.ts",
   "app/api/targets/route.ts",
   "app/api/teams/route.ts",
