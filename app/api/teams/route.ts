@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:workers';
+import { staffNames, teamSources } from '@/lib/teams/teams-api';
 import { getSessionUser, unauthorized } from '@/lib/auth/auth';
-import { MENTOR_SQL, groupTeams, mentorMap, type DeptRow, type TeamRow } from '@/lib/teams/hr-teams';
+import { groupTeams, mentorMap, type DeptRow, type TeamRow } from '@/lib/teams/hr-teams';
 import { mktTeams } from '@/lib/teams/mkt-teams-source';
 import { todayVn } from '@/lib/shared/report-time';
 import { WEB_TEAMS_KEY, WEB_TEAM_ID, overlayWebTeams, parseWebTeams } from '@/lib/teams/web-teams';
@@ -14,14 +15,7 @@ export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const asked = params.get('team');
   const day = todayVn();
-  const [rows, depts, offices, mentors, settings] = await env.DB.batch([
-    env.DB.prepare(`SELECT t.pos_user_id,t.employee_id,t.employee_name,t.team,t.department,t.department_id,t.level,t.title,t.leader_employee_id,t.leader_name,t.head_name,t.status,e.joined_on
-      FROM hr_pos_team t LEFT JOIN hr_employees e ON e.id=t.employee_id WHERE t.status<>'da_nghi'`),
-    env.DB.prepare('SELECT id,name,parent_id,kind,office_id FROM hr_departments WHERE active=1'),
-    env.DB.prepare('SELECT id,name FROM hr_offices'),
-    env.DB.prepare(MENTOR_SQL).bind(day, day),
-    env.DB.prepare('SELECT key,value FROM app_settings WHERE key IN (?,?)').bind('team_source', WEB_TEAMS_KEY),
-  ]);
+  const [rows, depts, offices, mentors, settings] = await teamSources(day);
   const officeMap = new Map((offices.results as { id: string; name: string }[]).map((o) => [o.id, o.name]));
   const mentorOf = mentorMap(mentors.results as { team_id: string; name: string }[]);
   // Team chia trên web tổng (lib/web-teams.ts) ghép đè lên team web nhân sự, trừ khi nguồn team đặt là web nhân sự.
@@ -60,9 +54,4 @@ function listTeam(id: string, name: string, office: string | null, dept: ListTea
 /** Chỉ giữ team chia trên web tổng (mã wt_), bỏ thư mục mẹ theo team web nhân sự. */
 function onlyWeb<G extends { id: string }>(o: { teams: G[]; parent: Map<string, string> }) {
   return { teams: o.teams.filter((t) => WEB_TEAM_ID.test(t.id)), parent: new Map<string, string>() };
-}
-
-async function staffNames() {
-  const staff = await env.DB.prepare("SELECT user_id, MAX(name) AS name FROM pos_users WHERE user_id<>'' GROUP BY user_id").all<{ user_id: string; name: string }>();
-  return new Map(staff.results.map((r) => [r.user_id, r.name || `NV ${r.user_id.slice(0, 8)}`]));
 }

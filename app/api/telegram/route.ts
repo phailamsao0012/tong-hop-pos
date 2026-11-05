@@ -6,6 +6,7 @@ import { pairingCode } from '@/lib/bot/bot-menu';
 import { allowChat, hasBotPassword, listRequests, removeChat, setBotPassword } from '@/lib/bot/bot-access';
 import { validPassword } from '@/lib/auth/auth';
 import { botInfo, recentChats, sendTelegram, setWebhook, webhookInfo } from '@/lib/bot/telegram';
+import { alertLog, allowedChats, logTestAlert } from '@/lib/bot/telegram-admin';
 
 const noStore = { headers: { 'Cache-Control': 'no-store' } };
 
@@ -17,9 +18,8 @@ export async function GET(request: Request) {
   // quick=1: chỉ đọc D1 (danh sách chat, yêu cầu, mật khẩu), bỏ qua gọi Telegram — dùng khi web vừa đổi quyền để cập nhật ngay.
   const quick = new URL(request.url).searchParams.get('quick') === '1';
   const token = env.TELEGRAM_BOT_TOKEN?.trim();
-  const log = await env.DB.prepare('SELECT kind,employee_id,day,sent_at,message,ok,error FROM alert_log WHERE owner_id=? ORDER BY sent_at DESC LIMIT 30')
-    .bind(user.userId).all<Record<string, unknown>>();
-  const allowed = await env.DB.prepare('SELECT chat_id,name,added_at,role FROM telegram_chats ORDER BY added_at').all<{ chat_id: string; name: string; added_at: string; role: string }>();
+  const log = await alertLog(user);
+  const allowed = await allowedChats();
   const [requests, hasPassword] = await Promise.all([listRequests(), hasBotPassword()]);
   let bot: { username?: string; first_name?: string } | null = null, chats: { id: string; type: string; name: string }[] = [], botError: string | null = null;
   let webhook: { url?: string; last_error_message?: string; pending_update_count?: number } = {};
@@ -72,8 +72,7 @@ export async function POST(request: Request) {
     const message = `✅ Tổng hợp POS đã kết nối Telegram.\nCảnh báo tỷ lệ chốt sẽ gửi vào đây trong ca làm.`;
     try {
       await sendTelegram(token, chatId, message);
-      await env.DB.prepare('INSERT INTO alert_log (id,owner_id,kind,employee_id,day,sent_at,message,ok,error) VALUES (?,?,?,?,?,?,?,1,NULL)')
-        .bind(crypto.randomUUID(), user.userId, 'test', null, new Date().toISOString().slice(0, 10), new Date().toISOString(), message).run();
+      await logTestAlert(user, message);
       return Response.json({ ok: true });
     } catch (e) {
       return Response.json({ error: `Gửi thất bại: ${e instanceof Error ? e.message : String(e)}` }, { status: 502 });
