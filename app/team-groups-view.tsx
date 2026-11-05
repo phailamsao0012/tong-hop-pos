@@ -25,6 +25,7 @@ import { useApi } from './use-api';
 import { unitFor, useHrUnit } from './team-store';
 import { StaleChip } from './stale-chip';
 import { daysInMonth, fetchTargets, parseMoney, type TargetItem } from './targets-panel';
+import { KpiInlineEditor } from './kpi-inline-editor';
 import { officeLabel, officeList } from '@/lib/teams/web-teams';
 import {
   ChartCard, EmptyState, ErrorBox, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, delta, dmy, pct, shortMoney, toast, useSort, vi,
@@ -106,19 +107,16 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
     const actual = kpiReport.data?.current.byEmployee.find((row) => row.sellerId === id)?.closedNet ?? 0;
     return goal && kpiReport.data ? pct(actual / goal * 100, 0) : '—';
   };
-  const editPersonal = async (id: string) => {
-    const raw = window.prompt('Doanh thu KPI tháng hiện tại (₫)');
-    if (raw === null) return;
-    // Sale: hỏi thêm tỉ lệ chốt mục tiêu; CSKH chỉ KPI doanh số (anh Vũ 02/11/2026).
-    const rawRate = team === 'sale' ? window.prompt('Tỉ lệ chốt mục tiêu (%)') : '';
-    if (rawRate === null) return;
-    const revenue = Number(raw);
-    if (!Number.isFinite(revenue) || revenue < 0) return;
+  // Đặt KPI cá nhân bằng ô nhập ngay trong bảng (trước đây là window.prompt; đánh giá giao diện điện thoại 21/10/2026).
+  const [kpiEditing, setKpiEditing] = useState<string | null>(null);
+  const editPersonal = async (id: string, revenue: number, rate: number | null) => {
     const existing = personalTargets[`employee:${id}`];
-    const closeRate = team === 'sale' ? parseRate(rawRate) : existing?.closeRate ?? null;
+    // Sale: thêm tỉ lệ chốt mục tiêu; CSKH chỉ KPI doanh số (anh Vũ 02/11/2026).
+    const closeRate = team === 'sale' ? rate : existing?.closeRate ?? null;
     const response = await fetch('/api/targets', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ month: kpiMonth, only: [`employee:${id}`], items: [{ ...existing, scope: 'employee', refId: id, revenue, closedOrders: existing?.closedOrders ?? 0, closeRate }] }) });
     if (!response.ok) { toast('Không có quyền đặt KPI người này hoặc không lưu được.'); return; }
     setPersonalTargets(await fetchTargets(kpiMonth));
+    setKpiEditing(null);
   };
 
   const ms = useMetricSettings();
@@ -294,7 +292,10 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
                               <td className="r num">{vi.format(p.cur.closed)}</td>
                               <td className="r num">{shortMoney(aov(p.cur))}</td>
                               <td className="r num">{pct(rate(p.cur, ms.rateBase))}</td>
-                              <td>—</td><td className="r" title="Cách tính: doanh thu đơn chốt tháng hiện tại trong mọi POS được cấp ÷ KPI doanh thu tháng"><span>{personalProgress(p.id)}</span> {(owner || editableStaff.includes(p.id)) && <button type="button" className="link" onClick={() => void editPersonal(p.id)}>Đặt KPI</button>}</td>
+                              <td>—</td><td className="r" title="Cách tính: doanh thu đơn chốt tháng hiện tại trong mọi POS được cấp ÷ KPI doanh thu tháng"><span>{personalProgress(p.id)}</span> {(owner || editableStaff.includes(p.id)) && (kpiEditing === p.id
+                                ? <KpiInlineEditor withRate={team === 'sale'} initialRevenue={personalTargets[`employee:${p.id}`]?.revenue} initialRate={personalTargets[`employee:${p.id}`]?.closeRate}
+                                  onSave={(revenue, rate) => editPersonal(p.id, revenue, rate)} onCancel={() => setKpiEditing(null)} />
+                                : <button type="button" className="link" onClick={() => setKpiEditing(p.id)}>Đặt KPI</button>)}</td>
                               {careCells(p.care, r.care)}
                             </tr>
                           ))}
@@ -405,7 +406,7 @@ function TeamKpi({ team, teams }: { team: Dept; teams: KpiTeam[] }) {
                     <td className="r num">{monthApi.data ? <>{shortMoney(d.revenue)}<span className="block text-[11px] text-ink-3">{vi.format(d.closed)} đơn{isSale && rate !== null ? <> · <span className={goalRate ? (rate >= goalRate ? 'text-good' : 'text-bad') : ''}>chốt {pct(rate, 1)}</span>{goalRate ? ` / ${pct(goalRate, 1)}` : ''}</> : null}</span></> : '…'}</td>
                     <td className="r num"><span className="flex items-center justify-end gap-2">{pct(p, 0)}<ProgressBar value={d.revenue} max={goal || 1} width={64} size="sm" color={p === null ? undefined : p >= 100 ? 'var(--good)' : p >= elapsed / daysInMonth(month) * 100 ? 'var(--t-lime)' : 'var(--warn)'} /></span></td>
                     <td className="r num">{monthApi.data ? <>{shortMoney(forecast)}{goal ? <span className={`block text-[11px] ${forecast >= goal ? 'text-good' : 'text-bad'}`}>{pct(forecast / goal * 100, 0)} mục tiêu</span> : null}</> : '…'}</td>
-                    <td className="r num">{pers.revenue ? <button type="button" className="text-primary underline-offset-2 hover:underline" title="Dùng tổng KPI cá nhân làm KPI team" onClick={() => setDraft((x) => ({ ...x, [t.id]: { revenue: String(pers.revenue), rate: x[t.id]?.rate ?? val(t, 'rate') } }))}>{shortMoney(pers.revenue)}</button> : <span className="text-ink-3">—</span>}</td>
+                    <td className="r num">{pers.revenue ? <button type="button" className="text-primary underline-offset-2 hover:underline tap" title="Dùng tổng KPI cá nhân làm KPI team" onClick={() => setDraft((x) => ({ ...x, [t.id]: { revenue: String(pers.revenue), rate: x[t.id]?.rate ?? val(t, 'rate') } }))}>{shortMoney(pers.revenue)}</button> : <span className="text-ink-3">—</span>}</td>
                   </tr>
                 );
               })}

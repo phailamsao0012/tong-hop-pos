@@ -22,7 +22,7 @@ export function D1UsagePanel({ usage }: { usage: Usage | null }) {
     <p className="mb-2 text-xs text-ink-3">Trần ngày: 1,2 triệu dòng. Cảnh báo Telegram khi dự tính vượt 40 triệu.</p>
     <p className="text-xs text-ink-3">Dòng ghi theo khâu trong 30 ngày (UTC)</p>
     <div className="mt-2 flex h-32 items-end gap-1"  aria-label="Biểu đồ dòng ghi 30 ngày theo khâu">{days.map((day, i) => <div key={day} className="flex h-full min-w-0 flex-1 flex-col justify-end" title={`${day}: ${rows[i] ? number(rows[i]!.writes) + ' dòng' : 'Chưa có dữ liệu'}\n${Object.keys(labels).map((key) => `${labels[key]}: ${number(rows[i]?.stages[key] ?? 0)}`).join('\n')}`}>{Object.keys(labels).map((key, j) => <div key={key} style={{ height: `${(rows[i]?.stages[key] ?? 0) / max * 100}%`, backgroundColor: colors[j] }} />)}</div>)}</div>
-    <div className="mt-1 flex justify-between text-[10px] text-ink-3"><span>{days[0]}</span><span>{today}</span></div>
+    <div className="mt-1 flex justify-between text-[11px] text-ink-3"><span>{days[0]}</span><span>{today}</span></div>
     <div className="mt-3 flex flex-wrap gap-3 text-xs text-ink-2">{Object.entries(labels).map(([key, label], i) => <span key={key}><span className="mr-1 inline-block size-2 rounded-sm" style={{ backgroundColor: colors[i] }} />{label}</span>)}</div>
   </section>;
 }

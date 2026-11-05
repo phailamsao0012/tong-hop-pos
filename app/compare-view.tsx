@@ -403,13 +403,13 @@ export function CompareView() {
                           <span className="flex items-center gap-2">
                             <span className="num w-5 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span>
                             <button type="button" aria-pressed={picked} onClick={() => toggle(r.sellerId)}
-                              className={`flex min-w-0 items-center gap-2 rounded-md text-[13px] font-medium transition-colors duration-[var(--dur)] ease-[var(--ease)] hover:text-primary ${picked ? 'text-primary' : 'text-ink'}`}>
+                              className={`flex min-w-0 items-center gap-2 rounded-md text-[13px] tap font-medium transition-colors duration-[var(--dur)] ease-[var(--ease)] hover:text-primary ${picked ? 'text-primary' : 'text-ink'}`}>
                               <Avatar name={r.name} size="sm" /><span className="truncate"><StaffName id={r.sellerId} name={r.name} tenure={false} /></span>
                             </button>
                             <HoverReveal>
                               <Tooltip content={picked ? 'Bỏ khỏi so sánh' : 'Thêm vào so sánh (tối đa 8 người)'}>
                                 <button type="button" aria-label={picked ? `Bỏ ${r.name} khỏi so sánh` : `Thêm ${r.name} vào so sánh`} onClick={() => toggle(r.sellerId)}
-                                  className="grid size-6 place-items-center rounded-[5px] text-ink-3 transition-colors duration-[var(--dur)] ease-[var(--ease)] hover:bg-tint hover:text-primary">
+                                  className="grid size-6 place-items-center rounded-[5px] text-ink-3 tap transition-colors duration-[var(--dur)] ease-[var(--ease)] hover:bg-tint hover:text-primary">
                                   {picked ? <X size={13} /> : <Plus size={13} />}
                                 </button>
                               </Tooltip>

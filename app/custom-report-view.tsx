@@ -157,7 +157,7 @@ export function CustomReportView() {
             <div>
               <p className="m-0 mb-1.5 text-[11.5px] font-semibold uppercase tracking-wide text-ink-3">Chỉ số</p>
               <div className="grid gap-1">{(Object.keys(METRICS) as MetricKey[]).map((k) => (
-                <label key={k} className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 hover:bg-surface-2"><input id={`cm-${k}`} type={display === 'pivot' ? 'radio' : 'checkbox'} name="cr-metric" checked={display === 'pivot' ? pivotMetric === k : metrics.includes(k)} onChange={() => display === 'pivot' ? setMetrics([k]) : toggle(k)} />{METRICS[k].label}</label>
+                <label key={k} className="tap flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 hover:bg-surface-2"><input id={`cm-${k}`} type={display === 'pivot' ? 'radio' : 'checkbox'} name="cr-metric" checked={display === 'pivot' ? pivotMetric === k : metrics.includes(k)} onChange={() => display === 'pivot' ? setMetrics([k]) : toggle(k)} />{METRICS[k].label}</label>
               ))}</div>
             </div>
             <div><p className="m-0 mb-1.5 text-[11.5px] font-semibold uppercase tracking-wide text-ink-3">Hiện dạng</p>

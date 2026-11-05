@@ -41,10 +41,10 @@ export function ReturnsView({ onOpen }: { onOpen: () => void }) {
         <thead><tr><th className="text-left">{DIMS.find((d) => d.value === dimension)!.label}</th><th className="n">Số đơn</th><th className="text-left">Tỉ lệ</th><th className="n">Tiền hàng</th></tr></thead>
         <tbody>{rows.map((row) => <tr key={row.label}>
           <td className="min-w-40 text-left">{dimension === 'reasons'
-            ? <button type="button" aria-label={row.label} className="text-left font-semibold text-ink hover:text-primary hover:underline" title="Mở Đơn nguồn ở nhóm Hoàn" onClick={onOpen}>{row.label}</button>
+            ? <button type="button" aria-label={row.label} className="text-left font-semibold text-ink hover:text-primary hover:underline tap" title="Mở Đơn nguồn ở nhóm Hoàn" onClick={onOpen}>{row.label}</button>
             : <span className="font-semibold">{label(row.label)}</span>}</td>
           <td className="n font-semibold">{vi.format(row.orders)}</td>
-          <td className="w-[40%] text-left" aria-label={`${row.rate.toFixed(1)}%`}><span className="flex items-center gap-2"><span aria-hidden="true" className="block h-2 flex-1 overflow-hidden rounded-full bg-surface-3"><i className="block h-full rounded-full bg-t-orange" style={{ width: `${row.orders / top * 100}%` }} /></span><span className="num w-12 text-right text-ink-2">{row.rate.toFixed(1).replace('.', ',')}%</span></span></td>
+          <td className="w-[40%] text-left" aria-label={`${row.rate.toFixed(1).replace('.', ',')}%`}><span className="flex items-center gap-2"><span aria-hidden="true" className="block h-2 flex-1 overflow-hidden rounded-full bg-surface-3"><i className="block h-full rounded-full bg-t-orange" style={{ width: `${row.orders / top * 100}%` }} /></span><span className="num w-12 text-right text-ink-2">{row.rate.toFixed(1).replace('.', ',')}%</span></span></td>
           <td className="n">{money(row.net)}</td>
         </tr>)}</tbody>
       </table></TableWrap>}

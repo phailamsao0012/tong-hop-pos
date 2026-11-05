@@ -82,7 +82,7 @@ export function CatalogPanel() {
                     {catalog.results.filter((r) => r.group === g).map((r) => (
                       <tr key={r.key} className="align-top">
                         <td><div className="font-medium">{r.label}</div><div className="text-[10.5px] text-ink-3">{r.path}</div></td>
-                        <td><StatusChip tone={STATUS[r.status].tone}>{STATUS[r.status].label}</StatusChip>{r.httpStatus ? <span className="num ml-1 text-[10px] font-semibold text-ink-3">HTTP {r.httpStatus} · {r.ms} ms</span> : null}</td>
+                        <td><StatusChip tone={STATUS[r.status].tone}>{STATUS[r.status].label}</StatusChip>{r.httpStatus ? <span className="num ml-1 text-[11px] font-semibold text-ink-3">HTTP {r.httpStatus} · {r.ms} ms</span> : null}</td>
                         <td className="n">{r.count === null ? '—' : vi.format(r.count)}</td>
                         <td><StatusChip tone={HAVE[r.have].tone}>{HAVE[r.have].label}</StatusChip></td>
                         <td className="whitespace-normal text-xs text-ink-2"><span className="line-clamp-2" title={r.fields.join(', ')}>{r.fields.join(', ') || '—'}</span></td>

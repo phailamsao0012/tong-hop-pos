@@ -140,7 +140,7 @@ export function AiAskView({ onNavigate }: { onNavigate: (view: string) => void }
         <li ref={end} className="scroll-mb-[220px] md:scroll-mb-[160px]" aria-hidden="true" />
       </ol>
       <div className="sticky bottom-[calc(60px+env(safe-area-inset-bottom,0px))] space-y-2 rounded-b-[inherit] border-t border-line bg-surface p-3 md:bottom-0">
-        <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1">{suggestions.map(q => <button type="button" key={q} className="shrink-0 rounded-full border border-line bg-surface-2 px-3 py-1 text-xs" disabled={busy} onClick={() => { setQuestion(q); input.current?.focus(); }}>{q}</button>)}</div>
+        <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1">{suggestions.map(q => <button type="button" key={q} className="shrink-0 rounded-full border border-line bg-surface-2 px-3 tap py-1 text-xs" disabled={busy} onClick={() => { setQuestion(q); input.current?.focus(); }}>{q}</button>)}</div>
         <form className="flex items-end gap-2" onSubmit={e => { e.preventDefault(); void ask(); }}>
           <label htmlFor="ai-question" className="sr-only">Câu hỏi</label>
           <textarea id="ai-question" ref={input} rows={1} maxLength={1000} placeholder="Hỏi về số liệu…" className="field max-h-36 min-h-10 flex-1 resize-none rounded-2xl py-2" value={question} onChange={e => setQuestion(e.target.value)}

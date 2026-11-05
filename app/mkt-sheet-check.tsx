@@ -77,7 +77,7 @@ export function MktSheetCheck({ start, end, posIds }: { start: string; end: stri
   if (!data) {
     return (
       <section className={`card p-5 ${loading ? 'is-loading' : ''}`} aria-busy={loading}>
-        {error ? <p className="text-[13px] text-bad">Không tải được bảng đối chiếu sheet. <button type="button" className="underline" onClick={reload}>Tải lại</button></p>
+        {error ? <p className="text-[13px] text-bad">Không tải được bảng đối chiếu sheet. <button type="button" className="underline tap" onClick={reload}>Tải lại</button></p>
           : <div className="skel h-40 rounded-2xl" />}
       </section>
     );
@@ -196,7 +196,7 @@ export function MktSheetCheck({ start, end, posIds }: { start: string; end: stri
                 <tr key={r.id} className={picked === r.id ? 'bg-tint-2' : ''}>
                   <td className="min-w-40">
                     {view === 'marketer'
-                      ? <button type="button" onClick={() => { setPicked(r.id === picked ? null : r.id); if (r.id !== picked) setView('day'); }} className="flex items-center gap-1.5 text-left font-semibold text-ink hover:text-primary" title="Bấm để xem từng ngày của người này">
+                      ? <button type="button" onClick={() => { setPicked(r.id === picked ? null : r.id); if (r.id !== picked) setView('day'); }} className="flex items-center gap-1.5 text-left font-semibold text-ink tap hover:text-primary" title="Bấm để xem từng ngày của người này">
                           {picked === r.id && <Check size={14} className="shrink-0 text-primary" />}{r.name}
                         </button>
                       : <span className="num font-semibold">{r.name}</span>}

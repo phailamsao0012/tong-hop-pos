@@ -13,7 +13,7 @@ export function ManagerChip({ label, name, people, onlyCount = false }: { label:
       <Popover>
         <PopoverTrigger
           render={<button type="button" onClick={(e) => e.stopPropagation()} disabled={!people.length}
-            className="inline-flex items-center gap-0.5 rounded-full bg-tint px-1.5 text-[11px] font-semibold text-primary disabled:cursor-default"
+            className="inline-flex items-center gap-0.5 rounded-full bg-tint px-1.5 tap text-[11px] font-semibold text-primary disabled:cursor-default"
             aria-label={`${label} ${name} quản lý ${people.length} người, bấm để xem tên`} />}>
           {people.length} người{people.length > 0 && <ChevronDown size={11} aria-hidden="true" />}
         </PopoverTrigger>

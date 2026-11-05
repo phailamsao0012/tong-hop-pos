@@ -957,7 +957,7 @@ export function SaleGroupBlock({
                 key={k}
                 type="button"
                 onClick={() => setMetric(k)}
-                className={`rounded-md px-2.5 py-1 font-semibold ${metric === k ? 'bg-primary text-[var(--primary-ink)]' : 'text-ink-2 hover:bg-surface-2'}`}
+                className={`tap rounded-md px-2.5 py-1 font-semibold ${metric === k ? 'bg-primary text-[var(--primary-ink)]' : 'text-ink-2 hover:bg-surface-2'}`}
               >
                 {l}
               </button>
