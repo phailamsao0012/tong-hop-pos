@@ -9,7 +9,8 @@ import { webOrigin } from '@/lib/notify/origin';
 import { logMessage, pruneMessages, type ChatKind } from '@/lib/zalo/zalo-chat';
 import { loadReportTargets } from '@/lib/zalo/team-link';
 import { buildBossSlotReport, bossSlotText, type BossSlotReport, type BossSlotTeam } from '@/lib/zalo/slot-report';
-import { buildMorningReport, morningText, type MorningData, type MorningReport } from '@/lib/zalo/morning-report';
+import { buildMorningReport, morningText, withHidden, type MorningData, type MorningReport } from '@/lib/zalo/morning-report';
+import { REPORT_SCHEDULE_KEY, hiddenSections, legacySlotKey, parseReportSchedule, previousTime, runsOn, timeKey, timeLabel } from '@/lib/zalo/report-schedule';
 
 const MORNING_TEST = 'anh-1';
 import { listTargets } from '@/lib/kpi/targets';
@@ -17,6 +18,8 @@ import { DEFAULT_ZALO_SETTINGS, listContacts, writeZaloSetting, formatList, form
 
 type Snapshot = { total: number; orders: number; created?: number; createdClosed?: number; people: Record<string, { name: string; total: number; orders: number }> };
 type TickState = { day?: string; morning?: string; morningTest?: string; overdue?: string; slot12?: string; slot17?: string; slot22?: string; idle?: string; prune?: string; snap?: Record<string, Record<string, Snapshot>>;
+  /** Ngày đã gửi báo cáo ca theo giờ "HH:MM" (Cài đặt báo cáo); ca 12:00/17:00/22:00 vẫn ghi thêm khoá cũ slot12… */
+  slots?: Record<string, string>;
   /** Số cùng giờ các ngày trước để báo cáo ca so sánh (giữ 15 ngày): team → ngày → giờ. */
   hist?: Record<string, Record<string, Record<string, { net: number; orders: number; created: number; createdClosed: number }>>>;
   /** Doanh số tháng tới hết hôm qua + KPI, lưu lúc 8h để báo cáo ca khỏi đọc lại D1. */
@@ -68,20 +71,29 @@ export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database
   // One result row even when settings are absent. The indexed EXISTS also avoids a meeting read on quiet minutes.
   const row = await db.prepare(`WITH config AS (SELECT
     (SELECT value FROM app_settings WHERE key='zalo_settings_v1') AS settings,
-    (SELECT value FROM app_settings WHERE key='zalo_tick_v1') AS tick) SELECT settings,tick,
+    (SELECT value FROM app_settings WHERE key='zalo_tick_v1') AS tick,
+    (SELECT value FROM app_settings WHERE key='${REPORT_SCHEDULE_KEY}') AS report) SELECT settings,tick,report,
     EXISTS(SELECT 1 FROM zalo_meetings m WHERE m.cancelled_at IS NULL AND m.start_at>? AND m.start_at<=strftime('%Y-%m-%dT%H:%M:%fZ', ?, '+' || COALESCE(json_extract(CASE WHEN json_valid(settings) THEN settings ELSE '{}' END,'$.remindBeforeMeetingMin'),60) || ' minutes') AND EXISTS(SELECT 1 FROM zalo_meeting_invites i WHERE i.meeting_id=m.id AND i.reminded_at IS NULL AND (i.answer IS NULL OR i.answer='co'))) AS meeting FROM config`)
-    .bind(new Date(now).toISOString(), new Date(now).toISOString()).first<{ settings: string | null; tick: string | null; meeting: number }>();
+    .bind(new Date(now).toISOString(), new Date(now).toISOString()).first<{ settings: string | null; tick: string | null; report: string | null; meeting: number }>();
   const parse = <T,>(s: string | null | undefined, fallback: T): T => { try { return s ? JSON.parse(s) as T : fallback; } catch { return fallback; } };
   const settings = { ...DEFAULT_ZALO_SETTINGS, ...parse(row?.settings, {}) };
   const state = parse<TickState>(row?.tick, {});
+  // Giờ gửi, lặp lại, mục trong báo cáo (Giao việc → Cài đặt báo cáo); chưa chỉnh = 08:00 và 12:00 / 17:00 / 22:00 hằng ngày, đủ mục.
+  const schedule = parseReportSchedule(row?.report);
   if (state.day !== day) {
-    state.day = day; state.snap = {};
+    state.day = day; state.snap = {}; state.slots = {};
     for (const t of Object.values(state.hist ?? {})) for (const d of Object.keys(t)) if (d < addDays(day, -15)) delete t[d];
   }
-  const morning = time === '08:00' && state.morning !== day;
+  // Giờ báo cáo sáng luôn chụp số của team (ca đầu tiên tính khung từ giờ này), kể cả khi tắt hoặc hôm nay không gửi.
+  const morning = time === schedule.morning.time && state.morning !== day;
   const overdue = time === '08:00' && state.overdue !== day;
-  const slotKey = ({ '12:00': 'slot12', '17:00': 'slot17', '22:00': 'slot22' } as const)[time as '12:00'];
-  const slot = settings.slotReports && slotKey && state[slotKey] !== day;
+  const slotTime = schedule.slots.times.includes(time) ? time : null;
+  const legacy = slotTime ? legacySlotKey(slotTime) : null;
+  const slotSent = !!slotTime && (state.slots?.[slotTime] === day || (legacy !== null && state[legacy] === day));
+  const slot = settings.slotReports && !!slotTime && runsOn(schedule.slots.repeat, day) && !slotSent;
+  /** Khoá giờ trong state.hist / state.snap: "08", "12" như trước; giờ lẻ "12:30". */
+  const key = timeKey(time);
+  const prevTime = slotTime ? previousTime(schedule, slotTime) : null;
   const idle = (!state.idle || now - Date.parse(state.idle + ':00+07:00') >= 15 * 60000) && time >= settings.idleFrom && time <= settings.idleTo && settings.idleMinutes > 0 && state.idle !== local.slice(0, 16);
   const prune = hour === '02' && state.prune !== day;
   // Gửi thử báo cáo 8h cho sếp MỘT lần sau khi lên bản có ảnh (anh Vũ 02/11/2026: "gửi thử t xem có xem được k").
@@ -109,7 +121,7 @@ export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database
       if (c.kind !== 'boss') await logMessage(db, { contactId: c.id, dir: 'out', kind: 'text', body: `[Ảnh ${label}]\n` + text, delivered: true, now });
     } else await send(c, text);
   };
-  const sendMorning = (c: Contact, report: MorningReport, prefix = '') => sendImage(c, report, prefix + morningText(report), 'báo cáo 8h');
+  const sendMorning = (c: Contact, report: MorningReport, prefix = '') => sendImage(c, report, prefix + morningText(report), `báo cáo ${timeLabel(schedule.morning.time)}`);
   if (morning || slot) {
     const bossTeams = new Map<string, BossSlotTeam>();
     // Một team có thể có cả Mentor và Leader nhận: số của team chỉ tính một lần.
@@ -122,7 +134,7 @@ export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database
         const snaps = (state.snap ??= {}), teamSnaps = snaps[team] ??= {};
         // Số cùng giờ để các ca sau so sánh (mỗi team ghi một lần mỗi giờ).
         ((state.hist ??= {})[team] ??= {})[day] ??= {};
-        state.hist[team][day][hour] = { net: current.total, orders: current.orders, created: current.created ?? 0, createdClosed: current.createdClosed ?? 0 };
+        state.hist[team][day][key] = { net: current.total, orders: current.orders, created: current.created ?? 0, createdClosed: current.createdClosed ?? 0 };
         const work = async () => {
           const ids = contacts.filter(c => c.id === leader.id || c.leader_id === leader.id).map(c => c.id);
           const tasks = (await db.prepare(`SELECT * FROM zalo_tasks WHERE status NOT IN ('xong','huy') AND assignee_id IN (${ids.map(() => '?').join(',')}) ORDER BY due_date LIMIT 500`).bind(...ids).all<Task>()).results;
@@ -131,40 +143,39 @@ export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database
           return { overdue: tasks.filter((t) => t.due_date && t.due_date < day).map(who), dueToday: tasks.filter((t) => t.due_date === day).map(who), meetings: meetings.map((m) => `họp số ${m.no} ${m.title}`) };
         };
         if (slot) {
-          const previousHour = hour === '12' ? '08' : hour === '17' ? '12' : '17', previous = teamSnaps[previousHour];
+          const previous = prevTime ? teamSnaps[timeKey(prevTime)] : undefined;
           const total = current.total - (previous?.total ?? 0);
           // Ảnh ca dùng đúng kiểu ảnh 8h (anh Vũ 03/11/2026): số từ 0h tới giờ này, so cùng giờ hôm qua / tuần trước.
-          const days = Array.from({ length: 13 }, (_, i) => addDays(day, i - 13)).flatMap((d) => { const h = state.hist?.[team]?.[d]?.[hour]; return h ? [{ day: d, ...h }] : []; });
+          const days = Array.from({ length: 13 }, (_, i) => addDays(day, i - 13)).flatMap((d) => { const h = state.hist?.[team]?.[d]?.[key]; return h ? [{ day: d, ...h }] : []; });
           const m = state.month?.[team], sameMonth = day.slice(0, 7) === addDays(day, -1).slice(0, 7);
           const kpiOk = !!m && m.day === day && sameMonth;
-          const report = buildMorningReport({
-            team: leader.team_name, dept: leader.dept === 'cskh' ? 'cskh' : 'sale', today: addDays(day, 1), slotHour: hour,
+          const report = withHidden(buildMorningReport({
+            team: leader.team_name, dept: leader.dept === 'cskh' ? 'cskh' : 'sale', today: addDays(day, 1), slotHour: key,
             days: [...days, { day, net: current.total, orders: current.orders, created: current.created ?? 0, createdClosed: current.createdClosed ?? 0 }],
             monthNet: (kpiOk ? m.monthNet : 0) + current.total, goal: kpiOk ? m.goal : null, workingDays: kpiOk ? m.workingDays : null,
             people: Object.values(current.people).map((p) => ({ name: p.name, net: p.total, orders: p.orders })),
             ...await work(),
-          });
-          await sendImage(leader, report, morningText(report), `báo cáo ${Number(hour)}h`);
+          }), hiddenSections(schedule.slots.sections));
+          await sendImage(leader, report, morningText(report), `báo cáo ${timeLabel(time)}`);
           bossTeams.set(team, { team: leader.team_name, total, cumulative: current.total });
         }
-        teamSnaps[hour] = current;
-        if (morning && settings.morningBrief) {
+        teamSnaps[key] = current;
+        if (morning && settings.morningBrief && runsOn(schedule.morning.repeat, day)) {
           if (!morningNumbers.has(team)) morningNumbers.set(team, (options.morningData ?? zaloMorningData)(leader, day));
           const numbers = await morningNumbers.get(team)!;
           if (numbers) {
             (state.month ??= {})[team] = { day, monthNet: numbers.monthNet, goal: numbers.goal, workingDays: numbers.workingDays };
-            await sendMorning(leader, buildMorningReport({ ...numbers, ...await work() }));
+            await sendMorning(leader, withHidden(buildMorningReport({ ...numbers, ...await work() }), hiddenSections(schedule.morning.sections)));
           }
         }
       } catch { console.error('zalo team report failed'); }
     }
     if (slot && bossTeams.size) {
-      const previousHour = hour === '12' ? '08' : hour === '17' ? '12' : '17';
-      const report = buildBossSlotReport(`khung ${Number(previousHour)}h–${Number(hour)}h`, hour, day, [...bossTeams.values()]);
-      for (const boss of contacts.filter(c => c.kind === 'boss')) await sendImage(boss, report, bossSlotText(report), `báo cáo ${Number(hour)}h`);
+      const report = buildBossSlotReport(`khung ${prevTime ? timeLabel(prevTime) : '0h'}–${timeLabel(time)}`, key, day, [...bossTeams.values()]);
+      for (const boss of contacts.filter(c => c.kind === 'boss')) await sendImage(boss, report, bossSlotText(report), `báo cáo ${timeLabel(time)}`);
     }
     if (morning) state.morning = day;
-    if (slot) state[slotKey] = day;
+    if (slot && slotTime) { (state.slots ??= {})[slotTime] = day; if (legacy) state[legacy] = day; }
   }
   if (morningTest) {
     const bosses = contacts.filter((c) => c.kind === 'boss' && c.chat_id);
@@ -172,7 +183,9 @@ export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database
       const numbers = bosses.length ? await (options.morningData ?? zaloMorningData)(leader, day).catch(() => null) : null;
       if (!numbers) continue;
       const report = buildMorningReport({ ...numbers, overdue: [], dueToday: [] });
-      for (const boss of bosses) await sendMorning(boss, report, 'Gửi thử báo cáo 8h (leader nhận lúc 8:00 mỗi sáng)\n');
+      // Chưa chỉnh lịch thì chữ y như cũ: "Gửi thử báo cáo 8h (leader nhận lúc 8:00 mỗi sáng)".
+      const mt = schedule.morning.time, when = schedule.morning.repeat.mode === 'daily' ? 'mỗi sáng' : 'theo lịch đã đặt';
+      for (const boss of bosses) await sendMorning(boss, report, `Gửi thử báo cáo ${timeLabel(mt)} (leader nhận lúc ${Number(mt.slice(0, 2))}:${mt.slice(3)} ${when})\n`);
       break;
     }
     state.morningTest = MORNING_TEST;

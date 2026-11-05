@@ -72,7 +72,7 @@ export function BossSlotImage({ r }: { r: BossSlotReport }) {
   return (
     <Frame
       title="Doanh số các team"
-      sub={`Báo cáo ${Number(r.hour)}h · ${r.slot} · ${dm(r.day)}`}
+      sub={`Báo cáo ${Number(r.hour.slice(0, 2))}h${r.hour.length > 2 ? r.hour.slice(3, 5) : ''} · ${r.slot} · ${dm(r.day)}`}
     >
       <div
         style={{
