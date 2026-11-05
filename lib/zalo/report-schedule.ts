@@ -24,11 +24,17 @@ export type ReportSchedule = {
   morning: { time: string; repeat: Repeat; sections: ReportSection[] };
   /** Báo cáo ca: mỗi giờ một lần, số từ 0h tới giờ đó; báo cáo gộp cho sếp tính khung từ giờ báo cáo trước. */
   slots: { times: string[]; repeat: Repeat; sections: ReportSection[] };
+  /** Báo cáo gộp các team gửi sếp ở mỗi ca: gửi hay không, có dòng luỹ kế không (anh Vũ 05/11/2026: "cho chỉnh cả ba"). */
+  boss: { send: boolean; cumulative: boolean };
+  /** Giờ gửi nhắc việc quá hạn / tới hạn hôm nay. */
+  overdue: { time: string };
 };
 
 export const DEFAULT_REPORT_SCHEDULE: ReportSchedule = {
   morning: { time: '08:00', repeat: { mode: 'daily' }, sections: [...SECTION_KEYS] },
   slots: { times: ['12:00', '17:00', '22:00'], repeat: { mode: 'daily' }, sections: [...SECTION_KEYS] },
+  boss: { send: true, cumulative: true },
+  overdue: { time: '08:00' },
 };
 export const MAX_SLOTS = 4;
 /** Giờ chọn được: 05:00 → 23:45, bước 15 phút (cron chạy mỗi phút, so đúng phút). */
@@ -88,19 +94,21 @@ function cleanTimes(v: unknown): string[] | null {
 export function parseReportSchedule(raw: unknown): ReportSchedule {
   let v: unknown = raw;
   if (typeof raw === 'string') { try { v = JSON.parse(raw); } catch { v = null; } }
-  const o = (v && typeof v === 'object' ? v : {}) as { morning?: Record<string, unknown>; slots?: Record<string, unknown> };
+  const o = (v && typeof v === 'object' ? v : {}) as { morning?: Record<string, unknown>; slots?: Record<string, unknown>; boss?: Record<string, unknown>; overdue?: Record<string, unknown> };
   const d = DEFAULT_REPORT_SCHEDULE;
   const morningTime = typeof o.morning?.time === 'string' && TIME_RE.test(o.morning.time) ? o.morning.time : d.morning.time;
   const slotTimes = (cleanTimes(o.slots?.times) ?? d.slots.times).filter((t) => t !== morningTime);
   return {
     morning: { time: morningTime, repeat: cleanRepeat(o.morning?.repeat) ?? d.morning.repeat, sections: cleanSections(o.morning?.sections) ?? [...d.morning.sections] },
     slots: { times: slotTimes.length ? slotTimes : [...d.slots.times].filter((t) => t !== morningTime), repeat: cleanRepeat(o.slots?.repeat) ?? d.slots.repeat, sections: cleanSections(o.slots?.sections) ?? [...d.slots.sections] },
+    boss: { send: typeof o.boss?.send === 'boolean' ? o.boss.send : d.boss.send, cumulative: typeof o.boss?.cumulative === 'boolean' ? o.boss.cumulative : d.boss.cumulative },
+    overdue: { time: typeof o.overdue?.time === 'string' && TIME_RE.test(o.overdue.time) ? o.overdue.time : d.overdue.time },
   };
 }
 
 /** Kiểm dữ liệu trang Cài đặt báo cáo gửi lên: sai thì báo lỗi bằng tiếng Việt, đúng thì trả bản đã làm sạch. */
 export function validateReportSchedule(input: unknown): ReportSchedule {
-  const o = (input && typeof input === 'object' ? input : null) as { morning?: Record<string, unknown>; slots?: Record<string, unknown> } | null;
+  const o = (input && typeof input === 'object' ? input : null) as { morning?: Record<string, unknown>; slots?: Record<string, unknown>; boss?: Record<string, unknown>; overdue?: Record<string, unknown> } | null;
   if (!o?.morning || !o.slots) throw new Error('Thiếu cài đặt báo cáo sáng hoặc báo cáo ca.');
   const time = o.morning.time;
   if (typeof time !== 'string' || !TIME_RE.test(time)) throw new Error('Giờ gửi báo cáo sáng phải là giờ:phút, bước 15 phút.');
@@ -111,7 +119,13 @@ export function validateReportSchedule(input: unknown): ReportSchedule {
   if (!morningRepeat || !slotRepeat) throw new Error('Cách lặp lại không hợp lệ: chọn ít nhất một thứ, hoặc một ngày cụ thể.');
   const morningSections = cleanSections(o.morning.sections), slotSections = cleanSections(o.slots.sections);
   if (!morningSections || !slotSections) throw new Error('Danh sách mục trong báo cáo không hợp lệ.');
-  return { morning: { time, repeat: morningRepeat, sections: morningSections }, slots: { times, repeat: slotRepeat, sections: slotSections } };
+  // Phần mới (05/11/2026) không gửi lên thì giữ mặc định, để trang bản cũ vẫn lưu được.
+  const d = DEFAULT_REPORT_SCHEDULE;
+  const flag = (v: unknown, fallback: boolean) => { if (v === undefined) return fallback; if (typeof v !== 'boolean') throw new Error('Cài đặt báo cáo gộp cho sếp không hợp lệ.'); return v; };
+  const boss = { send: flag(o.boss?.send, d.boss.send), cumulative: flag(o.boss?.cumulative, d.boss.cumulative) };
+  const overdueTime = o.overdue?.time ?? d.overdue.time;
+  if (typeof overdueTime !== 'string' || !TIME_RE.test(overdueTime)) throw new Error('Giờ nhắc việc quá hạn phải là giờ:phút, bước 15 phút.');
+  return { morning: { time, repeat: morningRepeat, sections: morningSections }, slots: { times, repeat: slotRepeat, sections: slotSections }, boss, overdue: { time: overdueTime } };
 }
 
 /** Một câu mô tả lịch cho phần tổng quan của trang: "Hằng ngày", "T2, T3, T4", "Chỉ ngày 05/11/2026". */

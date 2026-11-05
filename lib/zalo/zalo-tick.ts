@@ -86,7 +86,7 @@ export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database
   }
   // Giờ báo cáo sáng luôn chụp số của team (ca đầu tiên tính khung từ giờ này), kể cả khi tắt hoặc hôm nay không gửi.
   const morning = time === schedule.morning.time && state.morning !== day;
-  const overdue = time === '08:00' && state.overdue !== day;
+  const overdue = time === schedule.overdue.time && state.overdue !== day;
   const slotTime = schedule.slots.times.includes(time) ? time : null;
   const legacy = slotTime ? legacySlotKey(slotTime) : null;
   const slotSent = !!slotTime && (state.slots?.[slotTime] === day || (legacy !== null && state[legacy] === day));
@@ -170,8 +170,8 @@ export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database
         }
       } catch { console.error('zalo team report failed'); }
     }
-    if (slot && bossTeams.size) {
-      const report = buildBossSlotReport(`khung ${prevTime ? timeLabel(prevTime) : '0h'}–${timeLabel(time)}`, key, day, [...bossTeams.values()]);
+    if (slot && bossTeams.size && schedule.boss.send) {
+      const report = buildBossSlotReport(`khung ${prevTime ? timeLabel(prevTime) : '0h'}–${timeLabel(time)}`, key, day, [...bossTeams.values()], !schedule.boss.cumulative);
       for (const boss of contacts.filter(c => c.kind === 'boss')) await sendImage(boss, report, bossSlotText(report), `báo cáo ${timeLabel(time)}`);
     }
     if (morning) state.morning = day;

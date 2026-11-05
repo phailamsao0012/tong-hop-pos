@@ -7,6 +7,8 @@ export type BossSlotReport = {
   hour: string;
   day: string;
   teams: BossSlotTeam[];
+  /** Bỏ số luỹ kế (Cài đặt báo cáo → Báo cáo gộp cho sếp); không có = có luỹ kế như cũ. */
+  hideCumulative?: boolean;
 };
 
 export function buildBossSlotReport(
@@ -14,6 +16,7 @@ export function buildBossSlotReport(
   hour: string,
   day: string,
   teams: BossSlotTeam[],
+  hideCumulative = false,
 ): BossSlotReport {
   return {
     kind: 'bossSlot',
@@ -21,6 +24,7 @@ export function buildBossSlotReport(
     hour,
     day,
     teams: [...teams].sort((a, b) => b.total - a.total).slice(0, 14),
+    ...(hideCumulative ? { hideCumulative: true } : {}),
   };
 }
 
@@ -32,7 +36,7 @@ export function bossSlotText(r: BossSlotReport) {
     'Doanh số các team',
     ...r.teams.map(
       (t) =>
-        `${t.team} · ${r.slot}: ${vnd(t.total)} · Luỹ kế: ${vnd(t.cumulative)}`,
+        `${t.team} · ${r.slot}: ${vnd(t.total)}${r.hideCumulative ? '' : ` · Luỹ kế: ${vnd(t.cumulative)}`}`,
     ),
   ]
     .join('\n')

@@ -146,9 +146,11 @@ export function BossSlotImage({ r }: { r: BossSlotReport }) {
             }}
           >
             <b>{millions(t.total)}</b>
-            <span
-              style={{ color: C.muted, marginLeft: 6 }}
-            >{`/ ${millions(t.cumulative)}`}</span>
+            {r.hideCumulative ? null : (
+              <span
+                style={{ color: C.muted, marginLeft: 6 }}
+              >{`/ ${millions(t.cumulative)}`}</span>
+            )}
           </div>
         </div>
       ))}

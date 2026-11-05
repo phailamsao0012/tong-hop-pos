@@ -207,3 +207,45 @@ void test('API Cài đặt báo cáo: chưa chỉnh trả lịch mặc định; 
     assert.equal((await put({ schedule: D, morningBrief: true, slotReports: true })).status, 403);
   } finally { logout(); }
 });
+
+void test('báo cáo gộp cho sếp và nhắc việc: mặc định như cũ; đổi giờ nhắc, tắt bản gộp, bỏ luỹ kế', async () => {
+  // Lịch lưu từ bản trước (chưa có phần boss / overdue) vẫn đọc ra mặc định.
+  const old = parseReportSchedule({ morning: D.morning, slots: D.slots });
+  assert.deepEqual(old.boss, { send: true, cumulative: true }); assert.deepEqual(old.overdue, { time: '08:00' });
+  assert.throws(() => validateReportSchedule({ ...D, overdue: { time: '08:10' } }), /nhắc việc quá hạn/);
+  assert.throws(() => validateReportSchedule({ ...D, boss: { send: 'có' } }), /báo cáo gộp/);
+
+  const f = await fixture(custom({}));
+  await createTask(f.db, f.boss, { title: 'Việc thử', assigneeId: f.leader.id, dueDate: '2026-10-26' }, at('07:00'));
+  await f.tick('08:00'); assert.ok(f.messages.some((m) => m.chat === f.leader.id && /Việc số 1/.test(m.text)), 'mặc định nhắc 8h');
+  await f.tick('12:00'); assert.match(f.messages.at(-1)!.text, /khung 8h–12h: 400 · Luỹ kế: 1\.200/);
+
+  const g = await fixture(validateReportSchedule({ ...D, boss: { send: true, cumulative: false }, overdue: { time: '09:00' } }));
+  await createTask(g.db, g.boss, { title: 'Việc thử', assigneeId: g.leader.id, dueDate: '2026-10-26' }, at('07:00'));
+  await g.tick('08:00'); assert.ok(!g.messages.some((m) => /Việc số 1/.test(m.text)), '8h không nhắc nữa');
+  await g.tick('09:00'); assert.ok(g.messages.some((m) => m.chat === g.leader.id && /Việc số 1/.test(m.text)), '9h nhắc');
+  await g.tick('12:00'); assert.equal(g.messages.at(-1)!.chat, g.boss.id); assert.doesNotMatch(g.messages.at(-1)!.text, /Luỹ kế/);
+
+  const h = await fixture(validateReportSchedule({ ...D, boss: { send: false, cumulative: true } }));
+  await h.tick('12:00');
+  assert.ok(h.messages.some((m) => m.chat === h.leader.id && /Báo cáo 12h/.test(m.text)), 'leader vẫn nhận ca');
+  assert.ok(!h.messages.some((m) => m.chat === h.boss.id), 'sếp không nhận bản gộp');
+  await h.tick('17:00'); assert.match(h.messages.at(-1)!.text, /Báo cáo 17h/);
+});
+
+void test('API Cài đặt báo cáo: lưu số phút nhắc họp chung với Danh bạ Zalo, giữ cài đặt khác, giá trị sai bị từ chối', async () => {
+  const { raw, db } = emptyDb({ DEMO_MODE: '1' });
+  await loginAs(raw, 'owner');
+  const url = 'https://web.test/api/giao-viec/bao-cao';
+  const put = (body: unknown) => PUT(new Request(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }));
+  try {
+    assert.equal(((await (await GET(new Request(url))).json()) as { remindBeforeMeetingMin: number }).remindBeforeMeetingMin, DEFAULT_ZALO_SETTINGS.remindBeforeMeetingMin);
+    assert.equal((await put({ schedule: D, morningBrief: true, slotReports: true, remindBeforeMeetingMin: 30 })).status, 200);
+    const s = await readZaloSetting(db, 'zalo_settings_v1', DEFAULT_ZALO_SETTINGS);
+    assert.equal(s.remindBeforeMeetingMin, 30); assert.equal(s.idleMinutes, DEFAULT_ZALO_SETTINGS.idleMinutes);
+    assert.equal((await put({ schedule: D, morningBrief: true, slotReports: true })).status, 200, 'không gửi = giữ nguyên');
+    assert.equal((await readZaloSetting(db, 'zalo_settings_v1', DEFAULT_ZALO_SETTINGS)).remindBeforeMeetingMin, 30);
+    assert.equal((await put({ schedule: D, morningBrief: true, slotReports: true, remindBeforeMeetingMin: 0 })).status, 400);
+    assert.equal((await put({ schedule: D, morningBrief: true, slotReports: true, remindBeforeMeetingMin: 'nửa tiếng' })).status, 400);
+  } finally { logout(); }
+});
