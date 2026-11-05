@@ -13,7 +13,7 @@ import { resolveBranchUnit as resolveHrUnit } from '@/lib/shared/scope-filter';
 import { parseTeam, teamFilter } from '@/lib/teams/team';
 import { ORDER_STATUS } from '@/lib/pancake/pancake';
 import { aggregateReasons, definitions, groupOf, noteBatches, reasonOf, STATUS_LABELS } from '@/lib/reports/staff-detail';
-import { hideCskhAssigned } from '../overview/route';
+import { hideCskhAssigned } from '@/lib/reports/overview-api';
 
 type Order = { id: string; source_order_id: string; pos_id: string; phone: string | null; customer_id: string | null; status_code: number; tags_json: string | null; note: string | null; net: number; at: string; marketer_name: string | null };
 type Note = { pos_id: string; customer_id: string; message: string; author_name: string | null; created_at: string };
