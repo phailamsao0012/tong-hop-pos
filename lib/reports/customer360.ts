@@ -62,7 +62,7 @@ export async function customer360(opts: { posIds: string[] }) {
     gaps: GAP_BUCKETS.map((b) => ({ key: b.key, label: b.label, n: Number(gapRows.find((r) => r.b === b.key)?.n ?? 0) })),
     medianGap,
     due: dueList.results.map((r) => ({
-      phone: r.phone, name: r.name || 'Khách', posN: Number(r.pos_n), posNames: String(r.pos_list ?? '').split(',').map((id) => POS.find((p) => p.id === id)?.name ?? id),
+      phone: r.phone, name: r.name || 'Khách', posN: Number(r.pos_n), posIds: String(r.pos_list ?? '').split(',').filter(Boolean), posNames: String(r.pos_list ?? '').split(',').map((id) => POS.find((p) => p.id === id)?.name ?? id),
       orders: Number(r.so), net: Number(r.net), lastAt: r.ls, since: Math.floor(Number(r.since)), gap: Math.round(Number(r.gap)), overdue: Math.floor(Number(r.since) - Number(r.gap)),
       seller: r.seller_id ? who.get(r.seller_id) ?? null : null,
     })),

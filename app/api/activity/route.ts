@@ -1,6 +1,6 @@
 import { getSessionUser, unauthorized } from '@/lib/auth/auth';
 import { audit } from '@/lib/ops/audit';
-import { VIEW_LABELS, canView } from '@/lib/auth/access';
+import { VIEW_LABELS, canExportView, canView } from '@/lib/auth/access';
 
 // Trình duyệt báo trang vừa mở (để nhật ký biết ai xem gì). Mỗi lần đổi trang một dòng.
 const EXTRA: Record<string, string> = { config: 'Cấu hình & kết nối', security: 'Bảo mật tài khoản', audit: 'Nhật ký hoạt động', 'cskh-kpi': 'KPI CSKH', 'sale-kpi': 'KPI Sale' };
@@ -17,6 +17,7 @@ export async function POST(request: Request) {
     // Trình duyệt tự khai (QA M2): chỉ nhận trang có thật mà tài khoản được xem, số dòng là số nguyên hữu hạn ≤ 1.000.000.
     const known = view === 'export' || Object.hasOwn(VIEW_LABELS, view) || Object.hasOwn(EXTRA, view);
     if (!known || (view !== 'export' && !canView(user, view))) return Response.json({ error: 'Trang không hợp lệ.' }, { status: 400 });
+    if (!canExportView(user, view)) return Response.json({ error: 'Chỉ chủ hệ thống được xuất Excel trang này.' }, { status: 403 });
     const file = typeof body.export.file === 'string' ? Array.from(body.export.file).filter((ch) => ch.charCodeAt(0) >= 32).join('').slice(0, 160) : '';
     const n = Number(body.export.rows);
     const rows = Number.isFinite(n) ? Math.min(1_000_000, Math.max(0, Math.floor(n))) : 0;

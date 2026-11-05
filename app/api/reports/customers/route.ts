@@ -1,6 +1,8 @@
 import { mentorReport } from '@/lib/teams/staff-scope';
 import { env } from 'cloudflare:workers';
-import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { getSessionUser, unauthorized, type SessionUser } from '@/lib/auth/auth';
+import { privateResponse } from '@/lib/auth/phone-privacy';
+import { NON_OWNER_MAX_ROWS, isOwner } from '@/lib/auth/access';
 import { POS } from '@/lib/shared/report-model';
 import { DATE_RE, todayVn, vnRangeUtc } from '@/lib/shared/report-time';
 import { parseTeam, teamFilter, type Team } from '@/lib/teams/team';
@@ -110,6 +112,10 @@ export async function GET(request: Request) {
   const user = await getSessionUser();
   if (!user) return unauthorized();
   if (user.role === 'mentor' && !user.teamScope) return mentorReport(env.DB, user, request);
+  return privateResponse(user.role, await customersList(request, user));
+}
+
+async function customersList(request: Request, user: SessionUser) {
   const p = new URL(request.url).searchParams;
   const validPos = new Set<string>(POS.map((x) => x.id));
   const requested = (p.get('posIds') ?? '').split(',').filter(Boolean);
@@ -125,6 +131,8 @@ export async function GET(request: Request) {
   const page = Math.max(1, Math.min(500, Number(p.get('page') ?? '1') || 1));
   // size: 50 theo trang; "Xem toàn bộ" tới 5.000; xuất Excel tới 20.000.
   const size = Math.max(1, Math.min(20000, Number(p.get('size') ?? 50) || 50));
+  // Tải lớn (xuất Excel tới 20.000 khách) chỉ chủ hệ thống; vai trò khác tối đa NON_OWNER_MAX_ROWS một lượt.
+  if (size > NON_OWNER_MAX_ROWS && !isOwner(user)) return Response.json({ error: 'Chỉ chủ hệ thống được tải toàn bộ danh sách khách.' }, { status: 403 });
   const today = todayVn();
   const sort = p.get('sort') ?? 'recent';
   const team = parseTeam(p.get('team'));
