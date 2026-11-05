@@ -19,14 +19,15 @@ import { demoBlocked, installDemo, isDemo } from '@/lib/demo/mode';
 import { isReadOnly, readOnlyBlocked } from '@/lib/ops/read-only';
 import { checkScheduler } from '@/lib/bot/watch';
 import { WARM_BUDGET_MS, WARM_PATHS, pickWarm, warmBody, type RecentReport } from '@/lib/reports/report-warm';
+import { readDataVersion } from '@/lib/ops/data-version';
 
 export { SyncScheduler };
 // Bản demo (Worker riêng, DEMO_MODE=1): nối Pancake POS giả (người và số ảo); ở web thật lệnh này không làm gì.
 installDemo();
 
 // Cache cho API báo cáo, hai tầng: bộ nhớ isolate (90 giây) và Cache API dùng chung mọi isolate cùng trạm Cloudflare (5 phút).
-// Khóa luôn kèm "phiên bản dữ liệu" (lần đồng bộ Pancake mới nhất, danh sách "Vẫn tính doanh số", ghi chú nguyên nhân):
-// đồng bộ xong là khóa đổi, người mở sau tính lại từ D1 nên số luôn mới bằng lần đồng bộ gần nhất (anh Vũ 10/10/2026: "tôi cần
+// Khóa luôn kèm "phiên bản dữ liệu" (lần đồng bộ Pancake có ghi dữ liệu mới nhất, danh sách "Vẫn tính doanh số", ghi chú nguyên nhân):
+// đồng bộ có dữ liệu mới là khóa đổi, người mở sau tính lại từ D1 nên số luôn mới bằng lần đồng bộ gần nhất (anh Vũ 10/10/2026: "tôi cần
 // dữ liệu realtime"). Mục đích: nhiều người/nhiều thẻ mở cùng một báo cáo không bắt D1 tính lại từng lần (D1 chạy tuần tự từng câu;
 // test tải 10/10/2026: quá ~10 lời gọi/giây là D1 báo "overloaded").
 const REPORT_CACHE_TTL_MS = 90000;
@@ -50,13 +51,16 @@ const cacheable = (pathname: string) => pathname.startsWith('/api/reports/') || 
 // cache lúc D1 bận làm mọi lượt dồn hết vào D1, quá tải nặng thêm.
 const VERSION_MEMO_MS = 5000;
 const VERSION_FALLBACK_MS = 10 * 60000;
-let versionMemo: { at: number; value: Promise<string> } | null = null;
-let lastVersion: { at: number; value: string } | null = null;
+// Phiên bản chỉ đổi khi dữ liệu thật sự đổi (lib/ops/data-version.ts): lượt đồng bộ 5 phút không có gì mới thì cache báo cáo giữ nguyên
+// (trước 05/11/2026 khóa đổi mỗi lượt vì lấy theo giờ đồng bộ). Trang trạng thái đồng bộ (/api/sync/pos) vẫn đổi mỗi lượt (thêm `s`).
+type Version = { v: string; s: string };
+let versionMemo: { at: number; value: Promise<Version> } | null = null;
+let lastVersion: { at: number; value: Version } | null = null;
+const VERSION_SETTING_KEYS = [COUNTED_STAFF_KEY, 'uncounted_notes', SENT_AT_READY_KEY];
 function dataVersion(env: Cloudflare.Env, fresh = false) {
   if (!fresh && versionMemo && Date.now() - versionMemo.at < VERSION_MEMO_MS) return versionMemo.value;
-  const value = env.DB.prepare(`SELECT COALESCE(MAX(last_sync_at),'')||COALESCE(MAX(customers_synced_at),'')||COALESCE((SELECT MAX(updated_at) FROM app_settings WHERE key IN ('${COUNTED_STAFF_KEY}','uncounted_notes','${SENT_AT_READY_KEY}')),'') AS v FROM pos_shops`)
-    .first<{ v: string }>().then((row) => {
-      const v = row?.v ?? '';
+  const value = readDataVersion(env.DB, VERSION_SETTING_KEYS)
+    .then((v) => {
       lastVersion = { at: Date.now(), value: v };
       return v;
     }).catch((error) => {
@@ -144,7 +148,10 @@ async function cachedReport(request: Request, env: Cloudflare.Env, ctx: Executio
   if (request.method !== 'GET' || !cacheable(pathname) || !user) return run();
   const wrote = recentWrite(request);
   let version = '';
-  try { version = await dataVersion(env, wrote); } catch { return run(); }
+  try {
+    const v = await dataVersion(env, wrote);
+    version = pathname === '/api/sync/pos' ? `${v.v}|${v.s}` : v.v;
+  } catch { return run(); }
   // Khóa gồm cả vai trò và nguồn team (Pancake / web nhân sự): một số báo cáo che bớt số theo vai trò (vd. đơn chia CSKH chỉ chủ hệ thống / giám đốc thấy).
   // URL đã được phân quyền thu hẹp (POS/nhóm của tài khoản) trước khi tới đây.
   // CACHE_GEN: đổi khi đổi dạng / phạm vi dữ liệu trả về (vd. che SĐT 11/10/2026) để bản lưu từ trước khi lên bản không còn được trả (QA L5).
@@ -219,7 +226,7 @@ function rememberRecent(url: string, role: string) {
 let warmedVersion = '';
 async function warmRecentReports(env: Cloudflare.Env, ctx: ExecutionContext) {
   if (!recentReports.size) return;
-  const version = await dataVersion(env, true);
+  const version = (await dataVersion(env, true)).v;
   if (version === warmedVersion) return;
   warmedVersion = version;
   const started = Date.now();

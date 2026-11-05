@@ -1,4 +1,5 @@
 import { observeD1 } from '@/lib/ops/d1-usage';
+import { markDataChanged, trackDataWrites } from '@/lib/ops/data-version';
 import { normalizePhone } from '@/lib/reports/customer-stats';
 import { drainPendingNotes, loadCskhWatch, noteStatements, parseCustomerCursor, saveCskhWatch, syncCskhNotedWatch, syncCskhWatch, syncCustomersBackfill, syncCustomersRecent } from '@/lib/pancake/customers-sync';
 import { teamSubquery } from '@/lib/teams/team';
@@ -583,6 +584,24 @@ const DROP_OLD_INDEXES = [
 /** Đồng bộ nền theo thứ tự ưu tiên: đơn mới/sửa → nhân viên, sản phẩm (mỗi giờ) → lịch sử (tháng mới nhất trước),
  *  trong ngân sách thời gian và hạn mức ghi D1 của ngày. */
 export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs = 50000, budget: SyncBudget = DEFAULT_BUDGET, onUsage?: (stage: string, meta: D1Meta) => void) {
+  // Lượt có ghi dữ liệu thật (không chỉ mốc nước / giờ đồng bộ) thì ghi mốc "dữ liệu đổi" cho cache báo cáo (lib/ops/data-version.ts).
+  // Ghi cả khi lượt dừng giữa chừng vì lỗi: phần đã ghi vẫn phải hiện trên web.
+  const tracker = trackDataWrites(env.DB);
+  let out: Awaited<ReturnType<typeof syncAll>> | undefined;
+  try {
+    out = await syncAll({ ...env, DB: tracker.db } as Cloudflare.Env, now, budgetMs, budget, onUsage);
+  } finally {
+    if (tracker.changed()) {
+      try {
+        const marked = await markDataChanged(observeD1(env.DB, (meta) => onUsage?.('recent', meta)));
+        if (out) out.writes += marked;
+      } catch (error) { console.error('mark data changed failed', error); }
+    }
+  }
+  return { ...out!, dataChanged: tracker.changed() };
+}
+
+async function syncAll(env: Cloudflare.Env, now: Date, budgetMs: number, budget: SyncBudget, onUsage?: (stage: string, meta: D1Meta) => void) {
   const stages: Record<string, number> = { recent: 0, users: 0, products: 0, customers: 0, customers_backfill: 0, backfill: 0 };
   let stage = 'recent';
   let sizeBytes: number | null = null;

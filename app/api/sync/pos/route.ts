@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
 import { isOwner } from '@/lib/auth/access';
+import { markDataChanged, trackDataWrites } from '@/lib/ops/data-version';
 import { POS } from '@/lib/shared/report-model';
 import {
   currentMonth, loadShop, parseCursor, startBackfillCursor,
@@ -90,19 +91,24 @@ export async function POST(request: Request) {
     return Response.json({ error: 'Thiếu API key bí mật hoặc Shop ID.' }, { status: 400 });
   const action: Action = ['recent', 'backfill', 'restart', 'users', 'products'].includes(body.action ?? '')
     ? body.action! : 'recent';
+  // Đồng bộ bấm tay có ghi dữ liệu thì ghi mốc "dữ liệu đổi" để cache báo cáo tính lại (lib/ops/data-version.ts).
+  const tracker = trackDataWrites(env.DB);
+  const db = tracker.db;
   try {
-    if (action === 'users') return Response.json({ ok: true, posId, action, ...(await syncUsers(env.DB, shop, apiKey)) });
-    if (action === 'products') return Response.json({ ok: true, posId, action, ...(await syncProducts(env.DB, shop, apiKey)) });
-    if (action === 'recent') return Response.json({ ok: true, posId, action, ...(await syncRecent(env.DB, shop, apiKey)) });
+    if (action === 'users') return Response.json({ ok: true, posId, action, ...(await syncUsers(db, shop, apiKey)) });
+    if (action === 'products') return Response.json({ ok: true, posId, action, ...(await syncProducts(db, shop, apiKey)) });
+    if (action === 'recent') return Response.json({ ok: true, posId, action, ...(await syncRecent(db, shop, apiKey)) });
     let cursor: BackfillCursor | null = action === 'restart' ? null : parseCursor(shop.cursor);
     if (cursor?.completed && cursor.month > currentMonth())
       return Response.json({ ok: true, posId, action, completed: true, records: 0, cursor });
     if (!cursor) cursor = await startBackfillCursor(shop.shop_id, apiKey);
     cursor.completed = false;
-    return Response.json({ ok: true, posId, action, ...(await syncBackfill(env.DB, shop, apiKey, cursor, 8)) });
+    return Response.json({ ok: true, posId, action, ...(await syncBackfill(db, shop, apiKey, cursor, 8)) });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Đồng bộ thất bại.';
     await env.DB.prepare("UPDATE pos_shops SET status='error',last_error=? WHERE id=?").bind(message.slice(0, 500), posId).run();
     return Response.json({ error: message }, { status: 502 });
+  } finally {
+    if (tracker.changed()) await markDataChanged(env.DB).catch((error) => console.error('mark data changed failed', error));
   }
 }
