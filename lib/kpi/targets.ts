@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
-import type { Access } from '@/lib/auth/access';
+import { isOwner, type Access } from '@/lib/auth/access';
+import { POS } from '@/lib/shared/report-model';
 import { staffScope } from '@/lib/teams/staff-scope';
 import { teamSubquery } from '@/lib/teams/team';
 
@@ -87,4 +88,35 @@ export async function targetStaff(db: D1Database, user: Access & { userId: strin
 
 export function canWriteTarget(user: Access, ids: string[] | null, scope: string, refId: string) {
   return user.role === 'owner' || (scope === 'employee' && ['director', 'lead', 'mentor'].includes(user.role) && !!ids?.includes(refId));
+}
+
+// Ghi KPI tháng (PUT /api/targets). Tách khỏi app/api/targets/route.ts (cải tổ B5, 05/11/2026), câu SQL giữ nguyên.
+/** Một dòng app_settings của KPI: chi phí trần `target_cost:<tháng>`, tỷ lệ chốt `target_rate:<tháng>`. */
+export const readTargetSetting = (key: string) => env.DB.prepare('SELECT value FROM app_settings WHERE key=?').bind(key).first<{ value: string }>();
+
+/** Thay KPI của tháng (cả tháng, hoặc chỉ các khoá trong `only`) và lưu chi phí trần / tỷ lệ chốt; trả `only` để ghi nhật ký. */
+export async function writeTargets(user: { role: Access['role']; email: string }, body: { only?: string[]; items: { scope?: string; refId?: string; revenue?: number; closedOrders?: number; workingDays?: number | null; costCeiling?: number | null; closeRate?: number | null }[] }, month: string, caps: Record<string, number>, storedRates: { value: string } | null, now: string) {
+  const only = Array.isArray(body.only) ? body.only.map(String).filter((k) => /^(pos|employee|team):[^\s]{1,100}$/.test(k)).slice(0, 500) : null;
+  const statements = only
+    ? only.map((k) => env.DB.prepare('DELETE FROM targets WHERE id=?').bind(`${month}:${k}`))
+    : [env.DB.prepare('DELETE FROM targets WHERE month=?').bind(month)];
+  if (isOwner(user)) {
+    if (only) { for (const k of only) if (k.startsWith('team:')) delete caps[k.slice(5)]; } else { for (const k of Object.keys(caps)) delete caps[k]; }
+  }
+  const rates = mergeTargetRates(parseTargetCosts(storedRates?.value), body.items, only);
+  for (const it of body.items) {
+    const scope = it.scope === 'pos' || it.scope === 'employee' || it.scope === 'team' ? it.scope : null;
+    const refId = String(it.refId ?? '').slice(0, 100);
+    const revenue = Math.max(0, Math.round(Number(it.revenue) || 0)), closed = Math.max(0, Math.round(Number(it.closedOrders) || 0));
+    const workingDays = scope === 'employee' && it.workingDays != null && Number(it.workingDays) > 0 ? Math.min(31, Math.round(Number(it.workingDays))) : null;
+    if (!scope || !refId || (scope === 'pos' && !POS.some((p) => p.id === refId)) || (!revenue && !closed && !workingDays && it.costCeiling == null)) continue;
+    if (only && !only.includes(`${scope}:${refId}`)) continue;
+    if (scope === 'team' && it.costCeiling != null) caps[refId] = it.costCeiling;
+    statements.push(env.DB.prepare('INSERT INTO targets (id,month,scope,ref_id,revenue,closed_orders,working_days,updated_by,updated_at) VALUES (?,?,?,?,?,?,?,?,?)')
+      .bind(`${month}:${scope}:${refId}`, month, scope, refId, revenue, closed, workingDays, user.email, now));
+  }
+  if (isOwner(user)) statements.push(env.DB.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at').bind(`target_cost:${month}`, JSON.stringify(caps), now));
+  statements.push(env.DB.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at').bind(`target_rate:${month}`, JSON.stringify(rates), now));
+  for (let i = 0; i < statements.length; i += 100) await env.DB.batch(statements.slice(i, i + 100));
+  return only;
 }

@@ -1,11 +1,12 @@
 import { env } from 'cloudflare:workers';
+import { saveWebTeams, settings, teamOwnerAccounts, teamPeople, viewerAccounts } from '@/lib/teams/web-teams-admin';
 import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
 import { isOwner, parseAccess } from '@/lib/auth/access';
 import { auditHeaders } from '@/lib/ops/audit';
 import { MARKETING_TEAMS_KEY, parseMarketingTeams, validateMarketingTeams } from '@/lib/teams/marketing-teams';
 import { TEAM_SOURCE_KEY, refreshTeamSource } from '@/lib/teams/team-source';
 import { teamZaloStates } from '@/lib/zalo/team-link';
-import { WEB_TEAMS_BACKUP_KEY, WEB_TEAMS_KEY, parseWebTeams, validateWebTeams } from '@/lib/teams/web-teams';
+import { WEB_TEAMS_KEY, parseWebTeams, validateWebTeams } from '@/lib/teams/web-teams';
 
 // Trang Chia team (Cài đặt, chỉ chủ hệ thống): team Sale / CSKH / MKT chia ngay trên web tổng, thay web nhân sự (anh Vũ 21/10/2026).
 // Lưu xong thì nguồn team chuyển sang web tổng (team_source='pancake'); bản cũ giữ ở WEB_TEAMS_BACKUP_KEY.
@@ -16,23 +17,15 @@ async function owner() {
   return null;
 }
 
-async function settings() {
-  const rows = await env.DB.prepare('SELECT key,value FROM app_settings WHERE key IN (?,?,?)').bind(WEB_TEAMS_KEY, MARKETING_TEAMS_KEY, TEAM_SOURCE_KEY).all<{ key: string; value: string }>();
-  return new Map(rows.results.map((r) => [r.key, r.value]));
-}
-
 export async function GET() {
   const denied = await owner();
   if (denied) return denied;
   const values = await settings();
-  const staff = await env.DB.prepare("SELECT user_id,MAX(name) AS name,MAX(COALESCE(department,'')) AS department FROM pos_users WHERE user_id<>'' AND name<>'' GROUP BY user_id ORDER BY name")
-    .all<{ user_id: string; name: string; department: string }>();
+  const staff = await teamPeople();
   // Tài khoản đăng nhập vai trò Mentor / Trưởng nhóm để gán phụ trách team (31/10/2026).
-  const accounts = await env.DB.prepare("SELECT id,COALESCE(NULLIF(name,''),email) AS name,role FROM users WHERE role IN ('mentor','lead') AND disabled=0 ORDER BY name")
-    .all<{ id: string; name: string; role: string }>();
+  const accounts = await teamOwnerAccounts();
   // Sơ đồ quyền (03/11/2026): mọi tài khoản đang mở trừ chủ hệ thống, với bộ phận và POS được cấp.
-  const viewerRows = await env.DB.prepare("SELECT id,COALESCE(NULLIF(name,''),email) AS name,role,team,pos_ids_json FROM users WHERE disabled=0 AND role<>'owner' ORDER BY name")
-    .all<{ id: string; name: string; role: string; team: string | null; pos_ids_json: string | null }>();
+  const viewerRows = await viewerAccounts();
   return Response.json({
     accounts: accounts.results,
     viewers: viewerRows.results.map((r) => { const a = parseAccess(r); return { id: r.id, name: r.name, role: a.role, team: a.team === 'all' ? null : a.team, posIds: a.posIds }; }),
@@ -56,13 +49,7 @@ export async function PUT(request: Request) {
   const mkt = validateMarketingTeams(body.mkt);
   if (!mkt.teams) return Response.json({ error: mkt.error }, { status: 400 });
   const before = await settings(), now = new Date().toISOString();
-  const put = (key: string, value: string) => env.DB.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at').bind(key, value, now);
-  await env.DB.batch([
-    put(WEB_TEAMS_BACKUP_KEY, JSON.stringify({ savedAt: now, teams: before.get(WEB_TEAMS_KEY) ?? null, mkt: before.get(MARKETING_TEAMS_KEY) ?? null, source: before.get(TEAM_SOURCE_KEY) ?? null })),
-    put(WEB_TEAMS_KEY, JSON.stringify(web.teams)),
-    put(MARKETING_TEAMS_KEY, JSON.stringify(mkt.teams)),
-    put(TEAM_SOURCE_KEY, 'pancake'),
-  ]);
+  await saveWebTeams(before, now, web, mkt);
   await refreshTeamSource(true);
   return Response.json({ ok: true, teams: web.teams, mkt: mkt.teams, source: 'web' }, { headers: auditHeaders(`Chia team trên web tổng: ${web.teams.length} team Sale/CSKH, ${mkt.teams.length} team MKT`) });
 }

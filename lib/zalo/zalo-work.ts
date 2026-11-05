@@ -362,3 +362,9 @@ export async function webMeetings(db: D1Database, now = Date.now()) {
   const meetings = await listMeetings(db, { from: iso(now - 14 * DAY), to: iso(now + 366 * DAY) });
   return Promise.all(meetings.map(async m => ({ ...m, invites: (await db.prepare('SELECT i.*,c.name FROM zalo_meeting_invites i JOIN zalo_contacts c ON c.id=i.contact_id WHERE meeting_id=? ORDER BY c.name').bind(m.id).all<{ contact_id: string; name: string; answer: string | null; reason: string }>()).results })));
 }
+
+// Tra D1 cho route Giao việc (tách khỏi app/api/giao-viec/hop/[id]/route.ts và app/api/giao-viec/zalo/route.ts, cải tổ B5 05/11/2026; câu SQL giữ nguyên).
+/** Số thứ tự của một cuộc họp theo mã. */
+export const meetingNoById = (db: D1Database, id: string) => db.prepare('SELECT no FROM zalo_meetings WHERE id=?').bind(id).first<{ no: number }>();
+/** Tài khoản có thể giao việc (chủ hệ thống, giám đốc, trưởng nhóm) để cấp quyền. */
+export const bossUserOptions = async (db: D1Database) => (await db.prepare("SELECT id,name,role FROM users WHERE disabled=0 AND role IN ('owner','director','lead') ORDER BY name").all()).results;
