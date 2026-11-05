@@ -777,12 +777,12 @@ function SidebarStatus({ good, bad, sub, onOpen }: { good: number; bad: { name: 
   );
 }
 const TABS: [View, string, typeof Activity][] = [['center', 'Điều hành', LayoutDashboard], ['overview', 'Doanh thu', BarChart3], ['shift', 'Trong ngày', Activity], ['customers', 'Khách', UsersRound]];
-/** Thanh tab dưới cùng trên điện thoại; "Thêm" mở ngăn kéo menu (state openMobile của SidebarProvider). */
-function MobileTabBar({ view, onSelect }: { view: View; onSelect: (v: View) => void }) {
+/** Thanh tab dưới cùng trên điện thoại; "Thêm" mở ngăn kéo menu (state openMobile của SidebarProvider). Chỉ hiện trang người xem có quyền. */
+function MobileTabBar({ view, onSelect, can }: { view: View; onSelect: (v: View) => void; can: (id: string) => boolean }) {
   const { setOpenMobile } = useSidebar();
   return (
     <nav className="tabbar md:hidden" aria-label="Điều hướng nhanh">
-      {TABS.map(([id, label, Icon]) => (
+      {TABS.filter(([id]) => can(id)).map(([id, label, Icon]) => (
         <button key={id} type="button" onClick={() => onSelect(id)} aria-current={view === id ? 'page' : undefined} className={`tab ${view === id ? 'is-active' : ''}`}><Icon size={20} aria-hidden="true" />{label}</button>
       ))}
       <button type="button" onClick={() => setOpenMobile(true)} className="tab" aria-label="Mở menu đầy đủ"><Menu size={20} aria-hidden="true" />Thêm</button>
@@ -1542,8 +1542,8 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           </>}
           <ThemeSwitch className="hidden sm:inline-flex" />
           <div className="user">
-            <button type="button" title="Bảo mật tài khoản" aria-label="Bảo mật tài khoản" onClick={() => setView('security')} className="grid size-[26px] place-items-center rounded-full bg-primary text-[10.5px] font-semibold tracking-[.02em] text-primary-ink transition-colors duration-[var(--dur)] hover:bg-primary-2">{initials(user.displayName)}</button>
-            <div className="hidden max-w-40 whitespace-nowrap leading-[1.15] xl:block [&>div]:truncate" title={`${ROLE_LABELS[user.role]}${user.title ? ` · ${user.title}` : ''}`}>
+            <button type="button" title="Bảo mật tài khoản" aria-label="Bảo mật tài khoản" onClick={() => setView('security')} className="grid size-[26px] max-md:size-8 pointer-coarse:size-8 place-items-center rounded-full bg-primary text-[10.5px] font-semibold tracking-[.02em] text-primary-ink transition-colors duration-[var(--dur)] hover:bg-primary-2">{initials(user.displayName)}</button>
+            <div className="hidden max-w-40 whitespace-nowrap leading-[1.15] 2xl:block [&>div]:truncate" title={`${ROLE_LABELS[user.role]}${user.title ? ` · ${user.title}` : ''}`}>
               <div className="text-xs font-semibold text-ink">{user.displayName}</div>
               <div className="text-[10.5px] text-ink-3">{user.title || ROLE_LABELS[user.role]}</div>
             </div>
@@ -1570,7 +1570,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
             <button type="button" className="rounded-full p-1.5 transition-colors duration-[var(--dur)] hover:bg-bad-bg hover:text-bad" title="Thoát trình chiếu (Esc)" aria-label="Thoát trình chiếu" onClick={stopPresenting}><X size={16} /></button>
           </div>
         )}
-        {!presenting && <MobileTabBar view={view} onSelect={goTo} />}
+        {!presenting && <MobileTabBar view={view} onSelect={goTo} can={canNavigate} />}
         <div className="refresh-bar" hidden={!refresh.busy} aria-hidden="true"><i /></div>
         <RefreshStick busy={refresh.busy} />
         <main className={`${refreshClass} ${presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1360px] px-4 pt-4 pb-[calc(88px+env(safe-area-inset-bottom,0px))] sm:pt-6 md:px-6 md:pb-12'}`} style={presenting ? { zoom: 1.15 } : undefined}>
@@ -1579,7 +1579,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               <AlertTriangle size={15} className="shrink-0" aria-hidden="true" />
               {PAGE_DEPT.get(view) && PAGE_DEPT.get(view) !== team ? <span><strong>Trang {TEAM_LABELS[PAGE_DEPT.get(view)!]} đang chọn {TEAM_LABELS[team]}</strong>: chỉ tính người vừa thuộc {TEAM_LABELS[PAGE_DEPT.get(view)!]} vừa thuộc {TEAM_LABELS[team]}. Bấm &quot;Tất cả&quot; hoặc &quot;{TEAM_LABELS[PAGE_DEPT.get(view)!]}&quot; ở thanh trên để xem số.</span>
               : <span><strong>Đang lọc riêng nhóm {TEAM_LABELS[team]}</strong> — mọi số trên trang chỉ tính đơn, khách và data do nhân viên {team === 'sale' ? 'Sale / bán hàng' : 'CSKH'} phụ trách, nên sẽ thấp hơn Pancake. Bấm "Tất cả" ở thanh trên (hoặc nút bên phải) để so với Pancake.</span>}
-              <button type="button" className="link ml-auto shrink-0 text-xs font-semibold underline" onClick={() => setTeam('all')}>Xem tất cả</button>
+              <button type="button" className="link tap ml-auto shrink-0 text-xs font-semibold underline" onClick={() => setTeam('all')}>Xem tất cả</button>
             </div>
           )}
           {mktLens && <output className="notice warn mb-4">Đang xem team MKT {mktLens.name}: chỉ tính đơn có Marketer thuộc team này, Sale và CSKH là người chốt các đơn đó.</output>}
@@ -1590,7 +1590,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               {UNIT_VIEWS.includes(view)
                 ? <span><strong>Đang xem riêng team {hrUnit.name}</strong> — số trên trang chỉ tính người đang thuộc team này {hrUnit.id.startsWith('wt_') ? 'theo bảng chia team ở Cài đặt' : 'bên web nhân sự'} (theo team hiện tại: người chuyển team thì số các kỳ trước đi theo team mới; người đã nghỉ không tính).</span>
                 : <span><strong>Trang này chưa lọc được theo team</strong> — đang hiện số cả nhóm {TEAM_LABELS[team]}, không riêng team {hrUnit.name}. Xem theo team ở Tổng quan Sale / CSKH, Tổng quan POS, Theo team và Vận đơn.</span>}
-              <button type="button" className="link ml-auto shrink-0 text-xs font-semibold underline" onClick={() => setHrUnit(null)}>Bỏ chọn team</button>
+              <button type="button" className="link tap ml-auto shrink-0 text-xs font-semibold underline" onClick={() => setHrUnit(null)}>Bỏ chọn team</button>
             </div>
           )}
           {(() => {

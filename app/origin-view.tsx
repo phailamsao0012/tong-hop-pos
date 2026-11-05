@@ -102,7 +102,7 @@ export function OriginView() {
     const on = pick?.sellerId === s.sellerId && pick.group === label;
     return (
       <button type="button" onClick={(e) => { e.stopPropagation(); void openList({ sellerId: s.sellerId, name: s.name, origin: 'all', group: label }); }} disabled={!n}
-        className={`num rounded-md px-1.5 py-0.5 text-right hover:bg-tint-2 disabled:cursor-default disabled:hover:bg-transparent ${on ? 'bg-tint-2 font-semibold' : ''}`} title={n ? `Xem các đơn ${label}` : undefined}>
+        className={`num tap rounded-md px-1.5 py-0.5 text-right hover:bg-tint-2 disabled:cursor-default disabled:hover:bg-transparent ${on ? 'bg-tint-2 font-semibold' : ''}`} title={n ? `Xem các đơn ${label}` : undefined}>
         <span className="block text-ink">{n ? vi.format(n) : <span className="text-ink-4">0</span>}</span>
         {n > 0 && <span className="block text-[11px] text-ink-3">{pct(s.total ? n / s.total * 100 : null, 0)}</span>}
       </button>
@@ -112,7 +112,7 @@ export function OriginView() {
     const on = pick?.sellerId === s.sellerId && pick.origin === origin && !pick.group;
     return (
       <button type="button" onClick={(e) => { e.stopPropagation(); void openList({ sellerId: s.sellerId, name: s.name, origin }); }} disabled={!n}
-        className={`num rounded-md px-1.5 py-0.5 text-right hover:bg-tint-2 disabled:cursor-default disabled:hover:bg-transparent ${on ? 'bg-tint-2 font-semibold' : ''}`} title={n ? 'Xem các đơn này' : undefined}>
+        className={`num tap rounded-md px-1.5 py-0.5 text-right hover:bg-tint-2 disabled:cursor-default disabled:hover:bg-transparent ${on ? 'bg-tint-2 font-semibold' : ''}`} title={n ? 'Xem các đơn này' : undefined}>
         <span className="block text-ink">{n ? vi.format(n) : <span className="text-ink-4">0</span>}</span>
         {n > 0 && <span className="block text-[11px] text-ink-3">{shortMoney(net)}</span>}
       </button>

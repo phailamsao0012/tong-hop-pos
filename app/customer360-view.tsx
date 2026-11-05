@@ -114,7 +114,7 @@ export function Customer360View() {
                     </tr></thead>
                     <tbody>{due.map((c) => (
                       <tr key={c.phone}>
-                        <td className="text-left font-medium text-ink"><button type="button" className="text-left underline decoration-line underline-offset-4" onClick={() => setCustomer({ phone: c.phone, posIds })}>{c.name}</button><span className="block text-[11px] font-normal text-ink-3">{c.phone}</span></td>
+                        <td className="text-left font-medium text-ink"><button type="button" className="text-left underline decoration-line underline-offset-4 tap" onClick={() => setCustomer({ phone: c.phone, posIds })}>{c.name}</button><span className="block text-[11px] font-normal text-ink-3">{c.phone}</span></td>
                         <td className="text-left text-[12px] text-ink-2">{c.posNames.join(', ')}</td>
                         <td className="n">{vi.format(c.orders)}</td>
                         <td className="n">{shortMoney(c.net)}</td>

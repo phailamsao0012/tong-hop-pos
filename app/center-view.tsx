@@ -81,7 +81,7 @@ const ROW_CLS = 'ctx-row grid w-full items-center gap-x-2.5 rounded-lg px-2 text
 /** Liên kết "Xem chi tiết" sang trang con — component cấp module để không bị gỡ / gắn lại mỗi lần trang cập nhật (mất focus). */
 function Link({ view, label = 'Xem chi tiết', onNavigate }: { view: string; label?: string; onNavigate: (view: string) => void }) {
   return (
-    <button type="button" onClick={() => onNavigate(view)} className="link group/lnk inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] px-1 py-0.5 text-xs font-medium hover:bg-tint-2">
+    <button type="button" onClick={() => onNavigate(view)} className="link group/lnk inline-flex items-center gap-1 whitespace-nowrap tap rounded-[5px] px-1 py-0.5 text-xs font-medium hover:bg-tint-2">
       {label}<ArrowRight size={12} className="transition-transform duration-[var(--dur)] ease-[var(--ease)] group-hover/lnk:-translate-y-px group-hover/lnk:translate-x-px" />
     </button>
   );
@@ -131,7 +131,7 @@ function EmpTable({ rows, tone, compact = false, onNavigate }: { rows: Employee[
           <tr key={e.sellerId}>
             <td className="num text-ink-3">{i + 1}</td>
             <td className="min-w-28 max-w-0">
-              <button type="button" onClick={() => onNavigate('compare')} title={`${e.name} · mở So sánh nhân viên`} className="block w-full truncate rounded-[4px] text-left font-medium text-ink outline-none transition-colors duration-[var(--dur)] ease-[var(--ease)] hover:text-primary focus-visible:shadow-[0_0_0_2px_var(--ring)]">{e.name}</button>
+              <button type="button" onClick={() => onNavigate('compare')} title={`${e.name} · mở So sánh nhân viên`} className="block w-full truncate rounded-[4px] text-left font-medium tap text-ink outline-none transition-colors duration-[var(--dur)] ease-[var(--ease)] hover:text-primary focus-visible:shadow-[0_0_0_2px_var(--ring)]">{e.name}</button>
               {!compact && e.department && <span className="block truncate text-[10.5px] text-ink-3" title={e.department}>{e.department}</span>}
             </td>
             <td className={`n ${tone === 'green' ? 'text-good' : 'text-bad'}`} title={compact ? `${vi.format(closeRateTop(e, ms.rateBase))} / ${vi.format(closeRateBase(e, ms.rateBase))} đơn đã chốt` : undefined}>{pct(closeRateOf(e, ms.rateBase))}</td>
@@ -419,7 +419,7 @@ export function CenterView({ onNavigate, canRegenerateAi = false, canForecast = 
             <StaleChip stale={overviewApi.stale} at={overviewApi.at} loading={overviewApi.loading} error={report ? overviewApi.error : null} onRetry={reload} />
             <TeamSwitch size="sm" />
             <button type="button" className={`btn ${loading ? 'is-busy' : ''}`} onClick={reload} disabled={loading} aria-label="Tải lại số liệu"><RotateCw size={13} />{loading ? 'Đang tải…' : 'Tải lại'}</button>
-            <button type="button" className="btn" onClick={() => setTv(false)}><X size={14} />Thoát TV <kbd className="num rounded border border-line-2 px-1 text-[10px] text-ink-3">Esc</kbd></button>
+            <button type="button" className="btn" onClick={() => setTv(false)}><X size={14} />Thoát TV <kbd className="num rounded border border-line-2 px-1 text-[11px] text-ink-3">Esc</kbd></button>
           </div>
         </div>
         {topError}

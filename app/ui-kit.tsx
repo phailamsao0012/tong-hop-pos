@@ -159,14 +159,14 @@ export function InfoTip({ text, label = 'Cách tính', side = 'bottom', classNam
   return (
     <button type="button" aria-label={label} {...hook.props}
       onClick={(e) => { e.stopPropagation(); hook.show(e.currentTarget, true); }}
-      className={`grid size-5 shrink-0 place-items-center rounded-full text-ink-4 transition-colors duration-150 hover:bg-surface-2 hover:text-primary ${className}`}>
+      className={`grid size-5 shrink-0 place-items-center rounded-full text-ink-4 max-md:-m-1.5 max-md:size-8 pointer-coarse:-m-1.5 pointer-coarse:size-8 transition-colors duration-150 hover:bg-surface-2 hover:text-primary ${className}`}>
       <Info size={14} />{hook.node}
     </button>
   );
 }
 
 function MoreLink({ label = 'Xem thêm', onClick, href }: { label?: string; onClick?: () => void; href?: string }) {
-  const cls = 'group/more inline-flex items-center gap-0.5 whitespace-nowrap rounded-[5px] px-1 py-0.5 text-[11.5px] text-ink-3 transition-colors duration-150 hover:bg-tint-2 hover:text-primary';
+  const cls = 'group/more inline-flex items-center gap-0.5 whitespace-nowrap rounded-[5px] tap px-1 py-0.5 text-[11.5px] text-ink-3 transition-colors duration-150 hover:bg-tint-2 hover:text-primary';
   const arrow = <ArrowRight size={12} className="transition-transform duration-150 group-hover/more:-translate-y-px group-hover/more:translate-x-px" />;
   return href ? <a className={cls} href={href}>{label}{arrow}</a> : <button type="button" className={cls} onClick={onClick}>{label}{arrow}</button>;
 }
@@ -362,7 +362,7 @@ export function ProgressBar({ value, max, color = 'var(--primary)', size = 'md',
 
 export function Avatar({ name, size = 'md', className = '' }: { name: string; size?: 'sm' | 'md'; className?: string }) {
   const initials = name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  return <span className={`grid shrink-0 place-items-center rounded-full bg-primary font-semibold tracking-[.02em] text-primary-ink ${size === 'sm' ? 'size-[22px] text-[9.5px]' : 'size-[26px] text-[10.5px]'} ${className}`} aria-hidden="true">{initials}</span>;
+  return <span className={`grid shrink-0 place-items-center rounded-full bg-primary font-semibold tracking-[.02em] text-primary-ink ${size === 'sm' ? 'size-[22px] text-[11px]' : 'size-[26px] text-[10.5px]'} ${className}`} aria-hidden="true">{initials}</span>;
 }
 
 export function EmptyState({ text, className = '' }: { text: string; className?: string }) {

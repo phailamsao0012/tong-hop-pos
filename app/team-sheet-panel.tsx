@@ -253,7 +253,7 @@ export function TeamSheetPanel() {
 
 /** Nút Zalo cạnh Mentor / Leader: đã nối thì hiện dấu xanh, chưa thì bấm lấy mã 6 số nhắn cho bot. Không bắt buộc. */
 function ZaloButton({ linked, code, disabled, label, onClick }: { linked?: TeamZaloState; code?: string; disabled: boolean; label: string; onClick: () => void }) {
-  if (linked?.linked) return <span className="inline-flex items-center gap-0.5 rounded-full bg-tint px-1.5 py-0.5 text-[11px] font-semibold text-primary" title={`Đã nối Zalo · báo cáo theo ${linked.teamName}`}><MessageCircle size={11} />Zalo</span>;
+  if (linked?.linked) return <span className="inline-flex items-center gap-0.5 rounded-full bg-tint px-1.5 tap py-0.5 text-[11px] font-semibold text-primary" title={`Đã nối Zalo · báo cáo theo ${linked.teamName}`}><MessageCircle size={11} />Zalo</span>;
   if (code) return <span className="rounded-full border border-[var(--primary)] px-1.5 py-0.5 text-[11px] text-ink" title="Nhắn mã này cho bot Zalo · hết hạn sau 24 giờ">Nhắn bot: <b className="num text-primary">{code}</b></span>;
   return (
     <button type="button" disabled={disabled} onClick={onClick} title={disabled ? `Chọn ${label} trước` : 'Lấy mã nối Zalo (tự lưu chia team nếu chưa lưu)'}

@@ -472,6 +472,8 @@
   .demo-account:hover { border-color: #8bd5ab; }
   .demo-account:disabled { opacity: .6; cursor: progress; }
   .demo-ribbon { position: fixed; left: 50%; bottom: calc(10px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 80; pointer-events: none; padding: 4px 12px; border-radius: 999px; font-size: 11.5px; font-weight: 600; color: #5b3a00; background: #ffe9b3; border: 1px solid #f3cf73; box-shadow: 0 2px 8px rgb(0 0 0 / .12); white-space: nowrap; }
+  /* Điện thoại có thanh tab dưới (< 768px): nhãn demo nằm trên thanh tab, không đè nút tab. */
+  @media (max-width: 767px) { .demo-ribbon { bottom: calc(62px + env(safe-area-inset-bottom, 0px)); } }
   /* Ô biểu tượng POS (app/pos-badge.tsx) */
   .posb { display: inline-grid; place-items: center; flex: none; vertical-align: middle; border-radius: 28%; color: var(--c);
     background: color-mix(in srgb, var(--c) 14%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 28%, transparent);
@@ -557,19 +559,19 @@
   .nav-item.is-active { color: #fff; font-weight: 500; background: var(--sb-accent); }
   .nav-item.is-active > svg { color: var(--lime); }
   .nav-item:focus-visible { outline: 2px solid var(--lime); outline-offset: -2px; }
-  .nav-item .cnt { flex: none; margin-left: auto; font-family: var(--font-ui); font-variant-numeric: tabular-nums; font-weight: 700; font-size: 10px; color: var(--sb-ink-3); background: rgba(255,255,255,.06); border-radius: 999px; padding: 1px 6px; }
+  .nav-item .cnt { flex: none; margin-left: auto; font-family: var(--font-ui); font-variant-numeric: tabular-nums; font-weight: 700; font-size: 11px; color: var(--sb-ink-3); background: rgba(255,255,255,.06); border-radius: 999px; padding: 1px 6px; }
   .nav-item .cnt.hot { color: #ffd6d3; background: rgba(240,128,119,.18); }
   .nav-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; background: none; border: 0; padding: 8px 8px 4px; color: var(--sb-ink-3); font-size: 10.5px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; border-radius: 6px; text-align: left; transition: color var(--dur) var(--ease), background var(--dur) var(--ease); }
   button.nav-title:hover { color: var(--sb-ink-2); background: color-mix(in srgb, var(--sb-box) 60%, transparent); }
   .nav-title:focus-visible { outline: 2px solid var(--lime); outline-offset: -2px; }
   .nav-title .chev { flex: none; color: var(--sb-ink-3); transition: transform var(--dur-2) var(--ease); }
   .nav-title[aria-expanded='false'] .chev { transform: rotate(-90deg); }
-  .nav-title .badge { font-family: var(--font-ui); font-variant-numeric: tabular-nums; font-weight: 600; font-size: 10px; letter-spacing: 0; text-transform: none; color: #d6f2e0; background: rgba(126,226,168,.16); border-radius: 999px; padding: 1px 7px; white-space: nowrap; }
+  .nav-title .badge { font-family: var(--font-ui); font-variant-numeric: tabular-nums; font-weight: 600; font-size: 11px; letter-spacing: 0; text-transform: none; color: #d6f2e0; background: rgba(126,226,168,.16); border-radius: 999px; padding: 1px 7px; white-space: nowrap; }
   .nav-group.accent { background: var(--sb-panel); border-radius: 12px; padding: 4px; }
   .nav-group.accent .nav-title { color: var(--lime); }
 
   /* Thanh tab dưới cùng (điện thoại). */
-  .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 35; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding-bottom: env(safe-area-inset-bottom, 0px); background: color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-top: 1px solid var(--line); }
+  .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 35; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); padding-bottom: env(safe-area-inset-bottom, 0px); background: color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-top: 1px solid var(--line); }
   .tab { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 7px 4px 6px; background: none; border: 0; font-size: 11px; color: var(--ink-3); transition: color var(--dur) var(--ease); }
   .tab > svg { transition: transform var(--dur) var(--ease); }
   .tab:hover { color: var(--ink); }
@@ -582,6 +584,14 @@
   .topbar { position: sticky; top: 0; z-index: 25; display: flex; align-items: center; gap: 8px; min-height: 56px; padding: 0 24px; background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
   @media (max-width: 1440px) { .topbar { gap: 6px; padding: 0 16px; } }
   @media (max-width: 900px) { .topbar { min-height: 52px; padding: 0 16px; } }
+  /* Máy tính bảng / điện thoại gập khi mở (768–1099px, có thanh bên): một dòng không đủ chỗ (đo 05/11/2026: tràn 74–292px, nút Đăng xuất bị đẩy ra ngoài).
+     Ba ô bấm (Tất cả/Sale/CSKH, chi nhánh, sáng/tối) xuống dòng thứ hai như điện thoại; dòng trên còn menu, tìm, Team, lọc trạng thái, tài khoản. */
+  @media (min-width: 768px) and (max-width: 1099px) {
+    .topbar { flex-wrap: wrap; row-gap: 6px; padding-block: 6px; }
+    .topbar::after { content: ''; order: 9; flex-basis: 100%; height: 0; }
+    .topbar > .seg { order: 10; }
+    .topbar > form { flex: 1 1 8rem; }
+  }
   /* Điện thoại: thanh trên tràn ngang làm trình duyệt thu nhỏ cả trang (số chỉ chiếm nửa màn, anh Vũ 30/10/2026).
      Hai ô bấm Tất cả/Sale/CSKH và Tổng/Hà Nội/Thái Nguyên xuống dòng thứ hai, chia đều bề ngang; dòng trên còn menu, tìm, Team, tài khoản. */
   @media (max-width: 767px) {
@@ -637,6 +647,23 @@
   .funnel-bar:hover { filter: brightness(1.12); }
   .pbar { display: inline-block; overflow: hidden; border-radius: 999px; background: var(--surface-3); vertical-align: middle; }
   .pbar > i { display: block; height: 100%; border-radius: 999px; background: var(--primary); transition: width .9s var(--ease); }
+
+  /* Điểm chạm tối thiểu 32px trên điện thoại và màn cảm ứng (đánh giá giao diện điện thoại 21/10/2026). Máy tính dùng chuột giữ cỡ cũ.
+     Nút shadcn (components/ui/button.tsx) và nút "i" giải thích (ui-kit) đặt cỡ bằng lớp Tailwind riêng. */
+  @media (pointer: coarse), (max-width: 767px) {
+    .seg-btn { min-height: 32px; }
+    .btn.sm { height: 32px; min-width: 32px; }
+    .btn.sm.icon { width: 32px; }
+    .poschip { height: 32px; }
+    .user .out { min-width: 32px; min-height: 32px; }
+    th.sort > button { min-height: 32px; }
+    summary { min-height: 32px; }
+    .donut li { min-height: 32px; }
+    /* Nút chữ trong ô bảng (tên, số bấm xem chi tiết) và nút nhỏ riêng từng trang (lớp tap). */
+    td button, .tap, table.tbl :is(td, th) > :is(button, .tap) { min-height: 32px; min-width: 32px; }
+    .sync { min-height: 32px; }
+    /* Công tắc và ô tích (components/ui) đã nới vùng chạm sẵn bằng after:-inset-x-3 after:-inset-y-2. */
+  }
 }
 
 /* ---------- Chuyển động ---------- */

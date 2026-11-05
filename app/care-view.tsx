@@ -273,7 +273,7 @@ export function CareView() {
                                   {r.noteCount > 2 && <div className="pl-8 text-[11px] text-ink-3">… <span className="num">{vi.format(r.noteCount)}</span> ghi chú, bấm để xem hết</div>}
                                 </div>
                               ) : <StatusChip tone="red">Chưa note</StatusChip>}
-                              {r.tags.length > 0 && <div className="mt-1 flex flex-wrap gap-1">{r.tags.slice(0, 3).map((t) => <span key={t} className="rounded-[4px] border border-line-2 bg-surface-2 px-1.5 py-0.5 text-[10px] uppercase text-ink-2" title={t}>{t.length > 22 ? `${t.slice(0, 22)}…` : t}</span>)}{r.tags.length > 3 && <span className="num text-[10px] text-ink-3">+{r.tags.length - 3}</span>}</div>}
+                              {r.tags.length > 0 && <div className="mt-1 flex flex-wrap gap-1">{r.tags.slice(0, 3).map((t) => <span key={t} className="rounded-[4px] border border-line-2 bg-surface-2 px-1.5 py-0.5 text-[11px] uppercase text-ink-2" title={t}>{t.length > 22 ? `${t.slice(0, 22)}…` : t}</span>)}{r.tags.length > 3 && <span className="num text-[11px] text-ink-3">+{r.tags.length - 3}</span>}</div>}
                             </td>
                             {!oneStaff && <td className="whitespace-normal text-xs">{r.assignedName ?? <span className="text-ink-3">Chưa phân công</span>}</td>}
                             <td className="n whitespace-normal">

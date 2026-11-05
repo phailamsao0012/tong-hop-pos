@@ -229,9 +229,9 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
       <ChartCard icon={Target} title={`KPI theo đầu người · ${monthLabel}`} subtitle={`Doanh thu đơn chốt (đơn đã xác nhận, như Pancake) của từng nhân viên ${label} · nhập số thường (3000000) hoặc 3tr, 1.5 tỷ`} loading={!loaded}
         action={<div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-line bg-surface-2 px-2 py-1.5">
           <Wand2 size={14} className="text-primary" aria-hidden="true" /><span className="text-xs font-medium text-ink-2">Áp cho tất cả:</span>
-          <Input id={`${team}-bulk-revenue`} inputMode="numeric" className={`${NUM_INPUT} h-7 w-24 text-xs`} placeholder="Doanh thu" aria-label="KPI doanh thu áp cho tất cả" value={bulk.revenue} onChange={(e) => setBulk((b) => ({ ...b, revenue: e.target.value }))} />
-          {isSale && <Input id={`${team}-bulk-rate`} inputMode="decimal" className={`${NUM_INPUT} h-7 w-24 text-xs`} placeholder="Tỉ lệ chốt %" aria-label="KPI tỉ lệ chốt áp cho tất cả" value={bulk.rate} onChange={(e) => setBulk((b) => ({ ...b, rate: e.target.value }))} />}
-          <Input id={`${team}-bulk-days`} type="number" min={1} max={31} className={`${NUM_INPUT} h-7 w-24 text-xs`} placeholder={`Ngày · ${dim}`} aria-label="Số ngày làm việc áp cho tất cả" value={bulk.days} onChange={(e) => setBulk((b) => ({ ...b, days: e.target.value }))} />
+          <Input id={`${team}-bulk-revenue`} inputMode="numeric" className={`${NUM_INPUT} tap h-7 w-24 text-xs`} placeholder="Doanh thu" aria-label="KPI doanh thu áp cho tất cả" value={bulk.revenue} onChange={(e) => setBulk((b) => ({ ...b, revenue: e.target.value }))} />
+          {isSale && <Input id={`${team}-bulk-rate`} inputMode="decimal" className={`${NUM_INPUT} tap h-7 w-24 text-xs`} placeholder="Tỉ lệ chốt %" aria-label="KPI tỉ lệ chốt áp cho tất cả" value={bulk.rate} onChange={(e) => setBulk((b) => ({ ...b, rate: e.target.value }))} />}
+          <Input id={`${team}-bulk-days`} type="number" min={1} max={31} className={`${NUM_INPUT} tap h-7 w-24 text-xs`} placeholder={`Ngày · ${dim}`} aria-label="Số ngày làm việc áp cho tất cả" value={bulk.days} onChange={(e) => setBulk((b) => ({ ...b, days: e.target.value }))} />
           <Button size="sm" variant="outline" className="h-7 text-xs" onClick={applyBulk} disabled={!bulk.revenue && !bulk.rate && !bulk.days}>Áp dụng</Button>
         </div>}>
         {!loaded ? <SkeletonTable rows={6} cols={9} /> : (
@@ -252,7 +252,7 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
                   const p = t?.revenue ? net / t.revenue * 100 : null; const tn = todayNet(e.id); const dp = daily ? tn / daily * 100 : null;
                   return (
                     <tr key={e.id}>
-                      <td className="font-medium">{e.name}{!e.active && <span className="ml-1.5 rounded-[4px] bg-t-gray-bg px-1 py-px text-[10px] font-semibold text-t-gray">nghỉ</span>}</td>
+                      <td className="font-medium">{e.name}{!e.active && <span className="ml-1.5 rounded-[4px] bg-t-gray-bg px-1 py-px text-[11px] font-semibold text-t-gray">nghỉ</span>}</td>
                       <td className="n">{moneyInput(e.id, e.name)}</td>
                       {isSale && <td className="n">{rateInput(e.id, e.name)}</td>}
                       <td className="n"><Input type="number" min={1} max={31} className={`${NUM_INPUT} w-16`} placeholder={String(dim)} aria-label={`Ngày làm việc ${e.name}`} value={t?.workingDays ?? ''} onChange={(ev) => set(e.id, 'workingDays', ev.target.value === '' ? null : Math.max(1, Math.min(31, Math.round(Number(ev.target.value) || 0))))} /></td>
