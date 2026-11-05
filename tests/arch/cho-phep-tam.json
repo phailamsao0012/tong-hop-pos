@@ -1,14 +1,6 @@
 {
  "_ghi_chu": "Danh sách tạm chấp nhận của tests/arch/tang.test.ts (plan cải tổ 31/10/2026). Bước nào dọn xong thì rút dòng khỏi đây; test fail nếu có vi phạm MỚI ngoài danh sách, và cũng fail nếu dòng trong danh sách đã sạch (để danh sách không thừa).",
  "route_co_sql": [
-  "app/api/data/route.ts",
-  "app/api/raw/orders/detail/route.ts",
-  "app/api/raw/orders/route.ts",
-  "app/api/reports/calls/history/route.ts",
-  "app/api/reports/care/notes/route.ts",
-  "app/api/reports/customer-detail/route.ts",
-  "app/api/reports/customers/route.ts",
-  "app/api/sync/pos/route.ts"
  ],
  "app_goi_fetch_thang": [
   "app/ai-ask-view.tsx",
