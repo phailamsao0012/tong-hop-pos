@@ -32,7 +32,7 @@ export const DEPT_LAYOUT: DeptLayout[] = [
     { key: 'catalog', tabs: [['customer360', 'Khách hàng 360'], ['customers', 'Hồ sơ khách']] },
     { key: 'reports', tabs: [['repurchase', 'Mua lại & Upsell'], ['dormant', 'Khách lâu chưa mua']] },
   ] },
-  { key: 'giao-viec', label: 'Giao việc', sections: [{ key: 'reports', tabs: [['giao-viec', 'Tổng quan'], ['giao-viec-chat', 'Chat'], ['giao-viec-hop', 'Họp'], ['giao-viec-zalo', 'Danh bạ Zalo']] }] },
+  { key: 'giao-viec', label: 'Giao việc', sections: [{ key: 'reports', tabs: [['giao-viec', 'Tổng quan'], ['giao-viec-chat', 'Chat'], ['giao-viec-hop', 'Họp'], ['giao-viec-zalo', 'Danh bạ Zalo'], ['giao-viec-kpi', 'KPI team'], ['giao-viec-bao-cao', 'Cài đặt báo cáo']] }] },
   { key: 'cai-dat', label: 'Cài đặt', sections: [
     { key: 'settings', tabs: [['config', 'Cấu hình'], ['audit', 'Nhật ký'], ['raw-orders', 'Đơn nguồn Pancake'], ['security', 'Bảo mật tài khoản']] },
   ] },

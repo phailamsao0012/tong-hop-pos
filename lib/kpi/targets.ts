@@ -41,22 +41,71 @@ export function withTargetRates(rows: TargetRow[], rates: Record<string, number>
   return out;
 }
 
-export async function visibleTargets(db: D1Database, user: Access, items: TargetRow[], ids: string[] | null): Promise<TargetRow[]> {
-  if (user.role === 'owner') return items;
-  if (user.role === 'mentor' && !user.teamScope) return items.filter((item) => item.scope === 'employee' && !!ids?.includes(item.refId));
-  const cskh = new Set((await db.prepare(`SELECT user_id FROM ${teamSubquery('cskh', false)} AS t`).all<{ user_id: string }>()).results.map((row) => row.user_id));
-  return items.filter((item) => item.scope === 'pos' || (item.scope === 'employee' && (!cskh.has(item.refId) || (user.role !== 'staff' && !!ids?.includes(item.refId)))));
+/** KPI trung bình đơn (đồng/đơn) của cả team, lưu ở app_settings target_aov:<tháng>, khoá "team:<mã team>" (Giao việc → KPI team,
+ *  anh Vũ 28/10/2026). Cùng kiểu target_rate, không thêm cột. Chỉ thay khi dòng gửi lên có trường aov (null hay 0 = bỏ KPI),
+ *  để trang KPI cũ không biết TB đơn (Theo team, Mục tiêu) lưu doanh thu không làm mất TB đơn đã đặt. */
+export function mergeTargetAov(stored: Record<string, number>, items: { scope?: string; refId?: string; aov?: number | null }[], only: string[] | null): Record<string, number> {
+  const next: Record<string, number> = { ...stored };
+  for (const it of items) {
+    if (it.scope !== 'team' || !it.refId || it.aov === undefined) continue;
+    const k = `team:${it.refId}`;
+    if (only && !only.includes(k)) continue;
+    const v = Number(it.aov);
+    if (it.aov !== null && Number.isFinite(v) && v > 0) next[k] = Math.round(v); else delete next[k];
+  }
+  return next;
 }
 
-export type TargetRow = { scope: 'pos' | 'employee' | 'team'; refId: string; revenue: number; closedOrders: number; workingDays: number | null; updatedAt: string; costCeiling?: number | null; closeRate?: number | null };
+/** Gắn KPI TB đơn vào dòng team; team chỉ có TB đơn (chưa có doanh thu) vẫn thành một dòng. */
+export function withTargetAov(rows: TargetRow[], aov: Record<string, number>, updatedAt = ''): TargetRow[] {
+  const seen = new Set<string>();
+  const out = rows.map((r) => {
+    if (r.scope !== 'team') return r;
+    seen.add(r.refId);
+    return { ...r, aov: typeof aov[`team:${r.refId}`] === 'number' ? aov[`team:${r.refId}`] : null };
+  });
+  for (const [k, v] of Object.entries(aov)) {
+    if (!k.startsWith('team:') || seen.has(k.slice(5)) || typeof v !== 'number') continue;
+    out.push({ scope: 'team', refId: k.slice(5), revenue: 0, closedOrders: 0, workingDays: null, updatedAt, closeRate: null, aov: v });
+  }
+  return out;
+}
+
+/** Team mà người này cầm (anh Vũ 05/11/2026: leader / mentor xem KPI team của mình để tự chia cho từng người). null = mọi team (chủ hệ thống).
+ *  Team gán ở Cài đặt → Team (teamScope), hoặc team web nhân sự mà người này là Leader; giám đốc thêm các team của bộ phận mình. Nhân viên: không team nào. */
+export async function managedTeams(db: D1Database, user: Access & { userId: string }): Promise<string[] | null> {
+  if (user.role === 'owner') return null;
+  if (user.teamScope) return [...user.teamScope.ids];
+  if (user.role !== 'director' && user.role !== 'lead' && user.role !== 'mentor') return [];
+  const rows = await db.prepare(`SELECT DISTINCT t.department_id AS id FROM hr_pos_team t
+    LEFT JOIN hr_employees e ON e.id=t.leader_employee_id
+    WHERE t.department_id IS NOT NULL AND t.department_id<>'' AND t.status<>'da_nghi' AND (
+      e.main_user_id=? OR t.leader_employee_id=(SELECT value FROM app_settings WHERE key='user_employee:'||?)
+      OR (?='director' AND ?<>'all' AND t.team=?))`)
+    .bind(user.userId, user.userId, user.role, user.team, user.team).all<{ id: string }>();
+  return rows.results.map((r) => r.id).sort();
+}
+
+export async function visibleTargets(db: D1Database, user: Access, items: TargetRow[], ids: string[] | null, teams: string[] | null = []): Promise<TargetRow[]> {
+  if (user.role === 'owner') return items;
+  const mine = (item: TargetRow) => item.scope === 'team' && !!teams?.includes(item.refId);
+  if (user.role === 'mentor' && !user.teamScope) return items.filter((item) => mine(item) || (item.scope === 'employee' && !!ids?.includes(item.refId)));
+  const cskh = new Set((await db.prepare(`SELECT user_id FROM ${teamSubquery('cskh', false)} AS t`).all<{ user_id: string }>()).results.map((row) => row.user_id));
+  return items.filter((item) => mine(item) || item.scope === 'pos' || (item.scope === 'employee' && (!cskh.has(item.refId) || (user.role !== 'staff' && !!ids?.includes(item.refId)))));
+}
+
+export type TargetRow = { scope: 'pos' | 'employee' | 'team'; refId: string; revenue: number; closedOrders: number; workingDays: number | null; updatedAt: string; costCeiling?: number | null; closeRate?: number | null; aov?: number | null };
 /** Mục tiêu của một tháng (YYYY-MM). */
 export async function listTargets(month: string): Promise<TargetRow[]> {
   const rows = await env.DB.prepare('SELECT scope,ref_id,revenue,closed_orders,working_days,updated_at FROM targets WHERE month=?').bind(month)
     .all<{ scope: 'pos' | 'employee' | 'team'; ref_id: string; revenue: number; closed_orders: number; working_days: number | null; updated_at: string }>();
-  const caps = await env.DB.prepare('SELECT value FROM app_settings WHERE key=?').bind(`target_cost:${month}`).first<{ value: string }>();
-  const costs = parseTargetCosts(caps?.value);
-  const rates = await env.DB.prepare('SELECT value,updated_at FROM app_settings WHERE key=?').bind(`target_rate:${month}`).first<{ value: string; updated_at: string }>();
-  return withTargetRates(rows.results.map((r): TargetRow => ({ scope: r.scope, refId: r.ref_id, revenue: Number(r.revenue), closedOrders: Number(r.closed_orders), workingDays: r.working_days === null ? null : Number(r.working_days), updatedAt: r.updated_at, ...(r.scope === 'team' ? { costCeiling: costs[r.ref_id] ?? null } : {}) })), parseTargetCosts(rates?.value), rates?.updated_at ?? '');
+  // Chi phí trần, tỉ lệ chốt, TB đơn: một lần đọc app_settings.
+  const settings = new Map((await env.DB.prepare('SELECT key,value,updated_at FROM app_settings WHERE key IN (?,?,?)').bind(`target_cost:${month}`, `target_rate:${month}`, `target_aov:${month}`)
+    .all<{ key: string; value: string; updated_at: string }>()).results.map((r) => [r.key.slice(0, r.key.indexOf(':')), r]));
+  const costs = parseTargetCosts(settings.get('target_cost')?.value);
+  const rates = settings.get('target_rate'), aov = settings.get('target_aov');
+  const base = withTargetRates(rows.results.map((r): TargetRow => ({ scope: r.scope, refId: r.ref_id, revenue: Number(r.revenue), closedOrders: Number(r.closed_orders), workingDays: r.working_days === null ? null : Number(r.working_days), updatedAt: r.updated_at, ...(r.scope === 'team' ? { costCeiling: costs[r.ref_id] ?? null } : {}) })), parseTargetCosts(rates?.value), rates?.updated_at ?? '');
+  return aov ? withTargetAov(base, parseTargetCosts(aov.value), aov.updated_at) : base;
 }
 
 /** Tài khoản POS được phép đặt KPI; null dành riêng cho chủ hệ thống. */

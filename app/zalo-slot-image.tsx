@@ -72,7 +72,7 @@ export function BossSlotImage({ r }: { r: BossSlotReport }) {
   return (
     <Frame
       title="Doanh số các team"
-      sub={`Báo cáo ${Number(r.hour)}h · ${r.slot} · ${dm(r.day)}`}
+      sub={`Báo cáo ${Number(r.hour.slice(0, 2))}h${r.hour.length > 2 ? r.hour.slice(3, 5) : ''} · ${r.slot} · ${dm(r.day)}`}
     >
       <div
         style={{
@@ -146,9 +146,11 @@ export function BossSlotImage({ r }: { r: BossSlotReport }) {
             }}
           >
             <b>{millions(t.total)}</b>
-            <span
-              style={{ color: C.muted, marginLeft: 6 }}
-            >{`/ ${millions(t.cumulative)}`}</span>
+            {r.hideCumulative ? null : (
+              <span
+                style={{ color: C.muted, marginLeft: 6 }}
+              >{`/ ${millions(t.cumulative)}`}</span>
+            )}
           </div>
         </div>
       ))}
