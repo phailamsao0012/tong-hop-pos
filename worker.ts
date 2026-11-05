@@ -6,7 +6,9 @@ import { maybeForecastTick } from '@/lib/kpi/forecast-run';
 import { maybeDailyTrendNotes } from '@/lib/ai/ai-trends';
 import { SyncScheduler } from '@/lib/ops/scheduler';
 import { getSessionUserFromRequest } from '@/lib/auth/auth';
-import { scopeApi } from '@/lib/auth/access';
+import { cacheScopeFor, scopeApi } from '@/lib/auth/access';
+import { isCanonicalPath } from '@/lib/auth/path-guard';
+import { MFA_BLOCKED_ERROR, mfaBlocks } from '@/lib/auth/mfa-gate';
 import { AUDIT_HEADER, audit, classifyApi, scrubSearch, summarizeBody } from '@/lib/ops/audit';
 import type { SessionUser } from '@/lib/auth/auth';
 import { pullHr } from '@/lib/teams/hr-sync';
@@ -134,11 +136,14 @@ async function takeLock(origin: string, key: string) {
   return true;
 }
 
-const CACHE_GEN = 'pii-3';
+// pii-4 (05/11/2026): che SĐT theo vai trò ở máy chủ, bản lưu trước đó không còn được trả.
+const CACHE_GEN = 'pii-4';
 // Khóa dùng chung cho lượt đọc và lượt làm nóng (warmRecentReports), để hai bên không bao giờ lệch nhau.
-const cacheKeys = (role: string, version: string, url: string) => {
+// `scope`: phạm vi người xem (lib/auth/access.ts cacheScopeFor) cho báo cáo có nội dung theo trang được cấp của từng tài khoản.
+const cacheKeys = (role: string, version: string, url: string, scope = '') => {
   const source = usingHrTeams() ? 'hr' : 'pc';
-  return { key: `${CACHE_GEN}|${role}|${source}|${version}|${url}`, staleKey: `stale|${CACHE_GEN}|${role}|${source}|${url}` };
+  const who = scope ? `${role}~${scope}` : role;
+  return { key: `${CACHE_GEN}|${who}|${source}|${version}|${url}`, staleKey: `stale|${CACHE_GEN}|${who}|${source}|${url}` };
 };
 async function cachedReport(request: Request, env: Cloudflare.Env, ctx: ExecutionContext, pathname: string, run: () => Promise<Response>, user: SessionUser | null = null) {
   if (request.method !== 'GET' || !cacheable(pathname) || !user) return run();
@@ -148,7 +153,7 @@ async function cachedReport(request: Request, env: Cloudflare.Env, ctx: Executio
   // Khóa gồm cả vai trò và nguồn team (Pancake / web nhân sự): một số báo cáo che bớt số theo vai trò (vd. đơn chia CSKH chỉ chủ hệ thống / giám đốc thấy).
   // URL đã được phân quyền thu hẹp (POS/nhóm của tài khoản) trước khi tới đây.
   // CACHE_GEN: đổi khi đổi dạng / phạm vi dữ liệu trả về (vd. che SĐT 11/10/2026) để bản lưu từ trước khi lên bản không còn được trả (QA L5).
-  const { key, staleKey } = cacheKeys(user.role, version, request.url);
+  const { key, staleKey } = cacheKeys(user.role, version, request.url, cacheScopeFor(user, pathname));
   const { origin } = new URL(request.url);
   if (WARM_PATHS.has(pathname)) rememberRecent(request.url, user.role);
   const hit = reportCache.get(key);
@@ -249,7 +254,7 @@ async function batchReports(request: Request, env: Cloudflare.Env, ctx: Executio
   if (!urls.length) return Response.json({ error: 'Thiếu danh sách URL.' }, { status: 400 });
   const results = await Promise.all(urls.map(async (u) => {
     const subUrl = new URL(u, request.url);
-    if (!batchable(subUrl.pathname)) return { url: u, status: 400, body: JSON.stringify({ error: 'URL không được gộp.' }) };
+    if (!isCanonicalPath(subUrl.pathname) || !batchable(subUrl.pathname)) return { url: u, status: 400, body: JSON.stringify({ error: 'URL không được gộp.' }) };
     const r = scopeApi(user, 'GET', subUrl);
     if (r.blocked) {
       // Lượt bị chặn trong gộp báo cáo cũng vào nhật ký như gọi riêng (QA 11/10/2026, L6).
@@ -293,6 +298,8 @@ export default {
   async fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext) {
     const url = new URL(request.url);
     const { pathname } = url;
+    // Đường dẫn không ở dạng chuẩn (lib/auth/path-guard.ts): trả 404 trước mọi bước kiểm quyền.
+    if (!isCanonicalPath(pathname)) return new Response('Not Found', { status: 404 });
     // Mở bằng http:// (gõ tay trên điện thoại): cookie đăng nhập chỉ đi qua https nên sẽ không đăng nhập được, và trình duyệt
     // báo "Không bảo mật" → chuyển hẳn sang https (trừ máy thử nghiệm localhost).
     // wrangler dev gán hostname của route thật vào request.url và Host, nên máy thử tự khai bằng biến LOCAL_DEV
@@ -342,6 +349,8 @@ export default {
         return Response.json({ error: 'Máy chủ dữ liệu đang bận, thử lại sau vài giây.' }, { status: 503, headers: { 'Retry-After': '3' } });
       }
       if (!user) return Response.json({ error: 'Đăng nhập để tiếp tục.' }, { status: 401 });
+      // MFA bắt buộc mà chưa bật: chặn mọi API dữ liệu (phần /api/auth/* để bật MFA không đi qua đây).
+      if (mfaBlocks(user)) return Response.json({ error: MFA_BLOCKED_ERROR, mfaRequired: true }, { status: 403 });
       sessionUser = user;
       // Gộp nhiều API báo cáo trong một request (trình duyệt gom các lời gọi song song lại): giảm số vòng đi–về trên mạng chậm.
       // Từng URL con vẫn qua đúng phân quyền và cache như gọi riêng.

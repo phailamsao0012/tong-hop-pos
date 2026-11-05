@@ -20,7 +20,7 @@ const STAGE_COLORS: Record<string, string> = { new: 'var(--ai-3)', repeat: 'var(
 
 export function Customer360View() {
   const [posIds, setPosIds] = usePosIds();
-  const [customer, setCustomer] = useState<{ phone: string; posIds: string[] } | null>(null);
+  const [customer, setCustomer] = useState<{ phone: string; posIds: string[]; ref?: string } | null>(null);
   const url = useMemo(() => `/api/reports/customer360?${new URLSearchParams({ posIds: posIds.join(',') })}`, [posIds]);
   const { data: r, error, reload } = useApi<Customer360>(url);
   type K = 'net' | 'orders' | 'since' | 'overdue';
@@ -113,8 +113,8 @@ export function Customer360View() {
                       <th className="text-left">Người bán</th>
                     </tr></thead>
                     <tbody>{due.map((c) => (
-                      <tr key={c.phone}>
-                        <td className="text-left font-medium text-ink"><button type="button" className="text-left underline decoration-line underline-offset-4" onClick={() => setCustomer({ phone: c.phone, posIds })}>{c.name}</button><span className="block text-[11px] font-normal text-ink-3">{c.phone}</span></td>
+                      <tr key={(c as { phoneRef?: string }).phoneRef ?? c.phone}>
+                        <td className="text-left font-medium text-ink"><button type="button" className="text-left underline decoration-line underline-offset-4" onClick={() => setCustomer({ phone: c.phone, posIds, ref: (c as { phoneRef?: string }).phoneRef })}>{c.name}</button><span className="block text-[11px] font-normal text-ink-3">{c.phone}</span></td>
                         <td className="text-left text-[12px] text-ink-2">{c.posNames.join(', ')}</td>
                         <td className="n">{vi.format(c.orders)}</td>
                         <td className="n">{shortMoney(c.net)}</td>

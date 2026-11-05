@@ -1,7 +1,8 @@
 import { mentorReport } from '@/lib/teams/staff-scope';
 import { env } from 'cloudflare:workers';
 import { getSessionUser, unauthorized } from '@/lib/auth/auth';
-import { canView, scopeApi } from '@/lib/auth/access';
+import { allowedPos, canView, scopeApi } from '@/lib/auth/access';
+import { openPhoneRef } from '@/lib/auth/phone-privacy';
 import { audit } from '@/lib/ops/audit';
 import { customerIdPosAllowed, loadCustomerTimeline } from '@/lib/reports/customer-timeline';
 import { POS } from '@/lib/shared/report-model';
@@ -18,6 +19,15 @@ export async function GET(request: Request) {
   const p = scoped.url.searchParams;
   let phone = (p.get('phone') ?? '').trim();
   let posIds = [...new Set((p.get('posIds') ?? '').split(',').filter(Boolean))];
+  // Vai trò không thấy đủ SĐT mở hồ sơ bằng mã tham chiếu `ref` (lib/auth/phone-privacy.ts); POS trong mã vẫn phải thuộc phạm vi.
+  const ref = p.get('ref');
+  if (ref && !customerId) {
+    const opened = await openPhoneRef(ref);
+    const refPos = opened ? opened.posId.split(',').filter(Boolean) : [];
+    if (!opened || !refPos.length || refPos.some((id) => !allowedPos(user).includes(id))) return Response.json({ error: 'Không có quyền xem khách hàng.' }, { status: 403 });
+    phone = opened.phone;
+    posIds = refPos;
+  }
   if (customerId) {
     const customer = await env.DB.prepare('SELECT phone,pos_id,assigned_user_id FROM pos_customers WHERE id=?').bind(customerId)
       .first<{ phone: string; pos_id: string; assigned_user_id: string | null }>();

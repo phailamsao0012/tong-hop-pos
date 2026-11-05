@@ -1,6 +1,7 @@
 import { orderFilterSql, parseOrderFilters, marketerValue } from '@/lib/pancake/order-segments';
 import { env } from 'cloudflare:workers';
 import { getSessionUser } from '@/lib/auth/auth';
+import { privateJson } from '@/lib/auth/phone-privacy';
 import { ORDER_STATUS } from '@/lib/pancake/pancake';
 import { POS } from '@/lib/shared/report-model';
 import { DATE_RE, vnRangeUtc } from '@/lib/shared/report-time';
@@ -78,7 +79,7 @@ export async function GET(request: Request) {
   const baseWhere = where.join(' AND ');
   const marketers = team === 'cskh' ? await env.DB.prepare(`SELECT DISTINCT ${marketerValue('raw_pos_orders')} AS id FROM ${source} WHERE ${baseWhere} AND ${marketerValue('raw_pos_orders')} IS NOT NULL`).bind(...binds.slice(0, binds.length - filter.binds.length)).all<{ id: string }>() : null;
   const who = (id: string | null) => id ? nameMap.get(id) ?? `NV ${id.slice(0, 8)}` : null;
-  return Response.json({
+  return privateJson(user.role, {
     marketers: marketers?.results.map(m => ({ marketerId: m.id, marketerName: who(m.id)! })) ?? [],
     page, size, hasMore: rows.results.length > size,
     orders: rows.results.slice(0, size).map((o) => ({
