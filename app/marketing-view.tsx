@@ -19,6 +19,7 @@ import { MktSheetCheck } from './mkt-sheet-check';
 import { useTeam, useMktTeam, setMktTeam, useBranch } from './team-store';
 import { saveXlsx } from '@/app/save-xlsx';
 import { RANK_STAGES, rankByStage, type RankStage, type RankRow } from '@/lib/reports/mkt-rank';
+import { SegmentHintNote } from './segment-hint-note';
 
 type Basis = 'created' | 'confirmed';
 type Stage = 'all' | 'unconfirmed' | 'confirmed' | 'packed' | 'confirmed_now' | 'stock' | 'packing' | 'waiting' | 'shipping' | 'shipped' | 'delivered' | 'returned' | 'cancelled' | 'deleted';
@@ -225,6 +226,7 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
         onStart={setStart} onEnd={setEnd}
         loading={loading} onReload={reload} onExport={exportExcel} exportDisabled={!data} />
       <PosChips posIds={posIds} onChange={setPosIds} />
+      <SegmentHintNote />
       {onOpenRoas && <MktHeadline start={start} end={end} posIds={posIds} onOpen={onOpenRoas}
         marketerId={marketerId === '__all' ? null : marketerId} onMarketer={(id) => setMarketerId(id ?? '__all')}
         teamId={marketingTeamId === '__all' ? null : marketingTeamId} onTeam={(id) => { setMarketingTeamId(id ?? '__all'); setMarketerId('__all'); }} />}
