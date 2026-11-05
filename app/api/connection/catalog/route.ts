@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers';
 import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
 import { isOwner } from '@/lib/auth/access';
 import { POS } from '@/lib/shared/report-model';
+import { latestSourceOrder, shopIdRow } from '@/lib/pancake/connection-db';
 
 // Khảo sát danh mục dữ liệu Pancake POS: gọi thử từng endpoint (1 bản ghi) bằng khóa hiện tại
 // và báo cái nào lấy được, bao nhiêu bản ghi, có những trường gì. Chỉ quản trị viên; không ghi gì vào D1.
@@ -55,10 +56,7 @@ export async function GET(request: Request) {
   const p = new URL(request.url).searchParams;
   const posId = p.get('posId');
   if (!POS.some((p) => p.id === posId)) return Response.json({ error: 'POS ngoài phạm vi.' }, { status: 400 });
-  const [row, order] = await Promise.all([
-    env.DB.prepare('SELECT shop_id FROM pos_shops WHERE id=?').bind(posId).first<{ shop_id: string | null }>(),
-    env.DB.prepare('SELECT source_order_id FROM raw_pos_orders WHERE pos_id=? ORDER BY created_at DESC LIMIT 1').bind(posId).first<{ source_order_id: string }>(),
-  ]);
+  const [row, order] = await Promise.all([shopIdRow(posId), latestSourceOrder(posId)]);
   const shopId = row?.shop_id, apiKey = env.PANCAKE_POS_API_KEY?.trim();
   if (!apiKey || !shopId || !/^\d+$/.test(shopId)) return Response.json({ error: 'Thiếu API key bí mật hoặc Shop ID dạng số.' }, { status: 400 });
 
