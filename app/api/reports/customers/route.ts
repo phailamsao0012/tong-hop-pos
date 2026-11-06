@@ -2,7 +2,7 @@ import { mentorReport } from '@/lib/teams/staff-scope';
 import { env } from 'cloudflare:workers';
 import { getSessionUser, unauthorized, type SessionUser } from '@/lib/auth/auth';
 import { privateResponse } from '@/lib/auth/phone-privacy';
-import { NON_OWNER_MAX_ROWS, isOwner } from '@/lib/auth/access';
+import { NON_OWNER_MAX_ROWS, canExport } from '@/lib/auth/access';
 import { POS } from '@/lib/shared/report-model';
 import { DATE_RE, todayVn, vnRangeUtc } from '@/lib/shared/report-time';
 import { parseTeam, teamFilter, type Team } from '@/lib/teams/team';
@@ -132,7 +132,7 @@ async function customersList(request: Request, user: SessionUser) {
   // size: 50 theo trang; "Xem toàn bộ" tới 5.000; xuất Excel tới 20.000.
   const size = Math.max(1, Math.min(20000, Number(p.get('size') ?? 50) || 50));
   // Tải lớn (xuất Excel tới 20.000 khách) chỉ chủ hệ thống; vai trò khác tối đa NON_OWNER_MAX_ROWS một lượt.
-  if (size > NON_OWNER_MAX_ROWS && !isOwner(user)) return Response.json({ error: 'Chỉ chủ hệ thống được tải toàn bộ danh sách khách.' }, { status: 403 });
+  if (size > NON_OWNER_MAX_ROWS && !canExport(user)) return Response.json({ error: 'Nhân viên không được tải toàn bộ danh sách khách.' }, { status: 403 });
   const today = todayVn();
   const sort = p.get('sort') ?? 'recent';
   const team = parseTeam(p.get('team'));

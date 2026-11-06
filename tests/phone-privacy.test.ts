@@ -53,15 +53,11 @@ const otherPos = () => (raw.prepare('SELECT id FROM pos_shops WHERE id<>? LIMIT 
 const firstPhone = () => (raw.prepare('SELECT phone FROM raw_pos_orders WHERE pos_id=? AND phone IS NOT NULL LIMIT 1').get(posId) as { phone: string }).phone;
 const firstOrderId = () => (raw.prepare('SELECT id FROM raw_pos_orders WHERE pos_id=? AND phone IS NOT NULL LIMIT 1').get(posId) as { id: string }).id;
 
+// Anh Vũ 06/11/2026: CSKH và trưởng nhóm "cho thấy đủ chứ" (để gọi từ web): mọi vai trò thấy đủ SĐT khách.
 for (const [label, mod, url] of ROUTES) {
-  void test(`${label}: trưởng nhóm / nhân viên không nhận SĐT đầy đủ; chủ hệ thống / giám đốc vẫn thấy đủ`, async () => {
-    for (const role of ['lead', 'staff'] as const) {
-      const r = await call(role, mod, url());
-      assert.ok(r.status === 200, `${role} ${r.status} ${r.text.slice(0, 200)}`);
-      assert.doesNotMatch(r.text, FULL_PHONE, `${label} lộ SĐT cho ${role}`);
-    }
-    // /api/data đọc bảng nhập tay (rỗng trong dữ liệu demo): chỉ kiểm vai trò được xem đủ không bị chặn.
-    for (const role of ['owner', 'director'] as const) {
+  void test(`${label}: mọi vai trò thấy đủ SĐT (anh Vũ 06/11/2026)`, async () => {
+    // /api/data đọc bảng nhập tay (rỗng trong dữ liệu demo): chỉ kiểm không bị chặn.
+    for (const role of ['owner', 'director', 'lead', 'staff'] as const) {
       const r = await call(role, mod, url());
       assert.equal(r.status, 200, `${role} ${r.text.slice(0, 200)}`);
       if (!mod.endsWith('/data/route')) assert.match(r.text, FULL_PHONE, `${label}: ${role} phải thấy đủ SĐT`);
@@ -69,35 +65,29 @@ for (const [label, mod, url] of ROUTES) {
   });
 }
 
-void test('nhân viên mở hồ sơ khách bằng mã tham chiếu; POS ngoài phạm vi bị chặn; SĐT thô không mở được', async () => {
+void test('hồ sơ khách: nhân viên mở bằng SĐT và mã tham chiếu; POS ngoài phạm vi bị chặn; mã hỏng bị từ chối', async () => {
   const list = JSON.parse((await call('staff', '../app/api/reports/customers/route', ROUTES[0][2]())).text) as { customers: { phone: string; phoneRef?: string; posId: string }[] };
   const c = list.customers.find((x) => x.posId === posId)!;
-  assert.ok(c.phoneRef, 'danh sách phải kèm mã tham chiếu');
-  const ok = await call('staff', '../app/api/reports/customers/detail/route', `/api/reports/customers/detail?ref=${encodeURIComponent(c.phoneRef!)}`);
-  assert.equal(ok.status, 200);
-  assert.doesNotMatch(ok.text, FULL_PHONE);
-  // Chủ hệ thống / giám đốc vẫn mở bằng SĐT và thấy đủ số.
-  for (const role of ['owner', 'director'] as const) {
+  for (const role of ['owner', 'director', 'lead', 'staff'] as const) {
     const full = await call(role, '../app/api/reports/customers/detail/route', `/api/reports/customers/detail?posId=${posId}&phone=${firstPhone()}`);
-    assert.equal(full.status, 200);
+    assert.equal(full.status, 200, role);
     assert.match(full.text, FULL_PHONE);
   }
-  const other = await call('staff', '../app/api/reports/customers/detail/route', `/api/reports/customers/detail?ref=${encodeURIComponent(c.phoneRef!)}`, { posIds: ['pos-khac'] });
+  const other = await call('staff', '../app/api/reports/customers/detail/route', `/api/reports/customers/detail?posId=${posId}&phone=${firstPhone()}`, { posIds: ['pos-khac'] });
   assert.equal(other.status, 403);
-  const rawPhone = await call('staff', '../app/api/reports/customers/detail/route', `/api/reports/customers/detail?posId=${posId}&phone=${firstPhone()}`);
-  assert.equal(rawPhone.status, 400, 'nhân viên không tra hồ sơ bằng SĐT thô');
-  const bad = await call('staff', '../app/api/reports/customers/detail/route', `/api/reports/customers/detail?ref=${encodeURIComponent(c.phoneRef!.slice(0, -2) + 'AA')}`);
-  assert.equal(bad.status, 400);
+  if (c.phoneRef) {
+    const bad = await call('staff', '../app/api/reports/customers/detail/route', `/api/reports/customers/detail?ref=${encodeURIComponent(c.phoneRef.slice(0, -2) + 'AA')}`);
+    assert.equal(bad.status, 400);
+  }
 });
 
-void test('Báo cáo tuỳ chỉnh: chỉ dữ liệu POS của tài khoản; SĐT thay bằng bí danh ổn định', async () => {
+void test('Báo cáo tuỳ chỉnh: chỉ dữ liệu POS của tài khoản; SĐT đủ', async () => {
   const now = '2026-10-01T03:00:00.000Z';
   raw.prepare("INSERT INTO assignments (id,pos_id,phone,employee_id,assigned_at,batch_id) VALUES ('a1',?,?,?,?,'b'),('a2',?,?,?,?,'b')").run(posId, FAKE[0], authorId, now, otherPos(), FAKE[1], authorId, now);
   try {
     const staff = JSON.parse((await call('staff', '../app/api/data/route', '/api/data', { posIds: [posId] })).text) as { assignments: { posId: string; phone: string }[] };
     assert.deepEqual(staff.assignments.map((a) => a.posId), [posId]);
-    assert.doesNotMatch(JSON.stringify(staff), FULL_PHONE);
-    assert.equal(staff.assignments[0].phone, await phonePseudonym(FAKE[0]));
+    assert.equal(staff.assignments[0].phone, FAKE[0]);
     const owner = JSON.parse((await call('owner', '../app/api/data/route', '/api/data')).text) as { assignments: { phone: string }[] };
     assert.deepEqual(owner.assignments.map((a) => a.phone).sort(), [...FAKE].sort());
   } finally { raw.exec("DELETE FROM assignments WHERE id IN ('a1','a2')"); }

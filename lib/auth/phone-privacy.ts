@@ -9,8 +9,9 @@ import { maskPhonesIn } from '@/lib/ops/audit';
 
 const enc = new TextEncoder();
 
-/** Vai trò thấy đủ SĐT khách. */
-export const seesFullPhone = (role: Role) => role === 'owner' || role === 'director';
+/** Vai trò thấy đủ SĐT khách: mọi vai trò (anh Vũ 06/11/2026: CSKH và trưởng nhóm "cho thấy đủ chứ" để gọi từ web).
+ *  Giữ hàm để đổi lại một chỗ nếu sau này cần che. */
+export const seesFullPhone = (_role: Role) => true;
 
 /** Trường chứa một SĐT. */
 const PHONE_KEY = /^(?:phone|phoneNumber|phone_number|bill_phone_number|receiverPhone)$/i;

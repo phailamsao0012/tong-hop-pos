@@ -42,9 +42,11 @@ export const DEPT_VIEWS: Record<'sale' | 'cskh', string[]> = {
 };
 const scopeViews = (s: TeamScope) => s.dept === 'all' ? [...DEPT_VIEWS.sale, ...DEPT_VIEWS.cskh] : DEPT_VIEWS[s.dept];
 
-/** Xuất Excel danh sách khách (Hồ sơ khách hàng, Khách lâu chưa mua) và lịch sử cuộc gọi: chỉ chủ hệ thống. */
+/** Xuất Excel danh sách khách (Hồ sơ khách hàng, Khách lâu chưa mua) và lịch sử cuộc gọi: mọi vai trò trừ nhân viên
+ *  (anh Vũ 06/11/2026: "giám đốc phải xuất được, trừ nhân viên mới k được"). */
 export const OWNER_EXPORT_VIEWS = ['customers', 'dormant', 'calls'];
-export const canExportView = (a: { role: Role }, view: string) => !OWNER_EXPORT_VIEWS.includes(view) || isOwner(a);
+export const canExport = (a: { role: Role }) => a.role !== 'staff';
+export const canExportView = (a: { role: Role }, view: string) => !OWNER_EXPORT_VIEWS.includes(view) || canExport(a);
 /** Số khách tối đa một lượt tải danh sách khách cho vai trò không được xuất (đủ cho "Xem toàn bộ" 5.000 dòng, không đủ để tải hết). */
 export const NON_OWNER_MAX_ROWS = 5000;
 /** Báo cáo mà nội dung trả về đổi theo trang được cấp của từng tài khoản (không chỉ theo vai trò / URL đã thu hẹp):

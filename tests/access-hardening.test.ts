@@ -14,32 +14,30 @@ after(logout);
 
 const VIEWS = ['customers', 'dormant', 'calls', 'overview'];
 
-void test('c. xuất Excel danh sách khách / cuộc gọi: chỉ chủ hệ thống, máy chủ chặn vai trò khác', async () => {
+void test('c. xuất Excel danh sách khách / cuộc gọi: nhân viên bị chặn, giám đốc và trưởng nhóm xuất được', async () => {
   const { POST } = await import('../app/api/activity/route');
   const exportLog = (view: string) => POST(new Request('https://x/api/activity', { method: 'POST', body: JSON.stringify({ view, export: { file: 'a.xlsx', rows: 10 } }) }));
-  for (const role of ['director', 'lead', 'staff'] as const) {
+  // Anh Vũ 06/11/2026: "giám đốc phải xuất được, trừ nhân viên mới k được".
+  await loginAs(raw, 'staff', { views: VIEWS });
+  for (const view of ['customers', 'dormant', 'calls']) assert.equal((await exportLog(view)).status, 403, `staff xuất ${view}`);
+  assert.equal((await exportLog('overview')).status, 200);
+  for (const role of ['owner', 'director', 'lead'] as const) {
     await loginAs(raw, role, { views: VIEWS });
-    for (const view of ['customers', 'dormant', 'calls']) assert.equal((await exportLog(view)).status, 403, `${role} xuất ${view}`);
-    // Trang khác vẫn ghi nhật ký xuất như cũ.
-    assert.equal((await exportLog('overview')).status, 200);
+    for (const view of ['customers', 'dormant', 'calls']) assert.equal((await exportLog(view)).status, 200, `${role} xuất ${view}`);
   }
-  await loginAs(raw, 'owner');
-  for (const view of ['customers', 'dormant', 'calls']) assert.equal((await exportLog(view)).status, 200);
   assert.equal(canExportView(parseAccess({ role: 'owner' }), 'customers'), true);
-  assert.equal(canExportView(parseAccess({ role: 'director' }), 'customers'), false);
+  assert.equal(canExportView(parseAccess({ role: 'director' }), 'customers'), true);
+  assert.equal(canExportView(parseAccess({ role: 'staff' }), 'customers'), false);
 });
 
-void test('c. tải toàn bộ danh sách khách (cỡ xuất Excel): chủ hệ thống được, vai trò khác bị chặn; cỡ thường vẫn xem được', async () => {
+void test('c. tải toàn bộ danh sách khách (cỡ xuất Excel): nhân viên bị chặn; cỡ thường vẫn xem được', async () => {
   const { GET } = await import('../app/api/reports/customers/route');
   const get = (size: number) => GET(new Request(`https://x/api/reports/customers?group=all&size=${size}`));
-  for (const role of ['director', 'lead', 'staff'] as const) {
-    await loginAs(raw, role, { views: VIEWS });
-    assert.equal((await get(20000)).status, 403, role);
-    assert.equal((await get(NON_OWNER_MAX_ROWS)).status, 200, `${role} vẫn xem toàn bộ ${NON_OWNER_MAX_ROWS} dòng`);
-    assert.equal((await get(50)).status, 200);
-  }
-  await loginAs(raw, 'owner');
-  assert.equal((await get(20000)).status, 200);
+  await loginAs(raw, 'staff', { views: VIEWS });
+  assert.equal((await get(20000)).status, 403);
+  assert.equal((await get(NON_OWNER_MAX_ROWS)).status, 200, `staff vẫn xem toàn bộ ${NON_OWNER_MAX_ROWS} dòng`);
+  assert.equal((await get(50)).status, 200);
+  for (const role of ['owner', 'director', 'lead'] as const) { await loginAs(raw, role, { views: VIEWS }); assert.equal((await get(20000)).status, 200, role); }
 });
 
 void test('d. khoá cache báo cáo theo trang được cấp (Lý do hoàn, Gợi ý, Thẻ xu hướng): hai người cùng vai trò khác quyền không dùng chung', async () => {

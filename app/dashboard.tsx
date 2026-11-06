@@ -109,7 +109,7 @@ import {
 import { installApiFetch } from './api-fetch';
 import { setScope } from './access-store';
 import { DEPT_LAYOUT, firstDeptOf, layoutFor } from '@/lib/shared/nav-structure';
-import { ROLE_LABELS, canView, canViewForecast, isOwner } from '@/lib/auth/access';
+import { ROLE_LABELS, canExport, canView, canViewForecast, isOwner } from '@/lib/auth/access';
 import {
   POS,
   PRODUCTS,
@@ -1707,13 +1707,13 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {!gated && canView(user, view) && view === 'growth' && <GrowthView key={activeDept} navDept={activeDept} />}
           {!gated && view === 'batches' && <BatchesView />}
           {!gated && view === 'raw-orders' && <RawOrdersView onSyncNow={() => { void syncRecentAll(true); }} syncing={autoSyncing} />}
-          {!gated && view === 'customers' && <CustomersPage key={searchQuery} initialQ={searchQuery} canExport={isOwner(user)} />}
-          {!gated && view === 'dormant' && <CustomersView mode="dormant" canExport={isOwner(user)} />}
+          {!gated && view === 'customers' && <CustomersPage key={searchQuery} initialQ={searchQuery} canExport={canExport(user)} />}
+          {!gated && view === 'dormant' && <CustomersView mode="dormant" canExport={canExport(user)} />}
           {!gated && view === 'repurchase' && <RepurchaseView />}
           {!gated && view === 'monthly' && <MonthlyView onNavigate={(v) => goTo(v as View)} />}
           {!gated && view === 'pipeline' && <PipelineView />}
           {!gated && view === 'van-don' && <VanDonView />}
-          {!gated && view === 'calls' && <CallsView canExport={isOwner(user)} />}
+          {!gated && view === 'calls' && <CallsView canExport={canExport(user)} />}
           {!gated && view === 'origin' && <OriginView />}
           {!gated && view === 'cskh-overview' && <TeamOverviewView key="cskh" team="cskh" kpi={canView(user, 'cskh-kpi')} onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
           {!gated && view === 'sale-overview' && <TeamOverviewView key="sale" team="sale" onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}

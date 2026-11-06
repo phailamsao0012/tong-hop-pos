@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     // Trình duyệt tự khai (QA M2): chỉ nhận trang có thật mà tài khoản được xem, số dòng là số nguyên hữu hạn ≤ 1.000.000.
     const known = view === 'export' || Object.hasOwn(VIEW_LABELS, view) || Object.hasOwn(EXTRA, view);
     if (!known || (view !== 'export' && !canView(user, view))) return Response.json({ error: 'Trang không hợp lệ.' }, { status: 400 });
-    if (!canExportView(user, view)) return Response.json({ error: 'Chỉ chủ hệ thống được xuất Excel trang này.' }, { status: 403 });
+    if (!canExportView(user, view)) return Response.json({ error: 'Nhân viên không được xuất Excel trang này.' }, { status: 403 });
     const file = typeof body.export.file === 'string' ? Array.from(body.export.file).filter((ch) => ch.charCodeAt(0) >= 32).join('').slice(0, 160) : '';
     const n = Number(body.export.rows);
     const rows = Number.isFinite(n) ? Math.min(1_000_000, Math.max(0, Math.floor(n))) : 0;
