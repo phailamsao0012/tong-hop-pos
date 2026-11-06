@@ -42,7 +42,7 @@ const rowKeys = (fn: () => void) => (e: KeyboardEvent<HTMLElement>) => {
   if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); }
 };
 
-export function CallsView() {
+export function CallsView({ canExport = false }: { canExport?: boolean }) {
   const team = useTeam();
   const motionOn = useMotionOK();
   const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
@@ -142,7 +142,7 @@ export function CallsView() {
   return (
     <div className="space-y-5">
       <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title="Cuộc gọi CSKH" subtitle="Mỗi ghi chú trên hồ sơ khách Pancake = một cuộc gọi"
-        actions={<><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} /><Button variant="outline" onClick={exportStaff} disabled={!report}><FileDown size={14} />Xuất Excel bảng nhân viên</Button></>} />
+        actions={<><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} />{canExport && <Button variant="outline" onClick={exportStaff} disabled={!report}><FileDown size={14} />Xuất Excel bảng nhân viên</Button>}</>} />
       <CskhFocusBar />
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset}
         onStart={setStart} onEnd={setEnd} loading={loading} onReload={reload}
@@ -266,7 +266,7 @@ export function CallsView() {
           <div id="call-history" className="scroll-mt-16">
             {selected && (
               <ChartCard icon={PhoneCall} title={`Lịch sử cuộc gọi · ${selected.name}`} subtitle={`${periodLabel} · mỗi dòng một ghi chú; đơn chốt cùng ngày của khách đó gắn vào ghi chú đầu tiên trong ngày · tổng đơn chốt/doanh thu theo ngày tính theo người bán trên đơn`}
-                action={<><Button size="sm" onClick={exportHistory} disabled={!history}><FileDown size={14} />Xuất Excel lịch sử</Button><Button size="sm" variant="ghost" onClick={closeHistory}>Đóng</Button></>}>
+                action={<>{canExport && <Button size="sm" onClick={exportHistory} disabled={!history}><FileDown size={14} />Xuất Excel lịch sử</Button>}<Button size="sm" variant="ghost" onClick={closeHistory}>Đóng</Button></>}>
                 {historyState === 'loading' && <SkeletonTable rows={5} cols={6} />}
                 {historyState === 'error' && <ErrorBox error={historyError ?? 'Không tải được lịch sử cuộc gọi.'} onRetry={() => void openHistory(selected, false)} />}
                 {history && (

@@ -41,9 +41,23 @@ export function withTargetRates(rows: TargetRow[], rates: Record<string, number>
   return out;
 }
 
-export async function visibleTargets(db: D1Database, user: Access, items: TargetRow[], ids: string[] | null): Promise<TargetRow[]> {
+/** Tài khoản POS của chính người đăng nhập: cùng email trên POS, hoặc nhân sự cùng email đã ghép tài khoản POS (web nhân sự). */
+export async function ownPosUserIds(db: D1Database, email: string | undefined): Promise<string[]> {
+  if (!email) return [];
+  const rows = await db.prepare(`SELECT DISTINCT user_id AS id FROM pos_users WHERE lower(email)=lower(?)
+      UNION SELECT DISTINCT t.pos_user_id AS id FROM hr_pos_team t JOIN hr_employees e ON e.id=t.employee_id WHERE lower(e.email)=lower(?)`)
+    .bind(email, email).all<{ id: string }>();
+  return rows.results.map((r) => r.id).filter(Boolean);
+}
+
+export async function visibleTargets(db: D1Database, user: Access & { email?: string }, items: TargetRow[], ids: string[] | null): Promise<TargetRow[]> {
   if (user.role === 'owner') return items;
   if (user.role === 'mentor' && !user.teamScope) return items.filter((item) => item.scope === 'employee' && !!ids?.includes(item.refId));
+  // Nhân viên thường: KPI cá nhân chỉ của chính mình (không thấy KPI người khác, không thấy KPI team); KPI cấp POS giữ như cũ.
+  if (user.role === 'staff') {
+    const own = new Set(await ownPosUserIds(db, user.email));
+    return items.filter((item) => item.scope === 'pos' || (item.scope === 'employee' && own.has(item.refId)));
+  }
   const cskh = new Set((await db.prepare(`SELECT user_id FROM ${teamSubquery('cskh', false)} AS t`).all<{ user_id: string }>()).results.map((row) => row.user_id));
   return items.filter((item) => item.scope === 'pos' || (item.scope === 'employee' && (!cskh.has(item.refId) || (user.role !== 'staff' && !!ids?.includes(item.refId)))));
 }

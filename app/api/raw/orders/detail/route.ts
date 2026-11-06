@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { getSessionUser } from '@/lib/auth/auth';
 import { allowedPos, isOwner } from '@/lib/auth/access';
+import { privateJson } from '@/lib/auth/phone-privacy';
 import { teamSubquery } from '@/lib/teams/team';
 import { ORDER_STATUS } from '@/lib/pancake/pancake';
 import { POS } from '@/lib/shared/report-model';
@@ -38,7 +39,7 @@ export async function GET(request: Request) {
   const checks = {
     created: !!o.created_at, assigned: !!o.seller_assigned_at, confirmed: !!o.first_confirmed_at, history: history.length > 0 && !o.history_limited, raw: !!raw,
   };
-  return Response.json({
+  return privateJson(user.role, {
     id: o.id, orderId: o.source_order_id, posId: o.pos_id, posName: POS.find((x) => x.id === o.pos_id)?.name ?? o.pos_id, shopId,
     pancakeUrl: shopId ? `https://pos.pancake.vn/shop/${shopId}/orders?order_id=${o.source_order_id}` : null,
     phone: o.phone, customer: o.customer_name, createdAt: o.created_at, updatedAt: o.updated_at, fetchedAt: o.fetched_at,

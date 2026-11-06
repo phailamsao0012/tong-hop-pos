@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { privateJson } from '@/lib/auth/phone-privacy';
 import { ORDER_STATUS } from '@/lib/pancake/pancake';
 import { POS } from '@/lib/shared/report-model';
 import { DATE_RE, vnRangeUtc } from '@/lib/shared/report-time';
@@ -12,7 +13,8 @@ type Note = { id: string; pos_id: string; customer_id: string | null; phone: str
 type Order = { id: string; source_order_id: string; pos_id: string; phone: string; status_code: number; created_at: string; first_confirmed_at: string | null; net: number; seller_id: string | null; items: string | null; day: string };
 
 export async function GET(request: Request) {
-  if (!(await getSessionUser())) return unauthorized();
+  const user = await getSessionUser();
+  if (!user) return unauthorized();
   const p = new URL(request.url).searchParams;
   const authorId = (p.get('authorId') ?? '').slice(0, 100);
   const start = p.get('start') ?? '', end = p.get('end') ?? '';
@@ -78,7 +80,7 @@ export async function GET(request: Request) {
     const d = daysMap.get(day) ?? { day, calls: 0, customers: new Set<string>(), orders: 0, net: 0 };
     d.orders = o.orders; d.net = o.net; daysMap.set(day, d);
   }
-  return Response.json({
+  return privateJson(user.role, {
     authorId, author: nameMap.get(authorId) ?? rows[0]?.author_name ?? authorId, period: { start, end },
     days: [...daysMap.values()].sort((a, b) => b.day.localeCompare(a.day)).map((d) => ({ day: d.day, calls: d.calls, customers: d.customers.size, orders: d.orders, net: d.net, aov: d.orders ? d.net / d.orders : null })),
     items,
