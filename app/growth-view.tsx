@@ -112,7 +112,7 @@ function PersonLine({ me, data, onSaved }: { me: GrowthPerson; data: GrowthData;
         <>
           <span className="text-ink-2">Vào {dmy(me.joined)}{me.source && <span className="text-ink-3"> · {JOIN_SOURCE_LABELS[me.source]}</span>}</span>
           {tenure !== null && <span className="text-ink-2">· đã làm <b className="num text-ink">{vi.format(tenure)}</b> ngày</span>}
-          <button type="button" className="link inline-flex items-center gap-1 text-[12.5px]" onClick={() => { setValue(me.joined ?? ''); setEditing(true); }}><Pencil size={12} aria-hidden="true" />Sửa ngày vào</button>
+          <button type="button" className="link tap inline-flex items-center gap-1 text-[12.5px]" onClick={() => { setValue(me.joined ?? ''); setEditing(true); }}><Pencil size={12} aria-hidden="true" />Sửa ngày vào</button>
         </>
       ) : (
         <span className="flex flex-wrap items-center gap-2">
@@ -155,7 +155,7 @@ function CalendarCard({ me, data, idx, metric, fmt, unitLabel }: { me: GrowthPer
           return (
             <div key={m} className="shrink-0">
               <div className="mb-1 flex items-baseline justify-between gap-2 text-[12px]"><b className="text-ink">T{Number(m.slice(5))}/{m.slice(0, 4)}</b><span className="num text-ink-3">{fmt(total)}</span></div>
-              <div className="grid grid-cols-7 gap-[3px] text-[9.5px] text-ink-4">
+              <div className="grid grid-cols-7 gap-[3px] text-[11px] text-ink-4">
                 {WEEK.map((w) => <span key={w} className="text-center">{w}</span>)}
                 {Array.from({ length: offset }, (_, i) => <span key={`e${i}`} />)}
                 {Array.from({ length: count }, (_, i) => {
@@ -163,7 +163,7 @@ function CalendarCard({ me, data, idx, metric, fmt, unitLabel }: { me: GrowthPer
                   const out = day < span.from || day > span.to;
                   return (
                     <button key={day} type="button" title={`${dmy(day)}: ${fmt(v)}`} onClick={() => setPicked(day === picked ? null : day)}
-                      className={`size-[18px] rounded-[4px] ${day === me.joined ? 'ring-2 ring-[var(--warn)] ring-offset-1 ring-offset-[var(--surface)]' : ''} ${day === picked ? 'outline outline-2 outline-[var(--ink)]' : ''}`}
+                      className={`size-[18px] rounded-[4px] tap ${day === me.joined ? 'ring-2 ring-[var(--warn)] ring-offset-1 ring-offset-[var(--surface)]' : ''} ${day === picked ? 'outline outline-2 outline-[var(--ink)]' : ''}`}
                       style={{ background: out ? 'transparent' : shade(v), border: out ? '1px dashed var(--line)' : undefined, opacity: day > data.today ? 0.25 : 1 }} aria-label={`${dmy(day)}: ${fmt(v)}`} />
                   );
                 })}

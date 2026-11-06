@@ -15,7 +15,7 @@ import type { GroupKey } from '@/lib/reports/stats';
 import { useApi, useLazySeen } from './use-api';
 import { CountUp } from './ui/count-up';
 import { drawIn, useGlide, useInView, useTween } from './ui/chart-motion';
-import { EmptyState, ErrorBox, STATUS_LABELS, STATUS_VARS, SegmentedControl, Skeleton, dmy, dt, pct, short, vi } from './ui-kit';
+import { EmptyState, ErrorBox, STATUS_LABELS, STATUS_VARS, SegmentedControl, Skeleton, TableWrap, dmy, dt, pct, short, vi } from './ui-kit';
 
 export type TrendsData = TrendReport & { definitions: Record<string, string> };
 type Metric = 'net' | 'n';
@@ -198,8 +198,8 @@ function HeatTable({ data, list, metric, dim }: { data: TrendReport; list: Trend
   const step = (v: number) => Math.min(5, Math.floor((v - mn) / (mx - mn || 1) * 6));
   const weekStart = (w: number) => data.days[data.fullIndex - (TREND_WEEKS - 1 - w) * 7 - 6];
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[640px] border-separate border-spacing-0.5 text-[12px]">
+    <div>
+      <TableWrap><table className="w-full min-w-[640px] border-separate border-spacing-0.5 text-[12px]">
         <thead><tr><th className="px-1 text-left font-medium text-ink-3">{TREND_DIMS[dim]}</th>{Array.from({ length: TREND_WEEKS }, (_, w) => <th key={w} className="px-1 text-center font-medium text-ink-3">{dmy(weekStart(w))}</th>)}</tr></thead>
         <tbody>
           {rows.map(({ s, w }) => (
@@ -214,7 +214,7 @@ function HeatTable({ data, list, metric, dim }: { data: TrendReport; list: Trend
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></TableWrap>
       <p className="mt-1.5 flex flex-wrap items-center gap-2 text-[11.5px] text-ink-3">
         <span>{metric === 'net' ? 'Số trong ô: triệu đồng mỗi tuần' : `Số trong ô: ${nLabel(dim).toLowerCase()} mỗi tuần`}</span>
         <span className="inline-flex items-center gap-0.5">thấp{STEPS.map((p) => <i key={p} className="inline-block size-3 rounded-sm" style={{ background: `color-mix(in srgb, var(--t-blue) ${p}%, var(--surface))` }} />)}cao</span>
@@ -579,11 +579,11 @@ function DeptTile({ d, card, note, onOpen, onDetail }: { d: NoteDept; card: Card
   const top = Math.max(1, ...card.rows.map((r) => r.value));
   return <div className="flex h-full min-w-0 flex-col gap-2.5 rounded-xl border border-line px-3.5 py-3">
     <div className="flex items-center justify-between gap-2">
-      <p className="text-[14px] font-semibold text-ink">{onOpen ? <button type="button" title={`Bấm để mở trang ${DEPT_LABELS[d]}, nơi tính ra số này`} className="hover:text-primary hover:underline" onClick={onOpen}>{DEPT_LABELS[d]} →</button> : DEPT_LABELS[d]}</p>
+      <p className="text-[14px] font-semibold text-ink">{onOpen ? <button type="button" title={`Bấm để mở trang ${DEPT_LABELS[d]}, nơi tính ra số này`} className="tap hover:text-primary hover:underline" onClick={onOpen}>{DEPT_LABELS[d]} →</button> : DEPT_LABELS[d]}</p>
       <span className="text-[11px] text-ink-3">{d === 'vandon' ? 'Đơn chuyển đi' : 'Doanh thu'}</span>
     </div>
     <div>
-      <p className="num text-[26px] font-semibold leading-none tracking-[-.02em] text-ink" title="Cách tính: tổng số thực tế trong kỳ, theo POS và bộ lọc đang chọn. Bấm xem đơn."><button type="button" onClick={() => onDetail()} className="hover:text-primary hover:underline">{value}</button></p>
+      <p className="num text-[26px] font-semibold leading-none tracking-[-.02em] text-ink" title="Cách tính: tổng số thực tế trong kỳ, theo POS và bộ lọc đang chọn. Bấm xem đơn."><button type="button" onClick={() => onDetail()} className="tap hover:text-primary hover:underline">{value}</button></p>
       <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11.5px] text-ink-3" title={`Cách tính: (thực tế ÷ kỳ trước cùng mốc − 1) × 100, ${card.compareLabel}. Kỳ trước: ${chartVal(card.previous, card.unit)}`}>
         {card.compare === null ? 'Chưa có số kỳ trước' : <span className={`num rounded-full px-1.5 py-px font-semibold ${DIR_CLS[dir]}`}>{card.compare >= 0 ? '▲' : '▼'} {Math.abs(card.compare).toFixed(1).replace('.', ',')}%</span>}
         <span className="whitespace-nowrap">trước {chartVal(card.previous, card.unit)}</span>
@@ -595,7 +595,7 @@ function DeptTile({ d, card, note, onOpen, onDetail }: { d: NoteDept; card: Card
       <p className="text-[10.5px] font-semibold uppercase tracking-[.06em] text-ink-3">Thay đổi nhiều nhất</p>
       {card.rows.map((r) => {
         const delta = r.value - r.previous, tone = delta > 0 ? 'text-good' : delta < 0 ? 'text-bad' : 'text-ink-3';
-        return <button type="button" onClick={() => onDetail(r.id)} key={r.id} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 text-left text-[12px] hover:text-primary" title={`${r.name}: ${chartVal(r.value, card.unit)}, kỳ trước ${chartVal(r.previous, card.unit)}${r.pct === null ? '' : ` (${r.pct >= 0 ? '+' : ''}${r.pct.toFixed(1)}%)`}. Bấm xem đơn.`}>
+        return <button type="button" onClick={() => onDetail(r.id)} key={r.id} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 text-left text-[12px] tap hover:text-primary" title={`${r.name}: ${chartVal(r.value, card.unit)}, kỳ trước ${chartVal(r.previous, card.unit)}${r.pct === null ? '' : ` (${r.pct >= 0 ? '+' : ''}${r.pct.toFixed(1).replace('.', ',')}%)`}. Bấm xem đơn.`}>
           <span className="min-w-0"><span className="block truncate text-ink-2">{bareName(r.name)}</span><span className="mt-0.5 block h-1 rounded-full bg-surface-3"><span className="block h-1 rounded-full bg-primary/70" style={{ width: `${r.value / top * 100}%` }} /></span></span>
           <span className="num text-ink">{card.unit === 'money' ? short(r.value) : vi.format(r.value)}</span>
           <span className={`num text-right font-semibold ${tone}`}>{r.previous === 0 ? 'mới' : signedShort(delta, card.unit)}</span>
@@ -612,7 +612,7 @@ function TrendOrderList({ url, title, onClose }: { url: string; title: string; o
   return <section className="mt-3 rounded-xl border border-line p-3" aria-label="Đơn tính ra số xu hướng">
     <header className="flex justify-between gap-2"><h3 className="font-semibold">{title} · Đơn trong kỳ và bộ lọc đang chọn</h3><button type="button" className="btn sm" onClick={onClose}>Đóng</button></header>
     {error ? <ErrorBox error={error} /> : !data ? <Skeleton className="h-20 w-full" /> : <>
-      <div className="overflow-x-auto"><table className="w-full text-left text-[12px]"><thead><tr><th>Mã đơn</th><th>POS</th><th>Thời điểm (giờ Việt Nam)</th><th>Giá trị đơn</th></tr></thead><tbody>{data.rows.map((r) => <tr key={r.id}><td>{r.code}</td><td>{r.posId}</td><td>{dt(r.at, true)}</td><td className="num">{chartVal(r.net, 'money')}</td></tr>)}</tbody></table></div>
+      <TableWrap><table className="w-full text-left text-[12px]"><thead><tr><th>Mã đơn</th><th>POS</th><th>Thời điểm (giờ Việt Nam)</th><th>Giá trị đơn</th></tr></thead><tbody>{data.rows.map((r) => <tr key={r.id}><td>{r.code}</td><td>{r.posId}</td><td>{dt(r.at, true)}</td><td className="num">{chartVal(r.net, 'money')}</td></tr>)}</tbody></table></TableWrap>
       {!data.rows.length && <p className="text-[12px] text-ink-3">Không có đơn trong phạm vi này.</p>}
       <div className="mt-2 flex items-center gap-2"><button type="button" className="btn sm" disabled={page === 0} onClick={() => setPage(page - 1)}>Trước</button><span>Trang {page + 1}</span><button type="button" className="btn sm" disabled={!data.more} onClick={() => setPage(page + 1)}>Sau</button></div>
     </>}

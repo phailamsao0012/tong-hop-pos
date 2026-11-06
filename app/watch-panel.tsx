@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Save, Send, ShieldAlert } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { ChartCard, ErrorBox, toast } from './ui-kit';
+import { ChartCard, ErrorBox, TableWrap, toast } from './ui-kit';
 
 type Sev = 'high' | 'medium' | 'low';
 type Data = {
@@ -76,12 +76,12 @@ export function WatchPanel() {
       </div>
       {!!data.log.length && <details className="text-sm">
         <summary className="cursor-pointer text-ink-2">Nhật ký sự cố ({data.log.length} gần nhất)</summary>
-        <div className="tbl-wrap mt-2"><table className="tbl">
+        <TableWrap className="mt-2"><table className="tbl">
           <thead><tr><th>Sự cố</th><th>Mở</th><th>Báo</th><th>Đóng</th></tr></thead>
           <tbody>{data.log.map((r) => <tr key={`${r.key}@${r.opened_at}`}>
             <td>{ICON[r.severity]} {r.title}</td><td>{when(r.opened_at)}</td><td>{r.notified_at ? `${when(r.notified_at)}${r.channel === 'demo-log' ? ' (demo)' : ''}` : '—'}</td><td>{when(r.resolved_at)}</td>
           </tr>)}</tbody>
-        </table></div>
+        </table></TableWrap>
       </details>}
     </div>}
   </ChartCard>;

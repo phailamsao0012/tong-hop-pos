@@ -104,7 +104,7 @@ export function PancakeReference({ posIds, start, end, className = '', title = '
                 <span className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-2"><span className="block h-full rounded-full" style={{ width: `${share}%`, background: posVar(p.posId) }} /></span>
                 <span className="num w-16 text-right text-ink">{shortMoney(part.revenue)}</span>
                 <span className="num w-10 text-right text-ink-3" title="Đơn chốt">{vi.format(part.orders)}</span>
-                {p.source === 'web' && <span className="text-[10px] text-ink-4" title={p.error ?? 'Web tự tính'}>web</span>}
+                {p.source === 'web' && <span className="text-[11px] text-ink-4" title={p.error ?? 'Web tự tính'}>web</span>}
               </div>
             );
           })}

@@ -3,17 +3,16 @@ import { NET } from '@/lib/reports/stats';
 import { mktStatsReady } from '@/lib/reports/stats-mkt';
 import { MARKETING_TEAMS_KEY, UNASSIGNED_TEAM, parseMarketingTeams } from '@/lib/teams/marketing-teams';
 import { addDays, daysBetween, todayVn, vnRangeUtc } from '@/lib/shared/report-time';
+import { metrics, trendChartRows, type Base } from '@/lib/reports/mkt-trend-rows';
+
+export { metrics, trendChartRows, type Base };
 
 export type Bucket = 'day' | 'week' | 'month';
-export type Base = { cost: number; phones: number; newOrders: number; newNet: number; coveredNet: number; coveredPhones: number };
 const zero = (): Base => ({ cost: 0, phones: 0, newOrders: 0, newNet: 0, coveredNet: 0, coveredPhones: 0 });
 export const defaultBucket = (start: string, end: string): Bucket => daysBetween(start, end) <= 31 ? 'day' : daysBetween(start, end) <= 120 ? 'week' : 'month';
 export function bucketKey(day: string, bucket: Bucket) {
   if (bucket === 'month') return day.slice(0, 7);
   return bucket === 'week' ? addDays(day, -((new Date(`${day}T00:00:00Z`).getUTCDay() + 6) % 7)) : day;
-}
-export function metrics(x: Base) {
-  return { ...x, costShare: x.coveredNet ? x.cost / x.coveredNet * 100 : null, costPerLead: x.coveredPhones ? x.cost / x.coveredPhones : null, closeRate: x.phones ? x.newOrders / x.phones * 100 : null, roas: x.cost ? x.coveredNet / x.cost : null, aov: x.newOrders ? x.newNet / x.newOrders : null };
 }
 export function groupTrend(days: (Base & { key: string })[], start: string, end: string, bucket: Bucket, today = todayVn()) {
   const groups = new Map<string, Base>();
@@ -24,12 +23,6 @@ export function groupTrend(days: (Base & { key: string })[], start: string, end:
     for (const k of Object.keys(x) as (keyof Base)[]) x[k] += d[k];
   }
   return [...groups].map(([key, x]) => ({ key, ...metrics(x), partial: start <= today && today <= end && key === bucketKey(today, bucket) }));
-}
-export function trendChartRows(rows: (ReturnType<typeof metrics> & { key: string; partial?: boolean })[], key: keyof ReturnType<typeof metrics>) {
-  return rows.map((r, index) => {
-    const missingCost = r.partial && r.cost === 0 && ['cost', 'costPerLead', 'roas', 'costShare'].includes(key);
-    return { ...r, complete: r.partial ? null : r[key], running: r.partial || rows[index + 1]?.partial ? (missingCost ? null : r[key]) : null };
-  });
 }
 export function trendNotes(rows: (ReturnType<typeof metrics> & { key: string; partial?: boolean })[]) {
   rows = rows.filter(r => !r.partial);

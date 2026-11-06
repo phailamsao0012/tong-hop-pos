@@ -158,14 +158,14 @@ export function Attention({ items, summary, onNavigate, ai, onRegenerate }: { it
             {shown.map((it) => (
               <li key={it.text}>
                 <button type="button" disabled={!it.view} onClick={() => it.view && onNavigate(it.view)}
-                  className="flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-[12.5px] hover:bg-tint-2 disabled:hover:bg-transparent">
+                  className="tap flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-[12.5px] hover:bg-tint-2 disabled:hover:bg-transparent">
                   <i className={`mt-1.5 size-2 shrink-0 rounded-full ${it.level === 'high' ? 'bg-[var(--bad)]' : it.level === 'medium' ? 'bg-[var(--warn)]' : 'bg-[var(--ink-4)]'}`} />
                   <span className="min-w-0 flex-1 text-ink">{it.text}</span>
                   {it.view && <ArrowRight size={13} className="mt-0.5 shrink-0 text-ink-4" />}
                 </button>
               </li>
             ))}
-            {sorted.length > 8 && <li><button type="button" onClick={() => setAll(!all)} className="px-2 py-1 text-[12px] font-medium text-primary hover:underline">{all ? 'Thu gọn' : `Xem thêm ${sorted.length - 8} việc`}</button></li>}
+            {sorted.length > 8 && <li><button type="button" onClick={() => setAll(!all)} className="tap px-2 py-1 text-[12px] font-medium text-primary hover:underline">{all ? 'Thu gọn' : `Xem thêm ${sorted.length - 8} việc`}</button></li>}
           </ul>
         ) : <p className="m-0 text-[12.5px] text-ink-3">Không có việc gì cần xử lý ngay.</p>}
       </div>

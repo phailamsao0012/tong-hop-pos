@@ -290,7 +290,7 @@ export function VanDonView() {
             </>} />)}
           </div>
           <AdvisorPanel dept="vandon" />
-          <p className="text-xs text-ink-3"><button type="button" className="underline" onClick={() => openCard('waiting')}>Còn chờ xác nhận {vi.format(t.waiting)}</button> · <button type="button" className="underline" onClick={() => openCard('failed')}>Không xác nhận được {vi.format(t.failed)}</button></p>
+          <p className="text-xs text-ink-3"><button type="button" className="underline tap" onClick={() => openCard('waiting')}>Còn chờ xác nhận {vi.format(t.waiting)}</button> · <button type="button" className="underline tap" onClick={() => openCard('failed')}>Không xác nhận được {vi.format(t.failed)}</button></p>
           {card && <ChartCard title="Danh sách đơn tính ra số đã chọn" subtitle={period}>
             <Button onClick={() => setCard(null)}>Đóng</Button>
             {drill.error ? <ErrorBox error={drill.error} onRetry={drill.reload} /> : !drill.data ? <SkeletonTable rows={5} /> : <>

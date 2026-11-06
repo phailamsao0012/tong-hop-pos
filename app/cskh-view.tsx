@@ -459,8 +459,8 @@ function DormantView({ canExport }: { canExport: boolean }) {
                       className="ctx-row grid w-full grid-cols-[28px_minmax(0,1fr)_auto_auto] items-center gap-x-3 rounded-lg px-2 py-2 text-left transition-colors duration-[var(--dur)] hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
                       <span className={`num grid size-7 place-items-center rounded-full text-xs ${i === 0 ? 'bg-t-orange-bg text-t-orange' : i === 1 ? 'bg-warn-bg text-warn' : 'bg-tint text-primary'}`}>{i + 1}</span>
                       <span className="min-w-0"><span className="block truncate text-[13px] font-medium text-ink">{c.name || 'Khách chưa có tên'} <span className="num text-xs text-ink-3">{c.phone}</span></span><span className="block truncate text-xs text-ink-3">{c.posName} · {c.sellerName}</span></span>
-                      <span className="text-right"><span className="num block text-[13px] text-bad">{c.daysSinceSuccess ?? '—'} ngày</span><span className="block text-[10px] text-ink-3">chưa mua</span></span>
-                      <span className="text-right"><span className="num block text-[13px] text-ink">{money(c.successNet)}</span><span className="block text-[10px] text-ink-3">giá trị đã mua</span></span>
+                      <span className="text-right"><span className="num block text-[13px] text-bad">{c.daysSinceSuccess ?? '—'} ngày</span><span className="block text-[11px] text-ink-3">chưa mua</span></span>
+                      <span className="text-right"><span className="num block text-[13px] text-ink">{money(c.successNet)}</span><span className="block text-[11px] text-ink-3">giá trị đã mua</span></span>
                       <ContextLine className="col-span-full" indent={40}>Mua gần nhất {dt(c.lastSuccessAt)} · {vi.format(c.successOrders)} đơn thành công{c.products[0] ? ` · hay mua ${c.products[0].name}` : ''} · {priority(c).label}</ContextLine>
                     </button>
                   </li>
@@ -990,7 +990,7 @@ function StartFlowCard({ flow, dim, basis, onDim, onBasis }: { flow: Repurchase[
           </div>
           <div className="flex items-center gap-2 text-xs"><b className="text-ink-2">Ô hiện:</b>
             {([['customers', 'Số khách'], ['orders', 'Số đơn'], ['net', 'Doanh thu']] as const).map(([k, l]) => (
-              <button key={k} type="button" onClick={() => setMetric(k)} className={`rounded-md px-2.5 py-1 font-semibold ${metric === k ? 'bg-primary text-[var(--primary-ink)]' : 'text-ink-2 hover:bg-surface-2'}`}>{l}</button>
+              <button key={k} type="button" onClick={() => setMetric(k)} className={`tap rounded-md px-2.5 py-1 font-semibold ${metric === k ? 'bg-primary text-[var(--primary-ink)]' : 'text-ink-2 hover:bg-surface-2'}`}>{l}</button>
             ))}
           </div>
           <TableWrap minWidth={320 + flow.nows.length * 110} stickyFirst>

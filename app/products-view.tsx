@@ -101,7 +101,7 @@ export function ProductsView() {
                 <div className="flex h-4 gap-[2px] overflow-hidden rounded-full">{r.groups.map((g) => <i key={g.label} className="block h-full" style={{ width: `${r.total.revenue ? g.revenue / r.total.revenue * 100 : 0}%`, background: GROUP_COLORS[g.label] }} />)}</div>
                 <div className="mt-2 grid gap-1.5">
                   {r.groups.map((g) => (
-                    <button key={g.label} type="button" onClick={() => setGroup(group === g.label ? null : g.label)} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12.5px] hover:bg-tint-2 ${group === g.label ? 'bg-tint-2 font-semibold' : ''}`}>
+                    <button key={g.label} type="button" onClick={() => setGroup(group === g.label ? null : g.label)} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 tap text-left text-[12.5px] hover:bg-tint-2 ${group === g.label ? 'bg-tint-2 font-semibold' : ''}`}>
                       <i className="size-2.5 rounded-full" style={{ background: GROUP_COLORS[g.label] }} /><span className="text-ink">{g.label}</span>
                       <span className="num ml-auto text-ink">{shortMoney(g.revenue)}</span><DeltaPill variant="plain" value={g.prevRevenue ? delta(g.revenue, g.prevRevenue) : null} />
                     </button>

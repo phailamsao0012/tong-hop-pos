@@ -652,7 +652,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
                     const rate = closeRateOf(r, ms.rateBase);
                     return (
                       <tr key={`${r.posId}:${r.sellerId || 'none'}`}>
-                        <td className="font-medium"><span className="num mr-2 inline-block w-4 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span>{r.name}<span className="ml-1.5 text-[10px] font-normal text-ink-3 sm:hidden">{deptShort(r.department)}</span></td>
+                        <td className="font-medium"><span className="num mr-2 inline-block w-4 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span>{r.name}<span className="ml-1.5 text-[11px] font-normal text-ink-3 sm:hidden">{deptShort(r.department)}</span></td>
                         {splitPos && <td className="text-xs"><PosBadge posId={r.posId} size={16} className="mr-1 align-middle" />{posName(r.posId)}</td>}
                         <td className="mut hidden text-xs sm:table-cell" title={r.department ?? ''}>{deptShort(r.department)}</td>
                         {team === 'cskh' && <><td className="n">{vi.format(r.closedOrders)}</td><td className="n">{pct(closeRateOf(r, ms.rateBase))}</td></>}
