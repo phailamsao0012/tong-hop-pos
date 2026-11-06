@@ -2,6 +2,7 @@
 // Logic thuần: nhận số đã đọc sẵn, trả mô hình báo cáo và bản chữ; ảnh vẽ ở app/zalo-morning-image.tsx. Không đọc D1 ở đây.
 import { addDays } from '@/lib/shared/report-time';
 import { kpiPace, millions } from '@/lib/kpi/kpi-pace';
+import type { ReportSection } from '@/lib/zalo/report-schedule';
 
 export type MorningDay = {
   day: string;
@@ -32,7 +33,7 @@ export type MorningData = {
   /**
    * Báo cáo theo ca (anh Vũ 03/11/2026: ca 12h/17h/22h dùng đúng kiểu ảnh 8h). Khi có: "hôm qua" trong d.today−1
    * thực chất là HÔM NAY tính tới giờ này, và mọi ngày trong days là số CÙNG GIỜ của ngày đó; ngày không có số thì
-   * không so (ghi "chưa có số"), không coi là 0.
+   * không so (ghi "chưa có số"), không coi là 0. Giờ chẵn ghi "12"; giờ lẻ (Cài đặt báo cáo) ghi "12:30".
    */
   slotHour?: string;
 };
@@ -74,7 +75,8 @@ export function buildMorningReport(d: MorningData) {
   const cur = at(y),
     prev = at(addDays(y, -1)),
     lastWeek = at(addDays(y, -7));
-  const slot = d.slotHour ? Number(d.slotHour) : null;
+  // "12" → "12h", "12:30" → "12h30" (giờ chẵn ra đúng chữ như trước).
+  const slot = d.slotHour ? `${Number(d.slotHour.slice(0, 2))}h${d.slotHour.length > 2 && !d.slotHour.endsWith(':00') ? d.slotHour.slice(3, 5) : ''}` : null;
   // Ca: chỉ so với ngày có số thật cùng giờ.
   const known = (day: string) => slot === null || byDay.has(day);
   const hasPrev = known(addDays(y, -1)),
@@ -126,8 +128,8 @@ export function buildMorningReport(d: MorningData) {
     title:
       slot === null
         ? `Báo cáo sáng ${weekday(d.today)} ${dm(d.today)} · số của ngày ${dm(y)}`
-        : `Báo cáo ${slot}h ${weekday(y)} ${dm(y)} · số từ 0h tới ${slot}h`,
-    headline: slot === null ? 'Doanh số hôm qua' : `Doanh số tới ${slot}h`,
+        : `Báo cáo ${slot} ${weekday(y)} ${dm(y)} · số từ 0h tới ${slot}`,
+    headline: slot === null ? 'Doanh số hôm qua' : `Doanh số tới ${slot}`,
     yesterday: cur.net,
     vsPrev: hasPrev ? pct(cur.net, prev.net) : null,
     vsLastWeek: hasLastWeek ? pct(cur.net, lastWeek.net) : null,
@@ -141,7 +143,7 @@ export function buildMorningReport(d: MorningData) {
     chartLabel:
       slot === null
         ? '— 7 ngày · - - tuần trước'
-        : `— 7 ngày, cùng ${slot}h · - - tuần trước`,
+        : `— 7 ngày, cùng ${slot} · - - tuần trước`,
     week: week.map((r) => ({ day: r.day, net: r.net })),
     weekBefore: weekBefore.map((r) => r.net),
     tiles: withDeltaLabels([
@@ -185,7 +187,13 @@ export function buildMorningReport(d: MorningData) {
     footer: `Doanh số tính theo người có hậu tố ${d.dept === 'sale' ? 'SALE' : 'CSKH'} trong team · ngày chốt đơn`,
   };
 }
-export type MorningReport = ReturnType<typeof buildMorningReport>;
+export type MorningReport = ReturnType<typeof buildMorningReport> & {
+  /** Mục bỏ khỏi báo cáo theo Cài đặt báo cáo (lib/zalo/report-schedule.ts); thiếu = đủ mọi mục. Lưu kèm báo cáo để ảnh vẽ đúng. */
+  hidden?: ReportSection[];
+};
+/** Gắn danh sách mục bị bỏ (rỗng thì giữ nguyên báo cáo, như trước khi có Cài đặt báo cáo). */
+export const withHidden = (r: MorningReport, hidden: ReportSection[]): MorningReport => (hidden.length ? { ...r, hidden } : r);
+const shows = (r: MorningReport, section: ReportSection) => !r.hidden?.includes(section);
 
 const arrow = (v: number | null) => (v === null ? '' : v >= 0 ? '▲' : '▼');
 /** "▲ 12%" / "▼ 4%" / "= 0%" / "chưa có số" (câu sau đã có chữ "so"). */
@@ -216,33 +224,40 @@ export function morningText(r: MorningReport) {
     `📊 ${r.team}`,
     r.title,
     `${r.headline}: ${millions(r.yesterday)} (${morningDeltaLabel(r.vsPrev)} so ${r.prevLabel} · ${morningDeltaLabel(r.vsLastWeek)} so ${r.lastWeekLabel})`,
-    r.tiles
-      .map(
-        (t) =>
-          `${t.label} ${t.value}${t.deltaLabel ? ` (${t.deltaLabel})` : ''}`,
-      )
-      .join(' · '),
   ];
-  if (r.kpi)
+  if (shows(r, 'tiles'))
     lines.push(
-      `KPI tháng ${r.kpi.month}: ${millions(r.kpi.done)} / ${millions(r.kpi.goal)} (${Math.round(r.kpi.percent)}%) · ${r.kpi.paceDiff >= 0 ? 'vượt' : 'chậm'} ${millions(Math.abs(r.kpi.paceDiff))} so tiến độ${r.kpi.needPerDay !== null ? ` · cần ${millions(r.kpi.needPerDay)}/ngày` : ''}`,
+      r.tiles
+        .map(
+          (t) =>
+            `${t.label} ${t.value}${t.deltaLabel ? ` (${t.deltaLabel})` : ''}`,
+        )
+        .join(' · '),
     );
-  else lines.push('KPI tháng: chưa đặt cho team');
-  if (r.best.length)
+  // Bỏ mục KPI thì không ghi gì (khác "chưa đặt").
+  if (shows(r, 'kpi'))
+    lines.push(
+      r.kpi
+        ? `KPI tháng ${r.kpi.month}: ${millions(r.kpi.done)} / ${millions(r.kpi.goal)} (${Math.round(r.kpi.percent)}%) · ${r.kpi.paceDiff >= 0 ? 'vượt' : 'chậm'} ${millions(Math.abs(r.kpi.paceDiff))} so tiến độ${r.kpi.needPerDay !== null ? ` · cần ${millions(r.kpi.needPerDay)}/ngày` : ''}`
+        : 'KPI tháng: chưa đặt cho team',
+    );
+  if (shows(r, 'best') && r.best.length)
     lines.push(
       `Tốt nhất: ${r.best.map((p) => `${p.name} ${millions(p.net)}`).join(', ')}`,
     );
-  if (r.coach.length)
+  if (shows(r, 'coach') && r.coach.length)
     lines.push(
       `Cần kèm (0 đơn): ${r.coach.slice(0, 6).join(', ')}${r.coach.length > 6 ? ` +${r.coach.length - 6}` : ''}`,
     );
-  if (r.overdue.length)
-    lines.push(`⚠️ Quá hạn ${r.overdue.length}: ${names(r.overdue)}`);
-  if (r.dueToday.length)
-    lines.push(`Tới hạn hôm nay ${r.dueToday.length}: ${names(r.dueToday)}`);
-  if (!r.overdue.length && !r.dueToday.length)
-    lines.push('Việc: không có việc quá hạn hay tới hạn hôm nay');
-  if (r.meetings.length) lines.push(`Họp hôm nay: ${r.meetings.join(', ')}`);
+  if (shows(r, 'tasks')) {
+    if (r.overdue.length)
+      lines.push(`⚠️ Quá hạn ${r.overdue.length}: ${names(r.overdue)}`);
+    if (r.dueToday.length)
+      lines.push(`Tới hạn hôm nay ${r.dueToday.length}: ${names(r.dueToday)}`);
+    if (!r.overdue.length && !r.dueToday.length)
+      lines.push('Việc: không có việc quá hạn hay tới hạn hôm nay');
+  }
+  if (shows(r, 'meetings') && r.meetings.length) lines.push(`Họp hôm nay: ${r.meetings.join(', ')}`);
   lines.push(`(${r.footer})`);
   return lines.join('\n').slice(0, 2000);
 }
