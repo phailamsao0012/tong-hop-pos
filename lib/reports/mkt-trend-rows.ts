@@ -10,3 +10,13 @@ export function trendChartRows(rows: (ReturnType<typeof metrics> & { key: string
     return { ...r, complete: r.partial ? null : r[key], running: r.partial || rows[index + 1]?.partial ? (missingCost ? null : r[key]) : null };
   });
 }
+
+// Ô gọn của Xu hướng MKT (anh chọn "Thu gọn 1 hàng" 06/11/2026): đường nhỏ 14 đoạn đã đủ gần nhất,
+// đoạn đủ cuối so đoạn đủ ngay trước (bỏ đoạn đang chạy để không so nửa ngày với cả ngày).
+export function trendTile(rows: (ReturnType<typeof metrics> & { key: string; partial?: boolean })[], key: keyof ReturnType<typeof metrics>) {
+  const done = rows.filter(r => !r.partial).map(r => ({ key: r.key, value: r[key] }));
+  const spark = done.slice(-14).map(r => r.value);
+  const last = done.at(-1) ?? null, prev = done.at(-2) ?? null;
+  const change = last?.value != null && prev?.value != null && prev.value !== 0 ? (last.value - prev.value) / Math.abs(prev.value) * 100 : null;
+  return { spark, lastKey: last?.key ?? null, last: last?.value ?? null, prevKey: prev?.key ?? null, prev: prev?.value ?? null, change };
+}

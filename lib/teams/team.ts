@@ -14,16 +14,23 @@ export const teamOf = (department: string | null | undefined): Exclude<Team, 'al
 };
 /**
  * Hậu tố bộ phận ở CUỐI tên Pancake (anh Vũ 06/11/2026: chỉ tính đúng hậu tố, mỗi người một bộ phận), thay cách cũ "tên chứa chữ"
- * (tên "Rosalee" từng bị tính là Sale). Bỏ phần trong ngoặc, coi '-', '_', '.' là khoảng trắng; cho phép chi nhánh HN / TN sau hậu tố
+ * (tên "Rosalee" từng bị tính là Sale). Bỏ phần trong ngoặc, coi '-', '_' là khoảng trắng; cho phép chi nhánh HN / TN sau hậu tố
  * ("Lan SALE HN"). LIKE của SQLite không phân biệt hoa thường với chữ không dấu.
+ * Viết gọn (một truy vấn con với danh sách mẫu JSON) vì đoạn này lặp lại nhiều lần trong một câu: bản đầu viết OR từng mẫu làm câu
+ * vượt giới hạn độ dài của D1 (SQLITE_TOOBIG, lỗi 500 trang Marketing 06/11/2026).
  */
-const NAME_WORDS = "(' '||REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(TRIM(CASE WHEN instr(name,'(')>0 THEN substr(name,1,instr(name,'(')-1) ELSE name END),'-',' '),'_',' '),'.',' '),'   ',' '),'  ',' ')||' ')";
-export const nameSuffix = (...words: string[]) => `(${words.flatMap((w) => [`% ${w} `, `% ${w} hn `, `% ${w} tn `]).map((x) => `${NAME_WORDS} LIKE '${x}'`).join(' OR ')})`;
-const SALE_NAME = nameSuffix('sale', 'sales'), CSKH_NAME = nameSuffix('cskh'), MKT_NAME = nameSuffix('mkt');
+const NAME_WORDS = "(' '||REPLACE(REPLACE(REPLACE(REPLACE(TRIM(substr(name,1,instr(name||'(','(')-1)),'-',' '),'_',' '),'  ',' '),'  ',' ')||' ')";
+const SUFFIXES: Record<string, string[]> = { sale: ['sale', 'sales'], cskh: ['cskh'], mkt: ['mkt'] };
+const suffixJson = (depts: string[]) => JSON.stringify(Object.fromEntries(depts.map((d) => [d, SUFFIXES[d].flatMap((w) => [`% ${w} `, `% ${w} _n `])])));
+/** Bộ phận theo hậu tố cuối tên ('sale' | 'cskh' | 'mkt'), NULL khi không có. */
+export const nameSuffixDept = (depts = ['sale', 'cskh', 'mkt']) => `(SELECT d.key FROM json_each('${suffixJson(depts)}') d, json_each(d.value) p WHERE ${NAME_WORDS} LIKE p.value LIMIT 1)`;
+/** Tên có hậu tố cuối thuộc một trong các từ (sale, sales, cskh, mkt). */
+export const nameSuffix = (...words: string[]) => `(${nameSuffixDept([...new Set(words.map((w) => (w === 'sales' ? 'sale' : w)))])} IS NOT NULL)`;
+const DEPT_OF = `COALESCE(${nameSuffixDept()},CASE WHEN department LIKE '%sale%' OR department LIKE '%bán hàng%' OR department LIKE '%BÁN HÀNG%' THEN 'sale' WHEN department LIKE '%cskh%' OR department LIKE '%chăm sóc%' OR department LIKE '%CHĂM SÓC%' THEN 'cskh' END)`;
 const CONDITIONS: Record<Exclude<Team, 'all'>, string> = {
   // Hậu tố tên quyết trước (kể cả trưởng phòng "… - TP SALE" có bộ phận Pancake "Quản trị viên"); tên không có hậu tố thì theo bộ phận Pancake.
-  sale: `(${SALE_NAME} OR (NOT ${CSKH_NAME} AND NOT ${MKT_NAME} AND (department LIKE '%sale%' OR department LIKE '%bán hàng%' OR department LIKE '%BÁN HÀNG%')))`,
-  cskh: `(${CSKH_NAME} OR (NOT ${SALE_NAME} AND NOT ${MKT_NAME} AND (department LIKE '%cskh%' OR department LIKE '%chăm sóc%' OR department LIKE '%CHĂM SÓC%')))`,
+  sale: `(${DEPT_OF}='sale')`,
+  cskh: `(${DEPT_OF}='cskh')`,
 };
 /**
  * Nguồn team: 'pancake' (bộ phận trên Pancake, cách cũ) hoặc 'hr' (bảng hr_pos_team kéo từ web nhân sự). Worker đọc cài đặt

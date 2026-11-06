@@ -191,7 +191,8 @@ export function MktSheetCheck({ start, end, posIds }: { start: string; end: stri
               const p = r[basis], q = pick(p, target), g = gapOf(r.sheet.revenue, q.net), v = verdict(g.pct);
               const unmatched = view === 'marketer' && r.id.startsWith('sheet:');
               const notCounted = view === 'marketer' ? !unmatched && r.counted === false : pickedOff;
-              const noSheet = view === 'day' && r.id > cutoff;
+              // Bảng theo Marketer: người chưa ghi gì lên sheet trong kỳ thì báo "sheet chưa ghi", không coi là lệch −100% (anh Vũ 06/11/2026).
+              const noSheet = view === 'day' ? r.id > cutoff : !hasSheet(r);
               return (
                 <tr key={r.id} className={picked === r.id ? 'bg-tint-2' : ''}>
                   <td className="min-w-40">
