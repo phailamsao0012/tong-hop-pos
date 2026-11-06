@@ -16,7 +16,8 @@ import {
 import type { Sections } from '@/lib/reports/sections';
 import type { ProductSegment } from '@/lib/pancake/order-segments';
 import { addPart, emptyRefPart, type RefPos } from '@/lib/pancake/pancake-ref-types';
-import { focusAfterNav } from './nav-focus';
+import { focusAfterNav, setNavHint } from './nav-focus';
+import { segmentDrillHint } from '@/lib/shared/drill-hint';
 import { useApi } from './use-api';
 import { PeriodBars, useTrendCards, type NoteDept } from './overview-trends';
 import { DeltaPill, ErrorBox, InfoTip, SkeletonKpis, TableWrap, money, pct, shortMoney, vi } from './ui-kit';
@@ -107,8 +108,14 @@ export function OverviewSections({ start, end, posIds, productSegment, onNavigat
   const { data, error, reload } = useApi<SectionsReport>(`/api/reports/sections?${params}`, { refreshMs: 10 * 60000, keep: false });
   if (error && !data) return part === 'split' ? null : <ErrorBox error={error} onRetry={reload} />;
   if (!data) return part === 'split' ? null : <SkeletonKpis count={4} className="lg:grid-cols-2" />;
-  // Kỳ và POS là bộ lọc chung nên trang đích mở đúng kỳ, đúng POS đang xem.
-  const open = onNavigate ? (k: TargetKey) => { const t: Target = TARGETS[k]; if (t.id) focusAfterNav(t.id, t.hint); onNavigate(t.view); } : undefined;
+  // Kỳ và POS là bộ lọc chung nên trang đích mở đúng kỳ, đúng POS đang xem; nhóm đơn đang lọc đi kèm qua gợi ý (lib/shared/drill-hint.ts).
+  const open = onNavigate ? (k: TargetKey) => {
+    const t: Target = TARGETS[k];
+    const seg = segmentDrillHint(productSegment);
+    if (seg) setNavHint(seg);
+    if (t.id) focusAfterNav(t.id, t.hint);
+    onNavigate(t.view);
+  } : undefined;
   return (
     <div className="space-y-3">
       {part !== 'grid' && <RevenueSplit data={data} start={start} end={end} posIds={posIds} productSegment={productSegment} onDrill={open} />}

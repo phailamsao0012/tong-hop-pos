@@ -8,7 +8,8 @@ import { PancakeReference } from './pancake-reference';
 import { OverviewSections, SectionsGrid, type SectionsReport } from './overview-sections';
 import { StatusPanel, TrendNotes, TrendPanel, usePref, useStatusStyle, useTrends } from './overview-trends';
 import { PosCombined, PosMultiples } from './pos-multiples';
-import { focusAfterNav } from './nav-focus';
+import { focusAfterNav, setNavHint } from './nav-focus';
+import { segmentDrillHint } from '@/lib/shared/drill-hint';
 import { UncountedStaff } from './uncounted-staff';
 import { RATE_BASES, closeRateBase, closeRateOf, closeRateTop, rateLevel } from '@/lib/reports/metrics';
 import { useMetricSettings } from './metric-settings';
@@ -732,5 +733,10 @@ function LensSections({ start, end, posIds, productSegment, onNavigate }: { star
   const api = useApi<SectionsReport>('/api/reports/sections?'+params, { keep: false });
   if (api.error) return <ErrorBox error={api.error} onRetry={api.reload} />;
   if (!api.data) return null;
-  return <SectionsGrid data={api.data} packedParams={params} onDrill={onNavigate ? (key) => onNavigate(key.startsWith('sale.') ? 'sale-overview' : key.startsWith('cskh.') ? 'cskh-overview' : key.startsWith('mkt.') ? 'marketing' : 'van-don') : undefined} />;
+  const drill = onNavigate ? (key: string) => {
+    const seg = segmentDrillHint(productSegment);
+    if (seg) setNavHint(seg);
+    onNavigate(key.startsWith('sale.') ? 'sale-overview' : key.startsWith('cskh.') ? 'cskh-overview' : key.startsWith('mkt.') ? 'marketing' : 'van-don');
+  } : undefined;
+  return <SectionsGrid data={api.data} packedParams={params} onDrill={drill} />;
 }
