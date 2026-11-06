@@ -161,9 +161,17 @@ export function TeamSheetPanel() {
   }
 
   // Chỉ người đúng bộ phận (hậu tố tên hoặc bộ phận trên Pancake), không lẫn bộ phận khác (anh Vũ 06/11/2026, thay nhóm "Người khác" 03/11).
+  // Đã ở team nào rồi thì không thêm vào team khác (anh Vũ 06/11/2026). Tên không ra bộ phận (vd "… Lead APEX")
+  // để ở nhóm "Chưa rõ bộ phận" cuối danh sách, để vẫn chọn được.
   const peopleOptions = (t: Draft) => {
-    const inTeam = new Set(t.members.flatMap((m) => m.ids));
-    return (data?.people ?? []).filter((p) => !inTeam.has(p.id) && (t.dept === 'skip' || staffDept(p) === t.dept)).map((p) => <option key={p.id} value={p.id}>{p.name}</option>);
+    const taken = new Set(draft.filter((x) => x.dept !== 'skip').flatMap((x) => x.members.flatMap((m) => m.ids)));
+    const free = (data?.people ?? []).filter((p) => !taken.has(p.id));
+    if (t.dept === 'skip') return free.map((p) => <option key={p.id} value={p.id}>{p.name}</option>);
+    const own = free.filter((p) => staffDept(p) === t.dept), unknown = free.filter((p) => staffDept(p) === null);
+    return <>
+      {own.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+      {unknown.length > 0 && <optgroup label="Chưa rõ bộ phận">{unknown.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>}
+    </>;
   };
 
   return (
