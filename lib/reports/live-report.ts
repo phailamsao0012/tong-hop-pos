@@ -151,7 +151,7 @@ export async function liveReport({ posIds, employeeIds, start, end, endExclusive
   return {
     source: 'pancake_order_assignment_proxy',
     period: { start, end },
-    updatedAt: shops.results.map((shop) => shop.last_sync_at).filter(Boolean).sort().at(-1) ?? null,
+    updatedAt: shops.results.map((shop) => shop.last_sync_at).filter((x): x is string => !!x).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)).at(-1) ?? null,
     summary: {
       received: numberValue(summary.received),
       closed: numberValue(summary.closed),

@@ -117,7 +117,7 @@ export async function shiftReport(user: { role: Role }, p: URLSearchParams, posI
   return {
     date, shift, hours: { start: h0, end: h1 }, shifts: SHIFTS, isToday: date === today, assignedVisible,
     generatedAt: new Date().toISOString(),
-    syncedAt: shops.results.map((s) => s.last_sync_at).filter(Boolean).sort().at(-1) ?? null,
+    syncedAt: shops.results.map((s) => s.last_sync_at).filter((x): x is string => !!x).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)).at(-1) ?? null,
     total: { ...total, rate: total.received ? total.closed / total.received * 100 : null },
     yesterday: { ...yTotal, rate: yTotal.received ? yTotal.closed / yTotal.received * 100 : null },
     hourly: hours.map((h, i) => ({ ...h, closedOrders: hourOrders[i].closed, openOrders: hourOrders[i].open })),
