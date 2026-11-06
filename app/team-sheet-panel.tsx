@@ -76,9 +76,9 @@ export function TeamSheetPanel() {
       setData(body);
       const names = new Map(body.people.map((p) => [p.id, p.name]));
       setDraft([
-        ...body.mkt.map((t): Draft => ({ key: nextKey(), id: t.id, name: t.name, dept: 'mkt', office: null, members: membersOf(t.memberIds, names), ...ownersOf(t) })),
+        ...body.mkt.map((t): Draft => ({ key: nextKey(), id: t.id, name: t.name, dept: 'mkt', office: t.office ?? null, members: membersOf(t.memberIds, names), ...ownersOf(t) })),
         ...body.teams.map((t): Draft => ({ key: nextKey(), id: t.id, name: t.name, dept: t.dept, office: t.office, members: membersOf(t.memberIds, names), ...ownersOf(t) })),
-        ...(body.vandon ?? []).map((t): Draft => ({ key: nextKey(), id: t.id, name: t.name, dept: 'vandon', office: null, members: membersOf(t.memberIds, names), ...ownersOf(t) })),
+        ...(body.vandon ?? []).map((t): Draft => ({ key: nextKey(), id: t.id, name: t.name, dept: 'vandon', office: t.office ?? null, members: membersOf(t.memberIds, names), ...ownersOf(t) })),
       ]);
     }).catch(() => setError('Không tải được danh sách team.'));
   }, []);
@@ -128,7 +128,7 @@ export function TeamSheetPanel() {
       const seen = new Set<string>(), prefix = uuidPrefix[dept]!;
       return kept.filter((t) => t.dept === dept).map((t) => {
         const memberIds = t.members.flatMap((m) => m.ids).filter((id) => !seen.has(id) && !!seen.add(id));
-        return { id: t.id?.startsWith(prefix) ? t.id : `${prefix}${uuid()}`, name: t.name.trim(), memberIds, ...owners(t, memberIds) };
+        return { id: t.id?.startsWith(prefix) ? t.id : `${prefix}${uuid()}`, name: t.name.trim(), office: t.office, memberIds, ...owners(t, memberIds) };
       });
     };
     const mkt = listed('mkt'), vandon = listed('vandon');

@@ -1,4 +1,4 @@
-import { teamOwnerPeople } from '@/lib/teams/web-teams';
+import { officeList, teamOwnerPeople } from '@/lib/teams/web-teams';
 export type MarketingTeam = { id: string; name: string; memberIds: string[]; office?: string | null; mentor?: string | null; /** Tên thành viên theo web nhân sự, gồm cả người chưa gắn tài khoản POS. */ memberNames?: string[];
   /** Tài khoản đăng nhập phụ trách team, để gắn Zalo (anh Vũ 03/11/2026). Không đổi quyền xem. */
   mentorUserId?: string | null; leaderUserId?: string | null;
@@ -43,7 +43,9 @@ export function validateMarketingTeams(input: unknown, prefix = 'mkt', label = '
     if ([mentorUserId, leaderUserId].some((x) => x && (x.length > 100 || hasControl(x)))) return { error: `Team ${name}: tài khoản phụ trách không hợp lệ.` };
     const owners = teamOwnerPeople(row, memberIds);
     if (!owners) return { error: `Team ${name}: Mentor, Leader phải là người trong team.` };
-    ids.add(id); names.add(name.toLocaleLowerCase('vi')); teams.push({ id, name, memberIds, ...(mentorUserId ? { mentorUserId } : {}), ...(leaderUserId ? { leaderUserId } : {}), ...owners });
+    // Chi nhánh, chọn được cả Hà Nội lẫn Thái Nguyên như team Sale/CSKH (anh Vũ 06/11/2026).
+    const office = typeof row.office === 'string' && officeList(row.office).length ? officeList(row.office).map((o) => o.slice(0, 40)).slice(0, 4).join(',') : null;
+    ids.add(id); names.add(name.toLocaleLowerCase('vi')); teams.push({ id, name, memberIds, ...(office ? { office } : {}), ...(mentorUserId ? { mentorUserId } : {}), ...(leaderUserId ? { leaderUserId } : {}), ...owners });
   }
   return { teams };
 }

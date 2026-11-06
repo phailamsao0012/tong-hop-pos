@@ -30,3 +30,8 @@ void test('team Vận đơn: mã vd_, một người một team, Mentor trong te
   assert.match(validateMarketingTeams([{ id: VD, name: 'Vận đơn HN', memberIds: [] }]).error ?? '', /không hợp lệ/, 'mã vd_ không lọt vào team MKT');
   assert.match(validateMarketingTeams([{ id: VD, name: 'A', memberIds: ['p1'] }, { id: VD.replace('2', '3'), name: 'B', memberIds: ['p1'] }], 'vd', 'Vận đơn').error ?? '', /một team Vận đơn/);
 });
+
+void test('team MKT / Vận đơn lưu được cả hai chi nhánh', () => {
+  const ok = validateMarketingTeams([{ id: VD, name: 'Vận đơn', memberIds: [], office: 'Hà Nội,Thái Nguyên' }], 'vd', 'Vận đơn');
+  assert.equal(ok.teams?.[0].office, 'Hà Nội,Thái Nguyên');
+});
