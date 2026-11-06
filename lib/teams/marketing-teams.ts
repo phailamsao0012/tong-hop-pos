@@ -1,8 +1,13 @@
+import { teamOwnerPeople } from '@/lib/teams/web-teams';
 export type MarketingTeam = { id: string; name: string; memberIds: string[]; office?: string | null; mentor?: string | null; /** Tên thành viên theo web nhân sự, gồm cả người chưa gắn tài khoản POS. */ memberNames?: string[];
   /** Tài khoản đăng nhập phụ trách team, để gắn Zalo (anh Vũ 03/11/2026). Không đổi quyền xem. */
-  mentorUserId?: string | null; leaderUserId?: string | null };
+  mentorUserId?: string | null; leaderUserId?: string | null;
+  /** Người trong team làm Mentor / Leader (mã người POS), tài khoản gắn sau (anh Vũ 06/11/2026). */
+  mentorPosId?: string | null; leaderPosId?: string | null };
 
 export const MARKETING_TEAMS_KEY = 'marketing_teams_v1';
+/** Team Vận đơn chia trên web tổng (anh Vũ 06/11/2026), cùng dạng team Marketing, mã vd_<uuid>. */
+export const VANDON_TEAMS_KEY = 'vandon_teams_v1';
 export const UNASSIGNED_TEAM = '__unassigned';
 const hasControl = (value: string) => { for (const char of value) if (char.charCodeAt(0) < 32) return true; return false; };
 
@@ -15,8 +20,9 @@ export function parseMarketingTeams(value: string | null | undefined): Marketing
   } catch { return []; }
 }
 
-export function validateMarketingTeams(input: unknown): { teams?: MarketingTeam[]; error?: string } {
-  if (!Array.isArray(input) || input.length > 30) return { error: 'Tối đa 30 team Marketing.' };
+export function validateMarketingTeams(input: unknown, prefix = 'mkt', label = 'Marketing'): { teams?: MarketingTeam[]; error?: string } {
+  if (!Array.isArray(input) || input.length > 30) return { error: `Tối đa 30 team ${label}.` };
+  const idRe = new RegExp(`^${prefix}_[a-f0-9-]{36}$`);
   const teams: MarketingTeam[] = [];
   const ids = new Set<string>(), names = new Set<string>(), members = new Set<string>();
   for (const item of input) {
@@ -24,18 +30,20 @@ export function validateMarketingTeams(input: unknown): { teams?: MarketingTeam[
     const row = item as Record<string, unknown>;
     const id = typeof row.id === 'string' ? row.id.trim() : '';
     const name = typeof row.name === 'string' ? row.name.trim() : '';
-    if (!/^mkt_[a-f0-9-]{36}$/.test(id) || !name || name.length > 60 || hasControl(name) || ids.has(id) || names.has(name.toLocaleLowerCase('vi'))) return { error: 'Tên hoặc mã team bị trùng/không hợp lệ.' };
+    if (!idRe.test(id) || !name || name.length > 60 || hasControl(name) || ids.has(id) || names.has(name.toLocaleLowerCase('vi'))) return { error: 'Tên hoặc mã team bị trùng/không hợp lệ.' };
     if (!Array.isArray(row.memberIds) || row.memberIds.length > 300) return { error: 'Danh sách thành viên không hợp lệ.' };
     const memberIds: string[] = [];
     for (const raw of row.memberIds) {
       const userId = typeof raw === 'string' ? raw.trim() : '';
-      if (!userId || userId.length > 100 || hasControl(userId) || members.has(userId)) return { error: 'Một nhân viên chỉ được thuộc một team Marketing.' };
+      if (!userId || userId.length > 100 || hasControl(userId) || members.has(userId)) return { error: `Một nhân viên chỉ được thuộc một team ${label}.` };
       members.add(userId); memberIds.push(userId);
     }
     const account = (v: unknown) => typeof v === 'string' && v.trim() ? v.trim() : null;
     const mentorUserId = account(row.mentorUserId), leaderUserId = account(row.leaderUserId);
     if ([mentorUserId, leaderUserId].some((x) => x && (x.length > 100 || hasControl(x)))) return { error: `Team ${name}: tài khoản phụ trách không hợp lệ.` };
-    ids.add(id); names.add(name.toLocaleLowerCase('vi')); teams.push({ id, name, memberIds, ...(mentorUserId ? { mentorUserId } : {}), ...(leaderUserId ? { leaderUserId } : {}) });
+    const owners = teamOwnerPeople(row, memberIds);
+    if (!owners) return { error: `Team ${name}: Mentor, Leader phải là người trong team.` };
+    ids.add(id); names.add(name.toLocaleLowerCase('vi')); teams.push({ id, name, memberIds, ...(mentorUserId ? { mentorUserId } : {}), ...(leaderUserId ? { leaderUserId } : {}), ...owners });
   }
   return { teams };
 }
