@@ -12,7 +12,7 @@ import { CalendarDays } from 'lucide-react';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import type { OverviewReport } from './overview-view';
 import { setPeriodRange } from './period-store';
-import { ChartCard, SegmentedControl, delta, dmy, money, shortMoney, useMotionOK, vi } from './ui-kit';
+import { ChartCard, SegmentedControl, TableWrap, delta, dmy, money, shortMoney, useMotionOK, vi } from './ui-kit';
 import { useApi } from './use-api';
 
 type MetricKey = 'deliveredNet' | 'closedNet' | 'deliveredOrders' | 'closedOrders';
@@ -138,7 +138,7 @@ export function MonthlyCompare({ month, end, posIds, team, onOpenRange }: {
               </Bar>
             </BarChart>
           </ChartContainer>
-          <div className="mt-2 overflow-x-auto">
+          <TableWrap className="mt-2">
             <table className="tbl text-[12px]">
               <thead><tr><th>Tuần</th><th className="n">{MONTH_NAMES(month)}</th><th className="n">So tuần trước</th><th className="n">{MONTH_NAMES(past[0])}</th><th className="n">So tháng trước</th>{past.slice(1).map((m) => <th key={m} className="n">{MONTH_NAMES(m)}</th>)}</tr></thead>
               <tbody>
@@ -154,7 +154,7 @@ export function MonthlyCompare({ month, end, posIds, team, onOpenRange }: {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableWrap>
         </>
       ) : (
         <ChartContainer className="h-72 w-full aspect-auto" config={config}>

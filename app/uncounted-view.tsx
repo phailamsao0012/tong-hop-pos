@@ -47,7 +47,7 @@ function NoteCell({ p, onSaved }: { p: Person; onSaved: () => void }) {
   };
   return (
     <div className="min-w-[180px]">
-      <input aria-label={`Nguyên nhân: ${p.name}`} className="w-full rounded-md border border-line bg-surface px-2 py-1 text-[12.5px] text-ink placeholder:text-ink-4 focus:border-primary focus:outline-none"
+      <input aria-label={`Nguyên nhân: ${p.name}`} className="tap w-full rounded-md border border-line bg-surface px-2 py-1 text-[12.5px] text-ink placeholder:text-ink-4 focus:border-primary focus:outline-none"
         placeholder="Ghi nguyên nhân…" value={value} disabled={busy} maxLength={500}
         onChange={(e) => setDraft(e.target.value)} onBlur={() => void save()} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setDraft(null); }} />
       {p.note && draft === null && <p className="mt-0.5 text-[10.5px] text-ink-3">{p.note.by} · {dt(p.note.at, true)}</p>}
@@ -171,7 +171,7 @@ export function UncountedView() {
           <section className="card p-4 text-[12.5px] text-ink-2">
             <h2 className="mb-1 text-[13.5px] font-semibold text-ink">Đang vẫn tính dù tên không có hậu tố</h2>
             <p className="flex flex-wrap gap-1.5">{data.extra.map((p) => <span key={p.id} className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5">{p.name}
-              {data.canEdit && <button type="button" className="cursor-pointer text-ink-3 hover:text-bad" aria-label={`Bỏ tính ${p.name}`} disabled={busy === p.id} onClick={() => void count(p.id, p.name, false)}>×</button>}</span>)}</p>
+              {data.canEdit && <button type="button" className="tap cursor-pointer text-ink-3 hover:text-bad" aria-label={`Bỏ tính ${p.name}`} disabled={busy === p.id} onClick={() => void count(p.id, p.name, false)}>×</button>}</span>)}</p>
           </section>
         )}
       </>}

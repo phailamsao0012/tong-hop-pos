@@ -106,7 +106,7 @@ export function GiaoViecChatView() {
       <p className={`text-xs ${late ? 'text-bad' : 'text-ink-3'}`}>{timeLabel(t)}{t.assigner_name ? ` · Giao bởi ${t.assigner_name}` : ''}</p>
       {t.status === 'chua_xong' && t.reason && <p className="mt-1 text-xs text-warn">Lý do: {t.reason}</p>}
       <div className="mt-2 grid grid-cols-4 gap-1" aria-label="Tiến độ">{STEPS.map((s, i) => <span key={s} className={`h-1.5 rounded-full ${t.status === 'huy' ? 'bg-line' : t.status === 'chua_xong' ? (i <= 2 ? 'bg-t-orange' : 'bg-line') : i <= step ? 'bg-primary' : 'bg-line'}`} />)}</div>
-      <div className="mt-1 grid grid-cols-4 text-[10px] text-ink-3">{['Mới giao', 'Đã nhận', 'Đang làm', 'Xong'].map(s => <span key={s}>{s}</span>)}</div>
+      <div className="mt-1 grid grid-cols-4 text-[11px] text-ink-3">{['Mới giao', 'Đã nhận', 'Đang làm', 'Xong'].map(s => <span key={s}>{s}</span>)}</div>
       {!['xong', 'huy'].includes(t.status) && <div className="mt-2 flex flex-wrap gap-2"><button className="btn sm" disabled={busy} onClick={() => void remind('task', t.no)}><BellRing className="size-3.5" aria-hidden />Nhắc tiến độ</button><button className="btn sm text-bad" disabled={busy} onClick={() => setCancelNo(t)}>Huỷ việc</button></div>}
     </div>;
   };
@@ -132,7 +132,7 @@ export function GiaoViecChatView() {
   const people = <aside className={`min-h-0 flex-col border-line min-[700px]:flex min-[700px]:border-r ${selected ? 'hidden' : 'flex'}`}>
     <div className="space-y-2 border-b border-line p-3">
       <label htmlFor="chat-search" className="relative block"><Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-ink-3" aria-hidden /><Input id="chat-search" aria-label="Tìm người" placeholder="Tìm tên, team" className="pl-8" value={q} onChange={e => setQ(e.target.value)} /></label>
-      <fieldset className="flex flex-wrap gap-1.5" aria-label="Lọc người">{([['all', 'Tất cả'], ['unread', 'Chưa đọc'], ['overdue', 'Quá hạn'], ['leader', 'Leader'], ['staff', 'Nhân viên']] as const).map(([value, label]) => <button key={value} aria-pressed={filter === value} onClick={() => setFilter(value)} className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${filter === value ? 'bg-primary text-primary-ink' : 'bg-surface-2 text-ink-2 hover:bg-surface-3'}`}>{label}</button>)}</fieldset>
+      <fieldset className="flex flex-wrap gap-1.5" aria-label="Lọc người">{([['all', 'Tất cả'], ['unread', 'Chưa đọc'], ['overdue', 'Quá hạn'], ['leader', 'Leader'], ['staff', 'Nhân viên']] as const).map(([value, label]) => <button key={value} aria-pressed={filter === value} onClick={() => setFilter(value)} className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-colors tap ${filter === value ? 'bg-primary text-primary-ink' : 'bg-surface-2 text-ink-2 hover:bg-surface-3'}`}>{label}</button>)}</fieldset>
     </div>
     <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-color:var(--line-3)_transparent] [scrollbar-width:thin] [scrollbar-gutter:stable]">
       {list && <div className="border-b border-line">

@@ -24,6 +24,7 @@ import {
   type SourceNote,
 } from '../lib/pancake/pancake';
 import { runScheduledSync } from '../lib/pancake/sync';
+import { DATA_CHANGED_KEY } from '../lib/ops/data-version';
 import { POS } from '../lib/shared/report-model';
 
 const at = '2026-10-27T03:00:00.000Z';
@@ -436,7 +437,8 @@ void test('cron đọc hàng chờ một lần, rút sau recent, lưu một lầ
   f.db.prepare = ((sql: string) => {
     if (sql === 'SELECT key,value FROM app_settings WHERE key IN (?,?)')
       reads++;
-    if (sql.startsWith('INSERT INTO app_settings')) saves++;
+    // Mốc "dữ liệu đổi" cho cache báo cáo (lib/ops/data-version.ts) không phải lượt lưu hàng chờ.
+    if (sql.startsWith('INSERT INTO app_settings') && !sql.includes(`'${DATA_CHANGED_KEY}'`)) saves++;
     return prepare(sql);
   }) as typeof f.db.prepare;
   const calls: string[] = [];

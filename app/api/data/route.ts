@@ -1,5 +1,6 @@
-import { env } from 'cloudflare:workers';
+import { allowedPos } from '@/lib/auth/access';
 import { getSessionUser } from '@/lib/auth/auth';
+import { customDataSources } from '@/lib/reports/custom-data';
 import {
   customerKey,
   type Assignment,
@@ -9,42 +10,13 @@ import {
 } from '@/lib/shared/report-model';
 
 export async function GET() {
-  if (!(await getSessionUser()))
+  const user = await getSessionUser();
+  if (!user)
     return Response.json(
       { error: 'Đăng nhập để xem dữ liệu.' },
       { status: 401 },
     );
-  const db = env.DB;
-  const [assignmentRows, orderRows, customerRows, shops, coverage] =
-    await Promise.all([
-      db
-        .prepare(
-          'SELECT * FROM assignments ORDER BY assigned_at DESC LIMIT 5001',
-        )
-        .all<Record<string, unknown>>(),
-      db
-        .prepare('SELECT * FROM orders ORDER BY created_at DESC LIMIT 5001')
-        .all<Record<string, unknown>>(),
-      db
-        .prepare('SELECT * FROM customers LIMIT 5001')
-        .all<Record<string, unknown>>(),
-      db
-        .prepare(
-          'SELECT last_sync_at, history_start FROM pos_shops WHERE last_sync_at IS NOT NULL ORDER BY last_sync_at DESC LIMIT 1',
-        )
-        .first<{ last_sync_at: string; history_start: string | null }>(),
-      db
-        .prepare(
-          'SELECT COUNT(*) AS connected_pos, MIN(last_sync_at) AS oldest_sync_at, MAX(history_start) AS latest_history_start, SUM(CASE WHEN history_start IS NULL THEN 1 ELSE 0 END) AS missing_history_start FROM pos_shops WHERE status=?',
-        )
-        .bind('connected')
-        .first<{
-          connected_pos: number;
-          oldest_sync_at: string | null;
-          latest_history_start: string | null;
-          missing_history_start: number;
-        }>(),
-    ]);
+  const { assignmentRows, orderRows, customerRows, shops, coverage } = await customDataSources(allowedPos(user), user.team);
   if (!assignmentRows.results.length && !orderRows.results.length)
     return Response.json({ mode: 'empty' }, { headers: { 'Cache-Control': 'no-store' } });
   if (

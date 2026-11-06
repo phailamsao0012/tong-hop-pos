@@ -1,12 +1,12 @@
 import { env } from 'cloudflare:workers';
 import { bossRoute } from '../me/route';
-import { listContacts, saveContact, deactivateContact, createPairCode, readZaloSetting, saveZaloSettings, saveBosses, DEFAULT_ZALO_SETTINGS, type Contact } from '@/lib/zalo/zalo-work';
+import { bossUserOptions, listContacts, saveContact, deactivateContact, createPairCode, readZaloSetting, saveZaloSettings, saveBosses, DEFAULT_ZALO_SETTINGS, type Contact } from '@/lib/zalo/zalo-work';
 export async function GET(request: Request) {
   return bossRoute(request, async (db, _actor, user) => ({
     contacts: await listContacts(db), settings: { ...DEFAULT_ZALO_SETTINGS, ...await readZaloSetting(db, 'zalo_settings_v1', {}) },
     owner: user.role === 'owner', demo: env.DEMO_MODE === '1', hasToken: user.role === 'owner' ? !!env.ZALO_BOT_TOKEN?.trim() : undefined,
     bosses: user.role === 'owner' ? await readZaloSetting(db, 'zalo_bosses_v1', []) : undefined,
-    users: user.role === 'owner' ? (await db.prepare("SELECT id,name,role FROM users WHERE disabled=0 AND role IN ('owner','director','lead') ORDER BY name").all()).results : undefined,
+    users: user.role === 'owner' ? await bossUserOptions(db) : undefined,
     outbox: env.DEMO_MODE === '1' ? (await readZaloSetting<unknown[]>(db, 'demo_zalo_outbox', [])).slice(-30).reverse() : [],
   }));
 }

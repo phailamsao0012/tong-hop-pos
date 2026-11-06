@@ -2,7 +2,7 @@ import { env } from 'cloudflare:workers';
 import { authorizeDevice } from '@/lib/auth/device-pair';
 import { validInsight, saveInsight } from '@/lib/ai/ai-insight';
 import type { Insight } from '@/lib/ai/ai-insight';
-import type { AiPack } from '@/lib/ai/ai-pack';
+import { readAiSetting, type AiPack } from '@/lib/ai/ai-pack';
 import { demoInsight, demoAiPack, demoStaffNames } from '@/lib/demo/ai-pack';
 import { isDemo } from '@/lib/demo/mode';
 import { insightForDisplay } from '@/lib/ai/ai-insight';
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   let value: unknown;
   try { value = JSON.parse(raw); } catch { return Response.json({ error: 'JSON không hợp lệ.' }, { status: 400 }); }
   if (!validInsight(value) || value.date !== todayVn()) return Response.json({ error: 'Kết quả sai schema hoặc ngày.' }, { status: 400 });
-  const row = await env.DB.prepare('SELECT value FROM app_settings WHERE key=?').bind(`ai_pack:${value.date}`).first<{ value: string }>();
+  const row = await readAiSetting(env.DB, `ai_pack:${value.date}`);
   if (!row) return Response.json({ error: 'Chưa có gói cùng ngày.' }, { status: 409 });
   return Response.json(await saveInsight(env.DB, value, JSON.parse(row.value) as AiPack));
 }
@@ -24,11 +24,11 @@ export async function GET() {
   if (!user) return unauthorized();
   // Phân tích toàn công ty: không trả cho tài khoản có phạm vi hẹp.
   if (user.role !== 'owner') return forbidden('Chỉ chủ hệ thống xem phân tích toàn công ty.');
-  const row = await env.DB.prepare('SELECT value FROM app_settings WHERE key=?').bind(`ai_insight:${todayVn()}`).first<{ value: string }>();
+  const row = await readAiSetting(env.DB, `ai_insight:${todayVn()}`);
   const insight: Insight | null = row ? JSON.parse(row.value) : isDemo() ? demoInsight(todayVn()) : null;
   let display = null;
   if (insight) {
-    const stored = await env.DB.prepare('SELECT value FROM app_settings WHERE key=?').bind(`ai_pack:${insight.date}`).first<{ value: string }>();
+    const stored = await readAiSetting(env.DB, `ai_pack:${insight.date}`);
     const pack: AiPack | null = stored ? JSON.parse(stored.value) : isDemo() ? demoAiPack(insight.date) : null;
     display = await insightForDisplay(env.DB, insight, pack, isDemo() ? { ...demoStaffNames } : {});
   }

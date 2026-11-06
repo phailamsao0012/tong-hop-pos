@@ -19,6 +19,7 @@ import { TrendNotes } from './overview-trends';
 import { takeNavHint } from './nav-focus';
 import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, dmy, money, pct, shortMoney, toast, useSort, vi } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
+import { SegmentHintNote } from './segment-hint-note';
 
 type Count = { label: string; n: number };
 type Report = VdReport & { period: { start: string; end: string }; syncedAt: string | null;
@@ -267,6 +268,7 @@ export function VanDonView() {
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset} onStart={setStart} onEnd={setEnd} loading={loading} onReload={reload}
         extra={<><span className="px-1 text-xs font-semibold text-ink-2">Xem theo</span><SegmentedControl<Level> ariaLabel="Xem theo" size="sm" value={level} onChange={setLevel} options={LEVELS} /></>} />
       <PosChips posIds={posIds} onChange={setPosIds} />
+      <SegmentHintNote />
       {!mktLens && <TrendNotes depts={['vandon']} />}
       {error && !report && <ErrorBox error={error} onRetry={reload} />}
       {!report && !error && <><SkeletonKpis count={5} className="xl:grid-cols-5" /><SkeletonTable rows={8} /></>}
@@ -275,24 +277,24 @@ export function VanDonView() {
           <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5" aria-busy={loading || undefined}>
             {/* Ngoại lệ tên thẻ do anh đặt trong plan A3 ngày 17/10/2026. */}
             {[
-              { key: 'confirmed', label: 'Đơn chốt', icon: BadgeCheck, count: t.confirmed, net: t.confirmedNet, at: t.atConfirmed, prev: t.closed, base: 'đơn vào Chờ xác nhận', definition: 'Đơn vào Chờ xác nhận trong kỳ đã qua Đã xác nhận, kể cả hủy sau đó. Doanh số là tổng giá trị các đơn này.' },
-              { key: 'packed', label: 'Đơn xác nhận', icon: BadgeCheck, count: t.packed, net: t.packedNet, at: t.atPacked, prev: t.confirmed, base: 'Đơn chốt', definition: 'Đơn vào Chờ xác nhận trong kỳ đã qua Đang đóng hàng, kể cả hủy sau đóng hàng. Doanh số là tổng giá trị các đơn này.' },
-              { key: 'sent', label: 'Đơn chuyển', icon: Send, count: t.sent, net: t.sentNet, at: t.atSent, prev: t.packed, base: 'Đơn xác nhận', definition: bySent ? 'Đơn giao ĐVVC lần đầu trong kỳ, theo ngày gửi hàng; khác nhóm hai thẻ trước nên tỷ lệ có thể vượt 100%. Doanh số là tổng giá trị các đơn này.' : 'Đã giao ĐVVC trong các đơn vào Chờ xác nhận trong kỳ. Doanh số là tổng giá trị các đơn này.' },
-              { key: 'delivered', label: 'Đơn nhận', icon: ShoppingCart, count: t.delivered, net: t.deliveredNet, at: t.atDelivered, prev: t.sent, base: 'Đơn chuyển', definition: 'Đã nhận hoặc đã thu tiền; cùng cơ sở kỳ với Đơn chuyển. Doanh số là tổng giá trị các đơn này.' },
-              { key: 'returned', label: 'Đơn hoàn', icon: Undo2, count: t.returned, net: t.returnedNet, at: t.atReturned, prev: t.delivered, base: 'Đơn nhận', definition: 'Đang hoàn, hoàn một phần hoặc đã hoàn; cùng cơ sở kỳ với Đơn chuyển. Theo đơn = hoàn ÷ đơn chuyển; theo doanh số = giá trị hoàn ÷ doanh số chuyển.' },
+              { key: 'confirmed', label: 'Đơn chốt', icon: BadgeCheck, count: t.confirmed, net: t.confirmedNet, at: t.atConfirmed, prev: t.closed, base: 'đơn vào Chờ xác nhận', definition: 'Đơn vào Chờ xác nhận trong kỳ đã qua Đã xác nhận, kể cả hủy sau đó. Doanh số chuyển đi là tổng giá trị các đơn này.' },
+              { key: 'packed', label: 'Đơn xác nhận', icon: BadgeCheck, count: t.packed, net: t.packedNet, at: t.atPacked, prev: t.confirmed, base: 'Đơn chốt', definition: 'Đơn vào Chờ xác nhận trong kỳ đã qua Đang đóng hàng, kể cả hủy sau đóng hàng. Doanh số chuyển đi là tổng giá trị các đơn này.' },
+              { key: 'sent', label: 'Đơn chuyển', icon: Send, count: t.sent, net: t.sentNet, at: t.atSent, prev: t.packed, base: 'Đơn xác nhận', definition: bySent ? 'Đơn giao ĐVVC lần đầu trong kỳ, theo ngày gửi hàng; khác nhóm hai thẻ trước nên tỷ lệ có thể vượt 100%. Doanh số chuyển đi là tổng giá trị các đơn này.' : 'Đã giao ĐVVC trong các đơn vào Chờ xác nhận trong kỳ. Doanh số chuyển đi là tổng giá trị các đơn này.' },
+              { key: 'delivered', label: 'Đơn nhận', icon: ShoppingCart, count: t.delivered, net: t.deliveredNet, at: t.atDelivered, prev: t.sent, base: 'Đơn chuyển', definition: 'Đã nhận hoặc đã thu tiền; cùng cơ sở kỳ với Đơn chuyển. Doanh số chuyển đi là tổng giá trị các đơn này.' },
+              { key: 'returned', label: 'Đơn hoàn', icon: Undo2, count: t.returned, net: t.returnedNet, at: t.atReturned, prev: t.delivered, base: 'Đơn nhận', definition: 'Đang hoàn, hoàn một phần hoặc đã hoàn; cùng cơ sở kỳ với Đơn chuyển. Theo đơn = hoàn ÷ đơn chuyển; theo doanh số chuyển đi = giá trị hoàn ÷ doanh số chuyển đi.' },
             ].map((c) => <KpiCard key={c.key} icon={c.icon} label={c.label} value={vi.format(c.count)} onClick={() => openCard(c.key)} active={card === c.key} tooltip={{ definition: c.definition, period }} note={<>
-              <span className="block">Doanh số {money(c.net)}</span>
+              <span className="block">Doanh số chuyển đi {money(c.net)}</span>
               <span className="block">{pct(share(c.count, c.prev))} so với {c.base}</span>
               <span className="block">Đang nằm ở bước này: {vi.format(c.at)}</span>
-              {c.key === 'returned' && <><span className="block">Theo đơn: {pct(t.returnRate)} · hoàn ÷ đơn chuyển</span><span className="block">Theo doanh số: {pct(t.returnRateNet)} · giá trị hoàn ÷ doanh số chuyển</span></>}
+              {c.key === 'returned' && <><span className="block">Theo đơn: {pct(t.returnRate)} · hoàn ÷ đơn chuyển</span><span className="block">Theo doanh số chuyển đi: {pct(t.returnRateNet)} · giá trị hoàn ÷ doanh số chuyển đi</span></>}
             </>} />)}
           </div>
           <AdvisorPanel dept="vandon" />
-          <p className="text-xs text-ink-3"><button type="button" className="underline" onClick={() => openCard('waiting')}>Còn chờ xác nhận {vi.format(t.waiting)}</button> · <button type="button" className="underline" onClick={() => openCard('failed')}>Không xác nhận được {vi.format(t.failed)}</button></p>
+          <p className="text-xs text-ink-3"><button type="button" className="underline tap" onClick={() => openCard('waiting')}>Còn chờ xác nhận {vi.format(t.waiting)}</button> · <button type="button" className="underline tap" onClick={() => openCard('failed')}>Không xác nhận được {vi.format(t.failed)}</button></p>
           {card && <ChartCard title="Danh sách đơn tính ra số đã chọn" subtitle={period}>
             <Button onClick={() => setCard(null)}>Đóng</Button>
             {drill.error ? <ErrorBox error={drill.error} onRetry={drill.reload} /> : !drill.data ? <SkeletonTable rows={5} /> : <>
-              <TableWrap><table className="tbl"><thead><tr><th>Mã đơn</th><th>Trạng thái</th><th>Doanh số</th></tr></thead><tbody>{drill.data.orders.map((o) => <tr key={o.id}><td>{o.orderId}</td><td>{STATUS_NAMES[o.status] ?? 'Chưa rõ'}</td><td>{money(o.net)}</td></tr>)}</tbody></table></TableWrap>
+              <TableWrap><table className="tbl"><thead><tr><th>Mã đơn</th><th>Trạng thái</th><th>Doanh số chuyển đi</th></tr></thead><tbody>{drill.data.orders.map((o) => <tr key={o.id}><td>{o.orderId}</td><td>{STATUS_NAMES[o.status] ?? 'Chưa rõ'}</td><td>{money(o.net)}</td></tr>)}</tbody></table></TableWrap>
               {!drill.data.orders.length && <EmptyState text="Không có đơn" />}
               <Button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 100))}>Trước</Button><Button disabled={!drill.data.more} onClick={() => setOffset(offset + 100)}>Tiếp</Button>
             </>}

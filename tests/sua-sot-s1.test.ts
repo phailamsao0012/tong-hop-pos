@@ -26,6 +26,7 @@ void test('S1: card info excludes legacy warehouse definitions and keeps current
   assert.equal(info({ definitions }), 'groups packed waiting');
   assert.doesNotMatch(String(info({ definitions })), /XN kho/);
   assert.equal(info(null), undefined);
-  const route = read('../app/api/reports/product-groups/route.ts');
-  assert.match(route.slice(route.indexOf('    definitions: {')), /whConfirmed:/);
+  // Định nghĩa của báo cáo nằm ở lib từ cải tổ B4 (05/11/2026), route chỉ gọi lib.
+  const report = read('../lib/reports/product-groups-report.ts');
+  assert.match(report.slice(report.indexOf('    definitions: {')), /whConfirmed:/);
 });

@@ -19,6 +19,7 @@ import { useApi } from './use-api';
 import { SheetCostLink } from './sheet-cost-link';
 import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, dmy, money, pct, shortMoney, toast, useSort, vi } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
+import { SegmentHintNote } from './segment-hint-note';
 
 type Roas = Awaited<ReturnType<typeof roasReport>>;
 type Draft = { day: string; marketerId: string; amount: number; campaign?: string; note?: string };
@@ -124,6 +125,7 @@ export function MktRoasView({ owner = false }: { owner?: boolean }) {
         onPreset={setPreset}
         onStart={setStart} onEnd={setEnd} />
       <PosChips posIds={posIds} onChange={setPosIds} />
+      <SegmentHintNote />
       {error && !r && <ErrorBox error={error} onRetry={reload} />}
       {posIds.length < POS.length && <p className="notice warn m-0 text-[12.5px]">Chi phí được nhập theo marketer cho mọi POS, còn doanh thu đang lọc {posIds.length}/{POS.length} POS, nên ROAS lúc này thấp hơn thực tế. Chọn "Tất cả" POS để xem ROAS đúng.</p>}
       {!r && !error && <><SkeletonKpis count={5} /><SkeletonTable rows={5} cols={6} /></>}
@@ -230,7 +232,7 @@ export function MktRoasView({ owner = false }: { owner?: boolean }) {
                       <td className="text-left">{e.marketerName}</td>
                       <td className="n">{money(e.amount)}</td>
                       <td className="text-left text-ink-2">{[e.campaign, e.note].filter(Boolean).join(' · ') || '—'}</td>
-                      <td><button type="button" aria-label="Xóa dòng" className="grid size-7 place-items-center rounded-md text-ink-3 hover:bg-bad-bg hover:text-bad" onClick={() => void remove(e.id)}><Trash2 size={14} /></button></td>
+                      <td><button type="button" aria-label="Xóa dòng" className="grid size-7 place-items-center rounded-md text-ink-3 hover:bg-bad-bg tap hover:text-bad" onClick={() => void remove(e.id)}><Trash2 size={14} /></button></td>
                     </tr>
                   ))}</tbody>
                 </table>

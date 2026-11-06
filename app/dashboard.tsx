@@ -109,7 +109,7 @@ import {
 import { installApiFetch } from './api-fetch';
 import { setScope } from './access-store';
 import { DEPT_LAYOUT, firstDeptOf, layoutFor } from '@/lib/shared/nav-structure';
-import { ROLE_LABELS, canView, canViewForecast, isOwner } from '@/lib/auth/access';
+import { ROLE_LABELS, canExport, canView, canViewForecast, isOwner } from '@/lib/auth/access';
 import {
   POS,
   PRODUCTS,
@@ -126,6 +126,8 @@ const GiaoViecView = lazy(() => import('./giao-viec-view').then(m => ({ default:
 const GiaoViecChatView = lazy(() => import('./giao-viec-chat-view').then(m => ({ default: m.GiaoViecChatView })));
 const GiaoViecHopView = lazy(() => import('./giao-viec-hop-view').then(m => ({ default: m.GiaoViecHopView })));
 const GiaoViecZaloView = lazy(() => import('./giao-viec-zalo-view').then(m => ({ default: m.GiaoViecZaloView })));
+const GiaoViecKpiView = lazy(() => import('./giao-viec-kpi-view').then(m => ({ default: m.GiaoViecKpiView })));
+const GiaoViecBaoCaoView = lazy(() => import('./giao-viec-bao-cao-view').then(m => ({ default: m.GiaoViecBaoCaoView })));
 const UsersPanel = lazy(() => import('./users-panel').then((m) => ({ default: m.UsersPanel })));
 const OverviewView = lazy(() => import('./overview-view').then((m) => ({ default: m.OverviewView })));
 const SchedulerPanel = lazy(() => import('./scheduler-panel').then((m) => ({ default: m.SchedulerPanel })));
@@ -180,7 +182,7 @@ import { AiBotGlyph } from './ai-bot';
 
 const MentorView = lazy(() => import('./mentor-view').then((m) => ({ default: m.MentorView })));
 
-type View = 'giao-viec' | 'giao-viec-chat' | 'giao-viec-hop' | 'giao-viec-zalo'
+type View = 'giao-viec' | 'giao-viec-chat' | 'giao-viec-hop' | 'giao-viec-zalo' | 'giao-viec-kpi' | 'giao-viec-bao-cao'
   | 'ai-ask'
   | 'mentor'
   | 'tasks'
@@ -431,6 +433,8 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'giao-viec-chat', label: 'Chat', icon: UsersRound },
   { id: 'giao-viec-hop', label: 'Họp', icon: UsersRound },
   { id: 'giao-viec-zalo', label: 'Danh bạ Zalo', icon: UsersRound },
+  { id: 'giao-viec-kpi', label: 'KPI team', icon: UsersRound },
+  { id: 'giao-viec-bao-cao', label: 'Cài đặt báo cáo', icon: UsersRound },
   { id: 'config', label: 'Cài đặt', icon: Settings2 },
   { id: 'audit', label: 'Nhật ký hoạt động', icon: ScrollText },
   { id: 'security', label: 'Bảo mật tài khoản', icon: Settings2 },
@@ -777,12 +781,12 @@ function SidebarStatus({ good, bad, sub, onOpen }: { good: number; bad: { name: 
   );
 }
 const TABS: [View, string, typeof Activity][] = [['center', 'Điều hành', LayoutDashboard], ['overview', 'Doanh thu', BarChart3], ['shift', 'Trong ngày', Activity], ['customers', 'Khách', UsersRound]];
-/** Thanh tab dưới cùng trên điện thoại; "Thêm" mở ngăn kéo menu (state openMobile của SidebarProvider). */
-function MobileTabBar({ view, onSelect }: { view: View; onSelect: (v: View) => void }) {
+/** Thanh tab dưới cùng trên điện thoại; "Thêm" mở ngăn kéo menu (state openMobile của SidebarProvider). Chỉ hiện trang người xem có quyền. */
+function MobileTabBar({ view, onSelect, can }: { view: View; onSelect: (v: View) => void; can: (id: string) => boolean }) {
   const { setOpenMobile } = useSidebar();
   return (
     <nav className="tabbar md:hidden" aria-label="Điều hướng nhanh">
-      {TABS.map(([id, label, Icon]) => (
+      {TABS.filter(([id]) => can(id)).map(([id, label, Icon]) => (
         <button key={id} type="button" onClick={() => onSelect(id)} aria-current={view === id ? 'page' : undefined} className={`tab ${view === id ? 'is-active' : ''}`}><Icon size={20} aria-hidden="true" />{label}</button>
       ))}
       <button type="button" onClick={() => setOpenMobile(true)} className="tab" aria-label="Mở menu đầy đủ"><Menu size={20} aria-hidden="true" />Thêm</button>
@@ -822,7 +826,8 @@ installApiFetch();
 export default function Dashboard({ user, initialView, demo = false }: { user: SessionUser; initialView?: string; demo?: boolean }) {
   const [workBoss, setWorkBoss] = useState(false);
   useEffect(() => { let live = true; fetch('/api/giao-viec/me', { cache: 'no-store' }).then(r => r.json() as Promise<{ boss?: boolean }>).then(d => { if (live) setWorkBoss(d.boss === true); }).catch(() => {}); return () => { live = false; }; }, []);
-  const canNavigate = useCallback((id: string) => id.startsWith('giao-viec') ? workBoss : canView(user, id), [workBoss, user]);
+  // KPI team: chủ hệ thống đặt; leader / mentor / giám đốc xem KPI team mình cầm (05/11/2026). Các tab Giao việc khác theo người được giao việc.
+  const canNavigate = useCallback((id: string) => id === 'giao-viec-kpi' ? workBoss || ['director', 'lead', 'mentor'].includes(user.role) : id.startsWith('giao-viec') ? workBoss : canView(user, id), [workBoss, user]);
   setSnapshotScope(user.userId);
   // Trang mở thẳng bằng ?view= chỉ biết ở trình duyệt: phần phụ thuộc trang hiện tại ngoài Suspense (thanh tab bộ phận) vẽ sau khi gắn để khớp HTML máy chủ.
   const [mounted, setMounted] = useState(false);
@@ -1326,7 +1331,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   const title = navigation.find((n) => n.id === view)?.label ?? '';
   const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
   const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  const SELF_HEADED: View[] = ['giao-viec', 'giao-viec-chat', 'giao-viec-hop', 'giao-viec-zalo', 'mentor', 'returns', 'growth', 'tasks', 'custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'ai-ask', 'uncounted'];
+  const SELF_HEADED: View[] = ['giao-viec', 'giao-viec-chat', 'giao-viec-hop', 'giao-viec-zalo', 'giao-viec-kpi', 'giao-viec-bao-cao', 'mentor', 'returns', 'growth', 'tasks', 'custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'ai-ask', 'uncounted'];
   const changeFilters = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
   const setPeriodChoice = (choice: string) => {
@@ -1542,8 +1547,8 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           </>}
           <ThemeSwitch className="hidden sm:inline-flex" />
           <div className="user">
-            <button type="button" title="Bảo mật tài khoản" aria-label="Bảo mật tài khoản" onClick={() => setView('security')} className="grid size-[26px] place-items-center rounded-full bg-primary text-[10.5px] font-semibold tracking-[.02em] text-primary-ink transition-colors duration-[var(--dur)] hover:bg-primary-2">{initials(user.displayName)}</button>
-            <div className="hidden max-w-40 whitespace-nowrap leading-[1.15] xl:block [&>div]:truncate" title={`${ROLE_LABELS[user.role]}${user.title ? ` · ${user.title}` : ''}`}>
+            <button type="button" title="Bảo mật tài khoản" aria-label="Bảo mật tài khoản" onClick={() => setView('security')} className="grid size-[26px] max-md:size-8 pointer-coarse:size-8 place-items-center rounded-full bg-primary text-[10.5px] font-semibold tracking-[.02em] text-primary-ink transition-colors duration-[var(--dur)] hover:bg-primary-2">{initials(user.displayName)}</button>
+            <div className="hidden max-w-40 whitespace-nowrap leading-[1.15] 2xl:block [&>div]:truncate" title={`${ROLE_LABELS[user.role]}${user.title ? ` · ${user.title}` : ''}`}>
               <div className="text-xs font-semibold text-ink">{user.displayName}</div>
               <div className="text-[10.5px] text-ink-3">{user.title || ROLE_LABELS[user.role]}</div>
             </div>
@@ -1570,7 +1575,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
             <button type="button" className="rounded-full p-1.5 transition-colors duration-[var(--dur)] hover:bg-bad-bg hover:text-bad" title="Thoát trình chiếu (Esc)" aria-label="Thoát trình chiếu" onClick={stopPresenting}><X size={16} /></button>
           </div>
         )}
-        {!presenting && <MobileTabBar view={view} onSelect={goTo} />}
+        {!presenting && <MobileTabBar view={view} onSelect={goTo} can={canNavigate} />}
         <div className="refresh-bar" hidden={!refresh.busy} aria-hidden="true"><i /></div>
         <RefreshStick busy={refresh.busy} />
         <main className={`${refreshClass} ${presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1360px] px-4 pt-4 pb-[calc(88px+env(safe-area-inset-bottom,0px))] sm:pt-6 md:px-6 md:pb-12'}`} style={presenting ? { zoom: 1.15 } : undefined}>
@@ -1579,7 +1584,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               <AlertTriangle size={15} className="shrink-0" aria-hidden="true" />
               {PAGE_DEPT.get(view) && PAGE_DEPT.get(view) !== team ? <span><strong>Trang {TEAM_LABELS[PAGE_DEPT.get(view)!]} đang chọn {TEAM_LABELS[team]}</strong>: chỉ tính người vừa thuộc {TEAM_LABELS[PAGE_DEPT.get(view)!]} vừa thuộc {TEAM_LABELS[team]}. Bấm &quot;Tất cả&quot; hoặc &quot;{TEAM_LABELS[PAGE_DEPT.get(view)!]}&quot; ở thanh trên để xem số.</span>
               : <span><strong>Đang lọc riêng nhóm {TEAM_LABELS[team]}</strong> — mọi số trên trang chỉ tính đơn, khách và data do nhân viên {team === 'sale' ? 'Sale / bán hàng' : 'CSKH'} phụ trách, nên sẽ thấp hơn Pancake. Bấm "Tất cả" ở thanh trên (hoặc nút bên phải) để so với Pancake.</span>}
-              <button type="button" className="link ml-auto shrink-0 text-xs font-semibold underline" onClick={() => setTeam('all')}>Xem tất cả</button>
+              <button type="button" className="link tap ml-auto shrink-0 text-xs font-semibold underline" onClick={() => setTeam('all')}>Xem tất cả</button>
             </div>
           )}
           {mktLens && <output className="notice warn mb-4">Đang xem team MKT {mktLens.name}: chỉ tính đơn có Marketer thuộc team này, Sale và CSKH là người chốt các đơn đó.</output>}
@@ -1590,7 +1595,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               {UNIT_VIEWS.includes(view)
                 ? <span><strong>Đang xem riêng team {hrUnit.name}</strong> — số trên trang chỉ tính người đang thuộc team này {hrUnit.id.startsWith('wt_') ? 'theo bảng chia team ở Cài đặt' : 'bên web nhân sự'} (theo team hiện tại: người chuyển team thì số các kỳ trước đi theo team mới; người đã nghỉ không tính).</span>
                 : <span><strong>Trang này chưa lọc được theo team</strong> — đang hiện số cả nhóm {TEAM_LABELS[team]}, không riêng team {hrUnit.name}. Xem theo team ở Tổng quan Sale / CSKH, Tổng quan POS, Theo team và Vận đơn.</span>}
-              <button type="button" className="link ml-auto shrink-0 text-xs font-semibold underline" onClick={() => setHrUnit(null)}>Bỏ chọn team</button>
+              <button type="button" className="link tap ml-auto shrink-0 text-xs font-semibold underline" onClick={() => setHrUnit(null)}>Bỏ chọn team</button>
             </div>
           )}
           {(() => {
@@ -1629,7 +1634,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               ) : undefined}
             />
           )}
-          {!['giao-viec', 'giao-viec-chat', 'giao-viec-hop', 'giao-viec-zalo', 'mentor', 'growth', 'custom', 'config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'ai-ask', 'uncounted'].includes(view) && (
+          {!['giao-viec', 'giao-viec-chat', 'giao-viec-hop', 'giao-viec-zalo', 'giao-viec-kpi', 'giao-viec-bao-cao', 'mentor', 'growth', 'custom', 'config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'ai-ask', 'uncounted'].includes(view) && (
             <Toolbar className="mb-5">
               <span className="px-1.5 text-[12.5px] font-semibold text-ink-2">
                 Bộ lọc
@@ -1707,13 +1712,13 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {!gated && canView(user, view) && view === 'growth' && <GrowthView key={activeDept} navDept={activeDept} />}
           {!gated && view === 'batches' && <BatchesView />}
           {!gated && view === 'raw-orders' && <RawOrdersView onSyncNow={() => { void syncRecentAll(true); }} syncing={autoSyncing} />}
-          {!gated && view === 'customers' && <CustomersPage key={searchQuery} initialQ={searchQuery} />}
-          {!gated && view === 'dormant' && <CustomersView mode="dormant" />}
+          {!gated && view === 'customers' && <CustomersPage key={searchQuery} initialQ={searchQuery} canExport={canExport(user)} />}
+          {!gated && view === 'dormant' && <CustomersView mode="dormant" canExport={canExport(user)} />}
           {!gated && view === 'repurchase' && <RepurchaseView />}
           {!gated && view === 'monthly' && <MonthlyView onNavigate={(v) => goTo(v as View)} />}
           {!gated && view === 'pipeline' && <PipelineView />}
           {!gated && view === 'van-don' && <VanDonView />}
-          {!gated && view === 'calls' && <CallsView />}
+          {!gated && view === 'calls' && <CallsView canExport={canExport(user)} />}
           {!gated && view === 'origin' && <OriginView />}
           {!gated && view === 'cskh-overview' && <TeamOverviewView key="cskh" team="cskh" kpi={canView(user, 'cskh-kpi')} onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
           {!gated && view === 'sale-overview' && <TeamOverviewView key="sale" team="sale" onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
@@ -1738,6 +1743,8 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {!gated && workBoss && view === 'giao-viec-chat' && <GiaoViecChatView />}
           {!gated && workBoss && view === 'giao-viec-hop' && <GiaoViecHopView />}
           {!gated && workBoss && view === 'giao-viec-zalo' && <GiaoViecZaloView />}
+          {!gated && canNavigate('giao-viec-kpi') && view === 'giao-viec-kpi' && <GiaoViecKpiView owner={isOwner(user)} onOpen={(v) => goTo(v)} />}
+          {!gated && workBoss && view === 'giao-viec-bao-cao' && <GiaoViecBaoCaoView />}
           {!gated && view === 'audit' && isOwner(user) && <AuditView />}
           {!gated && view === 'dispatch' && isOwner(user) && <DispatchView />}
           {!gated && view === 'config' && isOwner(user) && cfgSection === null && (

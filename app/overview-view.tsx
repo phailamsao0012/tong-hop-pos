@@ -8,7 +8,8 @@ import { PancakeReference } from './pancake-reference';
 import { OverviewSections, SectionsGrid, type SectionsReport } from './overview-sections';
 import { StatusPanel, TrendNotes, TrendPanel, usePref, useStatusStyle, useTrends } from './overview-trends';
 import { PosCombined, PosMultiples } from './pos-multiples';
-import { focusAfterNav } from './nav-focus';
+import { focusAfterNav, setNavHint } from './nav-focus';
+import { segmentDrillHint } from '@/lib/shared/drill-hint';
 import { UncountedStaff } from './uncounted-staff';
 import { RATE_BASES, closeRateBase, closeRateOf, closeRateTop, rateLevel } from '@/lib/reports/metrics';
 import { useMetricSettings } from './metric-settings';
@@ -651,7 +652,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
                     const rate = closeRateOf(r, ms.rateBase);
                     return (
                       <tr key={`${r.posId}:${r.sellerId || 'none'}`}>
-                        <td className="font-medium"><span className="num mr-2 inline-block w-4 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span>{r.name}<span className="ml-1.5 text-[10px] font-normal text-ink-3 sm:hidden">{deptShort(r.department)}</span></td>
+                        <td className="font-medium"><span className="num mr-2 inline-block w-4 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span>{r.name}<span className="ml-1.5 text-[11px] font-normal text-ink-3 sm:hidden">{deptShort(r.department)}</span></td>
                         {splitPos && <td className="text-xs"><PosBadge posId={r.posId} size={16} className="mr-1 align-middle" />{posName(r.posId)}</td>}
                         <td className="mut hidden text-xs sm:table-cell" title={r.department ?? ''}>{deptShort(r.department)}</td>
                         {team === 'cskh' && <><td className="n">{vi.format(r.closedOrders)}</td><td className="n">{pct(closeRateOf(r, ms.rateBase))}</td></>}
@@ -732,5 +733,10 @@ function LensSections({ start, end, posIds, productSegment, onNavigate }: { star
   const api = useApi<SectionsReport>('/api/reports/sections?'+params, { keep: false });
   if (api.error) return <ErrorBox error={api.error} onRetry={api.reload} />;
   if (!api.data) return null;
-  return <SectionsGrid data={api.data} packedParams={params} onDrill={onNavigate ? (key) => onNavigate(key.startsWith('sale.') ? 'sale-overview' : key.startsWith('cskh.') ? 'cskh-overview' : key.startsWith('mkt.') ? 'marketing' : 'van-don') : undefined} />;
+  const drill = onNavigate ? (key: string) => {
+    const seg = segmentDrillHint(productSegment);
+    if (seg) setNavHint(seg);
+    onNavigate(key.startsWith('sale.') ? 'sale-overview' : key.startsWith('cskh.') ? 'cskh-overview' : key.startsWith('mkt.') ? 'marketing' : 'van-don');
+  } : undefined;
+  return <SectionsGrid data={api.data} packedParams={params} onDrill={drill} />;
 }

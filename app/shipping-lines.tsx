@@ -78,7 +78,7 @@ export function ShippingLines({ start, end, posIds, basis, team }: { start: stri
     <ChartCard icon={Truck} title="Vận đơn theo dòng sản phẩm"
       subtitle="Mỗi dòng chuyển đi bao nhiêu đơn, hoàn bao nhiêu, doanh số chuyển đi và giá trị hoàn, tỷ lệ hoàn theo đơn và theo giá trị. Chọn team MKT để xem riêng từng team."
       info={data ? Object.entries(data.definitions).map(([k, v]) => `${k}: ${v}`).join('\n') : undefined}
-      action={<button type="button" className="text-sm text-primary underline" onClick={exportExcel} disabled={!data}>Xuất Excel</button>}>
+      action={<button type="button" className="tap text-sm text-primary underline" onClick={exportExcel} disabled={!data}>Xuất Excel</button>}>
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <SegmentedControl size="sm" ariaLabel="Cách chia dòng sản phẩm" options={DIMS} value={dim} onChange={setDim} />
         <SegmentedControl size="sm" ariaLabel="Team MKT" value={teamId} onChange={setTeamId}

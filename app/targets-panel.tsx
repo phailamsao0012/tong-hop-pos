@@ -220,7 +220,7 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
                 <tbody>
                   {visibleEmployees.map((e) => (
                     <tr key={e.id}>
-                      <td className="font-medium">{e.name}{!e.active && <span className="ml-1.5 rounded-[4px] bg-t-gray-bg px-1 py-px text-[10px] font-semibold text-t-gray">nghỉ</span>}</td>
+                      <td className="font-medium">{e.name}{!e.active && <span className="ml-1.5 rounded-[4px] bg-t-gray-bg px-1 py-px text-[11px] font-semibold text-t-gray">nghỉ</span>}</td>
                       <td className="mut text-xs">{e.department ?? '—'}</td>
                       <td className="n">{moneyInput('employee', e.id, e.name)}</td>
                       <td className="n">{rateInput(e.id, e.name)}</td>

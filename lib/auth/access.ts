@@ -11,7 +11,7 @@ export const parseRole = (v: unknown): Role => v === 'owner' || v === 'admin' ? 
 export const VIEW_LABELS: Record<string, string> = {
   'ai-ask': 'Hỏi AI',
   mentor: 'Team của tôi',
-  'giao-viec': 'Giao việc', 'giao-viec-chat': 'Chat', 'giao-viec-hop': 'Họp', 'giao-viec-zalo': 'Danh bạ Zalo',
+  'giao-viec': 'Giao việc', 'giao-viec-chat': 'Chat', 'giao-viec-hop': 'Họp', 'giao-viec-zalo': 'Danh bạ Zalo', 'giao-viec-kpi': 'KPI team', 'giao-viec-bao-cao': 'Cài đặt báo cáo',
   tasks: 'Việc của tôi', returns: 'Lý do hoàn',
   center: 'Điều hành', overview: 'Tổng quan POS', shift: 'Trong ngày · chốt nóng',
   'cskh-overview': 'Tổng quan CSKH', 'sale-overview': 'Tổng quan Sale',
@@ -42,6 +42,23 @@ export const DEPT_VIEWS: Record<'sale' | 'cskh', string[]> = {
 };
 const scopeViews = (s: TeamScope) => s.dept === 'all' ? [...DEPT_VIEWS.sale, ...DEPT_VIEWS.cskh] : DEPT_VIEWS[s.dept];
 
+/** Xuất Excel danh sách khách (Hồ sơ khách hàng, Khách lâu chưa mua) và lịch sử cuộc gọi: mọi vai trò trừ nhân viên
+ *  (anh Vũ 06/11/2026: "giám đốc phải xuất được, trừ nhân viên mới k được"). */
+export const OWNER_EXPORT_VIEWS = ['customers', 'dormant', 'calls'];
+export const canExport = (a: { role: Role }) => a.role !== 'staff';
+export const canExportView = (a: { role: Role }, view: string) => !OWNER_EXPORT_VIEWS.includes(view) || canExport(a);
+/** Số khách tối đa một lượt tải danh sách khách cho vai trò không được xuất (đủ cho "Xem toàn bộ" 5.000 dòng, không đủ để tải hết). */
+export const NON_OWNER_MAX_ROWS = 5000;
+/** Báo cáo mà nội dung trả về đổi theo trang được cấp của từng tài khoản (không chỉ theo vai trò / URL đã thu hẹp):
+ *  khoá cache phải kèm phạm vi người xem (cacheScopeFor), để người này không nhận bản tính cho người khác. */
+export const VIEWER_SCOPED_REPORTS = ['/api/reports/returns', '/api/reports/advisor', '/api/reports/trend-cards'];
+export function cacheScopeFor(a: Access, pathname: string): string {
+  if (!VIEWER_SCOPED_REPORTS.includes(pathname)) return '';
+  const views = a.views === null ? '*' : [...a.views].sort().join(',');
+  const pos = a.posIds === null ? '*' : [...a.posIds].sort().join(',');
+  const scope = a.teamScope ? `${a.teamScope.dept}:${[...a.teamScope.ids].sort().join(',')}` : '';
+  return `v=${views};p=${pos};t=${a.team};s=${scope}`;
+}
 export const canViewForecast = (a: Access) => isOwner(a) || a.role === 'director' && a.posIds === null && a.team === 'all';
 export const isOwner = (a: { role: Role }) => a.role === 'owner';
 /** Trang KPI theo đầu người (CSKH, Sale): số nhạy cảm, chỉ chủ hệ thống xem và đặt được (giám đốc cũng không). */

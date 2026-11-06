@@ -1,4 +1,5 @@
 import { addUsage, cycleSummary, observeD1, type UsageDay } from '@/lib/ops/d1-usage';
+import { markDataChanged, trackDataWrites } from '@/lib/ops/data-version';
 import { DurableObject } from 'cloudflare:workers';
 import { DEFAULT_BUDGET, WRITE_LIMIT_ERROR, buildStatsMonth, runScheduledSync } from '@/lib/pancake/sync';
 import { MKT_EPOCH, MKT_READY_KEY, buildMktMonth } from '@/lib/reports/stats-mkt';
@@ -347,10 +348,20 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
       if (blocked) { await this.ctx.storage.put('state', s); await this.watch(s, { ok: true, skipped }, addUsage(await this.ctx.storage.get<UsageDay[]>('usage') ?? [], day, stages, sizeBytes)); return { backfillPending: true, blocked: true }; }
       s.lastError = null;
       s.backfillPending = result.backfillPending;
-      if (!result.writeLimitHit) s.writesUsed += await this.buildPendingStats(s, observeD1(this.env.DB, (meta) => {
-        stages.stats = (stages.stats ?? 0) + Number(meta.rows_written ?? 0);
-        sizeBytes = typeof meta.size_after === 'number' ? meta.size_after : null;
-      }));
+      if (!result.writeLimitHit) {
+        // Dựng lại số liệu ngày / khách là đổi số trên báo cáo: ghi mốc "dữ liệu đổi" cho cache (lib/ops/data-version.ts).
+        const tracker = trackDataWrites(this.env.DB);
+        const statsDb = observeD1(tracker.db, (meta) => {
+          stages.stats = (stages.stats ?? 0) + Number(meta.rows_written ?? 0);
+          sizeBytes = typeof meta.size_after === 'number' ? meta.size_after : null;
+        });
+        try { s.writesUsed += await this.buildPendingStats(s, statsDb); } finally {
+          if (tracker.changed()) {
+            // Một dòng app_settings: cộng vào hạn mức ngày, không tính vào giai đoạn "stats" của bảng lượt ghi.
+            try { s.writesUsed += await markDataChanged(this.env.DB); } catch (error) { console.error('mark data changed failed', error); }
+          }
+        }
+      }
       await this.ensureWebhook(s);
       // Cảnh báo Telegram sau khi dữ liệu đã cập nhật.
       try { await runAlerts(this.env, new Date()); } catch (error) { console.error('alerts failed', error); }

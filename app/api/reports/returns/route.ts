@@ -1,11 +1,9 @@
-import { env } from 'cloudflare:workers';
 import { getSessionUser, unauthorized } from '@/lib/auth/auth';
 import { canView, scopeApi } from '@/lib/auth/access';
 import { POS } from '@/lib/shared/report-model';
 import { DATE_RE } from '@/lib/shared/report-time';
 import { parseTeam } from '@/lib/teams/team';
-import { returnsQuery, packReturns, type ReturnOrder, type ReturnsReport } from '@/lib/reports/return-reasons';
-const cache = new Map<string, { at: number; report: ReturnsReport }>();
+import { returnsReport } from '@/lib/reports/returns-report';
 export async function GET(request: Request) {
   const user = await getSessionUser();
   if (!user) return unauthorized();
@@ -18,13 +16,5 @@ export async function GET(request: Request) {
   if (requested.some(id => !POS.some(pos => pos.id===id))) return Response.json({error:'POS không hợp lệ.'},{status:400});
   const posIds = requested.length ? requested : POS.map(p => p.id), team = parseTeam(p.get('team'));
   const key = JSON.stringify([user.role,user.views,user.posIds,user.team,posIds.sort(),team,start,end]);
-  let entry = cache.get(key);
-  if (!entry || Date.now()-entry.at>=600000) {
-    const query = returnsQuery(posIds,start,end,team);
-    const result = await env.DB.prepare(query.sql).bind(...query.binds).all<ReturnOrder>();
-    entry = { at:Date.now(), report:packReturns(result.results) };
-    if (cache.size>=80) cache.delete(cache.keys().next().value!);
-    cache.set(key,entry);
-  }
-  return Response.json(entry.report,{headers:{'Cache-Control':'private, max-age=600'}});
+  return Response.json(await returnsReport(key, posIds, start, end, team),{headers:{'Cache-Control':'private, max-age=600'}});
 }

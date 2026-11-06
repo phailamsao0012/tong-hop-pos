@@ -97,7 +97,7 @@ export function DispatchView() {
                   {MODES.map((m) => (
                     <button key={m} type="button" role="radio" aria-checked={p.mode === m} disabled={!p.linked || busy === `pos:${p.id}`}
                       onClick={() => setMode(p, m)}
-                      className={`rounded-md px-3 py-1 text-xs font-medium transition-colors duration-[var(--dur)] disabled:opacity-50 ${p.mode === m ? (m === 'live' ? 'bg-green-600 text-white' : m === 'dry' ? 'bg-blue-600 text-white' : 'bg-surface-3 text-ink') : 'text-ink-2 hover:bg-surface-3'}`}>
+                      className={`rounded-md px-3 py-1 text-xs font-medium transition-colors tap duration-[var(--dur)] disabled:opacity-50 ${p.mode === m ? (m === 'live' ? 'bg-green-600 text-white' : m === 'dry' ? 'bg-blue-600 text-white' : 'bg-surface-3 text-ink') : 'text-ink-2 hover:bg-surface-3'}`}>
                       {MODE_LABELS[m]}
                     </button>
                   ))}

@@ -5,6 +5,7 @@ import {
   morningDeltaLabel,
   type MorningReport,
 } from '@/lib/zalo/morning-report';
+import type { ReportSection } from '@/lib/zalo/report-schedule';
 
 const C = {
   ink: '#14231c',
@@ -20,8 +21,13 @@ const C = {
 const tone = (v: number | null) =>
   v === null || Math.round(v) === 0 ? C.muted : v > 0 ? C.up : C.down;
 export const MORNING_IMAGE_WIDTH = 720;
-export const morningImageHeight = (r: MorningReport) =>
-  720 + Math.max(1, r.best.length) * 36 + (r.kpi ? 0 : -64);
+/** Chiều cao ảnh; mục bị bỏ ở Cài đặt báo cáo (r.hidden) thì trừ phần của mục đó (không bỏ mục nào = đúng như trước). */
+export const morningImageHeight = (r: MorningReport) => {
+  const hide = (s: ReportSection) => !!r.hidden?.includes(s);
+  return 720 + Math.max(1, r.best.length) * 36 + (r.kpi ? 0 : -64)
+    - (hide('tiles') ? 104 : 0) - (hide('kpi') ? (r.kpi ? 100 : 40) : 0)
+    - (hide('best') ? Math.max(1, r.best.length) * 36 : 0) - (hide('coach') ? 36 : 0) - (hide('tasks') ? 36 : 0);
+};
 
 function Spark({ r }: { r: MorningReport }) {
   const w = 300,
@@ -140,6 +146,7 @@ const Row = ({
 );
 
 export function MorningImage({ r }: { r: MorningReport }) {
+  const hide = (s: ReportSection) => !!r.hidden?.includes(s);
   const dm = (day: string) => `${day.slice(8, 10)}/${day.slice(5, 7)}`;
   return (
     <div
@@ -204,7 +211,7 @@ export function MorningImage({ r }: { r: MorningReport }) {
               alignItems: 'flex-end',
             }}
           >
-            {r.chart ? (
+            {hide('chart') ? null : r.chart ? (
               <div
                 style={{
                   display: 'flex',
@@ -251,7 +258,7 @@ export function MorningImage({ r }: { r: MorningReport }) {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 16, marginTop: 22 }}>
-          {r.tiles.map((t) => (
+          {(hide('tiles') ? [] : r.tiles).map((t) => (
             <div
               key={t.label}
               style={{
@@ -270,7 +277,7 @@ export function MorningImage({ r }: { r: MorningReport }) {
             </div>
           ))}
         </div>
-        {r.kpi ? (
+        {hide('kpi') ? null : r.kpi ? (
           <div
             style={{ display: 'flex', flexDirection: 'column', marginTop: 24 }}
           >
@@ -369,6 +376,7 @@ export function MorningImage({ r }: { r: MorningReport }) {
             marginBottom: 18,
           }}
         />
+        {!hide('best') && (
         <Row label="Tốt nhất">
           {r.best.length ? (
             r.best.map((p, i) => (
@@ -401,6 +409,8 @@ export function MorningImage({ r }: { r: MorningReport }) {
             </div>
           )}
         </Row>
+        )}
+        {!hide('coach') && (
         <Row label="Cần kèm">
           <div
             style={{
@@ -418,6 +428,8 @@ export function MorningImage({ r }: { r: MorningReport }) {
               : 'Ai cũng có đơn'}
           </div>
         </Row>
+        )}
+        {!hide('tasks') && (
         <Row label="Việc">
           <div
             style={{
@@ -432,6 +444,7 @@ export function MorningImage({ r }: { r: MorningReport }) {
               : 'Không có việc quá hạn'}
           </div>
         </Row>
+        )}
         <div
           style={{
             display: 'flex',

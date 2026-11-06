@@ -177,7 +177,7 @@ function BreakdownTable({ rows, first, onPick, totalCost: _totalCost, keepOrder,
         return (
           <tr key={r.id} className={`${r.active ? 'bg-tint-2' : ''} ${r.dim ? 'opacity-55' : ''}`}>
             <td className="min-w-40">
-              {onPick ? <button type="button" onClick={() => onPick(r.id)} className="flex items-center gap-1.5 text-left font-semibold text-ink hover:text-primary" title={r.active ? 'Bỏ lọc' : 'Bấm để lọc cả khối theo dòng này'}>
+              {onPick ? <button type="button" onClick={() => onPick(r.id)} className="flex items-center gap-1.5 text-left font-semibold text-ink tap hover:text-primary" title={r.active ? 'Bỏ lọc' : 'Bấm để lọc cả khối theo dòng này'}>
                 {r.active && <Check size={14} className="shrink-0 text-primary" />}{r.name}
               </button> : <span className="font-semibold">{r.name}</span>}
               {(r.sub || r.note) && <span className="block max-w-72 whitespace-normal text-[11px] font-normal leading-snug text-ink-3">{[r.sub, r.note].filter(Boolean).join(' · ')}</span>}
@@ -251,7 +251,7 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
   if (!data) {
     return (
       <section className={`card p-5 ${loading ? 'is-loading is-thinking' : ''}`} aria-busy={loading}>
-        {error ? <p className="text-[13px] text-bad">Không tải được số chính Marketing. <button type="button" className="underline" onClick={reload}>Tải lại</button></p>
+        {error ? <p className="text-[13px] text-bad">Không tải được số chính Marketing. <button type="button" className="underline tap" onClick={reload}>Tải lại</button></p>
           : <div className="grid gap-3 md:grid-cols-3">{[0, 1, 2].map((i) => <div key={i} className="skel h-36 rounded-2xl" />)}</div>}
       </section>
     );
@@ -296,7 +296,7 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
           {/* Giải thích nguồn số chỉ hiện khi rê chuột vào tiêu đề (anh Vũ 21/10/2026: "phần thừa giải thích lan man"). */}
           <h2 className="display text-lg font-semibold leading-tight tracking-[-.015em] text-ink" title={`Chi phí QC từ Google Sheet CPQC Daily (và chi phí nhập tay) · doanh thu từ đơn Pancake có Marketer, ${shown === 'all' ? 'mọi người bán chốt' : `chỉ đơn ${REV_WHO[shown]}`} (nút ${shown === 'all' ? 'Sale / CSKH' : 'Tất cả'} đầu trang để đổi) · số về, đơn tạo, chi phí là của Marketing nên không đổi theo nút · so ${prevLabel}.`}>Số chính Marketing <span className="num font-medium text-ink-3">· {range(data.period.start, data.period.end)}</span></h2>
         </div>
-        <button type="button" onClick={onOpen} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12.5px] font-medium text-primary hover:bg-tint-2">Trang Chi phí &amp; ROAS <ArrowRight size={14} /></button>
+        <button type="button" onClick={onOpen} className="tap inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12.5px] font-medium text-primary hover:bg-tint-2">Trang Chi phí &amp; ROAS <ArrowRight size={14} /></button>
       </header>
 
       {filtered && <div className="flex flex-wrap items-center gap-2">

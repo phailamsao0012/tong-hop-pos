@@ -204,7 +204,7 @@ export function ShiftView() {
                         {staff.map((s, i) => (
                           <tr key={s.employeeId}>
                             <td className="n mut text-xs">{i + 1}</td>
-                            <td className="font-medium">{s.name}<div className="text-[11px] font-normal text-ink-3">{s.department ?? ''}{data.shift === 'personal' && <span className="num ml-1.5 rounded bg-tint-2 px-1 py-px text-[10px] font-semibold text-primary">{s.shiftHours ?? 'cả ngày'}</span>}</div></td>
+                            <td className="font-medium">{s.name}<div className="text-[11px] font-normal text-ink-3">{s.department ?? ''}{data.shift === 'personal' && <span className="num ml-1.5 rounded bg-tint-2 px-1 py-px text-[11px] font-semibold text-primary">{s.shiftHours ?? 'cả ngày'}</span>}</div></td>
                             <td className="text-xs">{s.posIds.map((id) => <span key={id} className="mr-1.5"><PosBadge posId={id} size={16} className="mr-1" />{posName(id)}</span>)}</td>
                             <td className="n">{s.assignedHidden ? '—' : vi.format(s.received)}</td>
                             <td>{s.assignedHidden ? <span className="text-xs text-ink-4">Chỉ GĐ xem</span> : <ProgressBar value={s.received} max={maxReceived} size="sm" width={72} />}</td>

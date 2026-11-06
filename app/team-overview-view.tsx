@@ -23,7 +23,10 @@ import {
   returnRateOf,
 } from '@/lib/reports/metrics';
 import { useMetricSettings } from './metric-settings';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { takeNavHint } from './nav-focus';
+import { SEGMENT_HINT, segmentFromHint } from '@/lib/shared/drill-hint';
+import { PRODUCT_SEGMENTS } from '@/lib/pancake/order-segments';
 import { PosTile } from './pos-badge';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import {
@@ -130,6 +133,8 @@ export function TeamOverviewView({
   // Đang chọn một team của bộ phận này (thanh trên cùng): mọi số trên trang chỉ tính người thuộc team đó.
   const unit = unitFor(useHrUnit(), team);
   const mktLens = useMktTeam();
+  // Bấm số ở Tổng quan POS khi đang lọc nhóm đơn: giữ nhóm đó cho báo cáo chính của trang (đánh giá 21/10/2026), có nút bỏ lọc.
+  const [segment, setSegment] = useState(() => segmentFromHint(takeNavHint(SEGMENT_HINT)));
   const q = useMemo(
     () =>
       new URLSearchParams(withUnit('/?'+new URLSearchParams({
@@ -144,8 +149,8 @@ export function TeamOverviewView({
   );
   const api = useApi<OverviewReport & { forecast?: MonthForecast | null; packedStaff?: PackedSeller[] }>(
     useMemo(
-      () => `/api/reports/overview?${q}&groupBy=day&compare=previous&forecast=month`,
-      [q],
+      () => `/api/reports/overview?${q}&groupBy=day&compare=previous&forecast=month${segment ? `&productSegment=${segment}` : ''}`,
+      [q, segment],
     ),
   );
   // Đơn chốt theo nhóm sản phẩm (cùng lời gọi với bảng Chốt theo nhóm sản phẩm bên dưới).
@@ -327,6 +332,12 @@ export function TeamOverviewView({
         extra={<GlobalStatusFilter size="md" />}
       />
       <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
+      {segment && (
+        <output className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-primary/40 bg-tint px-3 py-2 text-[13px] text-ink">
+          <span>Đang lọc nhóm đơn <b>{PRODUCT_SEGMENTS[segment]}</b> như ở Tổng quan POS: ô số, biểu đồ và bảng nhân viên tính theo nhóm này; các khối khác vẫn tính mọi nhóm.</span>
+          <button type="button" className="link" onClick={() => setSegment(null)}>Bỏ lọc nhóm</button>
+        </output>
+      )}
       {team === 'cskh' && <CskhFocusBar />}
       {api.error && !report && (
         <ErrorBox error={api.error} onRetry={api.reload} />
