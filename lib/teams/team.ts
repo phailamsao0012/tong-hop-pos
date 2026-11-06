@@ -12,11 +12,18 @@ export const teamOf = (department: string | null | undefined): Exclude<Team, 'al
   if (d.includes('cskh') || d.includes('chăm sóc')) return 'cskh';
   return null;
 };
+/**
+ * Hậu tố bộ phận ở CUỐI tên Pancake (anh Vũ 06/11/2026: chỉ tính đúng hậu tố, mỗi người một bộ phận), thay cách cũ "tên chứa chữ"
+ * (tên "Rosalee" từng bị tính là Sale). Bỏ phần trong ngoặc, coi '-', '_', '.' là khoảng trắng; cho phép chi nhánh HN / TN sau hậu tố
+ * ("Lan SALE HN"). LIKE của SQLite không phân biệt hoa thường với chữ không dấu.
+ */
+const NAME_WORDS = "(' '||REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(TRIM(CASE WHEN instr(name,'(')>0 THEN substr(name,1,instr(name,'(')-1) ELSE name END),'-',' '),'_',' '),'.',' '),'   ',' '),'  ',' ')||' ')";
+export const nameSuffix = (...words: string[]) => `(${words.flatMap((w) => [`% ${w} `, `% ${w} hn `, `% ${w} tn `]).map((x) => `${NAME_WORDS} LIKE '${x}'`).join(' OR ')})`;
+const SALE_NAME = nameSuffix('sale', 'sales'), CSKH_NAME = nameSuffix('cskh'), MKT_NAME = nameSuffix('mkt');
 const CONDITIONS: Record<Exclude<Team, 'all'>, string> = {
-  // Kể cả người tên có hậu tố SALE mà bộ phận Pancake là "Quản trị viên" (vd trưởng phòng "… - TP SALE").
-  sale: "(department LIKE '%sale%' OR department LIKE '%bán hàng%' OR department LIKE '%BÁN HÀNG%' OR name LIKE '%sale%')",
-  // Kể cả trưởng phòng CSKH (bộ phận Pancake là "Quản trị viên" nhưng tên có "CSKH").
-  cskh: "(department LIKE '%cskh%' OR department LIKE '%chăm sóc%' OR department LIKE '%CHĂM SÓC%' OR name LIKE '%CSKH%')",
+  // Hậu tố tên quyết trước (kể cả trưởng phòng "… - TP SALE" có bộ phận Pancake "Quản trị viên"); tên không có hậu tố thì theo bộ phận Pancake.
+  sale: `(${SALE_NAME} OR (NOT ${CSKH_NAME} AND NOT ${MKT_NAME} AND (department LIKE '%sale%' OR department LIKE '%bán hàng%' OR department LIKE '%BÁN HÀNG%')))`,
+  cskh: `(${CSKH_NAME} OR (NOT ${SALE_NAME} AND NOT ${MKT_NAME} AND (department LIKE '%cskh%' OR department LIKE '%chăm sóc%' OR department LIKE '%CHĂM SÓC%')))`,
 };
 /**
  * Nguồn team: 'pancake' (bộ phận trên Pancake, cách cũ) hoặc 'hr' (bảng hr_pos_team kéo từ web nhân sự). Worker đọc cài đặt
@@ -70,7 +77,7 @@ export const HIDDEN_STAFF_SQL = `${LEFT_STAFF_SQL} UNION ${REMOVED_STAFF_SQL}`;
  */
 export const COUNTED_STAFF_KEY = 'counted_staff_extra';
 // Tên Xuân Nghĩa ghi cả dạng dựng sẵn (NFC) lẫn dạng tách dấu (NFD) để không lệch theo cách Pancake lưu.
-export const COUNTED_NAME = `(name LIKE '%sale%' OR name LIKE '%cskh%' OR name LIKE '%mkt%' OR name LIKE '%Xuân Nghĩa%' OR name LIKE '%XUÂN NGHĨA%' OR name LIKE '%${'Xuân Nghĩa'.normalize('NFD')}%')`;
+export const COUNTED_NAME = `(${nameSuffix('sale', 'sales', 'cskh', 'mkt')} OR name LIKE '%Xuân Nghĩa%' OR name LIKE '%XUÂN NGHĨA%' OR name LIKE '%${'Xuân Nghĩa'.normalize('NFD')}%')`;
 const COUNTED_EXTRA = `user_id IN (SELECT value FROM json_each((SELECT CASE WHEN json_valid(value) THEN value ELSE '[]' END FROM app_settings WHERE key='${COUNTED_STAFF_KEY}')))`;
 // Người đã xếp vào một team ở Cài đặt → Chia team (Sale/CSKH lẫn MKT) luôn được tính, kể cả lead, mentor có tên không mang hậu tố
 // (anh Vũ 03/11/2026: "anh đắc đạt làm lead thì mặc định ... vẫn tính doanh thu, vẫn tính mọi thứ phát sinh từ tài khoản pos").

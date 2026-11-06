@@ -1,12 +1,11 @@
-// Kiểm số lệch giữa các trang (đánh giá 21/10/2026, kiểm lại trên main 05/11/2026). Chỉ TÁI HIỆN, không đổi cách tính:
-// mỗi mục có một test "hiện trạng" (qua, ghi hai số đang lệch bằng số ảo) và một test "sau khi thống nhất" đánh dấu todo,
-// chờ anh Vũ quyết (PR "Kiểm số lệch", mục "Cần anh Vũ quyết"). Tên người, SĐT, số tiền đều là ảo.
+// Kiểm số lệch giữa các trang (đánh giá 21/10/2026, kiểm lại trên main 05/11/2026). Anh Vũ chốt 06/11/2026: kỳ trước cắt cùng giờ,
+// CSKH theo người bán, Phân tích CSKH tính cả đơn không SĐT, MKT theo ngày xác nhận, hậu tố chỉ xét cuối tên. Tên, SĐT, số tiền đều ảo.
 import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyDb } from './support/d1-sqlite';
 import { loginAs } from './support/session';
 import { markDirty, rebuildStats, type DirtyBuckets } from '../lib/reports/stats';
-import { COUNTED_STAFF, teamSubquery } from '../lib/teams/team';
+import { COUNTED_STAFF } from '../lib/teams/team';
 import { cskhAnalytics } from '../lib/reports/cskh-analytics';
 import { GET as execGET } from '../app/api/reports/exec/route';
 import { GET as sectionsGET } from '../app/api/reports/sections/route';
@@ -68,20 +67,7 @@ const day1 = async () => world([SALE], [
   { id: 't1', seller: SALE.id, status: 1, createdAt: '2026-11-05T02:00:00', closedAt: '2026-11-05T02:00:00', confirmedAt: '2026-11-05T02:00:00', net: 100000 },
 ]);
 
-void test('Mục 1 hiện trạng: kỳ trước của Doanh thu công ty lấy trọn ngày, Tổng quan cắt ở cùng giờ', async () => {
-  try {
-    await day1();
-    const ref = await get(pancakeRefGET, '/api/reports/pancake-ref', { start: TODAY, end: TODAY });
-    const ov = await get(overviewGET, '/api/reports/overview', { start: TODAY, end: TODAY, compare: 'previous', groupBy: 'day' });
-    assert.equal(companyRevenue(ref.current as RefPos[]), 100000);
-    assert.equal(totalOf(ov, 'current').closedNet, 100000);
-    // Kỳ trước: Doanh thu công ty cộng cả đơn 20:00 hôm qua; Tổng quan chỉ tới 12:00 hôm qua.
-    assert.equal(companyRevenue(ref.previous as RefPos[]), 200000);
-    assert.equal(totalOf(ov, 'compare').closedNet, 100000);
-  } finally { done(); }
-});
-
-void test('Mục 1 sau khi thống nhất: hai trang cùng kỳ trước', { todo: 'Chờ anh Vũ quyết: cắt kỳ trước của Doanh thu công ty ở cùng giờ' }, async () => {
+void test('Mục 1 sau khi thống nhất: hai trang cùng kỳ trước', async () => {
   try {
     await day1();
     const ref = await get(pancakeRefGET, '/api/reports/pancake-ref', { start: TODAY, end: TODAY });
@@ -98,7 +84,7 @@ const careWorld = async () => world([SALE, CSKH], [
 /** Tự ups & từ MKT: doanh số CSKH = tự ups + từ MKT của nhân viên CSKH trong phạm vi trang. */
 const originCskh = (r: Record<string, unknown>) => { const t = r.total as { selfNet: number; mktNet: number }; return t.selfNet + t.mktNet; };
 
-void test('Mục 2a hiện trạng: mặc định cùng theo người bán; tuỳ chọn "NV chăm sóc" và chữ định nghĩa ở Điều hành thì khác', async () => {
+void test('Mục 2a: CSKH theo người bán ở mọi trang, chữ định nghĩa ở Điều hành khớp; tuỳ chọn "NV chăm sóc" vẫn có', async () => {
   try {
     await careWorld();
     const exec = await get(execGET, '/api/reports/exec', {});
@@ -112,8 +98,8 @@ void test('Mục 2a hiện trạng: mặc định cùng theo người bán; tu�
     assert.equal(originCskh(bySeller), 0);
     // Chọn "NV chăm sóc (trống thì người bán)": đơn về người CSKH.
     assert.equal(originCskh(byCare), 120000);
-    // Chữ định nghĩa ở Điều hành vẫn ghi theo NV chăm sóc, trong khi số tính theo người bán.
-    assert.match((exec.definitions as { teams: string }).teams, /CSKH = đơn có NV chăm sóc \(trống thì người bán\)/);
+    // Chữ định nghĩa ở Điều hành ghi đúng theo người bán (anh Vũ 06/11/2026).
+    assert.match((exec.definitions as { teams: string }).teams, /CSKH = đơn của người bán thuộc bộ phận CSKH/);
   } finally { done(); }
 });
 
@@ -123,17 +109,7 @@ const phoneWorld = async () => world([CSKH], [
   { id: 'b2', seller: CSKH.id, status: 1, createdAt: '2026-11-05T02:10:00', closedAt: '2026-11-05T02:10:00', confirmedAt: '2026-11-05T02:10:00', net: 50000, phone: '0000000002' },
 ]);
 
-void test('Mục 2b hiện trạng: Phân tích CSKH bỏ đơn không SĐT, Tổng quan CSKH vẫn tính', async () => {
-  try {
-    await phoneWorld();
-    const analytics = await cskhAnalytics({ posIds: [POS_ID], start: TODAY, end: TODAY, staffIds: [] });
-    const ov = await get(overviewGET, '/api/reports/overview', { start: TODAY, end: TODAY, team: 'cskh', groupBy: 'day' });
-    assert.equal(analytics.total.net, 50000);
-    assert.equal(totalOf(ov, 'current').closedNet, 130000);
-  } finally { done(); }
-});
-
-void test('Mục 2b sau khi thống nhất: ô tổng của Phân tích CSKH bằng Tổng quan CSKH', { todo: 'Chờ anh Vũ quyết: ô tổng tính cả đơn không SĐT' }, async () => {
+void test('Mục 2b sau khi thống nhất: ô tổng của Phân tích CSKH bằng Tổng quan CSKH', async () => {
   try {
     await phoneWorld();
     const analytics = await cskhAnalytics({ posIds: [POS_ID], start: TODAY, end: TODAY, staffIds: [] });
@@ -149,18 +125,7 @@ const mktWorld = async () => world([SALE, MKT], [
 ]);
 const execMkt = (r: Record<string, unknown>) => (r.teams as { key: string; current: { orders: number; net: number } }[]).find((t) => t.key === 'mkt')!.current;
 
-void test('Mục 3 hiện trạng: Điều hành tính MKT theo ngày chốt, Tổng quan POS / Marketing theo ngày xác nhận', async () => {
-  try {
-    await mktWorld();
-    const exec = await get(execGET, '/api/reports/exec', {});
-    const sections = await get(sectionsGET, '/api/reports/sections', { start: MONTH_START, end: TODAY });
-    assert.deepEqual(execMkt(exec), { orders: 1, net: 150000 });
-    const mkt = sections.mkt as { orders: number; net: number };
-    assert.deepEqual([mkt.orders, mkt.net], [0, 0]);
-  } finally { done(); }
-});
-
-void test('Mục 3 sau khi thống nhất: Số MKT ở Điều hành bằng MKT ở Tổng quan POS', { todo: 'Chờ anh Vũ quyết: MKT dùng first_confirmed_at ở mọi trang' }, async () => {
+void test('Mục 3 sau khi thống nhất: Số MKT ở Điều hành bằng MKT ở Tổng quan POS', async () => {
   try {
     await mktWorld();
     const exec = await get(execGET, '/api/reports/exec', {});
@@ -179,20 +144,7 @@ const suffixWorld = async () => world([ROSA, ROSA_CSKH], [
 ]);
 const ids = (raw: Awaited<ReturnType<typeof world>>, sql: string) => (raw.prepare(sql).all() as { user_id: string }[]).map((r) => r.user_id).sort();
 
-void test('Mục 4 hiện trạng: tên chứa "sale" vẫn được tính; một người vừa Sale vừa CSKH, số cộng hai lần', async () => {
-  try {
-    const raw = await suffixWorld();
-    assert.deepEqual(ids(raw, `SELECT user_id FROM pos_users WHERE user_id IN ${COUNTED_STAFF}`), [ROSA.id, ROSA_CSKH.id]);
-    assert.deepEqual(ids(raw, `SELECT user_id FROM ${teamSubquery('sale')} AS t`), [ROSA.id, ROSA_CSKH.id]);
-    assert.deepEqual(ids(raw, `SELECT user_id FROM ${teamSubquery('cskh')} AS t`), [ROSA_CSKH.id]);
-    const all = totalOf(await get(overviewGET, '/api/reports/overview', { start: TODAY, end: TODAY, groupBy: 'day' }), 'current').closedNet;
-    const sale = totalOf(await get(overviewGET, '/api/reports/overview', { start: TODAY, end: TODAY, team: 'sale', groupBy: 'day' }), 'current').closedNet;
-    const cskh = totalOf(await get(overviewGET, '/api/reports/overview', { start: TODAY, end: TODAY, team: 'cskh', groupBy: 'day' }), 'current').closedNet;
-    assert.deepEqual({ all, sale, cskh }, { all: 160000, sale: 160000, cskh: 90000 });
-  } finally { done(); }
-});
-
-void test('Mục 4 sau khi thống nhất: chỉ tính đúng hậu tố, mỗi người một bộ phận', { todo: 'Chờ anh Vũ quyết: lọc theo hậu tố thật' }, async () => {
+void test('Mục 4 sau khi thống nhất: chỉ tính đúng hậu tố, mỗi người một bộ phận', async () => {
   try {
     const raw = await suffixWorld();
     assert.deepEqual(ids(raw, `SELECT user_id FROM pos_users WHERE user_id IN ${COUNTED_STAFF}`), [ROSA_CSKH.id]);

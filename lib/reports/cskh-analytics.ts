@@ -11,7 +11,7 @@ import { teamFilter } from '@/lib/teams/team';
 
 // Đơn của CSKH = đơn do nhân viên CSKH lên (người bán), không theo NV chăm sóc (anh Vũ 21/10/2026 "cần con số đúng").
 const STAFF = 'o.seller_id';
-type PeriodRow = { id: string; phone: string; staff: string | null; created_at: string; net: number; tags_json: string | null };
+type PeriodRow = { id: string; phone: string | null; staff: string | null; created_at: string; net: number; tags_json: string | null };
 type HistRow = { id: string; phone: string; created_at: string; tags_json: string | null };
 
 export type CskhAnalytics = Awaited<ReturnType<typeof cskhAnalytics>>;
@@ -20,7 +20,8 @@ export async function cskhAnalytics(opts: { posIds: string[]; start: string; end
   const db = env.DB;
   const { startUtc, endUtc } = vnRangeUtc(opts.start, opts.end);
   const ph = opts.posIds.map(() => '?').join(',');
-  const inRange = `o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.${CLOSED} AND o.phone IS NOT NULL AND o.phone<>''`;
+  const inRange = `o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.${CLOSED}`;
+  // Tính cả đơn không có SĐT để ô tổng khớp Tổng quan CSKH (anh Vũ 06/11/2026); đơn đó không có lịch sử khách, coi là lần mua đầu.
   const net = NET.replace(/net_total|current_total|total_discount/g, (c) => `o.${c}`);
   const [period, saleAgg, names] = await db.batch([
     db.prepare(`SELECT o.id, o.phone, ${STAFF} AS staff, o.created_at, ${net} AS net, o.tags_json FROM raw_pos_orders o WHERE ${inRange}${teamFilter(STAFF, 'cskh')}`).bind(...opts.posIds, startUtc, endUtc),
@@ -32,7 +33,7 @@ export async function cskhAnalytics(opts: { posIds: string[]; start: string; end
   const nameMap = new Map((names.results as { user_id: string; name: string; department: string | null }[]).map((r) => [r.user_id, r]));
 
   // Lịch sử từng SĐT trên cả 6 POS (chỉ mục pos_id + phone), 90 SĐT một câu.
-  const phones = [...new Set(rows.map((r) => r.phone))];
+  const phones = [...new Set(rows.map((r) => r.phone).filter((p): p is string => !!p))];
   const all = POS.map((x) => x.id);
   const statements: D1PreparedStatement[] = [];
   for (let i = 0; i < phones.length; i += 90) {
@@ -62,14 +63,14 @@ export async function cskhAnalytics(opts: { posIds: string[]; start: string; end
   const customerGroups = new Map<string, Set<string>>();
   let totalNet = 0, repeatOrders = 0;
   for (const r of rows) {
-    const h = history.get(r.phone) ?? [];
+    const h = (r.phone && history.get(r.phone)) || [];
     const idx = h.findIndex((x) => x.id === r.id);
     const seq = idx >= 0 ? idx + 1 : h.filter((x) => x.created_at < r.created_at).length + 1;
     seqDist[Math.min(4, seq) as 1 | 2 | 3 | 4]++;
     const cur = groupOf(r.id, r.tags_json);
     const sid = r.staff ?? '';
     const s = staff.get(sid) ?? { staffId: sid, orders: 0, net: 0, customers: new Set<string>(), repeat: 0, groupsSum: 0, flows: new Map() };
-    s.orders++; s.net += Number(r.net); s.customers.add(r.phone);
+    s.orders++; s.net += Number(r.net); if (r.phone) s.customers.add(r.phone);
     totalNet += Number(r.net);
     if (seq >= 2) {
       repeatOrders++; s.repeat++;
@@ -79,7 +80,7 @@ export async function cskhAnalytics(opts: { posIds: string[]; start: string; end
       }
     }
     staff.set(sid, s);
-    if (!customerGroups.has(r.phone)) {
+    if (r.phone && !customerGroups.has(r.phone)) {
       const set = new Set<string>();
       for (const x of h) for (const g of groupOf(x.id, x.tags_json)) set.add(g);
       if (!set.size) for (const g of cur) set.add(g);
@@ -108,7 +109,7 @@ export async function cskhAnalytics(opts: { posIds: string[]; start: string; end
   const gini = nets.length > 1 && sum ? Math.max(0, 1 - 2 * area) : null;
   const top20 = nets.length ? [...nets].reverse().slice(0, Math.max(1, Math.round(nets.length * 0.2))).reduce((a, b) => a + b, 0) : 0;
   const sale = saleAgg.results[0] as { n: number; net: number } | undefined;
-  const customers = new Set(rows.map((r) => r.phone)).size;
+  const customers = new Set(rows.map((r) => r.phone).filter(Boolean)).size;
   return {
     period: { start: opts.start, end: opts.end },
     groups: MAIN_LABELS,

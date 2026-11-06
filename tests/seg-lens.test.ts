@@ -21,10 +21,10 @@ const total = (d: DatabaseSync, team: 'all' | 'sale' | 'cskh', seg: string | nul
 test('page department intersected with the selected one', () => {
   setHrTeams(false);
   const d = db();
-  assert.equal(total(d, 'sale', null), 107);
+  // "Cường SALE CSKH" (bộ phận Sale): hậu tố cuối tên là CSKH nên chỉ thuộc CSKH, mỗi người một bộ phận (anh Vũ 06/11/2026).
+  assert.equal(total(d, 'sale', null), 100);
   assert.equal(total(d, 'cskh', null), 47);
-  // Người tên có cả SALE và CSKH thuộc cả hai nhóm Pancake: chỉ còn người đó.
-  assert.equal(total(d, 'sale', 'cskh'), 7);
+  assert.equal(total(d, 'sale', 'cskh'), 0);
   assert.equal(total(d, 'all', 'cskh'), 47);
   d.exec("DELETE FROM o WHERE seller_id='x1'");
   assert.equal(total(d, 'sale', 'cskh'), 0);

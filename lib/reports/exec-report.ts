@@ -36,11 +36,14 @@ export async function execReport(posIds: string[], asked: string) {
   const raw = (extra: string, r: { startUtc: string; endUtc: string }) =>
     env.DB.prepare(`SELECT COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders WHERE ${base}${extra}`).bind(...posIds, r.startUtc, r.endUtc);
   const MKT = ` AND NULLIF(TRIM(marketer_id),'') IS NOT NULL AND marketer_id IN ${COUNTED_STAFF}`;
+  // Số MKT theo ngày xác nhận lần đầu, đơn đã xác nhận (không tính Chờ xác nhận), cùng cách Tổng quan POS / Marketing (anh Vũ 06/11/2026).
+  const mkt = (r: { startUtc: string; endUtc: string }) =>
+    env.DB.prepare(`SELECT COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders WHERE pos_id IN (${ph}) AND first_confirmed_at>=? AND first_confirmed_at<? AND status_code NOT IN (0,17,6,7)${MKT}`).bind(...posIds, r.startUtc, r.endUtc);
   const saleF = teamFilter('seller_id', 'sale');
   const parts = [
     { key: 'sale', label: 'Sale', cur: stat(saleF, monthStart, today), prev: raw(saleF, prev) },
     { key: 'cskh', label: 'CSKH', cur: raw(teamFilter('seller_id', 'cskh'), cur), prev: raw(teamFilter('seller_id', 'cskh'), prev) },
-    { key: 'mkt', label: 'Số MKT đưa về', cur: raw(MKT, cur), prev: raw(MKT, prev) },
+    { key: 'mkt', label: 'Số MKT đưa về', cur: mkt(cur), prev: mkt(prev) },
   ];
   const [daily, total, prevTotal, ...rest] = await env.DB.batch([
     env.DB.prepare(`SELECT day, COALESCE(SUM(closed_orders),0) AS n, COALESCE(SUM(closed_net),0) AS net FROM stats_daily WHERE ${statsWhere} GROUP BY day ORDER BY day`).bind(...posIds, monthStart, today),
@@ -54,7 +57,7 @@ export async function execReport(posIds: string[], asked: string) {
     total: one(total), prevTotal: one(prevTotal),
     teams: parts.map((t, i) => ({ key: t.key, label: t.label, current: one(rest[i * 2]), previous: one(rest[i * 2 + 1]) })),
     definitions: {
-      teams: 'Sale = đơn của người bán thuộc bộ phận Sale; CSKH = đơn có NV chăm sóc (trống thì người bán) thuộc CSKH; Số MKT = đơn có Marketer được tính doanh số (tên có hậu tố MKT…). Chỉ tính người có hậu tố MKT, CSKH, SALE trong tên Pancake. Một đơn có thể vừa là số MKT vừa thuộc Sale / CSKH, nên ba thanh không cộng thành tổng.',
+      teams: 'Sale = đơn của người bán thuộc bộ phận Sale; CSKH = đơn của người bán thuộc bộ phận CSKH; Số MKT = đơn đã xác nhận có Marketer được tính doanh số (tên có hậu tố MKT…), theo ngày xác nhận. Chỉ tính người có hậu tố MKT, CSKH, SALE trong tên Pancake. Một đơn có thể vừa là số MKT vừa thuộc Sale / CSKH, nên ba thanh không cộng thành tổng.',
       pace: 'So cùng số ngày đầu tháng trước, ngày cuối tính tới cùng giờ hiện tại. Dự báo cuối tháng = doanh thu trung bình mỗi ngày đã qua × số ngày của tháng.',
     },
   };
