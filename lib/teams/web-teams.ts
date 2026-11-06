@@ -2,7 +2,8 @@
 // Dùng khi nguồn team không phải web nhân sự (team_source khác 'hr'); mã team dạng wt_<uuid> để lọc ?hrTeam= như team web nhân sự.
 // mentorUserId / leaderUserId: tài khoản đăng nhập (users.id) phụ trách team (anh Vũ 31/10/2026: "Mentor ... chỉ xem được những người đã set theo
 // team trong cài đặt. Leader xem đc tất cả mentor và người của mentor đó thôi"). Không gán thì tài khoản giữ quyền cũ.
-export type WebTeam = { id: string; name: string; dept: 'sale' | 'cskh'; office: string | null; memberIds: string[]; mentorUserId?: string | null; leaderUserId?: string | null };
+// mentorPosId / leaderPosId: người trong team làm Mentor / Leader (mã người POS), không cần tài khoản web; tài khoản gắn sau ở mentorUserId (anh Vũ 06/11/2026).
+export type WebTeam = { id: string; name: string; dept: 'sale' | 'cskh'; office: string | null; memberIds: string[]; mentorUserId?: string | null; leaderUserId?: string | null; mentorPosId?: string | null; leaderPosId?: string | null };
 export const WEB_TEAMS_KEY = 'web_teams_v1';
 /** Một team có thể ở cả hai chi nhánh (anh Vũ 03/11/2026: "ấn được cả 2"): lưu "Hà Nội,Thái Nguyên" trong cùng trường office. */
 export const officeList = (office: string | null | undefined) => (office ?? '').split(',').map((o) => o.trim()).filter(Boolean);
@@ -46,9 +47,23 @@ export function validateWebTeams(input: unknown): { teams?: WebTeam[]; error?: s
     const account = (v: unknown) => typeof v === 'string' && v.trim() ? v.trim() : null;
     const mentorUserId = account(row.mentorUserId), leaderUserId = account(row.leaderUserId);
     if ([mentorUserId, leaderUserId].some((x) => x && (x.length > 100 || hasControl(x)))) return { error: `Team ${name}: tài khoản phụ trách không hợp lệ.` };
-    ids.add(id); names.add(nameKey); teams.push({ id, name, dept, office, memberIds, mentorUserId, leaderUserId });
+    const owners = teamOwnerPeople(row, memberIds);
+    if (!owners) return { error: `Team ${name}: Mentor, Leader phải là người trong team.` };
+    ids.add(id); names.add(nameKey); teams.push({ id, name, dept, office, memberIds, mentorUserId, leaderUserId, ...owners });
   }
   return { teams };
+}
+
+/** Mentor / Leader chọn trong team (mã người POS): phải là thành viên team; null khi không hợp lệ. */
+export function teamOwnerPeople(row: Record<string, unknown>, memberIds: string[]): { mentorPosId?: string; leaderPosId?: string } | null {
+  const out: { mentorPosId?: string; leaderPosId?: string } = {};
+  for (const f of ['mentorPosId', 'leaderPosId'] as const) {
+    const v = typeof row[f] === 'string' ? (row[f] as string).trim() : '';
+    if (!v) continue;
+    if (!memberIds.includes(v)) return null;
+    out[f] = v;
+  }
+  return out;
 }
 
 /**

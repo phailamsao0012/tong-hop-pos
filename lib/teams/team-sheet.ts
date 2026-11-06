@@ -1,7 +1,8 @@
 // Đọc bảng chia team anh Vũ dán từ Google Sheet (anh Vũ 21/10/2026: "chia team theo bảng của tôi, không dùng web nhân sự nữa").
 // Bảng có nhiều khối đặt cạnh nhau, mỗi khối 3 cột: nhóm lớn (Marketing: 20, CSKH: 38, Sale Hà Nội: 11…), team (A Đăng: 10, Sale c Mơ: 12…),
 // người ("1. Họ Tên"). Ô gộp khi copy chỉ còn giá trị ở dòng đầu, nên nhóm và team được kéo xuống các dòng dưới.
-export type SheetDept = 'sale' | 'cskh' | 'mkt';
+// Vận đơn thêm 06/11/2026 (anh Vũ: chia team chọn bộ phận trước, "mkt, sale, cskh, vận đơn").
+export type SheetDept = 'sale' | 'cskh' | 'mkt' | 'vandon';
 export type SheetTeam = { key: string; group: string; name: string; dept: SheetDept | null; office: string | null; members: string[] };
 export type StaffPerson = { id: string; name: string; department: string | null };
 
@@ -40,6 +41,7 @@ export function deptOf(...texts: string[]): SheetDept | null {
     if (/marketing|(^|\W)mkt(\W|$)/u.test(s)) return 'mkt';
     if (/cskh|chăm sóc/u.test(s)) return 'cskh';
     if (/sale|bán hàng/u.test(s)) return 'sale';
+    if (/vận đơn|van don|vận chuyển/u.test(s)) return 'vandon';
   }
   return null;
 }
@@ -77,7 +79,7 @@ export function nameKey(name: string) {
   return clean(name.normalize('NFC').toLocaleLowerCase('vi')).replace(/[-_.,]/gu, ' ')
     .split(' ').filter((w) => w && !/^(sale|sales|cskh|mkt|marketing|tp|part|time|pt|\d+)$/u.test(w)).join(' ');
 }
-const staffDept = (p: StaffPerson) => deptOf(p.name, p.department ?? '');
+export const staffDept = (p: StaffPerson) => deptOf(p.name, p.department ?? '');
 
 /** Mã tài khoản Pancake của một người trong bảng (một người có thể có tài khoản ở nhiều POS). Trùng tên thì ưu tiên người cùng bộ phận. */
 export function matchStaff(name: string, dept: SheetDept | null, people: StaffPerson[]): string[] {

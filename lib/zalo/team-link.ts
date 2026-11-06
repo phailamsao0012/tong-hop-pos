@@ -1,8 +1,14 @@
 // Gắn Zalo cho Mentor / Leader ngay ở trang Chia team (anh Vũ 03/11/2026).
 // Mỗi tài khoản đăng nhập có một người nhận việc Zalo (kind 'leader'), gắn với team đầu tiên được bấm.
 // Team không có Leader vẫn chạy bình thường: không bắt buộc gắn ai.
+// Từ 06/11/2026 (anh Vũ: "ưu tiên nối zalo trước" tài khoản web): Mentor / Leader là người trong team, nối Zalo theo người,
+// lưu user_id = 'pos:<mã người POS>' (không cần tài khoản web). Người nhận cũ gắn theo tài khoản vẫn chạy.
+export const posKey = (posId: string | null | undefined) => posId ? `pos:${posId}` : null;
+const ownsTeam = (key: string | null | undefined, t: { mentorUserId?: string | null; leaderUserId?: string | null; mentorPosId?: string | null; leaderPosId?: string | null }) =>
+  !!key && (key === t.mentorUserId || key === t.leaderUserId || key === posKey(t.mentorPosId) || key === posKey(t.leaderPosId));
 import {
   MARKETING_TEAMS_KEY,
+  VANDON_TEAMS_KEY,
   parseMarketingTeams,
 } from '@/lib/teams/marketing-teams';
 import {
@@ -96,31 +102,36 @@ export async function linkSavedTeamZalo(
 ) {
   const rows = (
     await db
-      .prepare('SELECT key,value FROM app_settings WHERE key IN (?,?)')
-      .bind(WEB_TEAMS_KEY, MARKETING_TEAMS_KEY)
+      .prepare('SELECT key,value FROM app_settings WHERE key IN (?,?,?)')
+      .bind(WEB_TEAMS_KEY, MARKETING_TEAMS_KEY, VANDON_TEAMS_KEY)
       .all<{ key: string; value: string }>()
   ).results;
   const value = (key: string) => rows.find((r) => r.key === key)?.value;
   // Team MKT cũng gắn được Zalo cho Mentor / Leader (anh Vũ 03/11/2026).
   const team =
     parseWebTeams(value(WEB_TEAMS_KEY)).find((t) => t.id === teamId) ??
-    parseMarketingTeams(value(MARKETING_TEAMS_KEY))
+    [...parseMarketingTeams(value(MARKETING_TEAMS_KEY)), ...parseMarketingTeams(value(VANDON_TEAMS_KEY))]
       .filter((t) => t.id === teamId)
       .map((t) => ({ ...t, dept: '' as const }))[0];
   if (!team) return { error: 'Lưu cách chia team trước rồi mới gắn Zalo.' };
   if (
     typeof userId !== 'string' ||
-    (userId !== team.mentorUserId && userId !== team.leaderUserId)
+    !ownsTeam(userId, team)
   )
     return {
       error: 'Người này chưa được lưu làm Mentor hoặc Leader của team.',
     };
-  const account = await db
-    .prepare(
-      "SELECT id,COALESCE(NULLIF(name,''),email) AS name FROM users WHERE id=? AND disabled=0",
-    )
-    .bind(userId)
-    .first<{ id: string; name: string }>();
+  const account = userId.startsWith('pos:')
+    ? await db
+        .prepare("SELECT ? AS id,MAX(name) AS name FROM pos_users WHERE user_id=? AND name<>'' HAVING COUNT(*)>0")
+        .bind(userId, userId.slice(4))
+        .first<{ id: string; name: string }>()
+    : await db
+        .prepare(
+          "SELECT id,COALESCE(NULLIF(name,''),email) AS name FROM users WHERE id=? AND disabled=0",
+        )
+        .bind(userId)
+        .first<{ id: string; name: string }>();
   if (!account) return { error: 'Tài khoản không còn dùng được.' };
   return {
     team,
@@ -150,9 +161,7 @@ export function reportTargets(
 ): Contact[] {
   const list = contacts.flatMap((c) => {
     const mine = c.user_id
-      ? teams.filter(
-          (t) => t.mentorUserId === c.user_id || t.leaderUserId === c.user_id,
-        )
+      ? teams.filter((t) => ownsTeam(c.user_id, t))
       : [];
     if (!mine.length) return c.team_id ? [c] : [];
     return mine.map((t) => ({

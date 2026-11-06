@@ -25,6 +25,10 @@ function fakeDb(saved: Record<string, string> = {}, users: Row[] = []) {
       if (/FROM zalo_contacts WHERE id=\?/.test(sql))
         return (contacts.find((c) => c.id === args[0] && c.active === 1) ??
           null) as T;
+      if (/FROM pos_users WHERE user_id=\?/.test(sql)) {
+        const u = users.find((x) => x.id === args[1]);
+        return (u ? { id: args[0], name: u.name } : null) as T;
+      }
       if (/FROM users WHERE id=\?/.test(sql))
         return (users.find((u) => u.id === args[0]) ?? null) as T;
       if (/app_settings/.test(sql)) {
@@ -180,4 +184,20 @@ void test('gắn Zalo cho Mentor team MKT: tìm team MKT đã lưu, người nh�
   assert.equal(contacts[0].dept, '');
   const wrong = await linkSavedTeamZalo(db, 'mkt_1', 'u8');
   assert.ok('error' in wrong);
+});
+
+void test('nối Zalo cho Mentor là người trong team, chưa có tài khoản web (anh Vũ 06/11/2026)', async () => {
+  const { linkSavedTeamZalo, reportTargets } = await import('@/lib/zalo/team-link');
+  const { db, contacts } = fakeDb(
+    { vandon_teams_v1: JSON.stringify([{ id: 'vd_1', name: 'Vận đơn A', memberIds: ['p1', 'p2'], mentorPosId: 'p1' }]) },
+    [{ id: 'p1', name: 'Người thử' }],
+  );
+  const out = await linkSavedTeamZalo(db, 'vd_1', 'pos:p1');
+  assert.ok(!('error' in out));
+  assert.equal(contacts[0].user_id, 'pos:p1');
+  assert.ok('error' in (await linkSavedTeamZalo(db, 'vd_1', 'pos:p2')), 'p2 không phải Mentor/Leader');
+  const base = { kind: 'leader' as const, leader_id: null, pos_seller_ids: '[]', chat_id: 'c', active: 1 };
+  const teams = [{ id: 'wt_1', name: 'Team 1', dept: 'sale' as const, office: null, memberIds: ['p5'], leaderPosId: 'p5' }];
+  const k = { ...base, id: 'k1', name: 'Leader', user_id: 'pos:p5', team_id: 'wt_9', team_name: 'Cũ', dept: 'sale' };
+  assert.deepEqual(reportTargets([k], teams).map((c) => c.team_id), ['wt_1']);
 });
