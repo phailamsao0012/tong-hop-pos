@@ -5,6 +5,7 @@
 import { env } from 'cloudflare:workers';
 import { PANCAKE_BASE } from '@/lib/pancake/pancake';
 import { todayVn, vnRangeUtc } from '@/lib/shared/report-time';
+import { CLOSED, NET } from '@/lib/reports/stats';
 
 import { emptyRefBlock as empty, emptyRefPart as emptyPart, type RefBlock, type RefPart, type RefPos } from '@/lib/pancake/pancake-ref-types';
 export type { RefBlock, RefPart, RefPos };
@@ -13,10 +14,16 @@ const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : Num
 // ---- Tự tính từ D1 ----
 // Đọc bảng tổng hợp theo ngày (stats_daily, cột closed_* theo ngày chốt, từ 08/10/2026 có tính Chờ xác nhận nên có thể cao hơn Pancake) — nhẹ.
 // Bảng này không tách Online / Bán tại quầy, không có giá vốn và hàng hoàn theo ngày hoàn: các ô đó chỉ có khi lấy được từ Pancake.
-async function webPart(posIds: string[], start: string, end: string): Promise<Map<string, RefPart>> {
+// endUtc: kỳ so sánh cắt ở cùng giờ hiện tại (anh Vũ 06/11/2026, như Tổng quan): ngày đủ đọc bảng tổng hợp, ngày cuối đọc đơn gốc tới giờ cắt.
+async function webPart(posIds: string[], start: string, end: string, endUtc: string | null = null): Promise<Map<string, RefPart>> {
   const ph = posIds.map(() => '?').join(',');
+  const daily = `SELECT pos_id, closed_orders, closed_gross, closed_net, closed_quantity FROM stats_daily WHERE pos_id IN (${ph}) AND day>=? AND day${endUtc ? '<' : '<='}?`;
+  const lastDay = `SELECT pos_id, 1 AS closed_orders, COALESCE(current_total,0) AS closed_gross, ${NET} AS closed_net,
+      (SELECT COALESCE(SUM(quantity),0) FROM raw_pos_order_items i WHERE i.order_id=o.id AND i.is_bonus=0) AS closed_quantity
+    FROM raw_pos_orders o WHERE pos_id IN (${ph}) AND first_closed_at>=? AND first_closed_at<? AND ${CLOSED}`;
   const rows = await env.DB.prepare(`SELECT pos_id, SUM(closed_orders) AS orders, SUM(closed_gross) AS sales, SUM(closed_net) AS revenue, SUM(closed_quantity) AS quantity
-    FROM stats_daily WHERE pos_id IN (${ph}) AND day>=? AND day<=? GROUP BY pos_id`).bind(...posIds, start, end)
+    FROM (${daily}${endUtc ? ` UNION ALL ${lastDay}` : ''}) GROUP BY pos_id`)
+    .bind(...posIds, start, end, ...(endUtc ? [...posIds, vnRangeUtc(end, end).startUtc, endUtc] : []))
     .all<{ pos_id: string; orders: number; sales: number; revenue: number; quantity: number }>();
   const out = new Map<string, RefPart>(posIds.map((id) => [id, { ...emptyPart(), split: false, hasReturned: false }]));
   for (const r of rows.results) {
@@ -47,8 +54,9 @@ function makeLimiter(max = 3): Limiter {
   };
 }
 
-async function analytics(limited: Limiter, shopId: string, start: string, end: string, filter?: Record<string, string[]>) {
-  const { startUtc, endUtc } = vnRangeUtc(start, end);
+async function analytics(limited: Limiter, shopId: string, start: string, end: string, filter?: Record<string, string[]>, cutUtc: string | null = null) {
+  const { startUtc, endUtc: fullEnd } = vnRangeUtc(start, end);
+  const endUtc = cutUtc ?? fullEnd;
   const url = new URL(`${PANCAKE_BASE}/shops/${encodeURIComponent(shopId)}/analytics/sale`);
   url.searchParams.set('since', startUtc);
   url.searchParams.set('until', new Date(Date.parse(endUtc) - 1000).toISOString());
@@ -95,10 +103,10 @@ function toBlock(rows: { success?: Stat }[]): RefBlock {
   return b;
 }
 
-async function pancakePart(limited: Limiter, shopId: string, start: string, end: string): Promise<RefPart> {
+async function pancakePart(limited: Limiter, shopId: string, start: string, end: string, endUtc: string | null): Promise<RefPart> {
   const [all, counter] = await Promise.all([
-    analytics(limited, shopId, start, end),
-    analytics(limited, shopId, start, end, { 'Order.received_at_shop': ['true'] }).catch(() => null),
+    analytics(limited, shopId, start, end, undefined, endUtc),
+    analytics(limited, shopId, start, end, { 'Order.received_at_shop': ['true'] }, endUtc).catch(() => null),
   ]);
   const total = toBlock(all);
   const part: RefPart = { ...emptyPart(), split: !!counter, hasReturned: true };
@@ -119,11 +127,13 @@ async function pancakePart(limited: Limiter, shopId: string, start: string, end:
 }
 
 /** Số tham chiếu từng POS trong kỳ; `source` cho biết số lấy từ Pancake hay web tự tính. */
-export async function pancakeReference(posIds: string[], start: string, end: string): Promise<RefPos[]> {
+/** endUtc: cắt kỳ ở giờ này (kỳ so sánh cùng giờ hiện tại); null là trọn ngày. Làm tròn xuống 5 phút để giữ được bộ nhớ đệm Pancake. */
+export async function pancakeReference(posIds: string[], start: string, end: string, endUtc: string | null = null): Promise<RefPos[]> {
+  if (endUtc) { const t = Date.parse(`${endUtc}Z`); endUtc = new Date(t - (t % 300000)).toISOString().slice(0, 19); }
   const shops = await env.DB.prepare(`SELECT id,shop_id FROM pos_shops WHERE id IN (${posIds.map(() => '?').join(',')})`)
     .bind(...posIds).all<{ id: string; shop_id: string | null }>();
   const shopOf = new Map(shops.results.map((r) => [r.id, r.shop_id]));
-  const web = await webPart(posIds, start, end).catch((e) => { console.error('pancake-ref web', e); return new Map<string, RefPart>(); });
+  const web = await webPart(posIds, start, end, endUtc).catch((e) => { console.error('pancake-ref web', e); return new Map<string, RefPart>(); });
   // Bản demo: Pancake giả không có mục thống kê, dùng số web tự tính.
   const useApi = !env.LOCAL_DEV && !!env.PANCAKE_POS_API_KEY && env.DEMO_MODE !== '1';
   const limited = makeLimiter();
@@ -132,7 +142,7 @@ export async function pancakeReference(posIds: string[], start: string, end: str
     const shopId = shopOf.get(posId);
     if (!useApi || !shopId) return { posId, source: 'web', web: own, error: useApi ? 'POS chưa ghép cửa hàng Pancake' : undefined };
     try {
-      return { posId, source: 'pancake', web: own, pancake: await pancakePart(limited, shopId, start, end) };
+      return { posId, source: 'pancake', web: own, pancake: await pancakePart(limited, shopId, start, end, endUtc) };
     } catch (error) {
       console.error('pancake-ref api', posId, error instanceof Error ? error.message : error);
       return { posId, source: 'web', web: own, error: error instanceof Error ? error.message : 'Không gọi được Pancake' };
