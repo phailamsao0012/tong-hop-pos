@@ -224,12 +224,14 @@ export function TeamSheetPanel() {
                             {t.members.filter((m) => m.ids.length).map((m) => <option key={m.ids[0]} value={m.ids[0]}>{m.name}</option>)}
                           </select>
                           {mkey && <ManagerChip onlyCount label={label} name={owner?.name ?? (data.accounts ?? []).find((a) => a.id === t[accField])?.name ?? ''} people={managed[posField].get(mkey) ?? []} />}
+                          {/* Nối Zalo theo người, trước tài khoản web (anh Vũ 06/11/2026: "ưu tiên nối zalo trước"). Người nhận cũ gắn theo tài khoản vẫn hiện. */}
+                          {owner ? <ZaloButton linked={zaloOf(`pos:${t[posField]}`) ?? (t[accField] ? zaloOf(t[accField]!) : undefined)} code={zaloCode[`pos:${t[posField]}`]} disabled={saving} label={label} onClick={() => void zaloFor(t, `pos:${t[posField]}`)} />
+                            : t[accField] && <ZaloButton linked={zaloOf(t[accField]!)} code={zaloCode[t[accField]!]} disabled={saving} label={label} onClick={() => void zaloFor(t, t[accField]!)} />}
                           <select aria-label={`Tài khoản web của ${label} ${t.name}`} title="Tài khoản đăng nhập web (không bắt buộc, gắn sau cũng được)" value={t[accField] ?? ''} onChange={(e) => edit(t.key, { [accField]: e.target.value || null })}
                             className={`max-w-36 rounded-full border border-dashed bg-surface px-2 py-0.5 text-[11.5px] ${t[accField] ? 'text-ink' : 'text-ink-3'}`}>
                             <option value="">TK web: chưa gắn</option>
                             {(data.accounts ?? []).filter((a) => a.role === role || a.id === t[accField]).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                           </select>
-                          {t[accField] && <ZaloButton linked={zaloOf(t[accField]!)} code={zaloCode[t[accField]!]} disabled={saving} label={label} onClick={() => void zaloFor(t, t[accField]!)} />}
                         </div>
                       );
                     })}
@@ -269,7 +271,7 @@ export function TeamSheetPanel() {
           <div className="flex flex-wrap items-center gap-2">
             <button type="button" className="btn primary" disabled={!dirty || saving} onClick={() => void save()}><Save size={15} />{saving ? 'Đang lưu…' : 'Lưu chia team'}</button>
             {dirty && <span className="text-[12px] text-warn">Chưa lưu</span>}
-            <span className="text-[11.5px] text-ink-3">Lưu đè cách chia cũ; bản cũ được giữ lại để lấy lại khi cần. Nhóm “Bỏ qua” (văn phòng, trực page…) không lưu. Mentor, Leader chọn trong người của team. Ô “TK web” gắn tài khoản đăng nhập (vai trò Mentor hoặc Trưởng nhóm, không bắt buộc): có tài khoản thì người đó chỉ xem team mình và nối được Zalo.</span>
+            <span className="text-[11.5px] text-ink-3">Lưu đè cách chia cũ; bản cũ được giữ lại để lấy lại khi cần. Nhóm “Bỏ qua” (văn phòng, trực page…) không lưu. Mentor, Leader chọn trong người của team, bấm Gắn Zalo để nhận báo cáo, không cần tài khoản. Ô “TK web” gắn tài khoản đăng nhập sau nếu có (vai trò Mentor hoặc Trưởng nhóm): người đó chỉ xem team mình.</span>
           </div>
         </div>
       )}
