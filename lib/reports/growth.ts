@@ -77,3 +77,6 @@ export async function saveJoined(db: D1Database, id: string, joinedAt: string | 
     .bind(PEOPLE_META_KEY, JSON.stringify(meta), new Date().toISOString()).run();
   return r.meta?.rows_written ?? 1;
 }
+
+/** Có tài khoản POS này không (sửa ngày vào ở trang Tăng trưởng; tách khỏi app/api/reports/growth/route.ts). */
+export const posUserExists = (db: D1Database, id: string) => db.prepare('SELECT 1 FROM pos_users WHERE user_id=? LIMIT 1').bind(id).first();

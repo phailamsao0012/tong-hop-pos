@@ -2,10 +2,8 @@ import { lensOrders } from '@/lib/reports/lens-orders';
 import { resolveMktLens, lensDatabase } from '@/lib/shared/scope-filter';
 import { packedBySeller, packedOrderPage } from '@/lib/reports/sale-packed';
 import { parseOrderFilters } from '@/lib/pancake/order-segments';
-import { parseTeam, teamFilter, teamSubquery } from '@/lib/teams/team';
+import { parseTeam } from '@/lib/teams/team';
 import { env } from 'cloudflare:workers';
-import { isOwner } from '@/lib/auth/access';
-import { listTargets } from '@/lib/kpi/targets';
 import { forecastTargetAllowed, monthForecast, type MonthForecast } from '@/lib/kpi/forecast';
 import { resolveBranchUnit as resolveHrUnit } from '@/lib/shared/scope-filter';
 import { getSessionUser, unauthorized } from '@/lib/auth/auth';
@@ -14,30 +12,15 @@ import { POS } from '@/lib/shared/report-model';
 import { DATE_RE, todayVn } from '@/lib/shared/report-time';
 import { parseMetricSettings } from '@/lib/reports/metrics';
 import { annotateRates } from '@/lib/reports/overview-rates';
+import { hideCskhAssigned, overviewBranches, overviewForecastTarget } from '@/lib/reports/overview-api';
 
-const isCskh = (d: string | null | undefined) => /cskh|chăm sóc/i.test(d ?? '');
-type Maskable = { assignedOrders: number; assignedCloseRate: number | null; assignedHidden: boolean };
-const mask = (r: Maskable) => { r.assignedOrders = 0; r.assignedCloseRate = null; r.assignedHidden = true; };
-export function hideCskhAssigned(report: Awaited<ReturnType<typeof overviewReport>>, team: ReturnType<typeof parseTeam>) {
-  for (const part of [report.current, report.compare]) {
-    if (!part) continue;
-    for (const r of part.byEmployee) if (isCskh(r.department)) mask(r);
-    for (const r of part.byEmployeePos) if (isCskh(r.department)) mask(r);
-    if (team === 'cskh') { report.origins.forEach(mask); mask(part.total); part.byPos.forEach(mask); part.series.forEach(mask); for (const d of part.byEmployeeDay) d.assignedOrders = 0; }
-  }
-}
 
 export async function GET(request: Request) {
   const user = await getSessionUser();
   if (!user) return unauthorized('Đăng nhập để xem báo cáo.');
   const params = new URL(request.url).searchParams;
   if (params.get('branches') === '1') {
-    const [offices, teams] = await env.DB.batch([
-      env.DB.prepare('SELECT id,name FROM hr_offices ORDER BY name'),
-      env.DB.prepare("SELECT d.id,d.name,d.office_id AS officeId,t.team AS dept,COUNT(*) AS people FROM hr_departments d JOIN hr_pos_team t ON t.department_id=d.id WHERE d.kind='team' AND d.active=1 AND t.team IN ('sale','cskh') AND t.status<>'da_nghi' GROUP BY d.id,t.team ORDER BY d.name"),
-    ]);
-    const teamRows = teams.results as { id: string; name: string; officeId: string; dept: 'sale' | 'cskh'; people: number }[];
-    return Response.json({ offices: offices.results, teams: teamRows.filter((t) => user.team === 'all' || t.dept === user.team) }, { headers: { 'Cache-Control': 'private, no-store' } });
+    return Response.json(await overviewBranches(user.team), { headers: { 'Cache-Control': 'private, no-store' } });
   }
   const start = params.get('start') ?? '';
   const end = params.get('end') ?? '';
@@ -88,13 +71,7 @@ export async function GET(request: Request) {
     // KPI CSKH và team vẫn chỉ chủ hệ thống được xem. Không chia KPI đầu người theo POS bằng ước lượng.
     const allPos = requested.length === 0 || POS.every((p) => requested.includes(p.id));
     if (allPos && forecastTargetAllowed(user.role)) {
-      const targets = await listTargets(today.slice(0, 7));
-      const members = await env.DB.prepare(`SELECT DISTINCT user_id FROM pos_users WHERE 1=1${teamFilter('user_id', team, true, unit)}`).all<{ user_id: string }>();
-      const hidden = isOwner(user) ? new Set<string>() : new Set((await env.DB.prepare(`SELECT user_id FROM ${teamSubquery('cskh', false)} AS t`).all<{ user_id: string }>()).results.map((m) => m.user_id));
-      const ids = new Set(members.results.map((r) => r.user_id).filter((id) => !hidden.has(id) && (!employeeIds.length || employeeIds.includes(id))));
-      const teamGoal = unit && !employeeIds.length ? targets.find((t) => t.scope === 'team' && t.refId === unit.id)?.revenue : null;
-      const employeeGoal = targets.filter((t) => t.scope === 'employee' && ids.has(t.refId)).reduce((sum, t) => sum + t.revenue, 0);
-      target = teamGoal || employeeGoal || null;
+      target = await overviewForecastTarget(team, unit, employeeIds, today, user);
     }
     forecast = monthForecast({ actual: report.current.total.closedNet, start, end, today, target });
   }

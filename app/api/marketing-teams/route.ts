@@ -1,8 +1,8 @@
 import { env } from 'cloudflare:workers';
 import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
 import { isOwner } from '@/lib/auth/access';
-import { MARKETING_TEAMS_KEY, validateMarketingTeams } from '@/lib/teams/marketing-teams';
-
+import { validateMarketingTeams } from '@/lib/teams/marketing-teams';
+import { mktPeople, saveMarketingTeams } from '@/lib/teams/mkt-teams-admin';
 import { mktTeams } from '@/lib/teams/mkt-teams-source';
 import { marketerIds } from '@/lib/teams/marketer-ids';
 
@@ -10,7 +10,7 @@ export async function GET() {
   if (!(await getSessionUser())) return unauthorized();
   const resolved = await mktTeams(env.DB);
   const [staff, marketerIdSet] = await Promise.all([
-    env.DB.prepare("SELECT user_id,MAX(name) AS name,MAX(COALESCE(department,'')) AS department,MAX(is_active) AS active FROM pos_users WHERE user_id<>'' GROUP BY user_id ORDER BY name").all(),
+    mktPeople(),
     marketerIds(env.DB),
   ]);
   return Response.json({
@@ -28,7 +28,6 @@ export async function PUT(request: Request) {
   try { body = await request.json(); } catch { return Response.json({ error: 'JSON không hợp lệ.' }, { status: 400 }); }
   const checked = validateMarketingTeams(body.teams);
   if (!checked.teams) return Response.json({ error: checked.error }, { status: 400 });
-  await env.DB.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at')
-    .bind(MARKETING_TEAMS_KEY, JSON.stringify(checked.teams), new Date().toISOString()).run();
+  await saveMarketingTeams(checked);
   return Response.json({ ok: true, teams: checked.teams }, { headers: { 'Cache-Control': 'private, no-store' } });
 }

@@ -1,9 +1,6 @@
-import { env } from 'cloudflare:workers';
-import { getSessionUser } from '@/lib/auth/auth';
 import { allowedPos } from '@/lib/auth/access';
-import { phonePseudonym, seesFullPhone } from '@/lib/auth/phone-privacy';
-import { maskPhonesIn } from '@/lib/ops/audit';
-import { teamSubquery } from '@/lib/teams/team';
+import { getSessionUser } from '@/lib/auth/auth';
+import { customDataSources } from '@/lib/reports/custom-data';
 import {
   customerKey,
   type Assignment,
@@ -19,44 +16,7 @@ export async function GET() {
       { error: 'Đăng nhập để xem dữ liệu.' },
       { status: 401 },
     );
-  const db = env.DB;
-  // Chỉ dữ liệu thuộc POS và nhóm của tài khoản (người cấp số / người chốt thuộc nhóm), như các báo cáo khác.
-  const posIds = allowedPos(user);
-  const posIn = `pos_id IN (${posIds.map(() => '?').join(',')})`;
-  const team = teamSubquery(user.team, false);
-  const [assignmentRows, orderRows, customerRows, shops, coverage] =
-    await Promise.all([
-      db
-        .prepare(
-          `SELECT * FROM assignments WHERE ${posIn}${team ? ` AND employee_id IN ${team}` : ''} ORDER BY assigned_at DESC LIMIT 5001`,
-        )
-        .bind(...posIds)
-        .all<Record<string, unknown>>(),
-      db
-        .prepare(`SELECT * FROM orders WHERE ${posIn}${team ? ` AND closer_id IN ${team}` : ''} ORDER BY created_at DESC LIMIT 5001`)
-        .bind(...posIds)
-        .all<Record<string, unknown>>(),
-      db
-        .prepare(`SELECT * FROM customers WHERE ${posIn} LIMIT 5001`)
-        .bind(...posIds)
-        .all<Record<string, unknown>>(),
-      db
-        .prepare(
-          'SELECT last_sync_at, history_start FROM pos_shops WHERE last_sync_at IS NOT NULL ORDER BY last_sync_at DESC LIMIT 1',
-        )
-        .first<{ last_sync_at: string; history_start: string | null }>(),
-      db
-        .prepare(
-          'SELECT COUNT(*) AS connected_pos, MIN(last_sync_at) AS oldest_sync_at, MAX(history_start) AS latest_history_start, SUM(CASE WHEN history_start IS NULL THEN 1 ELSE 0 END) AS missing_history_start FROM pos_shops WHERE status=?',
-        )
-        .bind('connected')
-        .first<{
-          connected_pos: number;
-          oldest_sync_at: string | null;
-          latest_history_start: string | null;
-          missing_history_start: number;
-        }>(),
-    ]);
+  const { assignmentRows, orderRows, customerRows, shops, coverage } = await customDataSources(allowedPos(user), user.team);
   if (!assignmentRows.results.length && !orderRows.results.length)
     return Response.json({ mode: 'empty' }, { headers: { 'Cache-Control': 'no-store' } });
   if (
@@ -136,13 +96,5 @@ export async function GET() {
       oldestSyncAt: coverage?.oldest_sync_at ?? null,
     },
   };
-  // Vai trò không thấy đủ SĐT: thay bằng bí danh ổn định (cùng số → cùng bí danh) để báo cáo vẫn gộp đúng theo khách.
-  if (!seesFullPhone(user.role)) {
-    const alias = new Map<string, string>();
-    const of = async (phone: string) => { let a = alias.get(phone); if (!a) { a = await phonePseudonym(phone); alias.set(phone, a); } return a; };
-    for (const list of [data.assignments, data.orders, data.customers] as { phone: string }[][])
-      for (const row of list) row.phone = await of(row.phone);
-    for (const c of data.customers) { c.name = maskPhonesIn(c.name); c.note = maskPhonesIn(c.note); }
-  }
   return Response.json(data, { headers: { 'Cache-Control': 'no-store' } });
 }

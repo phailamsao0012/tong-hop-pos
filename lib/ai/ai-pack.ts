@@ -28,3 +28,12 @@ export function packMetrics(pack: AiPack) {
   pack.rows.forEach((r, i) => Object.entries(r.metrics).forEach(([key, value]) => { if (typeof value === 'number' && Number.isFinite(value)) metrics[`rows.${i}.metrics.${key}`] = value; }));
   return metrics;
 }
+
+// Đọc / lưu gói AI trong app_settings. Tách khỏi app/api/ai/insights/route.ts và app/api/ai/pack/route.ts (cải tổ B5, 05/11/2026), câu SQL giữ nguyên.
+/** Một dòng app_settings của AI: gói `ai_pack:<ngày>`, kết quả `ai_insight:<ngày>`. */
+export const readAiSetting = (db: D1Database, key: string) => db.prepare('SELECT value FROM app_settings WHERE key=?').bind(key).first<{ value: string }>();
+/** Lưu gói hôm nay (không ghi đè gói đã có) và dọn gói cũ hơn 30 ngày. */
+export const storeAiPack = (db: D1Database, key: string, pack: AiPack, date: string) => db.batch([
+    db.prepare("INSERT OR IGNORE INTO app_settings(key,value,updated_at) VALUES (?,?,datetime('now'))").bind(key, JSON.stringify(pack)),
+    db.prepare("DELETE FROM app_settings WHERE key GLOB 'ai_pack:*' AND substr(key,9)<date(?, '-29 days')").bind(date),
+]);
