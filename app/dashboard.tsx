@@ -1489,7 +1489,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   return (
     <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen}>
       <Sidebar collapsible="offcanvas" className="border-r-0">
-        <SidebarHeader className="px-4 pt-5 pb-4">
+        <SidebarHeader data-no-st className="px-4 pt-5 pb-4">
           <div className="flex items-center gap-2.5">
             <img src="/logo.svg" alt="MEGATECH" width={34} height={34} className="size-[34px] rounded-[9px] shadow-[0_2px_10px_rgba(0,0,0,.25)]" />
             <div className="min-w-0">

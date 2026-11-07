@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Search, UserRoundCheck } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { STAFF_STATUSES, type StaffStatus } from '@/lib/teams/staff-status';
+import { POS } from '@/lib/shared/report-model';
 import { apiJson } from './api-fetch';
 import { TenureBadge } from './tenure-badge';
 import { ChartCard, ErrorBox, SegmentedControl, toast } from './ui-kit';
@@ -101,6 +102,8 @@ export function StatusPainter() {
       if (b !== k) bare.set(b, bare.has(b) && bare.get(b) !== (s ?? null) ? null : (s ?? null));
     }
     for (const [b, s] of bare) if (s && !byName.has(b)) byName.set(b, s);
+    // Tên POS / tên công ty không phải tên người.
+    for (const k of ['megatech', ...POS.map((p) => norm(p.name))]) byName.delete(k);
     const ownText = (el: Element) => { let t = ''; for (const n of el.childNodes) if (n.nodeType === 3) t += n.textContent ?? ''; return norm(t); };
     const paint = () => {
       for (const el of document.querySelectorAll('[data-st]')) { const s = byName.get(ownText(el)); if (s) { if (el.getAttribute('data-st') !== s) el.setAttribute('data-st', s); } else { el.removeAttribute('data-st'); if (Object.values(STAFF_STATUSES).includes(el.getAttribute('title') as never)) el.removeAttribute('title'); } }
@@ -110,7 +113,8 @@ export function StatusPainter() {
         const raw = n.textContent ?? '';
         if (raw.length < 3 || raw.length > 80) continue;
         const el = n.parentElement;
-        if (!el || el.closest('script,style,textarea,[contenteditable]')) continue;
+        // Logo, tên POS, tiêu đề: không phải tên người, không tô dù trùng tên tài khoản (07/11/2026: tài khoản POS "Megatech" đánh dấu nghỉ làm logo đỏ).
+        if (!el || el.closest('script,style,textarea,[contenteditable],[data-no-st]')) continue;
         const s = byName.get(ownText(el));
         if (s && el.getAttribute('data-st') !== s) { el.setAttribute('data-st', s); if (!el.getAttribute('title')) el.setAttribute('title', STAFF_STATUSES[s]); }
       }

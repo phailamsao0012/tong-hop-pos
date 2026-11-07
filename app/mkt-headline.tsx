@@ -7,6 +7,7 @@
 // (người / team dùng chung bộ lọc với bảng marketer bên dưới; sản phẩm sheet chỉ lọc khối này).
 // Theo bộ lọc kỳ + POS chung của web. Số liệu: lib/mkt-analytics.ts.
 import { useMemo, useState } from 'react';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { usePosStaffFilter } from './pos-store';
 import { ArrowRight, BadgeDollarSign, CalendarDays, Check, CheckCircle2, Coins, Megaphone, Package, Phone, TrendingUp, UsersRound, UserRound, Wallet, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -147,9 +148,42 @@ function RankChart({ rows, onPick, motionOn, seg }: { rows: Row[]; onPick: (id: 
 
 type SortKey = 'name' | 'cost' | 'net' | 'newNet' | 'cskhNet' | 'roas' | 'closed' | 'phones' | 'cpc' | 'cpl' | 'share';
 
+type OrderKind = 'new' | 'cskh';
+type MktOrder = { id: string; orderId: string; posName: string; phone: string | null; confirmedAt: string; status: string; marketer: string | null; seller: string | null; net: number };
+/** Bấm "x đơn" ở cột DT New / DT CSKH: danh sách đơn tạo ra số đó, cùng kỳ và POS (anh Vũ 07/11/2026). */
+function OrdersSheet({ pick, start, end, posIds, team, onClose }: { pick: { row: Row; kind: OrderKind; team: boolean } | null; start: string; end: string; posIds: string[]; team: boolean; onClose: () => void }) {
+  const p = new URLSearchParams({ start, end, posIds: posIds.join(','), kind: pick?.kind ?? 'new' });
+  if (pick) p.set(pick.team || team ? 'teamId' : 'marketerId', pick.row.id);
+  const { data, error } = useApi<{ orders: MktOrder[]; more: boolean }>(pick ? `/api/marketing/orders?${p}` : null, { keep: false });
+  const sum = data?.orders.reduce((t, o) => t + o.net, 0) ?? 0;
+  return <Sheet open={!!pick} onOpenChange={(open) => { if (!open) onClose(); }}>
+    <SheetContent className="overflow-y-auto data-[side=right]:w-full data-[side=right]:max-w-full data-[side=right]:sm:max-w-3xl">
+      <SheetHeader className="pr-12">
+        <SheetTitle>{pick ? `${pick.kind === 'new' ? 'Đơn New' : 'Đơn CSKH'} · ${pick.row.name}` : ''}</SheetTitle>
+        <SheetDescription>{pick?.kind === 'new' ? 'Đơn MKT do Sale chốt' : 'Đơn MKT do CSKH chốt'}, theo ngày xác nhận lần đầu, {dmy(start)}–{dmy(end)}, POS đang chọn.</SheetDescription>
+      </SheetHeader>
+      <div className="px-4 pb-6">
+        {error && <p className="text-[13px] text-bad">Không tải được danh sách đơn.</p>}
+        {!data && !error && <p className="text-[13px] text-ink-3">Đang tải đơn…</p>}
+        {data && (data.orders.length ? <>
+          <p className="mb-2 text-[12.5px] text-ink-2">{vi.format(data.orders.length)}{data.more ? '+' : ''} đơn · {money(sum)}{data.more ? ' (hiện 500 đơn mới nhất)' : ''}</p>
+          <TableWrap><table className="tbl"><thead><tr><th>Mã đơn</th><th>POS</th><th>SĐT</th>{(pick?.team || team) && <th>Marketer</th>}<th>Người chốt</th><th>Trạng thái</th><th className="n">Doanh thu</th></tr></thead>
+            <tbody>{data.orders.map((o) => <tr key={o.id}>
+              <td className="font-medium">{o.orderId}<span className="block text-[11px] font-normal text-ink-3">{dmy(vnDay(o.confirmedAt))} {vnTime(o.confirmedAt)}</span></td>
+              <td>{o.posName}</td><td className="num">{o.phone ?? '—'}</td>{(pick?.team || team) && <td>{o.marketer ?? '—'}</td>}<td>{o.seller ?? '—'}</td><td>{o.status}</td><td className="n">{money(o.net)}</td>
+            </tr>)}</tbody></table></TableWrap>
+        </> : <EmptyState text="Không có đơn." />)}
+      </div>
+    </SheetContent>
+  </Sheet>;
+}
+const vnDate = (iso: string) => new Date(new Date(iso.endsWith('Z') || iso.includes('+') ? iso : `${iso}Z`).getTime() + 7 * 3600e3).toISOString();
+const vnDay = (iso: string) => vnDate(iso).slice(0, 10);
+const vnTime = (iso: string) => vnDate(iso).slice(11, 16);
+
 // Doanh thu tách từng dòng (anh Vũ 28/10/2026: thấy doanh thu CSKH của từng marketer, không chỉ tổng). Dòng theo thời gian không có số tách.
 const splitOfRow = (m: Row['m']) => 'newNet' in m ? m as Metrics & NewSplit : null;
-function BreakdownTable({ rows, first, onPick, totalCost: _totalCost, keepOrder, showSplit = false }: { rows: Row[]; first: string; onPick?: (id: string) => void; totalCost: number; keepOrder?: boolean; showSplit?: boolean }) {
+function BreakdownTable({ rows, first, onPick, onOrders, totalCost: _totalCost, keepOrder, showSplit = false }: { rows: Row[]; first: string; onPick?: (id: string) => void; onOrders?: (row: Row, kind: OrderKind) => void; totalCost: number; keepOrder?: boolean; showSplit?: boolean }) {
   const sort = useSort<SortKey>('net');
   const shown = keepOrder && sort.key === 'net' && sort.desc ? rows : sort.apply(rows, (r, k) => {
     switch (k) {
@@ -184,7 +218,13 @@ function BreakdownTable({ rows, first, onPick, totalCost: _totalCost, keepOrder,
             </td>
             <td className="n">{money(r.m.cost)}</td>
             <td className="n font-semibold">{money(r.m.net)}{r.prevNet !== undefined && (r.prevNet || r.m.net) > 0 && <span className="block"><DeltaPill value={delta(r.m.net, r.prevNet)} variant="plain" /></span>}</td>
-            {split && (() => { const x = splitOfRow(r.m); return <><td className="n">{x ? money(x.newNet) : '—'}{x && <span className="block text-[11px] text-ink-3">{vi.format(x.newOrders)} đơn</span>}</td><td className="n">{x ? money(x.cskhNet) : '—'}{x && <span className="block text-[11px] text-ink-3">{vi.format(x.cskhOrders)} đơn</span>}</td></>; })()}
+            {split && (() => {
+              const x = splitOfRow(r.m);
+              const count = (n: number, kind: OrderKind) => onOrders && n > 0 && r.id !== '__unassigned'
+                ? <button type="button" onClick={() => onOrders(r, kind)} className="block w-full text-right text-[11px] text-primary underline decoration-dotted underline-offset-2 tap" title="Bấm xem danh sách đơn">{vi.format(n)} đơn</button>
+                : <span className="block text-[11px] text-ink-3">{vi.format(n)} đơn</span>;
+              return <><td className="n">{x ? money(x.newNet) : '—'}{x && count(x.newOrders, 'new')}</td><td className="n">{x ? money(x.cskhNet) : '—'}{x && count(x.cskhOrders, 'cskh')}</td></>;
+            })()}
             <td className="n font-semibold">{roasText(r.m.roas)}</td>
             <td className="n">{vi.format(r.m.closed)}</td>
             <td className="n">{vi.format(r.m.phones)}</td>
@@ -232,6 +272,7 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
   onMarketer: (id: string | null) => void; onTeam: (id: string | null) => void; onOpen: () => void;
 }) {
   const [product, setProduct] = useState<string | null>(null);
+  const [orders, setOrders] = useState<{ row: Row; kind: OrderKind; team: boolean } | null>(null);
   const [tab, setTab] = useState<Tab>('people');
   const seg = useTeam();
   // Chọn POS nào chỉ hiện người có tài khoản trên POS đó (anh Vũ 04/11/2026); tổng giữ nguyên.
@@ -358,7 +399,9 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
         {tab === 'teams' && !data.teams.some((t) => t.id !== '__unassigned') && <p className="text-[11.5px] text-ink-3">Chưa chia team Marketing. Chia ở nút <b>Quản lý team MKT</b> đầu trang.</p>}
         {tab !== 'time' && onPick && <RankChart seg={shown} rows={[...tabRows].sort((a, b) => (b.m.net + b.m.cost) - (a.m.net + a.m.cost))} onPick={onPick} motionOn={motionOn} />}
         <BreakdownTable rows={tabRows} first={tab === 'people' ? 'Marketer' : tab === 'teams' ? 'Team' : tab === 'products' ? 'Sản phẩm' : data.bucket === 'day' ? 'Ngày' : data.bucket === 'week' ? 'Tuần' : 'Tháng'}
-          onPick={onPick} totalCost={totalCost} keepOrder={tab === 'time'} showSplit={shown === 'all'} />
+          onPick={onPick} totalCost={totalCost} keepOrder={tab === 'time'} showSplit={shown === 'all'}
+          onOrders={product === null && (tab === 'people' || tab === 'teams') ? (row, kind) => setOrders({ row, kind, team: tab === 'teams' }) : undefined} />
+        <OrdersSheet pick={orders} start={start} end={end} posIds={posIds} team={false} onClose={() => setOrders(null)} />
       </div>
     </section>
   );

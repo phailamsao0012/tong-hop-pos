@@ -64,9 +64,10 @@ const ROLE_RE: [Role, RegExp][] = [
   ['amount', /chi phi|so tien|tien ads|tien qc|tien quang cao|spend|amount|cost|ngan sach|thanh tien|tong tien|^tien\b/],
   ['campaign', /chien dich|campaign|tai khoan|\bpage\b|nhom qc|^san pham\b|^sp$/],
   // Số MKT tự báo trên sheet (tab CPQC Daily: SĐT, Đơn, DT), lưu riêng để đối chiếu với đơn Pancake (anh Vũ 12/10/2026). Khớp cả ô cho chắc.
-  ['revenue', /^(dt|doanh thu|doanh so)( chot| ngay)?$/],
-  ['orders', /^(don|so don|don chot|tong don)$/],
-  ['phones', /^(sdt|so dien thoai|so sdt|data|so data|leads?|so ve)$/],
+  // File thật ghi "Số lượng SĐT", "Số đơn khách mới", "Doanh thu khách mới" (07/11/2026: trước đó web không nhận ra nên bảng đối chiếu trống).
+  ['revenue', /^(dt|doanh thu|doanh so)( chot| ngay)?( khach moi| moi| new)?$/],
+  ['orders', /^(don|so don|don chot|tong don)( khach moi| moi| new)?$/],
+  ['phones', /^(so luong )?(sdt|so dien thoai|so sdt|data|so data|leads?|so ve)$/],
   ['day', /^(ngay|date|thoi gian)\b|\bngay\b/],
   // "Trang" ở tab CPQC Daily của BC MKT Agri là tên MKT (anh Vũ 09/10); chỉ khớp cả ô, "Tình trạng" không tính.
   ['marketer', /marketer|\bmkt\b|nhan vien|ho ten|ho va ten|\bten\b|nguoi chay|nguoi|^trang$/],
