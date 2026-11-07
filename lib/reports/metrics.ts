@@ -92,7 +92,10 @@ export const METRIC_DEFS = {
   success: (b: SuccessBase) => ({ name: 'Mua thành công', def: `Đơn ${SUCCESS_BASES[b].label.toLowerCase()}. Đổi ở nút "Cách tính".` }),
 } as const;
 
-/** Ngưỡng màu tỷ lệ chốt dùng chung web, app, bot: ≥ good xanh, ≥ warn vàng, dưới là đỏ. */
-export const RATE_THRESHOLDS = { good: 40, warn: 25 } as const;
+/** Ngưỡng màu tỷ lệ chốt dùng chung web, app, bot: ≥ good xanh, ≥ warn vàng, dưới là đỏ.
+ *  Anh Vũ 07/11/2026: tỷ lệ chốt Sale dưới 42% đỏ, từ 42% xanh (bỏ mức vàng, nên warn = good). */
+export const RATE_THRESHOLDS = { good: 42, warn: 42 } as const;
+/** Lớp chữ màu tỷ lệ chốt Sale: xanh từ 42%, dưới là đỏ; không có số thì không tô. */
+export const rateTextClass = (rate: number | null | undefined) => rate === null || rate === undefined ? '' : rate >= RATE_THRESHOLDS.good ? 'text-good' : 'text-bad';
 export const rateLevel = (rate: number | null | undefined): 'good' | 'warn' | 'bad' =>
   (rate ?? 0) >= RATE_THRESHOLDS.good ? 'good' : (rate ?? 0) >= RATE_THRESHOLDS.warn ? 'warn' : 'bad';

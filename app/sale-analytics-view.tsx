@@ -275,7 +275,7 @@ export function SaleAnalyticsView() {
               </ul>
             </ChartCard>
           </div>
-          <ChartCard icon={Trophy} title={`Xếp hạng · ${staff.length} người`} subtitle={`Màu tỷ lệ chốt data: xanh từ ${RATE_THRESHOLDS.good}%, vàng từ ${RATE_THRESHOLDS.warn}% · bấm tiêu đề cột để sắp xếp`} info={r.definitions.scope}>
+          <ChartCard icon={Trophy} title={`Xếp hạng · ${staff.length} người`} subtitle={`Màu tỷ lệ chốt data: xanh từ ${RATE_THRESHOLDS.good}%, dưới là đỏ · bấm tiêu đề cột để sắp xếp`} info={r.definitions.scope}>
             {staff.length ? (
               <TableWrap minWidth={960} maxHeight="34rem" stickyFirst>
                 <table className="tbl">

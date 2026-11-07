@@ -6,8 +6,9 @@
 // 31/10: Siêu Vô Gạo tính thêm Oxy + Bổ huyết, Bio Nano Shield là kháng sinh).
 // Cùng cách tính với "Chốt Sale theo nhóm đơn" ở Tổng quan POS: lọc nhóm đơn productSegment, tỷ lệ chốt chia cho mọi đơn cùng phạm vi.
 // Mỗi đơn chỉ thuộc một nhóm (lib/order-segments.ts), nên cột Tổng là doanh số thật.
+import { ProfileLink } from './staff-profile-link';
 import { Pill } from 'lucide-react';
-import { closeRateOf } from '@/lib/reports/metrics';
+import { closeRateOf, rateTextClass } from '@/lib/reports/metrics';
 import { PRODUCT_SEGMENTS, SEGMENT_KEYS, segmentsFor } from '@/lib/pancake/order-segments';
 import type { OverviewReport } from './overview-view';
 import { useMetricSettings } from './metric-settings';
@@ -64,7 +65,7 @@ export function SaleSegmentBlock({ q, periodLabel }: { q: string; periodLabel: s
                 <>
                   <div className="mt-2 flex items-baseline gap-2"><strong className="num text-3xl text-ink">{shortMoney(cur.closedNet)}</strong></div>
                   <p className="m-0 mt-1 text-[12.5px] text-ink-2">
-                    <b className="num text-ink">{vi.format(cur.closedOrders)}</b> đơn chốt · tỷ lệ chốt <b className="num text-ink">{pct(closeRateOf(cur, ms.rateBase))}</b> · AOV {shortMoney(cur.averageOrder)}
+                    <b className="num text-ink">{vi.format(cur.closedOrders)}</b> đơn chốt · tỷ lệ chốt <b className={`num ${rateTextClass(closeRateOf(cur, ms.rateBase)) || 'text-ink'}`}>{pct(closeRateOf(cur, ms.rateBase))}</b> · AOV {shortMoney(cur.averageOrder)}
                   </p>
                   {prev && <p className="m-0 mt-0.5 text-[12px] text-ink-3">Kỳ trước {shortMoney(prev.closedNet)} · {vi.format(prev.closedOrders)} đơn</p>}
                 </>
@@ -94,7 +95,7 @@ export function SaleSegmentBlock({ q, periodLabel }: { q: string; periodLabel: s
               </tr></thead>
               <tbody>{rows.map((r) => (
                 <tr key={r.id}>
-                  <td className="text-left font-medium">{r.name}</td>
+                  <td className="text-left font-medium"><ProfileLink id={r.id} name={r.name} /></td>
                   {segs.map((seg) => [
                     <td key={seg} className="num r text-right">
                       {shortMoney(r[seg])}

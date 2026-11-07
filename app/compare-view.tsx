@@ -6,7 +6,7 @@ import { StaffName } from './staff-name';
 import { usePosIds } from './pos-store';
 import { compareText } from '@/lib/shared/periods';
 import { usePeriod } from './period-store';
-import { cancelRateOf, closeRateBase, closeRateOf, closeRateTop, returnRateOf } from '@/lib/reports/metrics';
+import { RATE_THRESHOLDS, cancelRateOf, closeRateBase, closeRateOf, closeRateTop, rateTextClass, returnRateOf } from '@/lib/reports/metrics';
 import { useMetricSettings } from './metric-settings';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { PosBadge } from './pos-badge';
@@ -33,7 +33,7 @@ type CallsStaff = { authorId: string; notes: number; customers: number; activeDa
 type Report = OverviewReport & { current: OverviewReport['current'] & { byEmployeeDay: { sellerId: string; day: string; closedOrders: number; assignedOrders: number; closedNet: number }[] } };
 type Emp = Report['current']['byEmployeePos'][number] & { spark: number[]; prevRate: number | null; prevClosed: number | null; tag: { tone: 'green' | 'red' | 'orange' | 'blue' | 'gray'; label: string } };
 type SortKey = 'name' | 'department' | 'assigned' | 'closed' | 'rate' | 'prev' | 'aov' | 'net' | 'delivered' | 'returned' | 'customers' | 'notes' | 'perDay' | 'goal';
-const TARGET = 40;
+const TARGET = RATE_THRESHOLDS.good; // 42% (anh Vũ 07/11/2026)
 /** Bỏ dấu để tìm tên không phân biệt dấu / hoa thường. */
 const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase().trim();
 /** Chênh lệch "+963 · +3,8%" cho tooltip KPI. */
@@ -352,7 +352,7 @@ export function CompareView() {
                               className="grid w-full grid-cols-[18px_minmax(0,1fr)_auto_auto] items-center gap-x-2.5 rounded-lg px-2 py-1.5 text-left text-[12.5px] outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--ring)]">
                               <span className="num inline-block w-4 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span>
                               <span className={`truncate transition-colors duration-[var(--dur)] ${picked ? 'font-medium text-primary' : 'text-ink'}`}>{r.name}</span>
-                              <span className="num text-[13px]">{pct(closeRateOf(r, ms.rateBase))}</span>
+                              <span className={`num text-[13px] ${rateTextClass(closeRateOf(r, ms.rateBase))}`}>{pct(closeRateOf(r, ms.rateBase))}</span>
                               <span className="num text-[11px] text-ink-3">{vi.format(closeRateTop(r, ms.rateBase))} / {vi.format(closeRateBase(r, ms.rateBase))}</span>
                               <ContextLine className="col-span-full" indent={28}>Kỳ trước {pct(r.prevRate)} · {money(r.closedNet)}{splitPos ? ` · ${posName(r.posId)}` : ''}{picked ? ' · đang so sánh' : ''}</ContextLine>
                             </button>
@@ -404,7 +404,7 @@ export function CompareView() {
                             <span className="num w-5 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span>
                             <button type="button" aria-pressed={picked} onClick={() => toggle(r.sellerId)}
                               className={`flex min-w-0 items-center gap-2 rounded-md text-[13px] tap font-medium transition-colors duration-[var(--dur)] ease-[var(--ease)] hover:text-primary ${picked ? 'text-primary' : 'text-ink'}`}>
-                              <Avatar name={r.name} size="sm" /><span className="truncate"><StaffName id={r.sellerId} name={r.name} tenure={false} /></span>
+                              <Avatar name={r.name} size="sm" /><span className="truncate"><StaffName id={r.sellerId} name={r.name} tenure={false} link={false} /></span>
                             </button>
                             <HoverReveal>
                               <Tooltip content={picked ? 'Bỏ khỏi so sánh' : 'Thêm vào so sánh (tối đa 8 người)'}>
@@ -425,7 +425,7 @@ export function CompareView() {
                         </> : <>
                           <td className="n">{r.assignedHidden ? '—' : vi.format(r.assignedOrders)}</td>
                           <td className="n">{vi.format(r.closedOrders)}</td>
-                          <td className={`n ${rate >= TARGET ? 'text-primary' : ''}`} title="Trong số chia, bao nhiêu đơn đã chốt (cột Đơn chốt đếm theo ngày chốt nên có cả đơn chia từ trước)">{r.assignedHidden ? '—' : pct(closeRateOf(r, ms.rateBase))}{!r.assignedHidden && closeRateBase(r, ms.rateBase) > 0 && <span className="block text-[11px] font-normal text-ink-3">{vi.format(closeRateTop(r, ms.rateBase))}/{vi.format(closeRateBase(r, ms.rateBase))} đã chốt</span>}</td>
+                          <td className={`n ${r.assignedHidden ? '' : rateTextClass(closeRateOf(r, ms.rateBase))}`} title="Trong số chia, bao nhiêu đơn đã chốt (cột Đơn chốt đếm theo ngày chốt nên có cả đơn chia từ trước)">{r.assignedHidden ? '—' : pct(closeRateOf(r, ms.rateBase))}{!r.assignedHidden && closeRateBase(r, ms.rateBase) > 0 && <span className="block text-[11px] font-normal text-ink-3">{vi.format(closeRateTop(r, ms.rateBase))}/{vi.format(closeRateBase(r, ms.rateBase))} đã chốt</span>}</td>
                           <td className="n mut text-xs"><span className="inline-flex items-center gap-1.5">{pct(r.prevRate)}{closeRateOf(r, ms.rateBase) !== null && r.prevRate !== null && <DeltaPill value={(closeRateOf(r, ms.rateBase) ?? 0) - r.prevRate} suffix=" điểm" />}</span></td>
                         </>}
                         <td className="n">{r.averageOrder ? money(r.averageOrder) : '—'}</td>

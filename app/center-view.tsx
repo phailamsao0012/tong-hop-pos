@@ -4,6 +4,7 @@
 // Hai kiểu hiển thị: cuộn dọc (mặc định) và màn hình TV (lớp phủ toàn màn hình, vừa khít một màn hình, không cuộn; Esc để thoát).
 // Tải dữ liệu: 8 request song song, mỗi khối một useApi (số "lần cuối" của khối hiện ngay từ trình duyệt, máy chủ trả số mới thì thay;
 // đổi kỳ / POS / nhóm huỷ request cũ nên số liệu kỳ trước không đè lên kỳ mới); khối nào lỗi thì giữ số cũ và báo riêng trong khối đó thay vì xoá cả trang.
+import { openStaffProfile } from './staff-profile-link';
 import { focusAfterNav } from './nav-focus';
 import { ForecastCard, ForecastReview } from './forecast-card';
 import { usePosIds } from './pos-store';
@@ -13,7 +14,7 @@ import { AiPackButton } from './ai-pack';
 import { ICON } from './icons';
 import { PancakeReference } from './pancake-reference';
 import { Attention, MonthPace, TeamsCompare, useExec, type AiSummaryView, type AttentionItem } from './exec-blocks';
-import { RATE_THRESHOLDS } from '@/lib/reports/metrics';
+import { RATE_THRESHOLDS, rateTextClass } from '@/lib/reports/metrics';
 import { cancelRateOf, closeRateBase, closeRateOf, closeRateTop, returnRateOf } from '@/lib/reports/metrics';
 import { useMetricSettings } from './metric-settings';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -121,7 +122,7 @@ function TrendTip({ active, payload, label, rows }: { active?: boolean; payload?
 }
 
 /** Bảng nhân viên (Top / Cần hỗ trợ): dòng sáng lên khi rê chuột / focus, lộ thanh tiến độ chốt / chia; tên là nút mở So sánh nhân viên. */
-function EmpTable({ rows, tone, compact = false, metric = 'rate', onNavigate }: { rows: Employee[]; tone: 'green' | 'red'; compact?: boolean; metric?: 'rate' | 'aov'; onNavigate: (view: string) => void }) {
+function EmpTable({ rows, tone, compact = false, metric = 'rate', onNavigate: _onNavigate }: { rows: Employee[]; tone: 'green' | 'red'; compact?: boolean; metric?: 'rate' | 'aov'; onNavigate: (view: string) => void }) {
   const ms = useMetricSettings();
   if (!rows.length) return <p className="empty px-2 py-4 text-[11.5px]">{metric === 'aov' ? 'Chưa đủ dữ liệu (cần ≥ 10 đơn chốt).' : 'Chưa đủ dữ liệu (cần ≥ 10 đơn chia).'}</p>;
   if (metric === 'aov') return (
@@ -131,7 +132,7 @@ function EmpTable({ rows, tone, compact = false, metric = 'rate', onNavigate }: 
         {rows.map((e, i) => (
           <tr key={e.sellerId}>
             <td className="num text-ink-3">{i + 1}</td>
-            <td className="whitespace-normal"><button type="button" onClick={() => onNavigate('compare')} title={`${e.name} · mở So sánh nhân viên`} className="block w-full whitespace-normal rounded-[4px] text-left font-medium leading-snug tap text-ink outline-none [overflow-wrap:anywhere] hover:text-primary focus-visible:shadow-[0_0_0_2px_var(--ring)]">{e.name}</button></td>
+            <td className="whitespace-normal"><button type="button" onClick={() => openStaffProfile(e.sellerId, e.name)} title={`${e.name} · mở hồ sơ làm việc`} className="block w-full whitespace-normal rounded-[4px] text-left font-medium leading-snug tap text-ink outline-none [overflow-wrap:anywhere] hover:text-primary focus-visible:shadow-[0_0_0_2px_var(--ring)]">{e.name}</button></td>
             <td className={`n ${tone === 'green' ? 'text-good' : 'text-bad'}`}>{shortMoney(e.averageOrder ?? 0)}</td>
             {!compact && <td className="n text-ink-2">{vi.format(e.closedOrders)}</td>}
           </tr>
@@ -147,9 +148,9 @@ function EmpTable({ rows, tone, compact = false, metric = 'rate', onNavigate }: 
           <tr key={e.sellerId}>
             <td className="num text-ink-3">{i + 1}</td>
             <td className="whitespace-normal">
-              <button type="button" onClick={() => onNavigate('compare')} title={`${e.name} · mở So sánh nhân viên`} className="block w-full whitespace-normal rounded-[4px] text-left font-medium leading-snug tap text-ink outline-none [overflow-wrap:anywhere] transition-colors duration-[var(--dur)] ease-[var(--ease)] hover:text-primary focus-visible:shadow-[0_0_0_2px_var(--ring)]">{e.name}</button>
+              <button type="button" onClick={() => openStaffProfile(e.sellerId, e.name)} title={`${e.name} · mở hồ sơ làm việc`} className="block w-full whitespace-normal rounded-[4px] text-left font-medium leading-snug tap text-ink outline-none [overflow-wrap:anywhere] transition-colors duration-[var(--dur)] ease-[var(--ease)] hover:text-primary focus-visible:shadow-[0_0_0_2px_var(--ring)]">{e.name}</button>
             </td>
-            <td className={`n ${tone === 'green' ? 'text-good' : 'text-bad'}`} title={compact ? `${vi.format(closeRateTop(e, ms.rateBase))} / ${vi.format(closeRateBase(e, ms.rateBase))} đơn đã chốt` : undefined}>{pct(closeRateOf(e, ms.rateBase))}</td>
+            <td className={`n ${rateTextClass(closeRateOf(e, ms.rateBase))}`} title={compact ? `${vi.format(closeRateTop(e, ms.rateBase))} / ${vi.format(closeRateBase(e, ms.rateBase))} đơn đã chốt` : undefined}>{pct(closeRateOf(e, ms.rateBase))}</td>
             {!compact && (
               <td className="n">
                 <span className="text-ink-2">{vi.format(closeRateTop(e, ms.rateBase))}<span className="font-normal text-ink-3">/{vi.format(closeRateBase(e, ms.rateBase))}</span></span>

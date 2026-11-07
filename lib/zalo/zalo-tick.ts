@@ -14,6 +14,8 @@ import { REPORT_SCHEDULE_KEY, hiddenSections, legacySlotKey, parseReportSchedule
 
 const MORNING_TEST = 'anh-1';
 import { listTargets } from '@/lib/kpi/targets';
+import { LOW_RATE_EVERY_MIN, LOW_RATE_KEY, currentSlot, lowRateText, pickLowRate, todayRates, type LowRateState } from '@/lib/zalo/low-rate';
+import { WEB_TEAMS_KEY, parseWebTeams } from '@/lib/teams/web-teams';
 import { DEFAULT_ZALO_SETTINGS, listContacts, writeZaloSetting, formatList, formatOverdue, formatIdleAlert, formatMeetingMessage, type Contact, type Task, type Meeting, type ZaloSend } from '@/lib/zalo/zalo-work';
 
 type Snapshot = { total: number; orders: number; created?: number; createdClosed?: number; people: Record<string, { name: string; total: number; orders: number }> };
@@ -98,7 +100,10 @@ export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database
   const prune = hour === '02' && state.prune !== day;
   // Gửi thử báo cáo 8h cho sếp MỘT lần sau khi lên bản có ảnh (anh Vũ 02/11/2026: "gửi thử t xem có xem được k").
   const morningTest = settings.morningBrief && state.morningTest !== MORNING_TEST;
-  if (!morning && !overdue && !slot && !idle && !row?.meeting && !prune && !morningTest) return;
+  // Báo ngay Sale tỷ lệ chốt dưới 42% (07/11/2026): mỗi 15 phút, từ giờ báo cáo sáng tới giờ báo cáo ca cuối.
+  const lastSlot = [...schedule.slots.times].sort().at(-1) ?? '22:00';
+  const lowRate = Number(time.slice(3)) % LOW_RATE_EVERY_MIN === 0 && time >= schedule.morning.time && time <= lastSlot;
+  if (!morning && !overdue && !slot && !idle && !row?.meeting && !prune && !morningTest && !lowRate) return;
   const contacts = (await listContacts(db)).filter(c => c.active), leaders = contacts.filter(c => c.kind === 'leader');
   const sender = options.send ?? createZaloSender(db, now); let sent = 0;
   // Tin gửi leader/nhân viên cũng ghi vào tab Chat. Người chưa nối thì không ghi: nhắc họp, cảnh báo sẽ thử lại mỗi lượt.
@@ -228,6 +233,29 @@ export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database
   if (row?.meeting) {
     const invites = (await db.prepare(`SELECT m.*,i.contact_id FROM zalo_meetings m JOIN zalo_meeting_invites i ON i.meeting_id=m.id WHERE m.cancelled_at IS NULL AND m.start_at>? AND m.start_at<=? AND i.reminded_at IS NULL AND (i.answer IS NULL OR i.answer='co') ORDER BY m.start_at LIMIT 30`).bind(new Date(now).toISOString(), new Date(now + settings.remindBeforeMeetingMin * 60000).toISOString()).all<Meeting & { contact_id: string }>()).results;
     for (const m of invites) if (await send(contacts.find(c => c.id === m.contact_id), 'Nhắc họp\n' + formatMeetingMessage(m), 'meeting', m.no)) await db.prepare('UPDATE zalo_meeting_invites SET reminded_at=? WHERE meeting_id=? AND contact_id=? AND reminded_at IS NULL').bind(new Date(now).toISOString(), m.id, m.contact_id).run();
+  }
+  if (lowRate) {
+    try {
+      const [saved, teamsRow] = await Promise.all([
+        db.prepare('SELECT value FROM app_settings WHERE key=?').bind(LOW_RATE_KEY).first<{ value: string }>(),
+        db.prepare('SELECT value FROM app_settings WHERE key=?').bind(WEB_TEAMS_KEY).first<{ value: string }>(),
+      ]);
+      const saleTeams = parseWebTeams(teamsRow?.value).filter((t) => t.dept === 'sale' && t.memberIds.length);
+      const targets = (await loadReportTargets(db, leaders)).filter((c) => c.dept === 'sale' && c.chat_id);
+      const watched = saleTeams.filter((t) => targets.some((c) => c.team_id === t.id));
+      if (watched.length) {
+        let lr = parse<LowRateState>(saved?.value, {});
+        const rows = await todayRates(db, [...new Set(watched.flatMap((t) => t.memberIds))], day);
+        const window = currentSlot(schedule.slots.times, time);
+        for (const t of watched) {
+          const picked = pickLowRate(rows.filter((r) => t.memberIds.includes(r.sellerId)), lr, day, window, t.id);
+          lr = picked.state;
+          if (!picked.low.length) continue;
+          for (const c of targets.filter((x) => x.team_id === t.id)) await send(c, lowRateText(t.name, time, picked.low));
+        }
+        await writeZaloSetting(db, LOW_RATE_KEY, lr);
+      }
+    } catch { console.error('zalo low rate failed'); }
   }
   if (prune) { try { await pruneMessages(db, now); await pruneMorningImages(db, now); } catch { console.error('zalo chat prune failed'); } state.prune = day; }
   await writeZaloSetting(db, 'zalo_tick_v1', state);
