@@ -59,7 +59,7 @@ type KpiDef = {
   delta?: number | null; deltaLabel?: string; note?: string; tip?: TipRows; progress?: { value: number; max: number }; view: string; tv?: boolean;
 };
 
-const SHIFT_LABELS: Record<string, string> = { morning: 'Ca sáng', afternoon: 'Ca chiều', evening: 'Ca tối', day: 'Cả ngày' };
+const SHIFT_LABELS: Record<string, string> = { night: 'Ca đêm', morning: 'Ca sáng', afternoon: 'Ca chiều', evening: 'Ca tối', day: 'Cả ngày' };
 const BLOCK_LABELS: Record<Block, string> = { overview: 'Tổng quan kỳ', trend: 'Xu hướng 30 ngày', shift: 'Ca hiện tại', pipeline: 'Vận hành đơn', customers: 'Khách hàng', repurchase: 'Mua lại', batches: 'Data được cấp', sync: 'Đồng bộ POS', targets: 'Mục tiêu tháng' };
 const STATUS_KEYS = Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[];
 const DORMANT_BUCKETS: { k: Bucket; label: string; fill: string }[] = [

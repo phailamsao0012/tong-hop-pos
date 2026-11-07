@@ -35,7 +35,7 @@ type Shift = {
   definitions: Record<string, string>;
 };
 type StaffSort = 'received' | 'closed' | 'rate' | 'pending';
-const SHIFT_LABELS: Record<string, string> = { morning: 'Ca sáng 08:00 – 12:00', afternoon: 'Ca chiều 12:00 – 17:00', evening: 'Ca tối 17:00 – 22:00', day: 'Cả ngày 00:00 – 24:00', personal: 'Ca cá nhân (giờ của từng người)' };
+const SHIFT_LABELS: Record<string, string> = { night: 'Ca đêm 00:00 – 08:00', morning: 'Ca sáng 08:00 – 12:00', afternoon: 'Ca chiều 12:00 – 17:00', evening: 'Ca tối 17:00 – 22:00', day: 'Cả ngày 00:00 – 24:00', personal: 'Ca cá nhân (giờ của từng người)' };
 const WEEKDAYS = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
 const STAFF_SORTS: { value: StaffSort; label: string }[] = [{ value: 'received', label: 'Số nhận' }, { value: 'closed', label: 'Số chốt' }, { value: 'rate', label: 'Tỷ lệ' }, { value: 'pending', label: 'Chưa chốt' }];
 const FRESH_MS = 15 * 60000;

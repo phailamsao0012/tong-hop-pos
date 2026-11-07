@@ -14,14 +14,15 @@ import { listStaffSettings } from '@/lib/teams/staff-settings';
 
 // Điều hành trong ca: số nhận / số chốt nóng theo SĐT trong khung giờ của một ngày (giờ VN),
 // so với cùng khung giờ hôm trước; diễn biến theo giờ; hoạt động xác nhận mới nhất; cảnh báo.
-const SHIFTS: Record<string, [number, number]> = { morning: [8, 12], afternoon: [12, 17], evening: [17, 22], day: [0, 24], personal: [0, 24] };
+// Ca đêm 0h–8h thêm theo ý sếp (anh Vũ 07/11/2026).
+const SHIFTS: Record<string, [number, number]> = { night: [0, 8], morning: [8, 12], afternoon: [12, 17], evening: [17, 22], day: [0, 24], personal: [0, 24] };
 const utcAt = (date: string, hour: number) => new Date(Date.parse(`${date}T00:00:00+07:00`) + hour * 3600000).toISOString().slice(0, 19);
 const NET = 'COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0))';
 
 export async function shiftReport(user: { role: Role }, p: URLSearchParams, posIds: string[], today: string, date: string) {
   const shiftKey = p.get('shift') ?? 'auto';
   const nowHourVn = (new Date(Date.now() + 7 * 3600000).getUTCHours());
-  const autoShift = nowHourVn < 12 ? 'morning' : nowHourVn < 17 ? 'afternoon' : 'evening';
+  const autoShift = nowHourVn < 8 ? 'night' : nowHourVn < 12 ? 'morning' : nowHourVn < 17 ? 'afternoon' : 'evening';
   const shift = shiftKey && Object.hasOwn(SHIFTS, shiftKey) ? shiftKey : autoShift;
   const [h0, h1] = SHIFTS[shift];
   // Ca cá nhân: mỗi nhân viên tính theo giờ ca đã cấu hình (Cấu hình → Mục tiêu tháng); chưa cấu hình thì cả ngày.
