@@ -11,7 +11,7 @@ import { PosCombined, PosMultiples } from './pos-multiples';
 import { focusAfterNav, setNavHint } from './nav-focus';
 import { segmentDrillHint } from '@/lib/shared/drill-hint';
 import { UncountedStaff } from './uncounted-staff';
-import { RATE_BASES, closeRateBase, closeRateOf, closeRateTop, rateLevel } from '@/lib/reports/metrics';
+import { RATE_BASES, closeRateBase, closeRateOf, closeRateTop, rateLevel, rateTextClass } from '@/lib/reports/metrics';
 import { useMetricSettings } from './metric-settings';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
@@ -430,7 +430,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
             total: ['Tổng', vnNum(cur.orders), vnNum(cur.closedOrders), pctText(closeRateOf(cur, ms.rateBase)), vnMoney(cur.closedNet), cur.averageOrder ? vnMoney(cur.averageOrder) : '—', cur.closedCustomers === null ? '—' : vnNum(cur.closedCustomers), vnNum(cur.groups.delivered.orders), vnNum(cur.groups.returned.orders), vnNum(cur.groups.cancelled.orders), ''] },
         ] },
         { title: 'Tỷ lệ chốt theo nhân viên', subtitle: `${department === 'all' ? 'Tất cả bộ phận' : department} · ${team === 'cskh' ? 'CSKH: đơn chốt ÷ đơn tạo mới theo nguồn đang chọn' : 'Đơn chia = đơn được giao trong kỳ; đơn chốt theo giờ chốt; tỷ lệ = chốt ÷ chia'}`, blocks: [
-          { type: 'chart', height: Math.min(520, 40 + employees.slice(0, 20).length * 24), config: { type: 'bar', data: { labels: employees.slice(0, 20).map((e) => e.name), datasets: [{ label: 'Tỷ lệ chốt %', data: employees.slice(0, 20).map((e) => Number((closeRateOf(e, ms.rateBase) ?? 0).toFixed(1))), backgroundColor: employees.slice(0, 20).map((e) => (closeRateOf(e, ms.rateBase) ?? 0) >= 40 ? SLIDE_COLORS.green : (closeRateOf(e, ms.rateBase) ?? 0) >= 25 ? SLIDE_COLORS.amber : SLIDE_COLORS.red), borderRadius: 4, unit: '%' }] }, options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { min: 0, max: 100 } } } } },
+          { type: 'chart', height: Math.min(520, 40 + employees.slice(0, 20).length * 24), config: { type: 'bar', data: { labels: employees.slice(0, 20).map((e) => e.name), datasets: [{ label: 'Tỷ lệ chốt %', data: employees.slice(0, 20).map((e) => Number((closeRateOf(e, ms.rateBase) ?? 0).toFixed(1))), backgroundColor: employees.slice(0, 20).map((e) => rateLevel(closeRateOf(e, ms.rateBase)) === 'good' ? SLIDE_COLORS.green : SLIDE_COLORS.red), borderRadius: 4, unit: '%' }] }, options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { min: 0, max: 100 } } } } },
           { type: 'table', columns: [{ label: '#' }, { label: 'Nhân viên' }, { label: 'Bộ phận' }, { label: 'Đơn chia', align: 'right' }, { label: 'Đơn chốt', align: 'right' }, { label: 'Tỷ lệ chốt', align: 'right' }, { label: 'Doanh thu', align: 'right' }, { label: 'SL bán thực', align: 'right' }, { label: 'Giao TC', align: 'right' }, { label: 'Hoàn / Hủy', align: 'right' }],
             rows: employees.map((r, i) => [i + 1, splitPos ? `${r.name} · ${posName(r.posId)}` : r.name, r.department ?? '—', team === 'cskh' || r.assignedHidden ? '—' : vnNum(r.assignedOrders), vnNum(r.closedOrders), pctText(team === 'cskh' ? closeRateOf(r, ms.rateBase) : closeRateOf(r, ms.rateBase), 2), vnMoney(r.closedNet), vnNum(r.closedQuantity), vnNum(r.groups.delivered.orders), `${vnNum(r.groups.returned.orders)} / ${vnNum(r.groups.cancelled.orders)}`]),
             total: ['', 'Tổng', '', team === 'cskh' ? '—' : vnNum(empTotal.assignedOrders), vnNum(empTotal.closedOrders), team === 'cskh' ? (empTotal.rateOrders ? pctText(empTotal.createdClosed / empTotal.rateOrders * 100, 2) : '—') : (empTotal.rateAssigned ? pctText(empTotal.assignedClosed / empTotal.rateAssigned * 100, 2) : '—'), vnMoney(empTotal.closedNet), vnNum(empTotal.closedQuantity), '', ''] },
@@ -588,7 +588,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
                       </td>
                       <td className="n">{vi.format(row.orders)}</td>
                       <td className="n">{vi.format(row.closedOrders)}</td>
-                      <td className="n">{pct(closeRateOf(row, ms.rateBase))}</td>
+                      <td className={`n ${rateTextClass(closeRateOf(row, ms.rateBase))}`}>{pct(closeRateOf(row, ms.rateBase))}</td>
                       <td className="n">{money(row.closedNet)}</td>
                       <td className="n">{row.averageOrder ? money(row.averageOrder) : '—'}</td>
                       <td className="n">{row.closedCustomers === null ? '—' : vi.format(row.closedCustomers)}</td>
@@ -606,7 +606,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
                   <tr>
                     <td className="bg-surface-2">Tổng</td>
                     <td className="n">{vi.format(cur.orders)}</td><td className="n">{vi.format(cur.closedOrders)}</td>
-                    <td className="n">{pct(closeRateOf(cur, ms.rateBase))}</td><td className="n">{money(cur.closedNet)}</td>
+                    <td className={`n ${rateTextClass(closeRateOf(cur, ms.rateBase))}`}>{pct(closeRateOf(cur, ms.rateBase))}</td><td className="n">{money(cur.closedNet)}</td>
                     <td className="n">{cur.averageOrder ? money(cur.averageOrder) : '—'}</td>
                     <td className="n">{cur.closedCustomers === null ? '—' : vi.format(cur.closedCustomers)}</td>
                     <td className="n">{vi.format(cur.groups.delivered.orders)}</td>

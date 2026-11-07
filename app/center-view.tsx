@@ -13,7 +13,7 @@ import { AiPackButton } from './ai-pack';
 import { ICON } from './icons';
 import { PancakeReference } from './pancake-reference';
 import { Attention, MonthPace, TeamsCompare, useExec, type AiSummaryView, type AttentionItem } from './exec-blocks';
-import { RATE_THRESHOLDS } from '@/lib/reports/metrics';
+import { RATE_THRESHOLDS, rateTextClass } from '@/lib/reports/metrics';
 import { cancelRateOf, closeRateBase, closeRateOf, closeRateTop, returnRateOf } from '@/lib/reports/metrics';
 import { useMetricSettings } from './metric-settings';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -149,7 +149,7 @@ function EmpTable({ rows, tone, compact = false, metric = 'rate', onNavigate }: 
             <td className="whitespace-normal">
               <button type="button" onClick={() => onNavigate('compare')} title={`${e.name} · mở So sánh nhân viên`} className="block w-full whitespace-normal rounded-[4px] text-left font-medium leading-snug tap text-ink outline-none [overflow-wrap:anywhere] transition-colors duration-[var(--dur)] ease-[var(--ease)] hover:text-primary focus-visible:shadow-[0_0_0_2px_var(--ring)]">{e.name}</button>
             </td>
-            <td className={`n ${tone === 'green' ? 'text-good' : 'text-bad'}`} title={compact ? `${vi.format(closeRateTop(e, ms.rateBase))} / ${vi.format(closeRateBase(e, ms.rateBase))} đơn đã chốt` : undefined}>{pct(closeRateOf(e, ms.rateBase))}</td>
+            <td className={`n ${rateTextClass(closeRateOf(e, ms.rateBase))}`} title={compact ? `${vi.format(closeRateTop(e, ms.rateBase))} / ${vi.format(closeRateBase(e, ms.rateBase))} đơn đã chốt` : undefined}>{pct(closeRateOf(e, ms.rateBase))}</td>
             {!compact && (
               <td className="n">
                 <span className="text-ink-2">{vi.format(closeRateTop(e, ms.rateBase))}<span className="font-normal text-ink-3">/{vi.format(closeRateBase(e, ms.rateBase))}</span></span>

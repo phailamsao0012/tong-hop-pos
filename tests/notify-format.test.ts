@@ -15,12 +15,13 @@ void test('số, tiền, phần trăm, giờ VN viết đúng kiểu web', () =>
   assert.equal(vnDay('2026-10-31T07:05:00Z', true), '31/10/2026');
 });
 
-void test('mức màu dùng chung ngưỡng web: hoàn/hủy 7/5, tỷ lệ chốt 40/25', () => {
+void test('mức màu dùng chung ngưỡng web: hoàn/hủy 7/5, tỷ lệ chốt 42% (dưới đỏ, từ 42 xanh)', () => {
   assert.equal(levelOf('return', 7.8), 'red');
   assert.equal(levelOf('return', 5.2), 'yellow');
   assert.equal(levelOf('cancel', 3.1), 'green');
   assert.equal(levelOf('closeRate', 21), 'red');
-  assert.equal(levelOf('closeRate', 30), 'yellow');
+  assert.equal(levelOf('closeRate', 41.9), 'red');
+  assert.equal(levelOf('closeRate', 42), 'green');
   assert.equal(levelOf('closeRate', 53), 'green');
   assert.equal(pctFlag('return', 5.2), '🟡 5,2%');
   assert.equal(pctFlag('cancel', 3.1), '3,1%');
@@ -70,4 +71,11 @@ void test('batch gom 5 người, webLink mang bộ lọc', () => {
   assert.deepEqual(batch(['a', 'b', 'c', 'd', 'e', 'f', 'g']), ['a', 'b', 'c', 'd', 'e', '… và 2 người khác']);
   assert.deepEqual(batch(['a', 'b']), ['a', 'b']);
   assert.equal(webLink('https://web.example/', 'sale', { team: 'HN', start: '2026-10-25', end: '2026-10-31', pos: null, q: '' }), 'https://web.example/?view=sale&team=HN&start=2026-10-25&end=2026-10-31');
+});
+
+void test('rateTextClass: tỷ lệ chốt Sale xanh từ 42%, dưới là đỏ, không số thì không tô', async () => {
+  const { rateTextClass } = await import('@/lib/reports/metrics');
+  assert.equal(rateTextClass(41.9), 'text-bad');
+  assert.equal(rateTextClass(42), 'text-good');
+  assert.equal(rateTextClass(null), '');
 });
