@@ -74,11 +74,11 @@ function MonthCharts({ months, mkt }: { months: MonthRow[]; mkt: boolean }) {
     <div className="grid gap-3 lg:grid-cols-2">
       <section className="min-w-0 rounded-xl border border-line p-3">
         <h4 className="text-[13px] font-semibold">Doanh số từng tháng</h4>
-        <p className="text-[11px] text-ink-3">Cột vàng = tháng lọt top 3 bộ phận</p>
+        <p className="text-[11px] text-ink-3">Cột cam = tháng lọt top 3 bộ phận</p>
         <ChartContainer config={{ net: { label: 'Doanh số', color: 'var(--primary)' } }} className="mt-2 aspect-auto h-52 w-full">
           <BarChart data={data} margin={{ left: 0, right: 4 }}>
             <CartesianGrid vertical={false} /><XAxis dataKey="key" tick={{ fontSize: 11 }} minTickGap={8} />
-            <YAxis width={48} tick={{ fontSize: 11 }} tickFormatter={(n: number) => shortMoney(n).replace(' ₫', '')} />
+            <YAxis width={44} tick={{ fontSize: 11 }} tickFormatter={(n: number) => (n >= 1e9 ? `${+(n / 1e9).toFixed(1)}tỷ` : `${Math.round(n / 1e6)}tr`)} />
             <ChartTooltip content={<ChartTooltipContent formatter={(v) => money(typeof v === 'number' ? v : null)} />} />
             <Bar dataKey="normal" name="Doanh số" stackId="n" fill="var(--primary)" radius={[4, 4, 0, 0]} isAnimationActive={false} />
             <Bar dataKey="topNet" name="Doanh số (lọt top)" stackId="n" fill="var(--warn)" radius={[4, 4, 0, 0]} isAnimationActive={false} />
