@@ -8,6 +8,7 @@ import { AiBot } from './ai-bot';
 import { Area, CartesianGrid, ComposedChart, Line, ReferenceLine, XAxis, YAxis } from 'recharts';
 import { ChartContainer, ChartTooltip } from '@/components/ui/chart';
 import { useApi } from './use-api';
+import { todayVn } from '@/lib/shared/report-time';
 import { ChartCard, DeltaPill, ErrorBox, SkeletonTable, ThinkingLine, delta, money, pct, shortMoney, useMotionOK } from './ui-kit';
 
 export type Exec = {
@@ -25,7 +26,11 @@ const tr = (n: number) => Math.round(n / 1e4) / 100; // triệu, 2 số lẻ
 
 /** month: tháng của kỳ đang chọn (YYYY-MM); bỏ trống = tháng này. */
 export function useExec(posIds: string[], month?: string) {
-  return useApi<Exec>(useMemo(() => `/api/reports/exec?${new URLSearchParams({ posIds: posIds.join(','), ...(month ? { month } : {}) })}`, [posIds, month]), { refreshMs: 5 * 60000 });
+  const api = useApi<Exec>(useMemo(() => `/api/reports/exec?${new URLSearchParams({ posIds: posIds.join(','), ...(month ? { month } : {}) })}`, [posIds, month]), { refreshMs: 5 * 60000 });
+  // Đổi sang tháng trước: không giữ số tháng cũ trong lúc chờ, kẻo vẫn thấy tháng này kèm dự báo (anh Vũ 07/11/2026).
+  const now = todayVn().slice(0, 7);
+  const want = month && month < now ? month : now;
+  return api.data && api.data.month !== want ? { ...api, data: null } : api;
 }
 
 /** Tiến độ tháng: cộng dồn thực tế, đường mục tiêu (0 → mục tiêu), nét đứt dự báo tới cuối tháng. */

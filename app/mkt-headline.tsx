@@ -9,7 +9,7 @@
 import { useMemo, useState } from 'react';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { usePosStaffFilter } from './pos-store';
-import { ArrowRight, BadgeDollarSign, CalendarDays, Check, CheckCircle2, Coins, Megaphone, Package, Phone, TrendingUp, UsersRound, UserRound, Wallet, X } from 'lucide-react';
+import { ArrowRight, BadgeDollarSign, CalendarDays, Check, CheckCircle2, Coins, Megaphone, Package, Percent, Phone, TrendingUp, UsersRound, UserRound, Wallet, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Area, Bar, BarChart, CartesianGrid, ComposedChart, LabelList, XAxis, YAxis } from 'recharts';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip } from '@/components/ui/chart';
@@ -35,6 +35,7 @@ type Analytics = {
 type Tab = 'people' | 'teams' | 'products' | 'time';
 type Row = { id: string; name: string; sub?: string; m: Metrics | Point; prevNet?: number; active: boolean; dim?: boolean; note?: string };
 
+const pctText = (n: number) => `${(n * 100).toFixed(1).replace('.', ',')}%`;
 const roasText = (n: number | null | undefined) => n === null || n === undefined ? '—' : `${n.toFixed(2).replace('.', ',')}×`;
 const range = (a: string, b: string) => a === b ? dmy(a) : `${dmy(a)}–${dmy(b)}`;
 const productName = (p: string) => p || 'Chưa ghi sản phẩm';
@@ -204,8 +205,8 @@ function BreakdownTable({ rows, first, onPick, onOrders, totalCost: _totalCost, 
   if (!rows.length) return <EmptyState text="Không có chi phí hoặc đơn Marketing trong phạm vi đang chọn." />;
   const split = showSplit && rows.some((r) => splitOfRow(r.m));
   return (
-    <TableWrap stickyFirst><table className="tbl">
-      <thead><tr><SortTh k="name" label={first} sort={sort} align="left" /><SortTh k="cost" label="Chi phí QC" sort={sort} /><SortTh k="net" label="Doanh thu" sort={sort} />{split && <><SortTh k="newNet" label="DT New" sort={sort} /><SortTh k="cskhNet" label="DT CSKH" sort={sort} /></>}<SortTh k="roas" label="ROAS" sort={sort} /><SortTh k="closed" label="Đơn chốt" sort={sort} /><SortTh k="phones" label="Số" sort={sort} /><SortTh k="cpc" label="CP / đơn New" sort={sort} /><SortTh k="cpl" label="CP / số" sort={sort} /><SortTh k="share" label="% chi phí / DT New" sort={sort} /></tr></thead>
+    <TableWrap stickyFirst><table className="tbl [&_td]:px-2 [&_th]:px-2">
+      <thead><tr><SortTh k="name" label={first} sort={sort} align="left" /><SortTh k="cost" label="Chi phí" sort={sort} /><SortTh k="net" label="Doanh thu" sort={sort} />{split && <><SortTh k="newNet" label="DT New" sort={sort} /><SortTh k="cskhNet" label="DT CSKH" sort={sort} /></>}<SortTh k="roas" label="ROAS" sort={sort} /><SortTh k="closed" label="Đơn chốt" sort={sort} /><SortTh k="phones" label="Số" sort={sort} /><SortTh k="cpc" label="CP/đơn New" sort={sort} /><SortTh k="cpl" label="CP/số" sort={sort} /><SortTh k="share" label="% CP/DT New" sort={sort} /></tr></thead>
       <tbody>{shown.map((r) => {
         const share = r.m.costShare == null ? null : r.m.costShare * 100;
         return (
@@ -216,21 +217,21 @@ function BreakdownTable({ rows, first, onPick, onOrders, totalCost: _totalCost, 
               </button> : <span className="font-semibold">{r.name}</span>}
               {(r.sub || r.note) && <span className="block max-w-72 whitespace-normal text-[11px] font-normal leading-snug text-ink-3">{[r.sub, r.note].filter(Boolean).join(' · ')}</span>}
             </td>
-            <td className="n">{money(r.m.cost)}</td>
-            <td className="n font-semibold">{money(r.m.net)}{r.prevNet !== undefined && (r.prevNet || r.m.net) > 0 && <span className="block"><DeltaPill value={delta(r.m.net, r.prevNet)} variant="plain" /></span>}</td>
+            <td className="n"><span title={money(r.m.cost)}>{shortMoney(r.m.cost)}</span></td>
+            <td className="n font-semibold"><span title={money(r.m.net)}>{shortMoney(r.m.net)}</span>{r.prevNet !== undefined && (r.prevNet || r.m.net) > 0 && <span className="block"><DeltaPill value={delta(r.m.net, r.prevNet)} variant="plain" /></span>}</td>
             {split && (() => {
               const x = splitOfRow(r.m);
               const count = (n: number, kind: OrderKind) => onOrders && n > 0 && r.id !== '__unassigned'
                 ? <button type="button" onClick={() => onOrders(r, kind)} className="block w-full text-right text-[11px] text-primary underline decoration-dotted underline-offset-2 tap" title="Bấm xem danh sách đơn">{vi.format(n)} đơn</button>
                 : <span className="block text-[11px] text-ink-3">{vi.format(n)} đơn</span>;
-              return <><td className="n">{x ? money(x.newNet) : '—'}{x && count(x.newOrders, 'new')}</td><td className="n">{x ? money(x.cskhNet) : '—'}{x && count(x.cskhOrders, 'cskh')}</td></>;
+              return <><td className="n">{x ? shortMoney(x.newNet) : '—'}{x && count(x.newOrders, 'new')}</td><td className="n">{x ? shortMoney(x.cskhNet) : '—'}{x && count(x.cskhOrders, 'cskh')}</td></>;
             })()}
             <td className="n font-semibold">{roasText(r.m.roas)}</td>
             <td className="n">{vi.format(r.m.closed)}</td>
             <td className="n">{vi.format(r.m.phones)}</td>
-            <td className="n">{r.m.costPerClosed === null ? '—' : money(r.m.costPerClosed)}</td>
-            <td className="n">{r.m.costPerLead === null ? '—' : money(r.m.costPerLead)}</td>
-            <td className="n" aria-label={`${(share ?? 0).toFixed(1)}% chi phí`}><span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="pbar block h-1.5 w-14"><i style={{ width: `${Math.min(100, share ?? 0)}%` }} /></span><span className="num w-11 text-right">{share === null ? '—' : `${share.toFixed(1).replace('.', ',')}%`}</span></span></td>
+            <td className="n">{r.m.costPerClosed === null ? '—' : shortMoney(r.m.costPerClosed)}</td>
+            <td className="n">{r.m.costPerLead === null ? '—' : shortMoney(r.m.costPerLead)}</td>
+            <td className="n" aria-label={`${(share ?? 0).toFixed(1)}% chi phí`}><span className="num">{share === null ? '—' : `${share.toFixed(1).replace('.', ',')}%`}</span></td>
           </tr>
         );
       })}</tbody>
@@ -363,11 +364,13 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
 
       {split && shown === 'all' && <SplitStrip cur={split.current} prev={split.prev} total={c.net} />}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Stat icon={CheckCircle2} label="Đơn chốt" value={vi.format(c.closed)} d={delta(c.closed, p.closed)} prevText={`trước ${vi.format(p.closed)}`} spark={spark((m) => m.closed, (n) => vi.format(n))} onClick={onOpen} />
         <Stat icon={Phone} label="Số (SĐT khác nhau)" value={vi.format(c.phones)} d={delta(c.phones, p.phones)} prevText={`trước ${vi.format(p.phones)}`} spark={spark((m) => m.phones, (n) => vi.format(n))} onClick={onOpen} />
         <Stat icon={Coins} label="Chi phí / đơn New" value={c.costPerClosed === null ? '—' : shortMoney(c.costPerClosed)} d={c.costPerClosed !== null && p.costPerClosed !== null ? delta(c.costPerClosed, p.costPerClosed) : null} invert prevText={`trước ${p.costPerClosed === null ? '—' : shortMoney(p.costPerClosed)}`} spark={spark((m) => m.costPerClosed, shortMoney)} onClick={onOpen} />
         <Stat icon={Megaphone} label="Chi phí / số" value={c.costPerLead === null ? '—' : shortMoney(c.costPerLead)} d={c.costPerLead !== null && p.costPerLead !== null ? delta(c.costPerLead, p.costPerLead) : null} invert prevText={`trước ${p.costPerLead === null ? '—' : shortMoney(p.costPerLead)}`} spark={spark((m) => m.costPerLead, shortMoney)} onClick={onOpen} />
+        {/* % chi phí / DT New lên ô riêng cho dễ thấy (anh Vũ 07/11/2026: "phần trăm chi phí trên doanh thu đâu"). */}
+        <Stat icon={Percent} label="% chi phí / DT New" value={c.costShare == null ? '—' : pctText(c.costShare)} d={c.costShare != null && p.costShare != null ? delta(c.costShare, p.costShare) : null} invert prevText={`trước ${p.costShare == null ? '—' : pctText(p.costShare)}`} spark={spark((m) => m.costShare ?? null, pctText)} onClick={onOpen} />
       </div>
 
       {timeRows.length > 1 && (
