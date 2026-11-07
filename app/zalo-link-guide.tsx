@@ -6,6 +6,7 @@
 import { useMemo, type ReactNode } from 'react';
 import QRCode from 'qrcode';
 import { ArrowLeft, Bot, ContactRound, Ellipsis, History, Image as ImageIcon, Images, LayoutGrid, List, MessageCircle, Mic, Newspaper, Pin, Plus, ScanLine, ScanQrCode, Search, SendHorizontal, Smile, SquareUser, UserRound, X } from 'lucide-react';
+import type { TeamZaloState } from '@/lib/zalo/team-link';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 /** Link mở bot Zalo của công ty. Để trống tới khi anh gửi link thật. */
@@ -199,5 +200,17 @@ export function ZaloLinkGuide({ open, name, code, demo, onClose }: { open: boole
         </ol>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Nút nối Zalo dùng chung ở Chia team và Tài khoản: đã nối → chip Zalo xanh; đang có mã → bấm xem lại hướng dẫn. */
+export function ZaloButton({ linked, code, disabled, label, onClick, onGuide, hint = 'Lấy mã nối Zalo (tự lưu chia team nếu chưa lưu)' }: { linked?: TeamZaloState; code?: string; disabled: boolean; label: string; onClick: () => void; onGuide: () => void; hint?: string }) {
+  if (linked?.linked) return <span className="inline-flex items-center gap-0.5 rounded-full bg-tint px-1.5 tap py-0.5 text-[11px] font-semibold text-primary" title={linked.teamName ? `Đã nối Zalo · báo cáo theo ${linked.teamName}` : 'Đã nối Zalo · nhận việc qua Zalo'}><MessageCircle size={11} />Zalo</span>;
+  if (code) return <button type="button" onClick={onGuide} className="rounded-full border border-[var(--primary)] px-1.5 py-0.5 text-[11px] text-ink hover:bg-tint-2" title="Bấm xem lại cách nối · mã hết hạn sau 24 giờ">Nhắn bot: <b className="num text-primary">{code}</b></button>;
+  return (
+    <button type="button" disabled={disabled} onClick={onClick} title={disabled ? `Chọn ${label} trước` : hint}
+      className="inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[11px] text-ink-2 hover:border-[var(--primary)] hover:text-primary disabled:opacity-50">
+      <MessageCircle size={11} />Gắn Zalo
+    </button>
   );
 }
