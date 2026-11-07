@@ -33,8 +33,9 @@ import { useApi, useLazySeen } from './use-api';
 import { StaleChip } from './stale-chip';
 import { ReconcileLine } from './reconcile-line';
 import { TEAM_LABELS, useTeam } from './team-store';
+import { deptOf } from '@/lib/teams/team-sheet';
 import {
-  ChartCard, ContextLine, DeltaPill, Donut, ErrorBox, HoverReveal, KpiCard, PageHeader, ProgressBar, STATUS_LABELS, STATUS_VARS, SkeletonKpis, StatusChip, TableWrap, TeamSwitch,
+  ChartCard, ContextLine, DeltaPill, Donut, ErrorBox, HoverReveal, KpiCard, PageHeader, STATUS_LABELS, STATUS_VARS, SkeletonKpis, StatusChip, TeamSwitch,
   delta, dmy, dt, money, pct, posName, posVar, short, shortMoney, timeOnly, toast, useMotionOK, vi, type TipRows, type Tone,
 } from './ui-kit';
 
@@ -58,7 +59,7 @@ type KpiDef = {
   delta?: number | null; deltaLabel?: string; note?: string; tip?: TipRows; progress?: { value: number; max: number }; view: string; tv?: boolean;
 };
 
-const SHIFT_LABELS: Record<string, string> = { morning: 'Ca sáng', afternoon: 'Ca chiều', evening: 'Ca tối', day: 'Cả ngày' };
+const SHIFT_LABELS: Record<string, string> = { night: 'Ca đêm', morning: 'Ca sáng', afternoon: 'Ca chiều', evening: 'Ca tối', day: 'Cả ngày' };
 const BLOCK_LABELS: Record<Block, string> = { overview: 'Tổng quan kỳ', trend: 'Xu hướng 30 ngày', shift: 'Ca hiện tại', pipeline: 'Vận hành đơn', customers: 'Khách hàng', repurchase: 'Mua lại', batches: 'Data được cấp', sync: 'Đồng bộ POS', targets: 'Mục tiêu tháng' };
 const STATUS_KEYS = Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[];
 const DORMANT_BUCKETS: { k: Bucket; label: string; fill: string }[] = [
@@ -120,33 +121,44 @@ function TrendTip({ active, payload, label, rows }: { active?: boolean; payload?
 }
 
 /** Bảng nhân viên (Top / Cần hỗ trợ): dòng sáng lên khi rê chuột / focus, lộ thanh tiến độ chốt / chia; tên là nút mở So sánh nhân viên. */
-function EmpTable({ rows, tone, compact = false, onNavigate }: { rows: Employee[]; tone: 'green' | 'red'; compact?: boolean; onNavigate: (view: string) => void }) {
+function EmpTable({ rows, tone, compact = false, metric = 'rate', onNavigate }: { rows: Employee[]; tone: 'green' | 'red'; compact?: boolean; metric?: 'rate' | 'aov'; onNavigate: (view: string) => void }) {
   const ms = useMetricSettings();
-  if (!rows.length) return <p className="empty px-2 py-4 text-[11.5px]">Chưa đủ dữ liệu (cần ≥ 10 đơn chia).</p>;
-  return (
-    <TableWrap><table className={`tbl w-full ${compact ? 'table-fixed [&_td]:px-1.5 [&_td]:py-1 [&_th]:px-1.5 [&_th]:py-1' : ''}`}>
-      <thead><tr><th className="w-6">#</th><th>Nhân viên</th><th className={`n ${compact ? 'w-16' : ''}`}>Tỷ lệ</th>{!compact && <th className="n">Chốt / chia</th>}</tr></thead>
+  if (!rows.length) return <p className="empty px-2 py-4 text-[11.5px]">{metric === 'aov' ? 'Chưa đủ dữ liệu (cần ≥ 10 đơn chốt).' : 'Chưa đủ dữ liệu (cần ≥ 10 đơn chia).'}</p>;
+  if (metric === 'aov') return (
+    <table className="tbl w-full table-fixed [&_td]:px-1.5 [&_th]:px-1.5">
+      <thead><tr><th className="w-6">#</th><th>Nhân viên</th><th className="n w-24">AOV</th>{!compact && <th className="n w-14">Đơn</th>}</tr></thead>
       <tbody>
         {rows.map((e, i) => (
           <tr key={e.sellerId}>
             <td className="num text-ink-3">{i + 1}</td>
-            <td className="min-w-28 max-w-0">
-              <button type="button" onClick={() => onNavigate('compare')} title={`${e.name} · mở So sánh nhân viên`} className="block w-full truncate rounded-[4px] text-left font-medium tap text-ink outline-none transition-colors duration-[var(--dur)] ease-[var(--ease)] hover:text-primary focus-visible:shadow-[0_0_0_2px_var(--ring)]">{e.name}</button>
-              {!compact && e.department && <span className="block truncate text-[10.5px] text-ink-3" title={e.department}>{e.department}</span>}
+            <td className="whitespace-normal"><button type="button" onClick={() => onNavigate('compare')} title={`${e.name} · mở So sánh nhân viên`} className="block w-full whitespace-normal rounded-[4px] text-left font-medium leading-snug tap text-ink outline-none [overflow-wrap:anywhere] hover:text-primary focus-visible:shadow-[0_0_0_2px_var(--ring)]">{e.name}</button></td>
+            <td className={`n ${tone === 'green' ? 'text-good' : 'text-bad'}`}>{shortMoney(e.averageOrder ?? 0)}</td>
+            {!compact && <td className="n text-ink-2">{vi.format(e.closedOrders)}</td>}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+  return (
+    <table className={`tbl w-full table-fixed ${compact ? '[&_td]:px-1.5 [&_td]:py-1 [&_th]:px-1.5 [&_th]:py-1' : '[&_td]:px-1.5 [&_th]:px-1.5'}`}>
+      <thead><tr><th className="w-6">#</th><th>Nhân viên</th><th className="n w-16">Tỷ lệ</th>{!compact && <th className="n w-20">Chốt/chia</th>}</tr></thead>
+      <tbody>
+        {rows.map((e, i) => (
+          <tr key={e.sellerId}>
+            <td className="num text-ink-3">{i + 1}</td>
+            <td className="whitespace-normal">
+              <button type="button" onClick={() => onNavigate('compare')} title={`${e.name} · mở So sánh nhân viên`} className="block w-full whitespace-normal rounded-[4px] text-left font-medium leading-snug tap text-ink outline-none [overflow-wrap:anywhere] transition-colors duration-[var(--dur)] ease-[var(--ease)] hover:text-primary focus-visible:shadow-[0_0_0_2px_var(--ring)]">{e.name}</button>
             </td>
             <td className={`n ${tone === 'green' ? 'text-good' : 'text-bad'}`} title={compact ? `${vi.format(closeRateTop(e, ms.rateBase))} / ${vi.format(closeRateBase(e, ms.rateBase))} đơn đã chốt` : undefined}>{pct(closeRateOf(e, ms.rateBase))}</td>
             {!compact && (
               <td className="n">
-                <span className="inline-flex items-center justify-end gap-2">
-                  <HoverReveal from="left"><ProgressBar value={closeRateTop(e, ms.rateBase)} max={closeRateBase(e, ms.rateBase)} size="sm" width={56} low={tone === 'red'} /></HoverReveal>
-                  <span className="text-ink-2">{vi.format(closeRateTop(e, ms.rateBase))}<span className="font-normal text-ink-3">/{vi.format(closeRateBase(e, ms.rateBase))}</span></span>
-                </span>
+                <span className="text-ink-2">{vi.format(closeRateTop(e, ms.rateBase))}<span className="font-normal text-ink-3">/{vi.format(closeRateBase(e, ms.rateBase))}</span></span>
               </td>
             )}
           </tr>
         ))}
       </tbody>
-    </table></TableWrap>
+    </table>
   );
 }
 
@@ -236,10 +248,13 @@ export function CenterView({ onNavigate, canRegenerateAi = false, canForecast = 
   const byPos = report?.current.byPos, cmpByPos = report?.compare?.byPos, byEmployee = report?.current.byEmployee;
   const posRows = useMemo(() => (byPos ? posIds.map((id) => ({ id, row: byPos.find((r) => r.posId === id), prev: cmpByPos?.find((r) => r.posId === id) })).filter((x) => x.row).sort((a, b) => b.row!.closedNet - a.row!.closedNet) : []), [byPos, cmpByPos, posIds]);
   const posTotal = posRows.reduce((a, x) => a + x.row!.closedNet, 0);
-  // Xếp hạng chỉ xét Sale/CSKH (bỏ quản trị, MKT, trực page).
-  const employees = useMemo(() => (byEmployee ?? []).filter((e) => e.sellerId && e.assignedOrders >= 10 && (!e.department || /sale|bán hàng|cskh|chăm sóc/i.test(e.department))), [byEmployee]);
-  const topEmp = [...employees].sort((a, b) => (closeRateOf(b, ms.rateBase) ?? -1) - (closeRateOf(a, ms.rateBase) ?? -1)).slice(0, 5);
-  const lowEmp = [...employees].sort((a, b) => (closeRateOf(a, ms.rateBase) ?? 999) - (closeRateOf(b, ms.rateBase) ?? 999)).slice(0, 5);
+  // Tỷ lệ chốt chỉ đo Sale (từ 10 đơn chia); CSKH không đo tỷ lệ chốt mà đo AOV (từ 10 đơn chốt) — anh Vũ 07/11/2026.
+  const saleEmp = useMemo(() => (byEmployee ?? []).filter((e) => e.sellerId && e.assignedOrders >= 10 && deptOf(e.name, e.department ?? '') === 'sale'), [byEmployee]);
+  const cskhEmp = useMemo(() => (byEmployee ?? []).filter((e) => e.sellerId && e.closedOrders >= 10 && e.averageOrder && deptOf(e.name, e.department ?? '') === 'cskh'), [byEmployee]);
+  const topEmp = [...saleEmp].sort((a, b) => (closeRateOf(b, ms.rateBase) ?? -1) - (closeRateOf(a, ms.rateBase) ?? -1)).slice(0, 5);
+  const lowEmp = [...saleEmp].sort((a, b) => (closeRateOf(a, ms.rateBase) ?? 999) - (closeRateOf(b, ms.rateBase) ?? 999)).slice(0, 5);
+  const topAov = [...cskhEmp].sort((a, b) => (b.averageOrder ?? 0) - (a.averageOrder ?? 0)).slice(0, 5);
+  const lowAov = [...cskhEmp].sort((a, b) => (a.averageOrder ?? 0) - (b.averageOrder ?? 0)).slice(0, 5);
   const goal = posIds.reduce((a, id) => a + (targets[`pos:${id}`]?.revenue ?? 0), 0);
   const goalPct = cur && goal ? cur.closedNet / goal * 100 : null;
   const bt = (batches?.batches ?? []).reduce((a, x) => ({ received: a.received + x.received, buyers: a.buyers + x.buyers, net: a.net + x.net }), { received: 0, buyers: 0, net: 0 });
@@ -430,7 +445,7 @@ export function CenterView({ onNavigate, canRegenerateAi = false, canForecast = 
           <TvCell className="col-span-3 row-span-4" title="Trạng thái đơn"><BlockNote error={errors.overview} hasData={!!cur} onRetry={reload} />{donut(150, true)}</TvCell>
           <TvCell className="col-span-3 row-span-4" title="Vận hành đơn"><BlockNote error={errors.pipeline} hasData={!!pipeline} onRetry={reload} />{funnelBlock(true)}</TvCell>
           <TvCell className="col-span-4 row-span-4" title="Xếp hạng POS · doanh thu đơn chốt">{posBars(true)}</TvCell>
-          <TvCell className="col-span-4 row-span-4" title="Nhân viên · tỷ lệ chốt">
+          <TvCell className="col-span-4 row-span-4" title="Sale · tỷ lệ chốt">
             <div className="grid h-full grid-cols-2 gap-3">
               <div className="min-w-0 overflow-hidden"><div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[.07em] text-good">Top tỷ lệ chốt</div><EmpTable rows={topEmp} tone="green" compact onNavigate={onNavigate} /></div>
               <div className="min-w-0 overflow-hidden"><div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[.07em] text-bad">Cần hỗ trợ</div><EmpTable rows={lowEmp} tone="red" compact onNavigate={onNavigate} /></div>
@@ -527,12 +542,18 @@ export function CenterView({ onNavigate, canRegenerateAi = false, canForecast = 
       </div>
 
       <div ref={lowRef} className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-        <ChartCard icon={Users} title="Nhân viên" subtitle="Tỷ lệ chốt · từ 10 đơn chia · Sale và CSKH" info={defs.rate} more={{ label: 'So sánh nhân viên', onClick: () => onNavigate('compare') }} className="min-w-0 lg:col-span-7" loading={firstLoad(!!cur, 'overview')}>
+        <ChartCard icon={Users} title="Nhân viên" subtitle="Sale đo tỷ lệ chốt (từ 10 đơn chia) · CSKH đo AOV (từ 10 đơn chốt)" info={defs.rate} more={{ label: 'So sánh nhân viên', onClick: () => onNavigate('compare') }} className="min-w-0 lg:col-span-7" loading={firstLoad(!!cur, 'overview')}>
           <BlockNote error={errors.overview} hasData={!!cur} onRetry={reload} />
           {cur && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="min-w-0"><div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[.07em] text-good">Top 5</div><EmpTable rows={topEmp} tone="green" onNavigate={onNavigate} /></div>
-              <div className="min-w-0"><div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[.07em] text-bad">Cần hỗ trợ</div><EmpTable rows={lowEmp} tone="red" onNavigate={onNavigate} /></div>
+            <div className="space-y-4">
+              {team !== 'cskh' && <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                <div className="min-w-0"><div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[.07em] text-good">Sale · tỷ lệ chốt cao nhất</div><EmpTable rows={topEmp} tone="green" onNavigate={onNavigate} /></div>
+                <div className="min-w-0"><div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[.07em] text-bad">Sale · cần hỗ trợ</div><EmpTable rows={lowEmp} tone="red" onNavigate={onNavigate} /></div>
+              </div>}
+              {team !== 'sale' && <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                <div className="min-w-0"><div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[.07em] text-good">CSKH · AOV cao nhất</div><EmpTable rows={topAov} tone="green" metric="aov" onNavigate={onNavigate} /></div>
+                <div className="min-w-0"><div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[.07em] text-bad">CSKH · AOV thấp nhất</div><EmpTable rows={lowAov} tone="red" metric="aov" onNavigate={onNavigate} /></div>
+              </div>}
             </div>
           )}
         </ChartCard>

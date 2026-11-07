@@ -195,7 +195,7 @@ export function MktSheetCheck({ start, end, posIds }: { start: string; end: stri
               const noSheet = view === 'day' ? r.id > cutoff : !hasSheet(r);
               return (
                 <tr key={r.id} className={picked === r.id ? 'bg-tint-2' : ''}>
-                  <td className="min-w-40">
+                  <td className="min-w-32 max-w-56 whitespace-normal">
                     {view === 'marketer'
                       ? <button type="button" onClick={() => { setPicked(r.id === picked ? null : r.id); if (r.id !== picked) setView('day'); }} className="flex items-center gap-1.5 text-left font-semibold text-ink tap hover:text-primary" title="Bấm để xem từng ngày của người này">
                           {picked === r.id && <Check size={14} className="shrink-0 text-primary" />}{r.name}

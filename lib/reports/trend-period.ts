@@ -41,6 +41,22 @@ export function forecastFraction(profile: Profile, start: string, end: string, t
   return total > 0 && elapsed > 0 ? Math.min(1, elapsed / total) : null;
 }
 
+/** Đường cộng dồn trong tháng (anh Vũ 07/11/2026): nét liền = đã có tới hôm nay, nét đứt = dự đoán tới cuối tháng.
+ *  Phần dự đoán chia theo cùng hồ sơ ngày trong tuần như số dự đoán, nên điểm cuối đúng bằng số dự đoán. */
+export function monthPath(points: TrendPoint[], profile: Profile, monthStart: string, monthEnd: string, today: string, actual: number, forecast: number | null) {
+  const byDay = new Map<string, number>();
+  for (const p of points) byDay.set(p.day, (byDay.get(p.day) ?? 0) + p.value);
+  const out: { day: string; actual: number | null; forecast: number | null }[] = [];
+  let run = 0;
+  for (let d = monthStart; d <= monthEnd; d = addDays(d, 1)) {
+    if (d < today) { run += byDay.get(d) ?? 0; out.push({ day: d, actual: run, forecast: null }); continue; }
+    if (d === today) { out.push({ day: d, actual, forecast: forecast === null ? null : actual }); continue; }
+    const frac = forecast === null ? null : forecastFraction(profile, monthStart, monthEnd, addDays(d, 1), 0);
+    out.push({ day: d, actual: null, forecast: forecast === null ? null : d === monthEnd ? forecast : Math.max(actual, forecast * (frac ?? 1)) });
+  }
+  return out;
+}
+
 export function periodCard(points: TrendPoint[], opts: TrendOptions, profile: Profile, now = Date.now()) {
   const today = todayVn(now), period = periodKind(opts.start, opts.end, today, opts.preset);
   const local = new Date(now + 7 * 3600000), hour = local.getUTCHours() + local.getUTCMinutes() / 60 + local.getUTCSeconds() / 3600;

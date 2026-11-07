@@ -68,7 +68,7 @@ export function reasonBars(groups: { reason: string; count: number }[], max = 5)
 export type AdvisorViz = {
   sale: ReturnType<typeof saleCapacity> | null;
   cskh: { have: number; notes: number; days: number; notesPerPerson: number | null } | null;
-  mkt: { open: boolean; actual: number; forecast: number | null } | null;
+  mkt: { open: boolean; actual: number; forecast: number | null; month?: string; done?: boolean; path?: { day: string; actual: number | null; forecast: number | null }[] } | null;
 };
 export type AdvisorItem = { dept: TrendDept; title: string; value: string; why: string };
 export type ReasonRow = { id: string; staff: string; team: string; messages: string };
@@ -117,7 +117,7 @@ export async function advisorReport(db: D1Database, opts: TrendOptions, depts: T
   const server = (import.meta as ImportMeta & { env?: { SSR: boolean } }).env?.SSR !== false
     ? await Promise.all([import('@/lib/shared/scope-filter'), import('@/lib/reports/trend-period')]) : null;
   if (!server) throw new Error('advisorReport chỉ chạy trên máy chủ');
-  const [{ scopeFromParams, scopeSql }, { hourlyProfile, periodCard, trendQuery }] = server;
+  const [{ scopeFromParams, scopeSql }, { hourlyProfile, monthPath, periodCard, trendQuery }] = server;
   const items: AdvisorItem[] = [];
   const viz: AdvisorViz = { sale: null, cskh: null, mkt: null };
   const scope = scopeFromParams(new URLSearchParams({ team: opts.team, ...(opts.branch ? { branch: opts.branch } : {}) }), opts.unit);
@@ -162,13 +162,19 @@ export async function advisorReport(db: D1Database, opts: TrendOptions, depts: T
     const range = vnRangeUtc(addDays(todayVn(), -28), addDays(todayVn(), -1));
     const newFilter = filter + teamFilter('o.seller_id', 'sale');
     const historyQuery = trendQuery('mkt', opts.posIds, range.startUtc, range.endUtc, newFilter, [], false);
-    const currentRange = vnRangeUtc(opts.start, opts.end < todayVn() ? opts.end : todayVn());
-    const currentQuery = trendQuery('mkt', opts.posIds, currentRange.startUtc, opts.end >= todayVn() ? new Date().toISOString().slice(0,19) : currentRange.endUtc, newFilter, [], false);
+    // Nét liền tiến độ, nét đứt dự đoán tới cuối tháng (anh Vũ 07/11/2026). Kỳ chọn thuộc tháng đã qua thì vẽ đủ tháng đó, không dự đoán.
+    const now = todayVn(), month = opts.end.slice(0, 7) < now.slice(0, 7) ? opts.end.slice(0, 7) : now.slice(0, 7), done = month < now.slice(0, 7);
+    const monthStart = `${month}-01`;
+    const monthEnd = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).toISOString().slice(0, 10);
+    const today = done ? addDays(monthEnd, 1) : now;
+    const currentRange = vnRangeUtc(monthStart, done ? monthEnd : now);
+    const currentQuery = trendQuery('mkt', opts.posIds, currentRange.startUtc, done ? currentRange.endUtc : new Date().toISOString().slice(0,19), newFilter, [], false);
     const history = (await db.prepare(historyQuery.sql).bind(...historyQuery.binds).all<TrendPoint>()).results;
     const current = (await db.prepare(currentQuery.sql).bind(...currentQuery.binds).all<TrendPoint>()).results;
-    const card = periodCard(current, opts, hourlyProfile(history, todayVn()));
-    viz.mkt = { open: card.period.open, actual: card.actual, forecast: card.forecast };
-    items.push({ dept: 'mkt', title: card.period.open ? 'DT New dự đoán cuối kỳ' : 'DT New trong kỳ', value: card.forecast === null ? 'Chưa đủ số' : `${Math.round(card.forecast).toLocaleString('vi-VN')} đ`, why: `DT New đã có ${Math.round(card.actual).toLocaleString('vi-VN')} đ. ${card.period.open ? 'Chia cho phần kỳ đã qua theo phân bố giờ và ngày trong tuần của 28 ngày trước (A4); chỉ đơn MKT xác nhận do Sale chốt, theo ngày xác nhận.' : 'Kỳ đã kết thúc: dùng số thực tế, không dự đoán.'}` });
+    const profile = hourlyProfile(history, now);
+    const card = done ? { actual: current.reduce((a, p) => a + p.value, 0), forecast: null } : periodCard(current, { ...opts, start: monthStart, end: now, preset: 'month' }, profile);
+    viz.mkt = { open: true, actual: card.actual, forecast: card.forecast, month, done, path: monthPath(current, profile, monthStart, monthEnd, today, card.actual, card.forecast) };
+    items.push(done ? { dept: 'mkt', title: 'DT New cả tháng', value: `${Math.round(card.actual).toLocaleString('vi-VN')} đ`, why: `DT New tháng ${month.slice(5)}/${month.slice(0, 4)} cộng dồn từng ngày; chỉ đơn MKT xác nhận do Sale chốt, theo ngày xác nhận. Tháng đã hết nên không dự đoán.` } : { dept: 'mkt', title: 'DT New dự đoán cuối tháng', value: card.forecast === null ? 'Chưa đủ số' : `${Math.round(card.forecast).toLocaleString('vi-VN')} đ`, why: `DT New tháng này đã có ${Math.round(card.actual).toLocaleString('vi-VN')} đ. Chia cho phần tháng đã qua theo phân bố giờ và ngày trong tuần của 28 ngày trước (A4); chỉ đơn MKT xác nhận do Sale chốt, theo ngày xác nhận. Chọn kỳ thuộc tháng đã qua thì xem cả tháng đó, không dự đoán.` });
     items.push({ dept: 'mkt', title: 'Số về và ROAS dự đoán cuối kỳ', value: 'Chưa đủ số', why: 'Chưa có hồ sơ phân bố số về và chi phí cùng phạm vi để dự đoán ROAS cuối kỳ; không dùng doanh thu MKT tổng thay cho DT New.' });
   }
 

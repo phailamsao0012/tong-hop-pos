@@ -6,7 +6,9 @@ import { useTeam, useHrUnit, useBranch, useMktTeam, withUnit, unitFor } from './
 import { useApi, useLazySeen } from './use-api';
 import { staffGap, bucketBars, reasonBars, type AdvisorReport } from '@/lib/bot/advisor';
 import type { ReactNode } from 'react';
-import { shortMoney } from './ui-kit';
+import { short, shortMoney } from './ui-kit';
+import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import type { DisplayInsight } from '@/lib/ai/ai-insight';
 import type { TrendDept } from '@/lib/reports/trend-period';
 
@@ -54,10 +56,20 @@ export function AdvisorPanel({ dept }: { dept?: TrendDept }) {
           <div className="flex h-36 flex-col justify-end gap-1">{b.enough ? <><span className="num text-xs">{percent(b.rate!)}</span><div className={`mx-auto w-full max-w-12 rounded-t ${b.best ? 'bg-primary' : 'bg-primary/30'}`} style={{ height: `${b.height * 96}px` }} /></> : <div className="rounded border border-dashed border-line p-1 text-[11px] text-ink-3">chưa đủ số</div>}</div><p className="num mt-2 text-xs">{b.label}</p>
         </div>)}</div>, 'Số được chia cho một Sale trong một ngày, 60 ngày đã kết thúc', <><p>Lịch sử tải Sale: 60 ngày đã kết thúc.</p>{sale.buckets.map(b => <p key={b.label}>{b.label}: {label(why(`Tỷ lệ chốt theo tải ${b.label}`))}</p>)}</>)}
       {care && tile('Sức chứa CSKH', chip('Chưa đủ số để khuyên tuyển'), <div><p className="num text-2xl font-semibold">{care.notesPerPerson === null ? 'Chưa đủ số' : care.notesPerPerson.toLocaleString('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</p><p className="text-xs text-ink-3">note/ngày/người · {number(care.have)} CSKH</p></div>, `${number(care.notes)} ghi chú trong ${number(care.days)} ngày`, label(why('Sức chứa CSKH')))}
-      {marketing && tile(marketing.open ? 'DT New dự đoán cuối kỳ' : 'DT New trong kỳ', !marketing.open ? chip('Kỳ đã kết thúc') : marketing.forecast === null ? chip('Chưa đủ số') : chip(`Đạt ${percent(marketing.forecast ? marketing.actual / marketing.forecast : 0)} dự đoán`, true),
-        <div className="space-y-3"><p className="num text-2xl font-semibold">{marketing.open && marketing.forecast === null ? 'Chưa đủ số' : shortMoney(marketing.open ? marketing.forecast : marketing.actual)}</p>
-          {marketing.open && marketing.forecast !== null && <><div className="h-3 overflow-hidden rounded border border-dashed border-line bg-surface-3"><div className="h-full bg-primary" style={{ width: `${Math.min(100, marketing.forecast > 0 ? marketing.actual / marketing.forecast * 100 : 0)}%` }} /></div><div className="num flex flex-wrap justify-between gap-2 text-xs"><span>Đã có {shortMoney(marketing.actual)}</span><span>Còn dự kiến {shortMoney(marketing.forecast - marketing.actual)}</span></div></>}
-        </div>, 'Đơn New do Sale xử lý · theo bộ lọc đang chọn', <>{data.items.filter(i => i.dept === 'mkt').map(i => <p key={i.title}>{label(i.why)}</p>)}</>)}
+      {marketing && tile(marketing.done ? `DT New tháng ${marketing.month?.slice(5)}/${marketing.month?.slice(0, 4)}` : 'DT New dự đoán cuối tháng', marketing.done ? chip('Đã hết tháng') : marketing.forecast === null ? chip('Chưa đủ số') : chip(`Đạt ${percent(marketing.forecast ? marketing.actual / marketing.forecast : 0)} dự đoán`, true),
+        <div className="space-y-2"><p className="num text-2xl font-semibold">{marketing.done ? shortMoney(marketing.actual) : marketing.forecast === null ? 'Chưa đủ số' : shortMoney(marketing.forecast)}</p>
+          {marketing.path && <ChartContainer config={{ actual: { label: 'Đã có', color: 'var(--primary)' }, forecast: { label: 'Dự đoán', color: 'var(--primary)' } }} className="h-36 w-full aspect-auto">
+            <LineChart data={marketing.path} margin={{ left: 0, right: 8, top: 4 }}>
+              <CartesianGrid vertical={false} />
+              <XAxis dataKey="day" tickFormatter={(d: string) => d.slice(8, 10)} minTickGap={16} tick={{ fontSize: 11 }} />
+              <YAxis width={50} tick={{ fontSize: 11 }} tickFormatter={(n: number) => n >= 1e9 ? `${(n / 1e9).toFixed(1).replace('.', ',')} tỷ` : n >= 1e6 ? `${Math.round(n / 1e6)} tr` : short(n)} />
+              <ChartTooltip content={<ChartTooltipContent labelFormatter={(d) => `${String(d).slice(8, 10)}/${String(d).slice(5, 7)}`} formatter={(v, name) => `${name === 'forecast' ? 'Dự đoán' : 'Đã có'}: ${shortMoney(Number(v))}`} />} />
+              <Line dataKey="actual" stroke="var(--primary)" strokeWidth={2.5} dot={false} isAnimationActive={false} connectNulls={false} />
+              <Line dataKey="forecast" stroke="var(--primary)" strokeWidth={2} strokeDasharray="5 4" dot={false} isAnimationActive={false} connectNulls={false} />
+            </LineChart>
+          </ChartContainer>}
+          {marketing.forecast !== null && <div className="num flex flex-wrap justify-between gap-2 text-xs"><span>— Đã có {shortMoney(marketing.actual)}</span><span>- - Còn dự kiến {shortMoney(marketing.forecast - marketing.actual)}</span></div>}
+        </div>, marketing.done ? 'Đơn New do Sale xử lý, cộng dồn cả tháng' : `Đơn New do Sale xử lý, tháng ${marketing.month ? `${marketing.month.slice(5)}/${marketing.month.slice(0, 4)}` : 'này'}; nét liền là tiến độ, nét đứt là dự đoán tới cuối tháng`, <>{data.items.filter(i => i.dept === 'mkt').map(i => <p key={i.title}>{label(i.why)}</p>)}</>)}
       {data.reasons && tile('Lý do không mua', chip(data.reasons.coverage === null || data.reasons.coverage < .3 ? 'Ít ghi chú, chỉ tham khảo' : `${percent(data.reasons.coverage)} có ghi chú phân loại được`, data.reasons.coverage === null || data.reasons.coverage < .3),
         <div className="space-y-2">{reasonBars(data.reasons.groups).map(g => <div key={g.reason} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2 text-xs"><span className="break-words">{label(g.reason)}</span><div className="h-2 rounded bg-surface-3"><div className={`h-full rounded ${g.reason === 'Khác' ? 'bg-ink-3' : 'bg-primary'}`} style={{ width: `${g.share * 100}%` }} /></div><span className="num">{number(g.count)} đơn</span></div>)}</div>, `${number(data.reasons.total)} đơn hủy/hoàn/không xác nhận`, <>{data.reasons.classified}/{data.reasons.total} đơn. {label(data.reasonScope)}</>)}
     </div>}

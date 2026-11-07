@@ -636,11 +636,11 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
               </Select>
               <Button size="sm" variant="ghost" onClick={() => setEmpDesc((d) => !d)} title="Đảo chiều sắp xếp" aria-label={`Đang xếp ${empDesc ? 'cao → thấp' : 'thấp → cao'}, bấm để đảo chiều`}>{empDesc ? 'Cao → thấp' : 'Thấp → cao'}</Button>
             </div>}>
-            <TableWrap minWidth={splitPos ? 900 : 780} maxHeight="32rem" stickyFirst>
+            <TableWrap minWidth={700} maxHeight="32rem" stickyFirst>
               <table className="tbl">
                 <thead>
                   <tr>
-                    <th>Nhân viên</th>{splitPos && <th>POS</th>}<th className="hidden sm:table-cell">Bộ phận</th>
+                    <th>Nhân viên{splitPos ? ' · POS' : ''}</th>
                     {team === 'cskh' && <><SortTh k="closedOrders" label="Đơn chốt" sort={empSortState} /><SortTh k="closeRate" label="Tỷ lệ chốt" sort={empSortState} /></>}
                     {team !== 'cskh' && <><SortTh k="assignedOrders" label="Đơn chia" sort={empSortState} /><SortTh k="closedOrders" label="Đơn chốt" sort={empSortState} /><SortTh k="closeRate" label="Tỷ lệ chốt" sort={empSortState} /></>}
                     <SortTh k="closedNet" label="Doanh thu" sort={empSortState} /><SortTh k="averageOrder" label="AOV" sort={empSortState} /><SortTh k="closedQuantity" label="SL bán" sort={empSortState} /><SortTh k="delivered" label="Giao TC" sort={empSortState} /><SortTh k="returned" label="Hoàn / Hủy" sort={empSortState} />
@@ -652,17 +652,16 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
                     const rate = closeRateOf(r, ms.rateBase);
                     return (
                       <tr key={`${r.posId}:${r.sellerId || 'none'}`}>
-                        <td className="font-medium"><span className="num mr-2 inline-block w-4 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span>{r.name}<span className="ml-1.5 text-[11px] font-normal text-ink-3 sm:hidden">{deptShort(r.department)}</span></td>
-                        {splitPos && <td className="text-xs"><PosBadge posId={r.posId} size={16} className="mr-1 align-middle" />{posName(r.posId)}</td>}
-                        <td className="mut hidden text-xs sm:table-cell" title={r.department ?? ''}>{deptShort(r.department)}</td>
+                        {/* Gộp POS và bộ phận xuống dòng dưới tên để bảng vừa màn hình, không kéo ngang (anh Vũ 07/11/2026). */}
+                        <td className="max-w-60 whitespace-normal font-medium"><span className="flex items-start gap-2"><span className="num mt-0.5 w-4 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span><span className="min-w-0">{r.name}<span className="block text-[11px] font-normal text-ink-3" title={r.department ?? ''}>{splitPos && <><PosBadge posId={r.posId} size={12} className="mr-1 align-[-2px]" />{posName(r.posId)} · </>}{deptShort(r.department)}</span></span></span></td>
                         {team === 'cskh' && <><td className="n">{vi.format(r.closedOrders)}</td><td className="n">{pct(closeRateOf(r, ms.rateBase))}</td></>}
                         {team !== 'cskh' && <><td className="n">{r.assignedHidden ? '—' : vi.format(r.assignedOrders)}</td>
                         <td className="n">{vi.format(r.closedOrders)}</td>
-                        <td className="n">{r.assignedHidden ? '—' : <><ProgressBar value={rate ?? 0} max={100} width={56} size="sm" color={rateColor(rate)} className="mr-2" />{pct(rate, 2)}</>}</td></>}
-                        <td className="n whitespace-nowrap">{money(r.closedNet)}<span className="ml-1.5 inline-block w-[72px] text-left"><DeltaPill value={delta(r.closedNet, p?.closedNet)} /></span></td>
+                        <td className="n">{r.assignedHidden ? '—' : <><span className="inline-flex items-center gap-1.5"><ProgressBar value={rate ?? 0} max={100} width={36} size="sm" color={rateColor(rate)} />{pct(rate, 1)}</span></>}</td></>}
+                        <td className="n whitespace-nowrap">{money(r.closedNet)}<span className="mt-0.5 block"><DeltaPill value={delta(r.closedNet, p?.closedNet)} /></span></td>
                         <td className="n">{r.averageOrder ? money(r.averageOrder) : '—'}</td>
                         <td className="n">{vi.format(r.closedQuantity)}</td>
-                        <td className="n">{vi.format(r.groups.delivered.orders)} <span className="text-[11px] text-ink-3">· {short(r.groups.delivered.net)}</span></td>
+                        <td className="n">{vi.format(r.groups.delivered.orders)}<span className="block text-[11px] text-ink-3">{short(r.groups.delivered.net)}</span></td>
                         <td className="n">{vi.format(r.groups.returned.orders)} / {vi.format(r.groups.cancelled.orders)}</td>
                       </tr>
                     );
@@ -670,11 +669,11 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
                 </tbody>
                 <tfoot>
                   <tr>
-                    <td className="bg-surface-2">Tổng</td>{splitPos && <td />}<td className="hidden sm:table-cell" />
+                    <td className="bg-surface-2">Tổng</td>
                     {team === 'cskh' && <><td className="n">{vi.format(empTotal.closedOrders)}</td><td className="n">{pct(empTotal.rateOrders ? empTotal.createdClosed / empTotal.rateOrders * 100 : null)}</td></>}
                     {team !== 'cskh' && <><td className="n">{vi.format(empTotal.assignedOrders)}</td>
                     <td className="n">{vi.format(empTotal.closedOrders)}</td>
-                    <td className="n">{empTotal.rateAssigned ? pct(empTotal.assignedClosed / empTotal.rateAssigned * 100, 2) : '—'}</td></>}
+                    <td className="n">{empTotal.rateAssigned ? pct(empTotal.assignedClosed / empTotal.rateAssigned * 100, 1) : '—'}</td></>}
                     <td className="n">{money(empTotal.closedNet)}</td>
                     <td className="n">{empTotal.closedOrders ? money(empTotal.closedNet / empTotal.closedOrders) : '—'}</td>
                     <td className="n">{vi.format(empTotal.closedQuantity)}</td><td /><td />
