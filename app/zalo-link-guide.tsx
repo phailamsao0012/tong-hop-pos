@@ -5,12 +5,12 @@
 // Link bot thật chưa có: web thật hiện chỗ chờ, bản chạy thử (demo / máy) hiện mã QR ảo để xem cách làm.
 import { useMemo, type ReactNode } from 'react';
 import QRCode from 'qrcode';
+import { ArrowLeft, Bot, ContactRound, Ellipsis, History, Image as ImageIcon, Images, LayoutGrid, List, MessageCircle, Mic, Newspaper, Pin, Plus, ScanLine, ScanQrCode, Search, SendHorizontal, Smile, SquareUser, UserRound, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 /** Link mở bot Zalo của công ty. Để trống tới khi anh gửi link thật. */
 export const ZALO_BOT_LINK = '';
 const DEMO_BOT_LINK = 'https://zalo.me/0000000000';
-const ZBLUE = '#0068ff';
 
 function useQr(link: string) {
   // Vẽ QR bằng ô vuông SVG ngay trên máy, không gọi dịch vụ ngoài.
@@ -41,13 +41,16 @@ function Arrow({ x, y, from = 'br' }: { x: number; y: number; from?: 'br' | 'bl'
   );
 }
 
-/** Khung điện thoại: viền đen, tai thỏ, thanh giờ. */
+const ZGRAD = 'linear-gradient(100deg,#0a68fe 0%,#0a8dfd 55%,#12b4fb 100%)';
+const BOT = 'Bot Quản Lý MEGATECH';
+
+/** Khung điện thoại: viền đen, thanh giờ giống máy thật. */
 function Phone({ children, dark = false }: { children: ReactNode; dark?: boolean }) {
   return (
-    <div className="relative mx-auto aspect-[9/18] w-full max-w-[200px] rounded-[26px] border-[6px] border-[#1c1c1e] bg-[#1c1c1e] shadow-md">
-      <div className={`relative h-full overflow-hidden rounded-[20px] text-[10px] leading-tight ${dark ? 'bg-[#111] text-white' : 'bg-white text-[#111]'}`}>
-        <div className={`flex items-center justify-between px-3 pt-1.5 text-[9px] font-semibold ${dark ? 'text-white' : ''}`} style={dark ? undefined : { background: ZBLUE, color: '#fff' }}>
-          <span>9:41</span><span className="h-3 w-12 rounded-full bg-black" /><span>5G ▮</span>
+    <div className="relative mx-auto aspect-[9/19] w-full max-w-[200px] rounded-[26px] border-[5px] border-[#1c1c1e] bg-[#1c1c1e] shadow-md">
+      <div className={`relative h-full overflow-hidden rounded-[21px] text-[10px] leading-tight ${dark ? 'bg-[#2a2a2a] text-white' : 'bg-white text-[#111]'}`}>
+        <div className="flex h-[18px] items-center justify-between px-3.5 text-[8.5px] font-semibold text-white" style={dark ? undefined : { background: ZGRAD }}>
+          <span>11:08</span><span className="tracking-tight">▂▄▆ ◔ 52</span>
         </div>
         {children}
       </div>
@@ -55,75 +58,104 @@ function Phone({ children, dark = false }: { children: ReactNode; dark?: boolean
   );
 }
 
-const ZHeader = ({ children }: { children: ReactNode }) => <div className="flex items-center gap-1.5 px-2 pb-2 pt-1.5 text-white" style={{ background: ZBLUE }}>{children}</div>;
-const ChatRow = ({ name, text }: { name: string; text: string }) => (
-  <div className="flex items-center gap-2 border-b border-[#eee] px-2 py-1.5">
-    <span className="grid size-7 shrink-0 place-items-center rounded-full bg-[#dfe6ef] text-[9px] font-bold text-[#557]">{name[0]}</span>
-    <span className="min-w-0"><b className="block truncate text-[10px]">{name}</b><span className="block truncate text-[9px] text-[#888]">{text}</span></span>
+const BotAvatar = ({ size = 28 }: { size?: number }) => (
+  <span className="grid shrink-0 place-items-center rounded-full bg-[#4b7cc0] text-[#e6eefa]" style={{ width: size, height: size }}><Bot size={size * 0.56} strokeWidth={2.2} /></span>
+);
+const ChatRow = ({ name, text, time, color, bot, pin }: { name: string; text: string; time: string; color?: string; bot?: boolean; pin?: boolean }) => (
+  <div className={`flex items-center gap-2 px-2 py-[5px] ${pin ? 'bg-[#f3f4f6]' : ''}`}>
+    {bot ? <BotAvatar /> : <span className="grid size-7 shrink-0 place-items-center rounded-full text-[10px] font-semibold text-white" style={{ background: color }}>{name.split(' ').pop()?.[0]}</span>}
+    <span className="min-w-0 flex-1 border-b border-[#ececec] pb-[5px]">
+      <span className="flex items-center gap-1"><span className="flex-1 truncate text-[10px]">{name}</span>{pin && <Pin size={8} className="rotate-45 fill-[#9aa0a6] text-[#9aa0a6]" />}<span className="text-[8px] text-[#8a8d91]">{time}</span></span>
+      <span className="block truncate text-[9px] text-[#8a8d91]">{text}</span>
+    </span>
   </div>
 );
 
 function Screen1() {
   return (
     <Phone>
-      <ZHeader>
-        <span className="flex h-6 flex-1 items-center rounded-md bg-white/25 px-2 text-[9.5px]">🔍 Tìm kiếm</span>
-        <span className="grid size-6 place-items-center rounded border-[1.5px] border-white text-[11px] font-bold">⌗</span>
-        <span className="grid size-6 place-items-center text-[16px]">+</span>
-      </ZHeader>
-      <div className="flex gap-3 border-b border-[#eee] px-2 py-1 text-[9px] font-semibold"><span className="border-b-2 pb-0.5" style={{ borderColor: ZBLUE }}>Ưu tiên</span><span className="text-[#888]">Khác</span></div>
-      <ChatRow name="Nhóm Sale HN" text="Chốt 3 đơn rồi nhé" /><ChatRow name="Trần Văn A" text="Ok em" /><ChatRow name="Lê Thị B" text="[Hình ảnh]" /><ChatRow name="Nhóm Kho" text="Đã gửi hàng" /><ChatRow name="Phạm Văn C" text="Mai họp 8h" />
-      <Arrow x={72} y={8} from="br" />
+      <div className="flex items-center gap-2 px-2.5 pb-2 pt-1 text-white" style={{ background: ZGRAD }}>
+        <Search size={13} /><span className="flex-1 text-[10.5px] text-white/75">Tìm kiếm</span><span className="relative grid"><ScanQrCode size={14} /><Arrow x={50} y={50} from="br" /></span><Plus size={15} />
+      </div>
+      <div className="flex gap-4 border-b border-[#e5e5e5] px-2.5 pt-1.5 text-[10px] font-semibold"><span className="border-b-2 border-[#111] pb-1">Ưu tiên</span><span className="text-[#8a8d91]">Khác</span></div>
+      <ChatRow bot pin name={BOT} text="[Hình ảnh] 📊 Báo cáo 8h" time="23 giờ" />
+      <ChatRow name="Nhóm Sale HN" text="An: chốt 3 đơn rồi nhé" time="5 phút" color="#e8833a" />
+      <ChatRow name="Trần Văn An" text="Bạn: ok em" time="11 phút" color="#3a9d6b" />
+      <ChatRow name="Lê Thị Bình" text="[Hình ảnh]" time="16 phút" color="#c0568a" />
+      <ChatRow name="Nhóm Kho" text="Đã gửi hàng chiều nay" time="37 phút" color="#7b68c4" />
+      <ChatRow name="Phạm Văn Cường" text="Mai họp 8h nhé" time="1 giờ" color="#4c8fd6" />
+      <div className="absolute inset-x-0 bottom-0 flex items-end justify-around border-t border-[#e5e5e5] bg-white px-1 pb-2.5 pt-1.5 text-[#555]">
+        <span className="flex flex-col items-center text-[7.5px] font-semibold text-[#0a68fe]"><MessageCircle size={13} className="fill-[#0a8dfd] text-[#0a8dfd]" />Tin nhắn</span>
+        <ContactRound size={13} /><LayoutGrid size={13} /><Newspaper size={13} /><UserRound size={13} />
+      </div>
     </Phone>
   );
 }
 function Screen2({ qr }: { qr: { size: number; d: string } | null }) {
   return (
     <Phone dark>
-      <div className="flex items-center justify-between px-3 pt-2 text-[10px]"><span>✕</span><b>Quét mã QR</b><span>⚡</span></div>
-      <div className="relative mx-auto mt-6 grid aspect-square w-[72%] place-items-center">
-        {qr ? <QrSvg qr={qr} className="w-[78%] rounded" /> : <span className="h-[78%] w-[78%] rounded bg-white/80" />}
-        {['left-0 top-0 border-l-4 border-t-4', 'right-0 top-0 border-r-4 border-t-4', 'bottom-0 left-0 border-b-4 border-l-4', 'bottom-0 right-0 border-b-4 border-r-4'].map((c) => <span key={c} className={`absolute size-6 rounded-sm border-white ${c}`} />)}
+      <div className="absolute inset-0 -z-0" style={{ background: 'radial-gradient(ellipse at 50% 45%,#5a5d63 0%,#2f3033 55%,#1a1a1b 100%)' }} />
+      <div className="relative flex items-center justify-between px-2.5 pt-1.5">
+        <span className="grid size-6 place-items-center rounded-full bg-white/20"><X size={12} /></span>
+        <span className="flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-1 text-[9px]"><SquareUser size={10} />Mã QR của tôi</span>
+        <span className="grid size-6 place-items-center rounded-full bg-white/20"><Ellipsis size={12} /></span>
       </div>
-      <p className="mt-4 px-3 text-center text-[9.5px] text-white/85">Đưa camera vào mã QR trên màn hình máy tính</p>
-      <Arrow x={50} y={40} from="br" />
+      <p className="relative mt-5 text-center text-[10px] font-medium">Quét mọi mã QR</p>
+      <div className="relative mx-auto mt-3 grid aspect-square w-[70%] place-items-center">
+        <span className="grid size-[74%] place-items-center rounded bg-white p-1 shadow-[0_0_0_6px_rgba(20,20,20,.55)]">{qr ? <QrSvg qr={qr} className="size-full" /> : null}</span>
+        {['left-0 top-0 border-l-[3px] border-t-[3px] rounded-tl-lg', 'right-0 top-0 border-r-[3px] border-t-[3px] rounded-tr-lg', 'bottom-0 left-0 border-b-[3px] border-l-[3px] rounded-bl-lg', 'bottom-0 right-0 border-b-[3px] border-r-[3px] rounded-br-lg'].map((c) => <span key={c} className={`absolute size-6 border-white/90 ${c}`} />)}
+        <Arrow x={52} y={55} from="br" />
+      </div>
+      <div className="absolute inset-x-0 bottom-3 flex justify-around px-1 text-center text-[7.5px] text-white/90">
+        {[{ i: <Images size={12} />, t: 'Ảnh có sẵn' }, { i: <ScanLine size={12} />, t: 'QR chuyển khoản' }, { i: <History size={12} />, t: 'Gần đây' }].map((b) => (
+          <span key={b.t} className="flex w-1/3 flex-col items-center gap-1"><span className="grid size-7 place-items-center rounded-full bg-white/20">{b.i}</span>{b.t}</span>
+        ))}
+      </div>
     </Phone>
   );
 }
 function Screen3() {
   return (
     <Phone>
-      <ZHeader><span className="text-[13px]">‹</span><b className="flex-1 text-[10.5px]">Bot MEGATECH</b></ZHeader>
-      <div className="h-14" style={{ background: 'linear-gradient(135deg,#cfe3ff,#e8f1ff)' }} />
-      <div className="-mt-7 flex flex-col items-center gap-1 px-3 text-center">
-        <span className="grid size-14 place-items-center rounded-full border-[3px] border-white bg-[#17684b] text-[20px] font-bold text-white">M</span>
-        <b className="text-[11.5px]">Bot MEGATECH</b>
-        <span className="text-[9px] text-[#888]">Tài khoản chính thức · Báo cáo và giao việc</span>
-        <div className="mt-2 flex w-full gap-1.5">
-          <span className="flex-1 rounded-full py-1.5 text-[10px] font-semibold text-white" style={{ background: ZBLUE }}>Nhắn tin</span>
-          <span className="flex-1 rounded-full border border-[#ccc] py-1.5 text-[10px] font-semibold">Quan tâm</span>
-        </div>
+      <div className="relative h-[70px]" style={{ background: 'linear-gradient(160deg,#9cc6ff 0%,#cfe4ff 60%,#eef5ff 100%)' }}>
+        <div className="flex items-center justify-between px-2 pt-1.5 text-white"><ArrowLeft size={14} /><Ellipsis size={14} /></div>
       </div>
-      <Arrow x={30} y={58} from="br" />
+      <div className="relative -mt-8 flex flex-col items-center gap-1 px-3 text-center">
+        <span className="rounded-full border-[3px] border-white"><BotAvatar size={58} /></span>
+        <b className="mt-0.5 text-[11.5px]">{BOT}</b>
+        <span className="rounded bg-[#e8f1ff] px-1.5 py-0.5 text-[8.5px] font-medium text-[#0a68fe]">Tài khoản Bot</span>
+        <span className="text-[9px] text-[#6b6f75]">Báo cáo doanh số và giao việc cho nhân viên MEGATECH</span>
+        <span className="relative mt-2.5 w-full rounded-full py-[7px] text-[10.5px] font-semibold text-white" style={{ background: '#0a68fe' }}>Nhắn tin<Arrow x={74} y={70} from="br" /></span>
+      </div>
+      <div className="mt-3 border-t-[6px] border-[#f2f3f5] px-3 pt-2 text-[9px] text-[#6b6f75]">
+        <p className="font-semibold text-[#111]">Thông tin</p>
+        <p className="mt-1">Tự động gửi báo cáo 8h, 12h, 17h, 22h</p>
+        <p className="mt-0.5">Nhận việc và báo hoàn thành ngay trên Zalo</p>
+      </div>
     </Phone>
   );
 }
 function ChatScreen({ code, done }: { code: string; done?: boolean }) {
   return (
     <Phone>
-      <ZHeader><span className="text-[13px]">‹</span><b className="flex-1 text-[10.5px]">Bot MEGATECH</b></ZHeader>
-      <div className="flex h-[calc(100%-62px)] flex-col gap-1.5 bg-[#e2e9f1] p-2">
-        <span className="w-fit max-w-[85%] rounded-lg bg-white px-2 py-1">Chào anh/chị. Gửi mã 6 số được cấp để nối với hệ thống giao việc.</span>
+      <div className="flex items-center gap-2 px-2 pb-1.5 pt-1 text-white" style={{ background: ZGRAD }}>
+        <ArrowLeft size={14} />
+        <span className="min-w-0 flex-1"><b className="block truncate text-[10.5px]">{BOT}</b><span className="block text-[8px] text-white/80">Tài khoản Bot</span></span>
+        <List size={14} />
+      </div>
+      <div className="flex h-full flex-col gap-1.5 bg-[#e2e8ef] p-2">
+        <span className="mx-auto rounded-full bg-[#b9bec6]/80 px-2 py-0.5 text-[8px] text-white">09:15 07/11/2026</span>
+        <span className="w-fit max-w-[85%] rounded-lg bg-white px-2 py-1 shadow-sm">Chào anh/chị. Gửi mã 6 số được cấp để nối với hệ thống giao việc.</span>
         {done && <>
-          <span className="ml-auto w-fit rounded-lg bg-[#d4e6ff] px-2 py-1 font-bold tracking-[.12em]">{code}</span>
-          <span className="relative w-fit max-w-[88%] rounded-lg border-2 border-[#ff3b30] bg-white px-2 py-1">✅ Đã nối Zalo với hệ thống giao việc.<br />Cách nhắn bot: việc của tôi, hướng dẫn…</span>
+          <span className="ml-auto w-fit rounded-lg bg-[#d5e9ff] px-2 py-1 font-semibold tracking-[.12em] shadow-sm">{code}</span>
+          <span className="relative w-fit max-w-[88%] rounded-lg border-2 border-[#ff3b30] bg-white px-2 py-1 shadow-sm">✅ Đã nối Zalo với hệ thống giao việc.<br /><span className="text-[#555]">Nhắn “việc của tôi” để xem việc đang có.</span><Arrow x={55} y={100} from="br" /></span>
         </>}
       </div>
-      <div className="absolute inset-x-0 bottom-0 flex items-center gap-1.5 border-t border-[#ddd] bg-white px-2 py-1.5">
-        <span className={`flex-1 rounded-full bg-[#f1f3f5] px-2 py-1 ${done ? 'text-[#999]' : 'font-bold tracking-[.12em]'}`}>{done ? 'Tin nhắn' : code}</span>
-        <span className="text-[14px]" style={{ color: ZBLUE }}>➤</span>
+      <div className="absolute inset-x-0 bottom-0 flex items-center gap-1.5 border-t border-[#e3e3e3] bg-white px-2 pb-2.5 pt-1.5 text-[#6b6f75]">
+        <Smile size={14} />
+        <span className={`flex-1 text-[10px] ${done ? 'text-[#9a9da2]' : 'font-semibold tracking-[.12em] text-[#111]'}`}>{done ? 'Tin nhắn' : code}</span>
+        {done ? <><Ellipsis size={13} /><Mic size={13} /><ImageIcon size={14} className="text-[#f39c34]" /></> : <span className="relative grid"><SendHorizontal size={15} className="fill-[#0a68fe] text-[#0a68fe]" /><Arrow x={50} y={50} from="tl" /></span>}
       </div>
-      {done ? <Arrow x={70} y={56} from="bl" /> : <Arrow x={89} y={95} from="tl" />}
     </Phone>
   );
 }
