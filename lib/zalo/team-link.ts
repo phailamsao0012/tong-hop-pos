@@ -150,6 +150,26 @@ export async function linkSavedTeamZalo(
 }
 
 /**
+ * Nối Zalo ngay ở trang Tài khoản (anh Vũ 07/11/2026: "cho nối zalo ở cả phần tài khoản đi").
+ * Người nhận gắn theo tài khoản web; tài khoản đang là Mentor / Leader của team nào thì nhận báo cáo team đó,
+ * chưa phụ trách team nào thì vẫn nhận việc qua Zalo.
+ */
+export async function linkAccountZalo(db: D1Database, userId: unknown, now = Date.now()) {
+  if (typeof userId !== 'string' || !userId) return { error: 'Thiếu tài khoản.' };
+  const account = await db
+    .prepare("SELECT id,COALESCE(NULLIF(name,''),email) AS name FROM users WHERE id=? AND disabled=0")
+    .bind(userId)
+    .first<{ id: string; name: string }>();
+  if (!account) return { error: 'Tài khoản không còn dùng được.' };
+  const saved = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(WEB_TEAMS_KEY).first<{ value: string }>();
+  const team = parseWebTeams(saved?.value).find((t) => ownsTeam(account.id, t));
+  return {
+    account,
+    result: await linkTeamZalo(db, { userId: account.id, name: account.name, teamId: team?.id ?? '', teamName: team?.name ?? '', dept: team?.dept ?? '' }, now),
+  };
+}
+
+/**
  * Báo cáo Zalo gửi theo team (anh Vũ 03/11/2026: "leader mentor đều được nhận"): người nhận gắn với tài khoản web
  * nhận báo cáo của MỌI team mình là Mentor hoặc Leader ở trang Chia team; người nhận cũ (không gắn tài khoản,
  * hoặc chưa phụ trách team nào) nhận theo team của mình như trước. Mỗi phần tử là người nhận, mang team cần báo.

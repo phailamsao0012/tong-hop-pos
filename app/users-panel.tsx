@@ -12,7 +12,9 @@ import { POS } from '@/lib/shared/report-model';
 import { TEAM_LABELS, type Team } from '@/lib/teams/team';
 import { ownerField, teamsOwnedBy, teamsWithPerson, type PosPerson, type TeamChoice } from '@/lib/teams/account-from-pos';
 import type { SessionUser } from '@/lib/auth/auth';
+import type { TeamZaloState } from '@/lib/zalo/team-link';
 import { StatusChip, TableWrap, dt, scrollToEl, toast } from './ui-kit';
+import { ZaloButton, ZaloLinkGuide } from './zalo-link-guide';
 
 type User = { employeeId: string | null; id: string; email: string; name: string; role: Role; primary?: boolean; disabled: boolean; createdAt: string; lastLoginAt: string | null; title: string; managerId: string | null; views: string[]; posIds: string[]; team: Team };
 type Draft = { posUserId: string; manageTeams: string[]; employeeId: string; email: string; name: string; password: string; role: Role; title: string; managerId: string; views: string[]; posIds: string[]; team: Team };
@@ -52,6 +54,11 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
   const [pw, setPw] = useState({ current: '', next: '' });
   const [busy, setBusy] = useState(false);
   const [pwBusy, setPwBusy] = useState(false);
+  // Nối Zalo ngay ở danh sách tài khoản (anh Vũ 07/11/2026).
+  const [zalo, setZalo] = useState<TeamZaloState[]>([]);
+  const [zaloCode, setZaloCode] = useState<Record<string, string>>({});
+  const [guide, setGuide] = useState<{ userId: string; code: string } | null>(null);
+  const demo = typeof location !== 'undefined' && (location.hostname.startsWith('demo.') || location.hostname === 'localhost');
 
   const load = useCallback(async () => {
     if (!owner) return;
@@ -63,6 +70,8 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
         if (profiles.ok) setEmployees(await profiles.json() as typeof employees);
         const pos = await fetch('/api/users?pos-people=1', { cache: 'no-store' });
         if (pos.ok) setPosData(await pos.json() as { people: PosPerson[]; teams: TeamChoice[] });
+        const z = await fetch('/api/users/zalo', { cache: 'no-store' });
+        if (z.ok) setZalo(((await z.json()) as { zalo: TeamZaloState[] }).zalo);
       }
       else toast('Không tải được danh sách tài khoản.', { kind: 'error' });
     } catch { toast('Không tải được danh sách tài khoản.', { kind: 'error' }); }
@@ -116,6 +125,17 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
     setDraft({ ...draft, posUserId: id, name: person.name, posIds: person.posIds.filter((pid) => POS.some((p) => p.id === pid)),
       employeeId: person.employeeId && employees.some((e) => e.id === person.employeeId) ? person.employeeId : draft.employeeId,
       manageTeams: [...new Set([...draft.manageTeams, ...teamsWithPerson(posData?.teams ?? [], id)])] });
+  };
+  const linkZalo = async (u: User) => {
+    setBusy(true);
+    try {
+      const r = await fetch('/api/web-teams/zalo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: u.id }) });
+      const out = await r.json().catch(() => ({})) as { error?: string; linked?: boolean; code?: string };
+      if (!r.ok) { toast(out.error ?? `Lỗi ${r.status}.`, { kind: 'error' }); return; }
+      if (out.code) { setZaloCode((c) => ({ ...c, [u.id]: out.code! })); setGuide({ userId: u.id, code: out.code }); }
+      else { toast(`${u.name} đã nối Zalo rồi.`); await load(); }
+    } catch { toast('Không gửi được yêu cầu.', { kind: 'error' }); }
+    finally { setBusy(false); }
   };
   /** Xem như tài khoản này (03/11/2026): mở web y hệt người đó; thoát bằng nút Thoát xem như hoặc Đăng xuất. */
   const actAs = async (u: User) => {
@@ -264,7 +284,7 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
                 const me = u.id === currentUser.userId;
                 return (
                   <tr key={u.id} className={editing === u.id ? '[&>td]:bg-tint-2 [&>td:first-child]:shadow-[inset_2px_0_0_var(--primary)]' : ''}>
-                    <td className="font-medium">{u.name}{u.disabled && <StatusChip tone="red" className="ml-2">đã khóa</StatusChip>}{me && <span className="ml-2 text-xs text-ink-3">(bạn)</span>}</td>
+                    <td className="font-medium">{u.name}{u.disabled && <StatusChip tone="red" className="ml-2">đã khóa</StatusChip>}{me && <span className="ml-2 text-xs text-ink-3">(bạn)</span>}{!u.disabled && <span className="ml-2 inline-block align-middle"><ZaloButton linked={zalo.find((z) => z.userId === u.id)} code={zaloCode[u.id]} disabled={busy} label="tài khoản" hint="Lấy mã nối Zalo cho tài khoản này" onClick={() => void linkZalo(u)} onGuide={() => setGuide({ userId: u.id, code: zaloCode[u.id] })} /></span>}</td>
                     <td className="mut text-xs">{u.email}</td>
                     <td className="text-xs"><StatusChip tone={ROLE_TONE[u.role]}>{ROLE_LABELS[u.role]}</StatusChip>{u.primary && <span className="ml-1 text-[10.5px] text-ink-3" title="Chủ hệ thống gốc: người duy nhất cấp / bỏ quyền chủ hệ thống">(gốc)</span>}{u.title ? <span className="ml-1.5 text-ink-2">{u.title}</span> : ''}</td>
                     <td className="mut text-xs">{nameOf(u.managerId) || '—'}</td>
@@ -291,6 +311,7 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
           </table>
         </TableWrap>
       )}
+      {guide && <ZaloLinkGuide open name={nameOf(guide.userId) || 'người này'} code={guide.code} demo={demo} onClose={() => setGuide(null)} />}
     </Surface>
   );
 }

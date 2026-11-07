@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { linkTeamZalo, teamZaloStates } from '@/lib/zalo/team-link';
+import { linkAccountZalo, linkTeamZalo, teamZaloStates } from '@/lib/zalo/team-link';
 
 // D1 giả tối giản: chỉ đủ cho các câu lệnh của team-link + saveContact + createPairCode.
 type Row = Record<string, unknown>;
@@ -200,4 +200,16 @@ void test('nối Zalo cho Mentor là người trong team, chưa có tài khoản
   const teams = [{ id: 'wt_1', name: 'Team 1', dept: 'sale' as const, office: null, memberIds: ['p5'], leaderPosId: 'p5' }];
   const k = { ...base, id: 'k1', name: 'Leader', user_id: 'pos:p5', team_id: 'wt_9', team_name: 'Cũ', dept: 'sale' };
   assert.deepEqual(reportTargets([k], teams).map((c) => c.team_id), ['wt_1']);
+});
+
+void test('nối Zalo ở trang Tài khoản: tài khoản chưa phụ trách team vẫn lấy được mã', async () => {
+  const { db, contacts } = fakeDb({}, [{ id: 'u9', name: 'Leader Ảo' }]);
+  const r = await linkAccountZalo(db, 'u9');
+  assert.ok(!('error' in r));
+  assert.equal(r.result.linked, false);
+  assert.match(r.result.linked ? '' : r.result.code, /^\d{6}$/);
+  assert.equal(contacts[0].user_id, 'u9');
+  assert.equal(contacts[0].team_id, '');
+  assert.deepEqual(await linkAccountZalo(db, 'khong-co'), { error: 'Tài khoản không còn dùng được.' });
+  assert.deepEqual(await linkAccountZalo(db, ''), { error: 'Thiếu tài khoản.' });
 });
