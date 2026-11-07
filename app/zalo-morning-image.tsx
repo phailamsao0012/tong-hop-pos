@@ -6,6 +6,7 @@ import {
   type MorningReport,
 } from '@/lib/zalo/morning-report';
 import type { ReportSection } from '@/lib/zalo/report-schedule';
+import { kpi2RowText } from '@/lib/zalo/kpi2-report';
 
 const C = {
   ink: '#14231c',
@@ -21,10 +22,27 @@ const C = {
 const tone = (v: number | null) =>
   v === null || Math.round(v) === 0 ? C.muted : v > 0 ? C.up : C.down;
 export const MORNING_IMAGE_WIDTH = 720;
+/** Chỉ tiêu KPI mới (lib/zalo/kpi2-report.ts): hai cột, mỗi hàng 30px. */
+const kpi2Height = (r: MorningReport) => (r.kpi2?.length ? 50 + Math.ceil(r.kpi2.length / 2) * 30 : 0);
+
+function Kpi2Block({ r }: { r: MorningReport }) {
+  const rows = r.kpi2 ?? [];
+  if (!rows.length) return null;
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', marginTop: 20, fontSize: 18 }}>
+      <div style={{ display: 'flex', width: '100%', height: 30, fontWeight: 600, fontSize: 20 }}>Chỉ tiêu tháng · xanh kịp tiến độ, cam chậm</div>
+      {rows.map((row) => (
+        <div key={row.label} style={{ display: 'flex', width: '50%', height: 30, alignItems: 'center', color: row.ahead === null ? C.muted : row.ahead ? C.up : C.down }}>
+          {kpi2RowText(row, false)}
+        </div>
+      ))}
+    </div>
+  );
+}
 /** Chiều cao ảnh; mục bị bỏ ở Cài đặt báo cáo (r.hidden) thì trừ phần của mục đó (không bỏ mục nào = đúng như trước). */
 export const morningImageHeight = (r: MorningReport) => {
   const hide = (s: ReportSection) => !!r.hidden?.includes(s);
-  return 720 + Math.max(1, r.best.length) * 36 + (r.kpi ? 0 : -64)
+  return 720 + Math.max(1, r.best.length) * 36 + (r.kpi ? 0 : -64) + (hide('kpi') ? 0 : kpi2Height(r))
     - (hide('tiles') ? 104 : 0) - (hide('kpi') ? (r.kpi ? 100 : 40) : 0)
     - (hide('best') ? Math.max(1, r.best.length) * 36 : 0) - (hide('coach') ? 36 : 0) - (hide('tasks') ? 36 : 0);
 };
@@ -367,6 +385,7 @@ export function MorningImage({ r }: { r: MorningReport }) {
             KPI tháng: chưa đặt cho team
           </div>
         )}
+        {hide('kpi') ? null : <Kpi2Block r={r} />}
         <div
           style={{
             display: 'flex',
