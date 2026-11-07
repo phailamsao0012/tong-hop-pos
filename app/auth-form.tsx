@@ -44,8 +44,9 @@ const Walker = () => (
   </svg>
 );
 
-/** intro: chạy màn mở đầu logo MEGATECH trước khi hiện thẻ đăng nhập (app/logo-intro.tsx; bật ở trang đăng nhập cả demo và web thật từ 09/10). */
-export function AuthForm({ mode, demo, google, intro }: { mode: 'login' | 'setup'; demo?: DemoLogin; google?: boolean; intro?: boolean }) {
+/** intro: chạy màn mở đầu logo MEGATECH trước khi hiện thẻ đăng nhập (app/logo-intro.tsx; bật ở trang đăng nhập cả demo và web thật từ 09/10).
+ *  viaMain: bản PC chỉ xem, thay ô mật khẩu bằng nút đăng nhập qua web chính (lib/auth/pc-link.ts, 07/11). */
+export function AuthForm({ mode, demo, google, intro, viaMain }: { mode: 'login' | 'setup'; demo?: DemoLogin; google?: boolean; intro?: boolean; viaMain?: { href: string; error?: string } }) {
   const [introStage, setIntroStage] = useState<'play' | 'reveal' | 'done'>(intro ? 'play' : 'done');
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
@@ -235,6 +236,7 @@ export function AuthForm({ mode, demo, google, intro }: { mode: 'login' | 'setup
     : step.step === 'reset-code' ? `Đã gửi mã 6 số tới ${step.to}. Mã có hiệu lực ${step.minutes} phút.`
     : step.step === 'approve' ? 'Máy này chưa quen. Mở app MEGATECH trên điện thoại và chọn đúng số dưới đây.'
     : step.step === 'qr' ? 'Mở app MEGATECH → Thêm → Quét đăng nhập máy tính.'
+    : viaMain ? 'Bản PC chỉ để xem. Đăng nhập bằng tài khoản web chính, xong tự quay về đây.'
     : intro ? 'Chào mừng trở lại. Cả nông trại Megatech đang chờ bạn.' : 'Chào mừng trở lại. Husky đang canh cửa cho bạn.';
   const errorBox = error ? <p role="alert" className="den-msg err"><AlertCircle size={15} className="mt-0.5 shrink-0" /><span>{error}</span></p> : null;
   const field = (id: string, label: string, input: React.InputHTMLAttributes<HTMLInputElement>, extra?: React.ReactNode, cls = '') => (
@@ -291,7 +293,13 @@ export function AuthForm({ mode, demo, google, intro }: { mode: 'login' | 'setup
           </div>
         )}
         {step.step === 'form' && step.notice && <p role="status" className="den-msg ok"><CheckCircle2 size={15} className="mt-0.5 shrink-0" /><span>{step.notice}</span></p>}
-        {step.step === 'form' ? (
+        {viaMain ? (
+          <>
+            {viaMain.error && <p role="alert" className="den-msg err"><AlertCircle size={15} className="mt-0.5 shrink-0" /><span>{viaMain.error}</span></p>}
+            <a href={viaMain.href} className="den-submit"><span>Đăng nhập qua web chính</span></a>
+            <p className="den-foot">Mật khẩu chỉ gõ ở tonghopposmegatech.io.vn, bản PC không giữ mật khẩu.</p>
+          </>
+        ) : step.step === 'form' ? (
           <>
             {mode === 'setup' && field('name', 'Tên hiển thị', { value: name, required: true, autoComplete: 'name', onChange: (e) => setName(e.target.value) })}
             {field('email', 'Email', {
