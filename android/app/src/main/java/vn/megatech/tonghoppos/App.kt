@@ -201,13 +201,14 @@ object AppLock {
     fun unlock(act: FragmentActivity, done: (Boolean) -> Unit) = authenticate(act, "Mở khoá MEGATECH", "Xác thực để xem số liệu") { ok -> if (ok) locked = false; done(ok) }
 }
 
-/** Ngoại lệ quay video chỉ dành cho debug và chỉ giữ trong bộ nhớ. */
+/** Cho chụp màn hình (anh Vũ 06/11/2026: app chỉ cho sếp, cần chụp gửi đi). Màn chuyển app vẫn che số liệu.
+ *  Bản debug: máy thử vẫn bật được chặn chụp qua intent "secure". */
 object Privacy {
-    private var secure = true
+    private var secure = false
     fun init(act: FragmentActivity) { apply(act) }
     fun set(act: FragmentActivity, on: Boolean) { if (BuildConfig.DEBUG) secure = on; apply(act) }
     fun apply(act: FragmentActivity) {
-        if (!BuildConfig.DEBUG || secure) act.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE) else act.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        if (secure) act.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE) else act.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         if (Build.VERSION.SDK_INT >= 33) act.setRecentsScreenshotEnabled(false)
     }
 }
