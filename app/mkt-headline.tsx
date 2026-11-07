@@ -157,7 +157,7 @@ function OrdersSheet({ pick, start, end, posIds, team, onClose }: { pick: { row:
   const { data, error } = useApi<{ orders: MktOrder[]; more: boolean }>(pick ? `/api/marketing/orders?${p}` : null, { keep: false });
   const sum = data?.orders.reduce((t, o) => t + o.net, 0) ?? 0;
   return <Sheet open={!!pick} onOpenChange={(open) => { if (!open) onClose(); }}>
-    <SheetContent className="overflow-y-auto data-[side=right]:w-full data-[side=right]:max-w-full data-[side=right]:sm:max-w-3xl">
+    <SheetContent className="overflow-y-auto data-[side=right]:w-full data-[side=right]:max-w-full data-[side=right]:sm:max-w-5xl">
       <SheetHeader className="pr-12">
         <SheetTitle>{pick ? `${pick.kind === 'new' ? 'Đơn New' : 'Đơn CSKH'} · ${pick.row.name}` : ''}</SheetTitle>
         <SheetDescription>{pick?.kind === 'new' ? 'Đơn MKT do Sale chốt' : 'Đơn MKT do CSKH chốt'}, theo ngày xác nhận lần đầu, {dmy(start)}–{dmy(end)}, POS đang chọn.</SheetDescription>

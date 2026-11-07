@@ -62,7 +62,7 @@ export function AdvisorPanel({ dept }: { dept?: TrendDept }) {
             <LineChart data={marketing.path} margin={{ left: 0, right: 8, top: 4 }}>
               <CartesianGrid vertical={false} />
               <XAxis dataKey="day" tickFormatter={(d: string) => d.slice(8, 10)} minTickGap={16} tick={{ fontSize: 11 }} />
-              <YAxis width={44} tick={{ fontSize: 11 }} tickFormatter={(n: number) => short(n)} />
+              <YAxis width={50} tick={{ fontSize: 11 }} tickFormatter={(n: number) => n >= 1e9 ? `${(n / 1e9).toFixed(1).replace('.', ',')} tỷ` : n >= 1e6 ? `${Math.round(n / 1e6)} tr` : short(n)} />
               <ChartTooltip content={<ChartTooltipContent labelFormatter={(d) => `${String(d).slice(8, 10)}/${String(d).slice(5, 7)}`} formatter={(v, name) => `${name === 'forecast' ? 'Dự đoán' : 'Đã có'}: ${shortMoney(Number(v))}`} />} />
               <Line dataKey="actual" stroke="var(--primary)" strokeWidth={2.5} dot={false} isAnimationActive={false} connectNulls={false} />
               <Line dataKey="forecast" stroke="var(--primary)" strokeWidth={2} strokeDasharray="5 4" dot={false} isAnimationActive={false} connectNulls={false} />
