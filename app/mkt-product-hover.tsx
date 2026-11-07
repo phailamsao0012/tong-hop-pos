@@ -12,7 +12,7 @@ const cache = new Map<string, Promise<SplitBody>>();
 const loadSplit = (url: string) => {
   let hit = cache.get(url);
   if (!hit) {
-    hit = apiJson<SplitBody>(url);
+    hit = apiJson<SplitBody>(url as `/api/${string}`);
     hit.catch(() => cache.delete(url));
     cache.set(url, hit);
   }
