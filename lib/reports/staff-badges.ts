@@ -7,16 +7,28 @@ import { POS } from '@/lib/shared/report-model';
 import { teamSubquery } from '@/lib/teams/team';
 import { staffTenure } from '@/lib/teams/tenure';
 import { RATE_THRESHOLDS } from '@/lib/reports/metrics';
+import { cskhUpsell } from '@/lib/reports/cskh-upsell';
+import { vnRangeUtc } from '@/lib/shared/report-time';
 
 export type BadgeDept = 'sale' | 'cskh' | 'mkt';
-export type BadgeTier = 'dong' | 'bac' | 'vang' | 'kim-cuong' | 'ky-luc' | 'quan-quan' | 'top' | 'ben-bi' | 'bung-no';
+export type BadgeTier = 'dong' | 'bac' | 'vang' | 'kim-cuong' | 'ky-luc' | 'quan-quan' | 'top' | 'ben-bi' | 'bung-no' | 'vua' | 'don-to' | 'tan-binh' | 'but-pha' | 'chuoi';
 export type Badge = { key: string; tier: BadgeTier; label: string; note: string; month?: string };
 export type BadgePerson = { id: string; dept: BadgeDept; joined: string | null; months: { month: string; orders: number; net: number; base: number; closedOfBase: number }[] };
+/** Số thêm theo phòng cho các giải (anh Vũ 07/11/2026 "nghiên cứu mở rộng ra cho có nhiều giải"). */
+export type DeptExtras = {
+  bestDay?: { id: string; day: string; net: number };
+  bestWeek?: { id: string; week: string; net: number };
+  bigOrder?: { id: string; net: number; day: string };
+  streak?: { id: string; days: number; end: string };
+  /** Sale: đơn chốt từ số MKT theo tháng × người. */ mktOrders?: { month: string; id: string; orders: number }[];
+  /** CSKH: tỷ lệ tự upsell tháng vừa xong. */ upsell?: { month: string; id: string; rate: number; handed: number }[];
+};
 export type BadgeBook = { day: string; people: Record<string, Badge[]> };
 
 export const TIERS = ['dong', 'bac', 'vang', 'kim-cuong'] as const;
 export const TIER_LABEL: Record<BadgeTier, string> = {
   dong: 'Đồng', bac: 'Bạc', vang: 'Vàng', 'kim-cuong': 'Kim cương', 'ky-luc': 'Kỷ lục', 'quan-quan': 'Quán quân', top: 'Top 3', 'ben-bi': 'Bền bỉ', 'bung-no': 'Bùng nổ',
+  vua: 'Danh hiệu', 'don-to': 'Đơn to nhất', 'tan-binh': 'Tân binh', 'but-pha': 'Bứt phá', chuoi: 'Không nghỉ tay',
 };
 /** Mốc số đơn và doanh số cộng dồn của từng phòng. MKT tính đơn xác nhận mang về và doanh số mang về. */
 export const MILESTONES: Record<BadgeDept, { orders: number[]; net: number[]; ordersLabel: string; netLabel: string }> = {
@@ -39,7 +51,7 @@ function reachMonth(months: BadgePerson['months'], pick: (m: BadgePerson['months
 }
 
 /** Huy hiệu của mọi người. thisMonth: tháng đang chạy (không tính vào Quán quân / Top / Bền bỉ vì chưa xong). */
-export function computeBadges(people: BadgePerson[], thisMonth: string, bestDays: Partial<Record<BadgeDept, { id: string; day: string; net: number }>> = {}): Record<string, Badge[]> {
+export function computeBadges(people: BadgePerson[], thisMonth: string, extras: Partial<Record<BadgeDept, DeptExtras>> = {}): Record<string, Badge[]> {
   const out: Record<string, Badge[]> = {};
   const add = (id: string, b: Badge) => (out[id] ??= []).push(b);
   const sorted = people.map((p) => ({ ...p, months: [...p.months].sort((a, b) => a.month.localeCompare(b.month)) }));
@@ -90,11 +102,62 @@ export function computeBadges(people: BadgePerson[], thisMonth: string, bestDays
       const need = dept === 'sale' ? STREAK : STREAK - 1;
       if (bestRun >= need) add(p.id, { key: 'streak', tier: 'ben-bi', label: dept === 'sale' ? `Tỷ lệ chốt từ ${RATE_THRESHOLDS.good}% liền ${bestRun} tháng` : `Doanh số tăng liền ${bestRun + 1} tháng`, note: `Tới tháng ${mLabel(end!)}`, month: end! });
     }
-    // 5. Ngày bùng nổ: ngày doanh số cao nhất cả phòng.
-    const bd = bestDays[dept];
-    if (bd && list.some((p) => p.id === bd.id)) add(bd.id, { key: 'best-day', tier: 'bung-no', label: 'Ngày bùng nổ của phòng', note: `${bd.day.slice(8, 10)}/${bd.day.slice(5, 7)}/${bd.day.slice(0, 4)}: ${moneyLabel(Math.round(bd.net / 1e6) * 1e6)}`, month: bd.day.slice(0, 7) });
+    const ex = extras[dept] ?? {}, inDept = (id: string) => list.some((p) => p.id === id);
+    const dmyOf = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
+    const mm = (n: number) => moneyLabel(Math.max(1e6, Math.round(n / 1e6) * 1e6));
+    // 5. Kỷ lục ngày, tuần, tháng của cả phòng.
+    const bd = ex.bestDay;
+    if (bd && inDept(bd.id)) add(bd.id, { key: 'best-day', tier: 'bung-no', label: 'Kỷ lục doanh số ngày của phòng', note: `${dmyOf(bd.day)}: ${mm(bd.net)}`, month: bd.day.slice(0, 7) });
+    const bw = ex.bestWeek;
+    if (bw && inDept(bw.id)) add(bw.id, { key: 'best-week', tier: 'bung-no', label: 'Kỷ lục doanh số tuần của phòng', note: `Tuần ${bw.week.slice(5)}/${bw.week.slice(0, 4)}: ${mm(bw.net)}` });
+    const bm = list.flatMap((p) => p.months.map((m) => ({ id: p.id, ...m }))).sort((a, b) => b.net - a.net)[0];
+    if (bm && bm.net > 0) add(bm.id, { key: 'best-month', tier: 'ky-luc', label: 'Kỷ lục doanh số tháng của phòng', note: `Tháng ${mLabel(bm.month)}: ${mm(bm.net)}`, month: bm.month });
+    // 6. Đơn to nhất phòng.
+    const bo = ex.bigOrder;
+    if (bo && inDept(bo.id)) add(bo.id, { key: 'big-order', tier: 'don-to', label: 'Đơn to nhất phòng', note: `${dmyOf(bo.day)}: ${new Intl.NumberFormat('vi-VN').format(Math.round(bo.net))} ₫`, month: bo.day.slice(0, 7) });
+    // 7. Không nghỉ tay: chuỗi ngày liền có đơn dài nhất phòng (từ 7 ngày).
+    const st = ex.streak;
+    if (st && inDept(st.id) && st.days >= 7) add(st.id, { key: 'streak-days', tier: 'chuoi', label: `${st.days} ngày liền có đơn`, note: `Chuỗi dài nhất phòng, tới ${dmyOf(st.end)}`, month: st.end.slice(0, 7) });
+    // 8. Danh hiệu theo tháng đã xong (đếm số lần): Sale = Vua chốt đơn (tỷ lệ chốt cao nhất, từ 30 đơn lên) và Chiến thần số MKT;
+    //    CSKH = Vua bán lại (nhiều đơn chốt nhất); MKT = Vua ra số (nhiều đơn mang về nhất).
+    const monthKing = (key: string, label: string, pick: (month: string) => { id: string; v: number }[], note: (v: number) => string) => {
+      const won = new Map<string, { months: string[]; last: number }>();
+      for (const month of months) {
+        const top = pick(month).filter((r) => r.v > 0 && inDept(r.id)).sort((a, b) => b.v - a.v)[0];
+        if (top) won.set(top.id, { months: [...(won.get(top.id)?.months ?? []), month], last: top.v });
+      }
+      for (const [id, w] of won) add(id, { key, tier: 'vua', label: `${label} ×${w.months.length}`, note: `${w.months.slice(-4).map(mLabel).join(', ')} · gần nhất ${note(w.last)}`, month: w.months.at(-1) });
+    };
+    const rows = (month: string) => list.map((p) => ({ p, m: p.months.find((x) => x.month === month) })).filter((r) => !!r.m);
+    if (dept === 'sale') {
+      monthKing('king-rate', 'Vua chốt đơn', (month) => rows(month).filter((r) => r.m!.base >= RATE_MIN).map((r) => ({ id: r.p.id, v: r.m!.closedOfBase / r.m!.base * 100 })), (v) => `${Math.round(v)}%`);
+      monthKing('king-mkt', 'Chiến thần số MKT', (month) => (ex.mktOrders ?? []).filter((r) => r.month === month).map((r) => ({ id: r.id, v: r.orders })), (v) => `${v} đơn từ số MKT`);
+    }
+    if (dept === 'cskh') {
+      monthKing('king-resale', 'Vua bán lại', (month) => rows(month).map((r) => ({ id: r.p.id, v: r.m!.orders })), (v) => `${v} đơn`);
+      const up = (ex.upsell ?? []).filter((r) => r.handed >= 10 && inDept(r.id)).sort((a, b) => b.rate - a.rate)[0];
+      if (up) add(up.id, { key: 'king-upsell', tier: 'vua', label: 'Vua upsell', note: `Tháng ${mLabel(up.month)}: tự upsell ${Math.round(up.rate)}% khách MKT`, month: up.month });
+    }
+    if (dept === 'mkt') monthKing('king-leads', 'Vua ra số', (month) => rows(month).map((r) => ({ id: r.p.id, v: r.m!.orders })), (v) => `${v} đơn mang về`);
+    // 9. Tân binh xuất sắc: doanh số tháng đầu làm việc (tháng vào làm hoặc tháng đầu có số) cao nhất phòng, trong 12 tháng gần đây.
+    const rookie = list.flatMap((p) => {
+      const first = p.joined?.slice(0, 7) ?? p.months.find((m) => m.net > 0)?.month;
+      const m = first ? p.months.find((x) => x.month === first) : undefined;
+      return m && m.month < thisMonth && monthIndex(thisMonth) - monthIndex(m.month) <= 12 ? [{ id: p.id, month: m.month, net: m.net }] : [];
+    }).sort((a, b) => b.net - a.net)[0];
+    if (rookie && rookie.net > 0) add(rookie.id, { key: 'rookie', tier: 'tan-binh', label: 'Tân binh xuất sắc', note: `Tháng đầu ${mLabel(rookie.month)}: ${mm(rookie.net)}`, month: rookie.month });
+    // 10. Bứt phá: tăng doanh số mạnh nhất tháng vừa xong so tháng trước (tháng trước từ 30 triệu).
+    const last = months.at(-1);
+    if (last) {
+      const prevM = new Date(Date.UTC(Number(last.slice(0, 4)), Number(last.slice(5, 7)) - 2, 1)).toISOString().slice(0, 7);
+      const grow = list.flatMap((p) => {
+        const a = p.months.find((m) => m.month === prevM), b = p.months.find((m) => m.month === last);
+        return a && b && a.net >= 3e7 && b.net > a.net ? [{ id: p.id, pct: (b.net - a.net) / a.net * 100 }] : [];
+      }).sort((x, y) => y.pct - x.pct)[0];
+      if (grow) add(grow.id, { key: 'breakout', tier: 'but-pha', label: 'Bứt phá tháng', note: `Tháng ${mLabel(last)} tăng ${Math.round(grow.pct)}% so tháng trước`, month: last });
+    }
   }
-  const order: BadgeTier[] = ['ky-luc', 'quan-quan', 'bung-no', 'kim-cuong', 'vang', 'top', 'ben-bi', 'bac', 'dong'];
+  const order: BadgeTier[] = ['ky-luc', 'quan-quan', 'vua', 'don-to', 'bung-no', 'kim-cuong', 'vang', 'but-pha', 'tan-binh', 'top', 'chuoi', 'ben-bi', 'bac', 'dong'];
   for (const id of Object.keys(out)) out[id].sort((a, b) => order.indexOf(a.tier) - order.indexOf(b.tier));
   return out;
 }
@@ -108,23 +171,55 @@ export async function badgeBook(db: D1Database, today: string): Promise<BadgeBoo
   try { const b = saved ? JSON.parse(saved.value) as BadgeBook : null; if (b?.day === today) return b; } catch { /* tính lại */ }
   const posIds = POS.map((p) => p.id), ph = posIds.map(() => '?').join(',');
   const deptCase = `CASE WHEN seller_id IN ${teamSubquery('sale')} THEN 'sale' WHEN seller_id IN ${teamSubquery('cskh')} THEN 'cskh' END`;
-  const [sales, mkt, saleDay, cskhDay, mktDay] = await db.batch([
+  const MKT_IDS = "(SELECT user_id FROM pos_users WHERE name LIKE '%mkt%')";
+  const yearAgo = `${Number(today.slice(0, 4)) - 1}${today.slice(4, 10)}`;
+  const thisMonth = today.slice(0, 7), lastMonth = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 2, 1)).toISOString().slice(0, 7);
+  const NET = 'COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0))';
+  // Chuỗi ngày liền có đơn: nhóm ngày liên tiếp bằng julianday(ngày) − số thứ tự (gaps and islands).
+  const streakSql = (table: string, who: string, has: string, where: string) => `WITH d AS (SELECT ${who} AS id, day FROM ${table} WHERE pos_id IN (${ph}) AND ${where} GROUP BY 1,2 HAVING ${has}),
+      g AS (SELECT id, day, julianday(day) - ROW_NUMBER() OVER (PARTITION BY id ORDER BY day) AS grp FROM d)
+    SELECT id, COUNT(*) AS days, MAX(day) AS end FROM g GROUP BY id, grp ORDER BY days DESC, end DESC LIMIT 1`;
+  const deptStat = (d: 'sale' | 'cskh') => [
+    db.prepare(`SELECT seller_id AS id, day, SUM(closed_net) AS net FROM stats_daily WHERE pos_id IN (${ph}) AND seller_id IN ${teamSubquery(d)} GROUP BY 1,2 ORDER BY net DESC LIMIT 1`).bind(...posIds),
+    db.prepare(`SELECT seller_id AS id, strftime('%Y-%W', day) AS week, SUM(closed_net) AS net FROM stats_daily WHERE pos_id IN (${ph}) AND seller_id IN ${teamSubquery(d)} GROUP BY 1,2 ORDER BY net DESC LIMIT 1`).bind(...posIds),
+    db.prepare(`SELECT o.seller_id AS id, MAX(${NET}) AS net, substr(MAX(o.first_closed_at),1,10) AS day FROM raw_pos_orders o INDEXED BY idx_raw_orders_pos_closed_status_money
+      WHERE o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.status_code NOT IN (0,6,7) AND o.seller_id IN ${teamSubquery(d)} GROUP BY 1 ORDER BY net DESC LIMIT 1`).bind(...posIds, yearAgo),
+    db.prepare(streakSql('stats_daily', 'seller_id', 'SUM(closed_orders)>0', `seller_id IN ${teamSubquery(d)} AND day>='${yearAgo}'`)).bind(...posIds),
+  ];
+  const results = await db.batch([
     db.prepare(`SELECT substr(day,1,7) AS month, seller_id AS id, ${deptCase} AS dept, SUM(closed_orders) AS orders, SUM(closed_net) AS net, SUM(orders) AS base, SUM(${CC}) AS cob
       FROM stats_daily WHERE pos_id IN (${ph}) AND seller_id<>'' GROUP BY 1,2 HAVING dept IS NOT NULL`).bind(...posIds),
     db.prepare(`SELECT substr(day,1,7) AS month, marketer_id AS id, SUM(orders) AS orders, SUM(net) AS net FROM stats_daily_mkt
-      WHERE pos_id IN (${ph}) AND marketer_id<>'' AND marketer_id IN (SELECT user_id FROM pos_users WHERE name LIKE '%mkt%') GROUP BY 1,2`).bind(...posIds),
-    ...(['sale', 'cskh'] as const).map((d) => db.prepare(`SELECT seller_id AS id, day, SUM(closed_net) AS net FROM stats_daily WHERE pos_id IN (${ph}) AND seller_id IN ${teamSubquery(d)} GROUP BY 1,2 ORDER BY net DESC LIMIT 1`).bind(...posIds)),
-    db.prepare(`SELECT marketer_id AS id, day, SUM(net) AS net FROM stats_daily_mkt WHERE pos_id IN (${ph}) AND marketer_id IN (SELECT user_id FROM pos_users WHERE name LIKE '%mkt%') GROUP BY 1,2 ORDER BY net DESC LIMIT 1`).bind(...posIds),
+      WHERE pos_id IN (${ph}) AND marketer_id<>'' AND marketer_id IN ${MKT_IDS} GROUP BY 1,2`).bind(...posIds),
+    db.prepare(`SELECT substr(day,1,7) AS month, seller_id AS id, SUM(orders) AS orders FROM stats_daily_mkt WHERE pos_id IN (${ph}) AND seller_id IN ${teamSubquery('sale')} GROUP BY 1,2`).bind(...posIds),
+    ...deptStat('sale'), ...deptStat('cskh'),
+    db.prepare(`SELECT marketer_id AS id, day, SUM(net) AS net FROM stats_daily_mkt WHERE pos_id IN (${ph}) AND marketer_id IN ${MKT_IDS} GROUP BY 1,2 ORDER BY net DESC LIMIT 1`).bind(...posIds),
+    db.prepare(`SELECT marketer_id AS id, strftime('%Y-%W', day) AS week, SUM(net) AS net FROM stats_daily_mkt WHERE pos_id IN (${ph}) AND marketer_id IN ${MKT_IDS} GROUP BY 1,2 ORDER BY net DESC LIMIT 1`).bind(...posIds),
+    db.prepare(`SELECT o.marketer_id AS id, MAX(${NET}) AS net, substr(MAX(o.first_sent_at),1,10) AS day FROM raw_pos_orders o INDEXED BY idx_raw_orders_pos_sent_status_money
+      WHERE o.pos_id IN (${ph}) AND o.first_sent_at IS NOT NULL AND o.first_sent_at>=? AND o.status_code NOT IN (6,7) AND o.marketer_id IN ${MKT_IDS} GROUP BY 1 ORDER BY net DESC LIMIT 1`).bind(...posIds, yearAgo),
   ]);
+  const [sales, mkt, mktBySale, ...rest] = results;
   const tenure = await staffTenure(db, today).catch(() => ({} as Awaited<ReturnType<typeof staffTenure>>));
+  const upsell = await cskhUpsell(db, posIds, vnRangeUtc(`${lastMonth}-01`, `${lastMonth}-01`).startUtc, vnRangeUtc(`${thisMonth}-01`, `${thisMonth}-01`).startUtc).catch(() => []);
   const people = new Map<string, BadgePerson>();
   const person = (id: string, dept: BadgeDept) => people.get(`${dept}:${id}`) ?? people.set(`${dept}:${id}`, { id, dept, joined: tenure[id]?.joined ?? null, months: [] }).get(`${dept}:${id}`)!;
   for (const r of sales.results as { month: string; id: string; dept: 'sale' | 'cskh'; orders: number; net: number; base: number; cob: number }[])
     person(String(r.id), r.dept).months.push({ month: r.month, orders: Number(r.orders), net: Number(r.net), base: Number(r.base), closedOfBase: Math.min(Number(r.base), Number(r.cob)) });
   for (const r of mkt.results as { month: string; id: string; orders: number; net: number }[])
     person(String(r.id), 'mkt').months.push({ month: r.month, orders: Number(r.orders), net: Number(r.net), base: 0, closedOfBase: 0 });
-  const day = (res: D1Result) => { const r = res.results[0] as { id: string; day: string; net: number } | undefined; return r && Number(r.net) > 0 ? { id: String(r.id), day: r.day, net: Number(r.net) } : undefined; };
-  const book: BadgeBook = { day: today, people: computeBadges([...people.values()], today.slice(0, 7), { sale: day(saleDay), cskh: day(cskhDay), mkt: day(mktDay) }) };
+  type One = { id: string; day?: string; week?: string; net?: number; days?: number; end?: string };
+  const one = (res: D1Result | undefined) => { const r = res?.results[0] as One | undefined; return r && r.id ? r : undefined; };
+  const dayOf = (r?: One) => (r && Number(r.net) > 0 && r.day ? { id: String(r.id), day: r.day, net: Number(r.net) } : undefined);
+  const weekOf = (r?: One) => (r && Number(r.net) > 0 && r.week ? { id: String(r.id), week: r.week, net: Number(r.net) } : undefined);
+  const streakOf = (r?: One) => (r && r.days && r.end ? { id: String(r.id), days: Number(r.days), end: r.end } : undefined);
+  const extras: Partial<Record<BadgeDept, DeptExtras>> = {
+    sale: { bestDay: dayOf(one(rest[0])), bestWeek: weekOf(one(rest[1])), bigOrder: dayOf(one(rest[2])), streak: streakOf(one(rest[3])),
+      mktOrders: (mktBySale.results as { month: string; id: string; orders: number }[]).map((r) => ({ month: r.month, id: String(r.id), orders: Number(r.orders) })) },
+    cskh: { bestDay: dayOf(one(rest[4])), bestWeek: weekOf(one(rest[5])), bigOrder: dayOf(one(rest[6])), streak: streakOf(one(rest[7])),
+      upsell: upsell.flatMap((r) => (r.rate === null ? [] : [{ month: lastMonth, id: r.cskhId, rate: r.rate, handed: r.handed }])) },
+    mkt: { bestDay: dayOf(one(rest[8])), bestWeek: weekOf(one(rest[9])), bigOrder: dayOf(one(rest[10])) },
+  };
+  const book: BadgeBook = { day: today, people: computeBadges([...people.values()], thisMonth, extras) };
   await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at')
     .bind(BADGES_KEY, JSON.stringify(book), new Date().toISOString()).run();
   return book;

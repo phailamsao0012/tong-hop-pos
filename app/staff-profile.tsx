@@ -6,7 +6,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import { closeStaffProfile, currentStaffProfile, subscribeStaffProfile } from './staff-profile-link';
 import { todayVn } from '@/lib/shared/report-time';
 import { Award, CalendarDays, Crown, Flag, Package, TrendingUp, UserRound } from 'lucide-react';
-import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceLine, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, Line, LineChart, ReferenceLine, XAxis, YAxis } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { JOIN_SOURCE_LABELS } from '@/lib/reports/growth-calc';
@@ -69,7 +69,7 @@ export function insights(p: StaffProfile, today: string): string[] {
 }
 
 function MonthCharts({ months, mkt }: { months: MonthRow[]; mkt: boolean }) {
-  const data = months.map((m) => ({ key: mLabel(m.month), net: m.net, orders: m.closedOrders, rate: m.rate === null ? null : Math.round(m.rate * 10) / 10, top: m.rank !== null && m.rank <= 3 }));
+  const data = months.map((m) => ({ key: mLabel(m.month), net: m.net, normal: m.rank !== null && m.rank <= 3 ? 0 : m.net, topNet: m.rank !== null && m.rank <= 3 ? m.net : 0, orders: m.closedOrders, rate: m.rate === null ? null : Math.round(m.rate * 10) / 10, top: m.rank !== null && m.rank <= 3 }));
   return (
     <div className="grid gap-3 lg:grid-cols-2">
       <section className="min-w-0 rounded-xl border border-line p-3">
@@ -80,9 +80,8 @@ function MonthCharts({ months, mkt }: { months: MonthRow[]; mkt: boolean }) {
             <CartesianGrid vertical={false} /><XAxis dataKey="key" tick={{ fontSize: 11 }} minTickGap={8} />
             <YAxis width={48} tick={{ fontSize: 11 }} tickFormatter={(n: number) => shortMoney(n).replace(' ₫', '')} />
             <ChartTooltip content={<ChartTooltipContent formatter={(v) => money(typeof v === 'number' ? v : null)} />} />
-            <Bar dataKey="net" name="Doanh số" radius={[4, 4, 0, 0]} isAnimationActive={false}>
-              {data.map((d) => <Cell key={d.key} fill={d.top ? 'var(--warn)' : 'var(--primary)'} />)}
-            </Bar>
+            <Bar dataKey="normal" name="Doanh số" stackId="n" fill="var(--primary)" radius={[4, 4, 0, 0]} isAnimationActive={false} />
+            <Bar dataKey="topNet" name="Doanh số (lọt top)" stackId="n" fill="var(--warn)" radius={[4, 4, 0, 0]} isAnimationActive={false} />
           </BarChart>
         </ChartContainer>
       </section>
@@ -192,7 +191,6 @@ export function StaffProfileHost() {
   useEffect(() => {
     if (!target) return;
     let live = true;
-    setState({ id: target.id });
     void apiJson<StaffProfile>(`/api/reports/staff-profile?id=${encodeURIComponent(target.id)}`)
       .then((data) => { if (live) setState({ id: target.id, data }); }, (e: Error) => { if (live) setState({ id: target.id, error: e.message }); });
     return () => { live = false; };
@@ -202,7 +200,7 @@ export function StaffProfileHost() {
       <SheetContent className="overflow-y-auto data-[side=right]:w-full data-[side=right]:max-w-full data-[side=right]:sm:max-w-3xl">
         <SheetHeader className="pr-12"><SheetTitle>{state?.data?.name ?? target?.name ?? 'Hồ sơ nhân sự'}</SheetTitle><SheetDescription>Hồ sơ làm việc từ ngày vào tới hôm nay</SheetDescription></SheetHeader>
         <div className="px-4 pb-6" aria-live="polite">
-          {state?.error ? <p role="alert" className="text-bad">{state.error}</p> : !state?.data ? <p className="text-ink-3">Đang tải hồ sơ…</p> : <StaffProfileBody data={state.data} today={today} />}
+          {state?.id === target?.id && state?.error ? <p role="alert" className="text-bad">{state.error}</p> : state?.id !== target?.id || !state?.data ? <p className="text-ink-3">Đang tải hồ sơ…</p> : <StaffProfileBody data={state.data} today={today} />}
         </div>
       </SheetContent>
     </Sheet>

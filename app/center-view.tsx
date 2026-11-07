@@ -122,7 +122,7 @@ function TrendTip({ active, payload, label, rows }: { active?: boolean; payload?
 }
 
 /** Bảng nhân viên (Top / Cần hỗ trợ): dòng sáng lên khi rê chuột / focus, lộ thanh tiến độ chốt / chia; tên là nút mở So sánh nhân viên. */
-function EmpTable({ rows, tone, compact = false, metric = 'rate', onNavigate }: { rows: Employee[]; tone: 'green' | 'red'; compact?: boolean; metric?: 'rate' | 'aov'; onNavigate: (view: string) => void }) {
+function EmpTable({ rows, tone, compact = false, metric = 'rate', onNavigate: _onNavigate }: { rows: Employee[]; tone: 'green' | 'red'; compact?: boolean; metric?: 'rate' | 'aov'; onNavigate: (view: string) => void }) {
   const ms = useMetricSettings();
   if (!rows.length) return <p className="empty px-2 py-4 text-[11.5px]">{metric === 'aov' ? 'Chưa đủ dữ liệu (cần ≥ 10 đơn chốt).' : 'Chưa đủ dữ liệu (cần ≥ 10 đơn chia).'}</p>;
   if (metric === 'aov') return (

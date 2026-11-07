@@ -1,7 +1,7 @@
 'use client';
 
 // Huy hiệu thành tích (anh Vũ 07/11/2026): huy chương tròn, màu theo hạng. Số tính ở lib/reports/staff-badges.ts.
-import { Crown, Flame, Gem, Medal, Rocket, ShieldCheck, Trophy } from 'lucide-react';
+import { CalendarCheck, Crown, Flame, Gem, Medal, Package, Rocket, ShieldCheck, Sparkles, TrendingUp, Trophy } from 'lucide-react';
 import { TIER_LABEL, type Badge, type BadgeTier } from '@/lib/reports/staff-badges';
 
 // Màu cố ý theo kim loại thật, cùng một bộ cho cả hai giao diện sáng / tối (nền huy chương tự đủ tương phản với chữ trắng).
@@ -15,6 +15,11 @@ const STYLE: Record<BadgeTier, { bg: string; ring: string; icon: typeof Medal }>
   top: { bg: 'linear-gradient(135deg,#9ccc65,#17684b)', ring: '#d7f0bd', icon: Trophy },
   'ben-bi': { bg: 'linear-gradient(135deg,#4db6ac,#00695c)', ring: '#b8e8e2', icon: ShieldCheck },
   'bung-no': { bg: 'linear-gradient(135deg,#ff8a65,#d84315)', ring: '#ffd0bf', icon: Flame },
+  vua: { bg: 'linear-gradient(135deg,#b388ff,#5e35b1)', ring: '#ddd0ff', icon: Crown },
+  'don-to': { bg: 'linear-gradient(135deg,#ffe082,#c49000)', ring: '#fff1bd', icon: Package },
+  'tan-binh': { bg: 'linear-gradient(135deg,#80deea,#00838f)', ring: '#c8f3f8', icon: Sparkles },
+  'but-pha': { bg: 'linear-gradient(135deg,#64b5f6,#1565c0)', ring: '#c6e1fb', icon: TrendingUp },
+  chuoi: { bg: 'linear-gradient(135deg,#a5d6a7,#2e7d32)', ring: '#d5eed6', icon: CalendarCheck },
 };
 
 export function BadgeMedal({ tier, size = 44 }: { tier: BadgeTier; size?: number }) {
