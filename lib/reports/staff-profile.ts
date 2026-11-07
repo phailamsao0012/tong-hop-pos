@@ -15,6 +15,8 @@ export type MonthRow = {
 };
 export type StaffProfile = {
   id: string; name: string; dept: ProfileDept; posNames: string[];
+  /** Các POS người này có tài khoản (anh Vũ 07/11: chỉ hiện POS có tài khoản, chọn một hay nhiều POS thì số theo POS đó). */ pos: { id: string; name: string }[];
+  /** POS đang tính số; rỗng = mọi POS có tài khoản. */ posSel: string[];
   tenure: Tenure | null; posCreated: string | null; firstOrderDay: string | null; lastOrderDay: string | null;
   /** Đơn đầu tiên người này lên (theo ngày tạo): mã, giá trị, trạng thái hiện tại. */ firstOrder: { orderId: string; posName: string; net: number; at: string; status: number } | null;
   months: MonthRow[];
@@ -56,13 +58,21 @@ export function bestOf(months: MonthRow[]) {
   return { month, rateMonth, topMonths };
 }
 
-export async function staffProfile(db: D1Database, id: string, today: string): Promise<StaffProfile> {
-  const since = monthStartOf(today, 23), posIds = POS.map((p) => p.id), ph = posIds.map(() => '?').join(',');
+/** POS dùng để tính: các POS được chọn mà người này có tài khoản; không chọn gì thì cộng mọi POS như trước (giữ nguyên số cũ). */
+export function pickPos(account: string[], pick: string[]) {
+  const sel = pick.filter((p) => account.includes(p));
+  return { posIds: sel.length ? sel : POS.map((p) => p.id), posSel: sel };
+}
+
+export async function staffProfile(db: D1Database, id: string, today: string, pick: string[] = []): Promise<StaffProfile> {
+  const since = monthStartOf(today, 23);
   const month = today.slice(0, 7);
-  const [users, firstLast, mktRows] = await db.batch([
-    db.prepare(`SELECT pos_id, MAX(name) AS name, MIN(source_created_at) AS created,
+  const users = await db.prepare(`SELECT pos_id, MAX(name) AS name, MIN(source_created_at) AS created,
         (CASE WHEN user_id IN ${teamSubquery('sale', false)} THEN 'sale' WHEN user_id IN ${teamSubquery('cskh', false)} THEN 'cskh' END) AS dept
-      FROM pos_users WHERE user_id=? GROUP BY pos_id`).bind(id),
+      FROM pos_users WHERE user_id=? GROUP BY pos_id`).bind(id).all();
+  const account = POS.map((p) => p.id).filter((p) => (users.results as { pos_id: string }[]).some((r) => r.pos_id === p));
+  const { posIds, posSel } = pickPos(account, pick), ph = posIds.map(() => '?').join(',');
+  const [firstLast, mktRows] = await db.batch([
     db.prepare(`SELECT MIN(day) AS first, MAX(day) AS last FROM stats_daily WHERE pos_id IN (${ph}) AND seller_id=? AND orders>0`).bind(...posIds, id),
     db.prepare(`SELECT COUNT(*) AS n FROM stats_daily_mkt WHERE pos_id IN (${ph}) AND day>=? AND marketer_id=?`).bind(...posIds, since, id),
   ]);
@@ -116,17 +126,17 @@ export async function staffProfile(db: D1Database, id: string, today: string): P
   const created = u.map((r) => r.created).filter((c): c is string => !!c).sort()[0] ?? null;
   const best = bestOf(months);
   return {
-    id, name, dept, posNames: [...new Set(u.map((r) => POS.find((p) => p.id === r.pos_id)?.name ?? r.pos_id))],
+    id, name, dept, pos: account.map((p) => ({ id: p, name: POS.find((x) => x.id === p)?.name ?? p })), posSel, posNames: [...new Set(u.map((r) => POS.find((p) => p.id === r.pos_id)?.name ?? r.pos_id))],
     tenure, posCreated: vnDay(created), firstOrderDay: fl?.first ?? null, lastOrderDay: fl?.last ?? null,
     firstOrder: first ? { orderId: String(first.source_order_id), posName: POS.find((p) => p.id === first.pos_id)?.name ?? first.pos_id, net: Number(first.net), at: first.created_at, status: Number(first.status_code) } : null,
     months, best: { month: best.month, rateMonth: best.rateMonth, day: bestDay && Number(bestDay.net) > 0 ? { day: bestDay.day, net: Number(bestDay.net), orders: Number(bestDay.orders) } : null },
     topMonths: best.topMonths, badges: book?.people[id] ?? [],
     products: products.results.map((p) => ({ name: p.name, quantity: Number(p.quantity), total: Number(p.total) })), productsMonth: month,
     definitions: {
-      scope: 'Số 24 tháng gần nhất, cộng mọi POS, đọc từ bảng tính sẵn theo ngày.',
+      scope: `Số 24 tháng gần nhất, cộng ${posSel.length ? 'các POS đang chọn' : 'mọi POS'}, đọc từ bảng tính sẵn theo ngày. Huy hiệu tính trên mọi POS.`,
       revenue: dept === 'mkt' ? 'Doanh số MKT = doanh thu đơn xác nhận do marketer này mang về, theo ngày xác nhận.' : 'Doanh số = doanh thu đơn chốt của người bán, theo ngày chốt (cùng cách Tổng quan).',
       rate: 'Tỷ lệ chốt = đơn lên trong tháng đã chốt ÷ đơn lên trong tháng. Tháng tốt nhất về tỷ lệ chỉ xét tháng có từ 30 đơn lên.',
-      rank: `Hạng = thứ tự doanh số tháng trong cả bộ phận (mọi POS). Lọt top = hạng 1 tới ${TOP}.`,
+      rank: `Hạng = thứ tự doanh số tháng trong cả bộ phận, trên cùng các POS đang tính. Lọt top = hạng 1 tới ${TOP}.`,
       joined: 'Ngày vào làm: sửa tay → web nhân sự → ngày tạo tài khoản Pancake → ngày có đơn đầu tiên.',
       products: 'Sản phẩm tháng này: số lượng trên đơn chốt, không tính quà tặng.',
     },

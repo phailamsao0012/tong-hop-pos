@@ -105,7 +105,23 @@ function MonthCharts({ months, mkt }: { months: MonthRow[]; mkt: boolean }) {
   );
 }
 
-export function StaffProfileBody({ data, today }: { data: StaffProfile; today: string }) {
+const chip = (on: boolean) => `tap rounded-full border px-2.5 py-1 ${on ? 'border-primary bg-primary text-primary-foreground font-semibold' : 'border-line hover:bg-surface-2'}`;
+
+/** Hàng POS người này có tài khoản: bấm để chọn một hay nhiều POS, "Tất cả" để bỏ chọn (anh Vũ 07/11). */
+function PosPick({ data, onPick }: { data: StaffProfile; onPick?: (pos: string[]) => void }) {
+  if (!data.pos.length) return null;
+  const sel = data.posSel, toggle = (id: string) => onPick?.(sel.includes(id) ? sel.filter((p) => p !== id) : [...sel, id]);
+  return (
+    <fieldset className="m-0 flex min-w-0 flex-wrap items-center gap-1.5 border-0 p-0 text-[12px]">
+      <legend className="sr-only">Chọn POS</legend>
+      <span className="text-ink-3">POS:</span>
+      <button type="button" aria-pressed={!sel.length} className={chip(!sel.length)} onClick={() => onPick?.([])}>Tất cả</button>
+      {data.pos.map((p) => <button key={p.id} type="button" aria-pressed={sel.includes(p.id)} className={chip(sel.includes(p.id))} onClick={() => toggle(p.id)}>{p.name}</button>)}
+    </fieldset>
+  );
+}
+
+export function StaffProfileBody({ data, today, onPick }: { data: StaffProfile; today: string; onPick?: (pos: string[]) => void }) {
   const status = useStaffStatus()[data.id] ?? 'working';
   const mkt = data.dept === 'mkt', notes = insights(data, today), worked = daysSince(data.tenure?.joined ?? null, today);
   return (
@@ -114,12 +130,12 @@ export function StaffProfileBody({ data, today }: { data: StaffProfile; today: s
         <span className={`rounded-full bg-surface-2 px-2.5 py-1 font-semibold ${STATUS_CLASS[status]}`}>{STAFF_STATUSES[status]}</span>
         {data.dept && <span className="rounded-full bg-surface-2 px-2.5 py-1">{DEPT[data.dept]}</span>}
         {data.tenure && <span className="rounded-full bg-surface-2 px-2.5 py-1 num">T{data.tenure.t} · {worked !== null ? `${vi.format(worked)} ngày` : ''}</span>}
-        {data.posNames.map((p) => <span key={p} className="rounded-full border border-line px-2.5 py-1">{p}</span>)}
       </div>
+      <PosPick data={data} onPick={onPick} />
 
       <section aria-label="Các mốc" className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         <Fact icon={CalendarDays} label="Ngày vào làm" value={dmyFull(data.tenure?.joined)} note={data.tenure ? `theo ${JOIN_SOURCE_LABELS[data.tenure.source]}` : 'chưa có ngày vào'} />
-        <Fact icon={UserRound} label="Có tài khoản POS" value={dmyFull(data.posCreated)} note={data.posNames.length ? `${data.posNames.length} POS` : undefined} />
+        <Fact icon={UserRound} label="Có tài khoản POS" value={dmyFull(data.posCreated)} note={data.pos.length ? `${data.pos.length} POS` : undefined} />
         <Fact icon={Flag} label="Ngày có đơn đầu tiên" value={dmyFull(data.firstOrderDay)}
           note={data.firstOrder ? `đơn ${data.firstOrder.orderId} · ${shortMoney(data.firstOrder.net)} · ${ORDER_STATUS[data.firstOrder.status] ?? ''}` : undefined} />
         <Fact icon={TrendingUp} label="Có đơn gần nhất" value={dmyFull(data.lastOrderDay)} />
@@ -187,20 +203,24 @@ export function StaffProfileBody({ data, today }: { data: StaffProfile; today: s
 export function StaffProfileHost() {
   const [today] = useState(() => todayVn());
   const target = useSyncExternalStore(subscribeStaffProfile, currentStaffProfile, () => null);
-  const [state, setState] = useState<{ id: string; data?: StaffProfile; error?: string } | null>(null);
+  const [state, setState] = useState<{ id: string; key: string; data?: StaffProfile; error?: string } | null>(null);
+  const [pick, setPick] = useState<{ id: string; pos: string[] }>({ id: '', pos: [] });
+  const pos = target && pick.id === target.id ? pick.pos : [];
+  const key = pos.join(',');
   useEffect(() => {
     if (!target) return;
     let live = true;
-    void apiJson<StaffProfile>(`/api/reports/staff-profile?id=${encodeURIComponent(target.id)}`)
-      .then((data) => { if (live) setState({ id: target.id, data }); }, (e: Error) => { if (live) setState({ id: target.id, error: e.message }); });
+    void apiJson<StaffProfile>(`/api/reports/staff-profile?id=${encodeURIComponent(target.id)}${key ? `&pos=${encodeURIComponent(key)}` : ''}`)
+      .then((data) => { if (live) setState({ id: target.id, key, data }); }, (e: Error) => { if (live) setState({ id: target.id, key, error: e.message }); });
     return () => { live = false; };
-  }, [target]);
+  }, [target, key]);
+  const loading = state?.id === target?.id && state?.key !== key;
   return (
     <Sheet open={!!target} onOpenChange={(open) => { if (!open) closeStaffProfile(); }}>
       <SheetContent className="overflow-y-auto data-[side=right]:w-full data-[side=right]:max-w-full data-[side=right]:sm:max-w-3xl">
         <SheetHeader className="pr-12"><SheetTitle>{state?.data?.name ?? target?.name ?? 'Hồ sơ nhân sự'}</SheetTitle><SheetDescription>Hồ sơ làm việc từ ngày vào tới hôm nay</SheetDescription></SheetHeader>
         <div className="px-4 pb-6" aria-live="polite">
-          {state?.id === target?.id && state?.error ? <p role="alert" className="text-bad">{state.error}</p> : state?.id !== target?.id || !state?.data ? <p className="text-ink-3">Đang tải hồ sơ…</p> : <StaffProfileBody data={state.data} today={today} />}
+          {state?.id === target?.id && state?.error ? <p role="alert" className="text-bad">{state.error}</p> : state?.id !== target?.id || !state?.data ? <p className="text-ink-3">Đang tải hồ sơ…</p> : <div className={loading ? 'opacity-50 transition-opacity' : 'transition-opacity'} aria-busy={loading}><StaffProfileBody data={state.data} today={today} onPick={(p) => target && setPick({ id: target.id, pos: p })} /></div>}
         </div>
       </SheetContent>
     </Sheet>

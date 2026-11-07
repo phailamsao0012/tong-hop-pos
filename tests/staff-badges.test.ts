@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { computeBadges, moneyLabel, type BadgePerson } from '../lib/reports/staff-badges';
-import { bestOf, rankByMonth } from '../lib/reports/staff-profile';
+import { bestOf, pickPos, rankByMonth } from '../lib/reports/staff-profile';
+import { POS } from '../lib/shared/report-model';
 
 const m = (month: string, orders: number, net: number, base = 0, closedOfBase = 0) => ({ month, orders, net, base, closedOfBase });
 
@@ -62,4 +63,11 @@ void test('badgeBook và staffProfile chạy được trên thế giới demo (c
   const p = await staffProfile(db, seller, '2026-11-05');
   assert.ok(p.months.length >= 1 && p.firstOrderDay !== null);
   assert.ok(Array.isArray(p.badges));
+});
+
+void test('pickPos: chỉ nhận POS người đó có tài khoản, không chọn thì cộng mọi POS', () => {
+  const [a, b, c] = POS.map((p) => p.id);
+  assert.deepEqual(pickPos([a, b], [b, c]), { posIds: [b], posSel: [b] });
+  assert.deepEqual(pickPos([a, b], []).posSel, []);
+  assert.equal(pickPos([a, b], [c]).posIds.length, POS.length);
 });
