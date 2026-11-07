@@ -26,10 +26,11 @@ import { parseMoney, type TargetItem } from './targets-panel';
 import { setHrUnit, useBranch, useHrUnit, useTeamChoice } from './team-store';
 import { ChartCard, Definitions, EmptyState, ErrorBox, SkeletonTable, pct, shortMoney, toast, vi } from './ui-kit';
 import { useApi } from './use-api';
+import { Kpi2Panel, ProductQtyCard } from './kpi2-panel';
 
 type Dept = 'sale' | 'cskh';
 const LABEL: Record<Dept, string> = { sale: 'Sale', cskh: 'CSKH' };
-type Team = { id: string; name: string; leader: string | null; ids: string[] };
+type Team = { id: string; name: string; leader: string | null; ids: string[]; members: { id: string; name: string }[] };
 type Target = TargetItem & { aov?: number | null };
 type TargetsResp = { items: Target[]; teams?: string[] | null };
 type Field = 'revenue' | 'aov' | 'rate';
@@ -149,7 +150,7 @@ export function GiaoViecKpiView({ owner, onOpen }: { owner: boolean; onOpen?: (v
   const inScope = (id: string) => (!owner && !mine?.includes(id) ? false : picked ? picked.id.split(',').includes(id) : branch ? !!branches.data?.teams.some((t) => t.id === id && t.officeId === branch) : true);
   const scopeName = picked ? picked.name : branch ? branches.data?.offices.find((o) => o.id === branch)?.name ?? '' : '';
   const teamsOf = (d: (typeof depts)[number]): Team[] => (d.teams.data?.teams ?? []).filter((t) => t.id !== 'none' && t.id !== 'unlinked' && inScope(t.id))
-    .map((t) => ({ id: t.id, name: t.name, leader: t.leader, ids: t.members.map((m) => m.posUserId) }));
+    .map((t) => ({ id: t.id, name: t.name, leader: t.leader, ids: t.members.map((m) => m.posUserId), members: t.members.map((m) => ({ id: m.posUserId, name: m.name })) }));
 
   // KPI các tháng của kỳ (mỗi tháng một lần đọc /api/targets).
   const [targets, setTargets] = useState<Record<string, Target[]>>({});
@@ -268,6 +269,19 @@ export function GiaoViecKpiView({ owner, onOpen }: { owner: boolean; onOpen?: (v
         );
       })}
 
+      {/* Chỉ tiêu mới (07/11/2026): KPI team và phần Leader / Mentor chia cho từng người, rồi số lượng sản phẩm để cân nên bán gì. */}
+      {ok && !future && targetsReady && scopeReady && editMonth && depts.map((d) => {
+        const teams = teamsOf(d);
+        if (!teams.length || !d.teams.data) return null;
+        return (
+          <div key={`kpi2-${d.dept}`} className="space-y-4">
+            <Kpi2Panel dept={d.dept} teams={teams} rows={d.report.data?.current.byEmployee} period={period} end={end} editMonth={editMonth} owner={owner}
+              targets={targets} onTargets={(m, items) => setTargets((x) => ({ ...x, [m]: items }))} />
+            <ProductQtyCard dept={d.dept} teams={teams} period={period} end={end} />
+          </div>
+        );
+      })}
+
       {owner && ok && targetsReady && scopeReady && editMonth && depts.map((d) => {
         const sale = d.dept === 'sale', label = LABEL[d.dept], teams = teamsOf(d);
         if (!teams.length) return null;
@@ -302,6 +316,8 @@ export function GiaoViecKpiView({ owner, onOpen }: { owner: boolean; onOpen?: (v
 
       <Definitions items={[
         'KPI đặt theo tháng cho cả team (doanh thu, trung bình đơn, tỉ lệ chốt); leader tự chia cho từng người, web không chia.',
+        'Chỉ tiêu mới (07/11/2026): Sale có Số nhận (số được chia), Số chốt (chốt từ số được chia), Doanh số, Số đơn (đơn chốt), số lượng từng sản phẩm; CSKH có Doanh số, Tỷ lệ tự upsell, số lượng từng sản phẩm. Chủ hệ thống đặt KPI cả team, Leader / Mentor chia cho người của mình; chia vượt KPI team thì hiện chữ đỏ.',
+        'Tỷ lệ tự upsell = khách do Marketing mang về có CSKH nhận chăm sóc trên đơn, sau đó chính CSKH đó bán thêm được đơn chốt ÷ số khách đó. Số lượng sản phẩm = hộp / chai trên đơn chốt, không tính quà tặng.',
         'Chủ hệ thống đặt KPI team. Leader / mentor chỉ xem KPI các team mình cầm (gán ở Cài đặt → Team, hoặc là Leader bên web nhân sự).',
         'KPI lưu chung với trang KPI → Theo team, tiến độ KPI ở Tổng quan và báo cáo Zalo buổi sáng: sửa ở đây thì các nơi đó đổi theo.',
         'Bộ phận, chi nhánh, team: theo nút Tất cả / Sale / CSKH và chi nhánh ở thanh trên cùng.',

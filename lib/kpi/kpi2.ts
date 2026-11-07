@@ -78,3 +78,23 @@ export function splitStatus(team: Kpi2 | undefined, members: (Kpi2 | undefined)[
     return { field, team: t, split, over: t !== null && split > t };
   }).filter((l) => l.team !== null || l.split > 0);
 }
+
+/** Đọc một chỉ tiêu: "assigned", "upsellRate" hay "products.<dòng>". */
+export function kpi2Value(k: Kpi2 | undefined, field: string): number | undefined {
+  if (!k) return undefined;
+  if (field.startsWith('products.')) return k.products?.[field.slice(9) as LineKey];
+  return (k as Record<string, number | undefined>)[field];
+}
+
+/** Chỉ tiêu của kỳ từ chỉ tiêu tháng (giống KPI doanh thu ở lib/kpi/team-kpi.ts): số cộng dồn = KPI tháng × ngày của tháng trong kỳ ÷ ngày
+ *  của tháng; tỷ lệ = trung bình theo số ngày. Có tháng chưa đặt thì null, không đoán. */
+export function periodGoal(byMonth: { month: string; value: number | undefined; overlap: number; days: number }[], ratio: boolean): number | null {
+  let sum = 0, days = 0;
+  for (const m of byMonth) {
+    if (!m.value) return null;
+    sum += ratio ? m.value * m.overlap : m.value * m.overlap / m.days;
+    days += m.overlap;
+  }
+  if (!days) return null;
+  return ratio ? sum / days : sum;
+}

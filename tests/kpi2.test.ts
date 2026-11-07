@@ -35,3 +35,12 @@ void test('kpi2: đã chia / tổng, báo chia vượt', () => {
     { field: 'products.gentadox', team: 10, split: 6, over: false },
   ]);
 });
+
+void test('kpi2: quy chỉ tiêu tháng về kỳ', async () => {
+  const { periodGoal, kpi2Value } = await import('../lib/kpi/kpi2');
+  assert.equal(periodGoal([{ month: '2026-11', value: 300, overlap: 10, days: 30 }], false), 100);
+  assert.equal(periodGoal([{ month: '2026-11', value: 30, overlap: 10, days: 30 }, { month: '2026-12', value: 60, overlap: 10, days: 31 }], true), 45);
+  assert.equal(periodGoal([{ month: '2026-11', value: undefined, overlap: 10, days: 30 }], false), null);
+  assert.equal(kpi2Value({ products: { oxy: 7 } }, 'products.oxy'), 7);
+  assert.equal(kpi2Value({ closed: 4 }, 'closed'), 4);
+});
