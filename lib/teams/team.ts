@@ -149,8 +149,8 @@ export const teamFilter = (column: string, team: Team, counted = true, unit: HrU
   const q = unit && !unit.branchOnly ? unitSubquery(unit, counted) : teamSubquery(team, counted);
   return (q ? ` AND ${column} IN ${q}` : '') + (unit?.branchOnly ? branchFilter(column, unit.branch ?? null) : '');
 };
-/** Số về MKT (anh Vũ 04/11/2026, ý sếp): đơn chia cho Sale là số Sale, chia cho CSKH là số CSKH; chưa chia hoặc chia người ngoài
- *  Sale / CSKH không tính. Nút Sale / CSKH chỉ lấy bên đó, Tất cả lấy cả hai. */
+/** Số về MKT: chỉ đơn đang chia cho bộ phận Sale mới tính số (sếp qua anh Vũ 07/11/2026, khớp Pancake lọc Marketer + bộ phận Sale).
+ *  Chưa chia, chia CSKH hay người khác không tính số. Nút CSKH vẫn xem riêng đơn đang ở CSKH. */
 export const leadSellerFilter = (column: string, team: Team = 'all') =>
-  team === 'sale' || team === 'cskh' ? ` AND ${column} IN ${teamSubquery(team)}` : ` AND (${column} IN ${teamSubquery('sale')} OR ${column} IN ${teamSubquery('cskh')})`;
+  ` AND ${column} IN ${teamSubquery(team === 'cskh' ? 'cskh' : 'sale')}`;
 
