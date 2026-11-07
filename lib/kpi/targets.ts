@@ -186,3 +186,7 @@ export async function writeTargets(user: { role: Access['role']; email: string }
   for (let i = 0; i < statements.length; i += 100) await env.DB.batch(statements.slice(i, i + 100));
   return only;
 }
+
+/** Lưu chỉ tiêu KPI mới của tháng (lib/kpi/kpi2.ts), app_settings target_kpi2:<tháng>. */
+export const saveKpi2 = (key: string, value: unknown, now: string) => env.DB.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at')
+  .bind(key, JSON.stringify(value), now).run();

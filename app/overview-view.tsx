@@ -1,4 +1,5 @@
 'use client';
+import { ProfileLink } from './staff-profile-link';
 import { AdvisorPanel } from './advisor-panel';
 
 import { usePosIds } from './pos-store';
@@ -653,7 +654,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
                     return (
                       <tr key={`${r.posId}:${r.sellerId || 'none'}`}>
                         {/* Gộp POS và bộ phận xuống dòng dưới tên để bảng vừa màn hình, không kéo ngang (anh Vũ 07/11/2026). */}
-                        <td className="max-w-60 whitespace-normal font-medium"><span className="flex items-start gap-2"><span className="num mt-0.5 w-4 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span><span className="min-w-0">{r.name}<span className="block text-[11px] font-normal text-ink-3" title={r.department ?? ''}>{splitPos && <><PosBadge posId={r.posId} size={12} className="mr-1 align-[-2px]" />{posName(r.posId)} · </>}{deptShort(r.department)}</span></span></span></td>
+                        <td className="max-w-60 whitespace-normal font-medium"><span className="flex items-start gap-2"><span className="num mt-0.5 w-4 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span><span className="min-w-0"><ProfileLink id={r.sellerId} name={r.name} /><span className="block text-[11px] font-normal text-ink-3" title={r.department ?? ''}>{splitPos && <><PosBadge posId={r.posId} size={12} className="mr-1 align-[-2px]" />{posName(r.posId)} · </>}{deptShort(r.department)}</span></span></span></td>
                         {team === 'cskh' && <><td className="n">{vi.format(r.closedOrders)}</td><td className="n">{pct(closeRateOf(r, ms.rateBase))}</td></>}
                         {team !== 'cskh' && <><td className="n">{r.assignedHidden ? '—' : vi.format(r.assignedOrders)}</td>
                         <td className="n">{vi.format(r.closedOrders)}</td>

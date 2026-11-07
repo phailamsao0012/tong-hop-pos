@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
 import { isOwner } from '@/lib/auth/access';
-import { managedTeams, ownPosUserIds, readTargetSetting, targetStaff } from '@/lib/kpi/targets';
+import { managedTeams, ownPosUserIds, readTargetSetting, saveKpi2, targetStaff } from '@/lib/kpi/targets';
 import { KPI2_KEY, canWriteKpi2, mergeKpi2, parseKpi2, visibleKpi2 } from '@/lib/kpi/kpi2';
 import { audit } from '@/lib/ops/audit';
 
@@ -40,8 +40,7 @@ export async function PUT(request: Request) {
   const stored = parseKpi2((await readTargetSetting(KPI2_KEY(month)))?.value);
   const next = mergeKpi2(stored, items.map((it) => ({ key: String(it.key), value: it.value })));
   const now = new Date().toISOString();
-  await env.DB.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at')
-    .bind(KPI2_KEY(month), JSON.stringify(next), now).run();
+  await saveKpi2(KPI2_KEY(month), next, now);
   await audit({ action: 'targets.kpi2', userId: user.userId, target: month, detail: JSON.stringify({ keys: items.map((it) => it.key) }), request });
   const { teams } = await scopeOf(user);
   return Response.json({ ok: true, month, items: visibleKpi2(next, teams, staff), editable: staff }, { headers });

@@ -6,6 +6,7 @@
 // 31/10: Siêu Vô Gạo tính thêm Oxy + Bổ huyết, Bio Nano Shield là kháng sinh).
 // Cùng cách tính với "Chốt Sale theo nhóm đơn" ở Tổng quan POS: lọc nhóm đơn productSegment, tỷ lệ chốt chia cho mọi đơn cùng phạm vi.
 // Mỗi đơn chỉ thuộc một nhóm (lib/order-segments.ts), nên cột Tổng là doanh số thật.
+import { ProfileLink } from './staff-profile-link';
 import { Pill } from 'lucide-react';
 import { closeRateOf, rateTextClass } from '@/lib/reports/metrics';
 import { PRODUCT_SEGMENTS, SEGMENT_KEYS, segmentsFor } from '@/lib/pancake/order-segments';
@@ -94,7 +95,7 @@ export function SaleSegmentBlock({ q, periodLabel }: { q: string; periodLabel: s
               </tr></thead>
               <tbody>{rows.map((r) => (
                 <tr key={r.id}>
-                  <td className="text-left font-medium">{r.name}</td>
+                  <td className="text-left font-medium"><ProfileLink id={r.id} name={r.name} /></td>
                   {segs.map((seg) => [
                     <td key={seg} className="num r text-right">
                       {shortMoney(r[seg])}

@@ -1,5 +1,6 @@
 'use client';
 
+import { StaffProfileHost } from './staff-profile';
 import { focusAfterNav } from './nav-focus';
 import { Spotlight } from './spotlight';
 import { Fragment, Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
@@ -2136,6 +2137,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
         </DialogContent>
       </Dialog>
       <Toaster />
+      <StaffProfileHost />
     </SidebarProvider>
   );
 }

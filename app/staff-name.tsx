@@ -2,6 +2,7 @@
 
 // Tên nhân viên có màu theo trạng thái (anh Vũ 04/11/2026): thường = đang làm, vàng = tạm nghỉ, đỏ = đã nghỉ. Chủ hệ thống đặt tay ở
 // Cài đặt → Team & tài khoản → Trạng thái nhân viên. Tải một lần cho cả web; lưu xong thì mọi chỗ đổi màu ngay.
+import { ProfileLink } from './staff-profile-link';
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Search, UserRoundCheck } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -25,12 +26,12 @@ export function useStaffStatus(): Map {
 export const STATUS_CLASS: Record<StaffStatus, string> = { working: '', paused: 'text-[var(--st-paused)]', left: 'text-bad' };
 
 /** Tên + nhãn thâm niên; tạm nghỉ tô vàng, đã nghỉ tô đỏ (rê chuột thấy chữ). */
-export function StaffName({ id, name, tenure = true }: { id: string | null | undefined; name: string; tenure?: boolean }) {
+export function StaffName({ id, name, tenure = true, link = true }: { id: string | null | undefined; name: string; tenure?: boolean; /** false khi tên đã nằm trong một nút khác. */ link?: boolean }) {
   const map = useStaffStatus();
   const s: StaffStatus = (id && map[id]) || 'working';
   return (
     <>
-      <span className={STATUS_CLASS[s]} title={s === 'working' ? undefined : STAFF_STATUSES[s]}>{name}</span>
+      <ProfileLink id={link ? id : null} name={name}><span className={STATUS_CLASS[s]} title={s === 'working' ? undefined : STAFF_STATUSES[s]}>{name}</span></ProfileLink>
       {tenure && <TenureBadge id={id} />}
     </>
   );

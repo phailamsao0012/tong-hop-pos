@@ -404,7 +404,7 @@ export function CompareView() {
                             <span className="num w-5 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span>
                             <button type="button" aria-pressed={picked} onClick={() => toggle(r.sellerId)}
                               className={`flex min-w-0 items-center gap-2 rounded-md text-[13px] tap font-medium transition-colors duration-[var(--dur)] ease-[var(--ease)] hover:text-primary ${picked ? 'text-primary' : 'text-ink'}`}>
-                              <Avatar name={r.name} size="sm" /><span className="truncate"><StaffName id={r.sellerId} name={r.name} tenure={false} /></span>
+                              <Avatar name={r.name} size="sm" /><span className="truncate"><StaffName id={r.sellerId} name={r.name} tenure={false} link={false} /></span>
                             </button>
                             <HoverReveal>
                               <Tooltip content={picked ? 'Bỏ khỏi so sánh' : 'Thêm vào so sánh (tối đa 8 người)'}>

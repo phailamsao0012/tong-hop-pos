@@ -5,13 +5,14 @@ import { useState, type ReactNode } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { LINE_LABEL, OTHER_LINE, PRODUCT_LINES, type LineKey, type ProductSplit, type SplitCell } from '@/lib/reports/mkt-product-split';
 import { shortMoney, vi } from './ui-kit';
+import { apiJson } from './api-fetch';
 
 type SplitBody = { byMarketer: ProductSplit; total: Partial<Record<LineKey, SplitCell>> };
 const cache = new Map<string, Promise<SplitBody>>();
 const loadSplit = (url: string) => {
   let hit = cache.get(url);
   if (!hit) {
-    hit = fetch(url).then((r) => (r.ok ? (r.json() as Promise<SplitBody>) : Promise.reject(new Error(String(r.status)))));
+    hit = apiJson<SplitBody>(url);
     hit.catch(() => cache.delete(url));
     cache.set(url, hit);
   }
