@@ -3,6 +3,7 @@
 import { addDays } from '@/lib/shared/report-time';
 import { kpiPace, millions } from '@/lib/kpi/kpi-pace';
 import type { ReportSection } from '@/lib/zalo/report-schedule';
+import { kpi2Text, type Kpi2Row } from '@/lib/zalo/kpi2-report';
 
 export type MorningDay = {
   day: string;
@@ -36,6 +37,8 @@ export type MorningData = {
    * không so (ghi "chưa có số"), không coi là 0. Giờ chẵn ghi "12"; giờ lẻ (Cài đặt báo cáo) ghi "12:30".
    */
   slotHour?: string;
+  /** Chỉ tiêu KPI mới của team (lib/zalo/kpi2-report.ts), số từ đầu tháng tới giờ báo cáo; thiếu = chưa đặt. */
+  kpi2?: Kpi2Row[];
 };
 
 const WEEKDAYS = [
@@ -179,6 +182,7 @@ export function buildMorningReport(d: MorningData) {
       },
     ]),
     kpi,
+    kpi2: d.kpi2 ?? [],
     best: withOrders.slice(0, 3),
     coach: sorted.filter((p) => p.orders === 0).map((p) => p.name),
     overdue: d.overdue,
@@ -241,6 +245,7 @@ export function morningText(r: MorningReport) {
         ? `KPI tháng ${r.kpi.month}: ${millions(r.kpi.done)} / ${millions(r.kpi.goal)} (${Math.round(r.kpi.percent)}%) · ${r.kpi.paceDiff >= 0 ? 'vượt' : 'chậm'} ${millions(Math.abs(r.kpi.paceDiff))} so tiến độ${r.kpi.needPerDay !== null ? ` · cần ${millions(r.kpi.needPerDay)}/ngày` : ''}`
         : 'KPI tháng: chưa đặt cho team',
     );
+  if (shows(r, 'kpi') && r.kpi2?.length) lines.push(kpi2Text(r.kpi2));
   if (shows(r, 'best') && r.best.length)
     lines.push(
       `Tốt nhất: ${r.best.map((p) => `${p.name} ${millions(p.net)}`).join(', ')}`,

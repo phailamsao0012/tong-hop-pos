@@ -2,7 +2,7 @@ import { env } from 'cloudflare:workers';
 import { overviewReport } from '@/lib/reports/overview-report';
 import { resolveHrUnit } from '@/lib/teams/hr-unit';
 import { countedFilter, teamFilter } from '@/lib/teams/team';
-import { todayVn, addDays, vnDayStartUtc } from '@/lib/shared/report-time';
+import { todayVn, addDays, vnDayStartUtc, vnRangeUtc } from '@/lib/shared/report-time';
 import { createZaloSender, sendZaloPhoto } from '@/lib/zalo/zalo';
 import { saveMorningImage, pruneMorningImages } from '@/lib/zalo/morning-store';
 import { webOrigin } from '@/lib/notify/origin';
@@ -14,6 +14,11 @@ import { REPORT_SCHEDULE_KEY, hiddenSections, legacySlotKey, parseReportSchedule
 
 const MORNING_TEST = 'anh-1';
 import { listTargets } from '@/lib/kpi/targets';
+import { KPI2_KEY, parseKpi2 } from '@/lib/kpi/kpi2';
+import { kpi2Rows, type Kpi2Row } from '@/lib/zalo/kpi2-report';
+import { sellerProductQty, qtyOf } from '@/lib/reports/seller-product-qty';
+import { cskhUpsell, upsellOf } from '@/lib/reports/cskh-upsell';
+import { POS } from '@/lib/shared/report-model';
 import { LOW_RATE_EVERY_MIN, LOW_RATE_KEY, currentSlot, lowRateText, pickLowRate, todayRates, type LowRateState } from '@/lib/zalo/low-rate';
 import { WEB_TEAMS_KEY, parseWebTeams } from '@/lib/teams/web-teams';
 import { DEFAULT_ZALO_SETTINGS, listContacts, writeZaloSetting, formatList, formatOverdue, formatIdleAlert, formatMeetingMessage, type Contact, type Task, type Meeting, type ZaloSend } from '@/lib/zalo/zalo-work';
@@ -65,8 +70,39 @@ export async function zaloMorningData(leader: Contact, today: string): Promise<M
     goal: target?.revenue || null, workingDays: target?.workingDays ?? null, people: [...people.values()],
   };
 }
+type Kpi2Shared = Map<string, Promise<unknown>>;
+const once = <T,>(cache: Kpi2Shared, key: string, load: () => Promise<T>) => {
+  if (!cache.has(key)) cache.set(key, load().catch(() => null));
+  return cache.get(key) as Promise<T | null>;
+};
+/** Dòng chỉ tiêu KPI mới của team, số từ đầu tháng tới hết toDay (lib/zalo/kpi2-report.ts). Team chưa đặt chỉ tiêu thì không đọc thêm gì.
+ *  Số lượng sản phẩm và tỷ lệ upsell đọc một lần cho mọi team trong cùng lượt gửi (cache). */
+export async function zaloKpi2(leader: Contact, toDay: string, cache: Kpi2Shared): Promise<Kpi2Row[]> {
+  if (!leader.team_id || !['sale', 'cskh'].includes(leader.dept)) return [];
+  const dept = leader.dept as 'sale' | 'cskh', month = toDay.slice(0, 7), monthStart = `${month}-01`;
+  const map = await once(cache, `kpi:${month}`, async () => parseKpi2((await env.DB.prepare('SELECT value FROM app_settings WHERE key=?').bind(KPI2_KEY(month)).first<{ value: string }>())?.value));
+  const scope = await resolveHrUnit(new URLSearchParams({ hrTeam: leader.team_id }), dept);
+  if (scope instanceof Response || scope.dropped || !scope.unit) return [];
+  const goal = map?.[`team:${scope.unit.id}`];
+  if (!goal) return [];
+  const ids = (await env.DB.prepare(`SELECT DISTINCT user_id FROM pos_users WHERE name<>''${teamFilter('user_id', scope.team, true, scope.unit)}${countedFilter('user_id')}`).all<{ user_id: string }>()).results.map((r) => String(r.user_id));
+  if (!ids.length) return [];
+  const posIds = POS.map((p) => p.id), { startUtc, endUtc } = vnRangeUtc(monthStart, toDay);
+  const sums = dept === 'sale' && (goal.assigned || goal.closed || goal.orders)
+    ? await env.DB.prepare(`SELECT SUM(assigned_orders) AS assigned, SUM(assigned_closed_orders) AS closed, SUM(closed_orders) AS orders FROM stats_daily
+        WHERE pos_id IN (${posIds.map(() => '?').join(',')}) AND day>=? AND day<=? AND seller_id IN (${ids.map(() => '?').join(',')})`).bind(...posIds, monthStart, toDay, ...ids).first<{ assigned: number; closed: number; orders: number }>()
+    : null;
+  const qty = goal.products && Object.keys(goal.products).length ? await once(cache, `qty:${monthStart}:${toDay}`, () => sellerProductQty(env.DB, posIds, startUtc, endUtc)) : null;
+  const upsell = dept === 'cskh' && goal.upsellRate ? await once(cache, `up:${monthStart}:${toDay}`, () => cskhUpsell(env.DB, posIds, startUtc, endUtc)) : null;
+  const daysInMonth = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
+  return kpi2Rows(goal, {
+    assigned: Number(sums?.assigned ?? 0), closed: Number(sums?.closed ?? 0), orders: Number(sums?.orders ?? 0),
+    upsellRate: upsell ? upsellOf(upsell, ids).rate : null, products: qty ? qtyOf(qty, ids) : {},
+  }, dept, Number(toDay.slice(8, 10)), daysInMonth);
+}
+
 /** Dependencies are injectable for local clock tests; production always uses the shared report and sender. */
-export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database; send?: ZaloSend; snapshot?: typeof zaloTeamSnapshot; morningData?: typeof zaloMorningData; sendPhoto?: ZaloPhotoSend } = {}) {
+export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database; send?: ZaloSend; snapshot?: typeof zaloTeamSnapshot; morningData?: typeof zaloMorningData; sendPhoto?: ZaloPhotoSend; kpi2?: typeof zaloKpi2 } = {}) {
   if (env.DEMO_MODE !== '1' && !env.ZALO_BOT_TOKEN?.trim()) return;
   const db = options.db ?? env.DB;
   const local = new Date(now + 7 * 3600000).toISOString(), day = todayVn(now), time = local.slice(11, 16), hour = local.slice(11, 13);
@@ -131,6 +167,7 @@ export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database
     const bossTeams = new Map<string, BossSlotTeam>();
     // Một team có thể có cả Mentor và Leader nhận: số của team chỉ tính một lần.
     const teamNumbers = new Map<string, Promise<Snapshot | null>>(), morningNumbers = new Map<string, Promise<MorningNumbers | null>>();
+    const kpi2Cache: Kpi2Shared = new Map(), kpi2Of = async (c: Contact, toDay: string) => (await once(kpi2Cache, `team:${c.team_id}:${c.dept}:${toDay}`, () => (options.kpi2 ?? zaloKpi2)(c, toDay, kpi2Cache))) ?? [];
     for (const leader of await loadReportTargets(db, leaders, contacts.filter(c => c.kind === 'boss' && c.chat_id))) {
       try {
         if (!teamNumbers.has(leader.team_id!)) teamNumbers.set(leader.team_id!, snapshot(leader, day));
@@ -159,6 +196,7 @@ export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database
             days: [...days, { day, net: current.total, orders: current.orders, created: current.created ?? 0, createdClosed: current.createdClosed ?? 0 }],
             monthNet: (kpiOk ? m.monthNet : 0) + current.total, goal: kpiOk ? m.goal : null, workingDays: kpiOk ? m.workingDays : null,
             people: Object.values(current.people).map((p) => ({ name: p.name, net: p.total, orders: p.orders })),
+            kpi2: await kpi2Of(leader, day),
             ...await work(),
           }), hiddenSections(schedule.slots.sections));
           await sendImage(leader, report, morningText(report), `báo cáo ${timeLabel(time)}`);
@@ -170,7 +208,7 @@ export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database
           const numbers = await morningNumbers.get(team)!;
           if (numbers) {
             (state.month ??= {})[team] = { day, monthNet: numbers.monthNet, goal: numbers.goal, workingDays: numbers.workingDays };
-            await sendMorning(leader, withHidden(buildMorningReport({ ...numbers, ...await work() }), hiddenSections(schedule.morning.sections)));
+            await sendMorning(leader, withHidden(buildMorningReport({ ...numbers, kpi2: await kpi2Of(leader, addDays(day, -1)), ...await work() }), hiddenSections(schedule.morning.sections)));
           }
         }
       } catch { console.error('zalo team report failed'); }
