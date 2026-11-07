@@ -10,6 +10,7 @@ import type { MarketingTeam } from '@/lib/teams/marketing-teams';
 import type { TeamZaloState } from '@/lib/zalo/team-link';
 import { ChartCard, ErrorBox, toast } from './ui-kit';
 import { ManagerChip } from './manager-chip';
+import { ZaloLinkGuide } from './zalo-link-guide';
 import { managedBy } from '@/lib/teams/managed-by';
 
 // 'unset': team mới, chưa chọn bộ phận (anh Vũ 06/11/2026: chia team phải chọn bộ phận trước, chỉ hiện người bộ phận đó).
@@ -66,6 +67,7 @@ export function TeamSheetPanel() {
   const [saving, setSaving] = useState(false);
   // Mã nối Zalo vừa cấp, theo tài khoản (03/11/2026).
   const [zaloCode, setZaloCode] = useState<Record<string, string>>({});
+  const [guide, setGuide] = useState<{ userId: string; code: string } | null>(null);
   const nameOf = useMemo(() => new Map((data?.people ?? []).map((p) => [p.id, p.name])), [data]);
   const demo = typeof location !== 'undefined' && (location.hostname.startsWith('demo.') || location.hostname === 'localhost');
 
@@ -110,7 +112,7 @@ export function TeamSheetPanel() {
       const body = await r.json() as { linked?: boolean; code?: string; teamName?: string; error?: string };
       if (!r.ok) { toast(body.error ?? 'Không gắn được Zalo.', { kind: 'error' }); return; }
       if (body.linked) { toast('Người này đã nối Zalo rồi.'); return; }
-      if (body.code) setZaloCode((c) => ({ ...c, [userId]: body.code! }));
+      if (body.code) { setZaloCode((c) => ({ ...c, [userId]: body.code! })); setGuide({ userId, code: body.code }); }
       setData((d) => d && ({ ...d, zalo: [...(d.zalo ?? []).filter((z) => z.userId !== userId), { userId, linked: false, teamName: body.teamName ?? '' }] }));
     } catch { toast('Không gắn được Zalo.', { kind: 'error' }); }
   }
@@ -233,8 +235,8 @@ export function TeamSheetPanel() {
                           </select>
                           {mkey && <ManagerChip onlyCount label={label} name={owner?.name ?? (data.accounts ?? []).find((a) => a.id === t[accField])?.name ?? ''} people={managed[posField].get(mkey) ?? []} />}
                           {/* Nối Zalo theo người, trước tài khoản web (anh Vũ 06/11/2026: "ưu tiên nối zalo trước"). Người nhận cũ gắn theo tài khoản vẫn hiện. */}
-                          {owner ? <ZaloButton linked={zaloOf(`pos:${t[posField]}`) ?? (t[accField] ? zaloOf(t[accField]!) : undefined)} code={zaloCode[`pos:${t[posField]}`]} disabled={saving} label={label} onClick={() => void zaloFor(t, `pos:${t[posField]}`)} />
-                            : t[accField] && <ZaloButton linked={zaloOf(t[accField]!)} code={zaloCode[t[accField]!]} disabled={saving} label={label} onClick={() => void zaloFor(t, t[accField]!)} />}
+                          {owner ? <ZaloButton linked={zaloOf(`pos:${t[posField]}`) ?? (t[accField] ? zaloOf(t[accField]!) : undefined)} code={zaloCode[`pos:${t[posField]}`]} onGuide={() => setGuide({ userId: `pos:${t[posField]}`, code: zaloCode[`pos:${t[posField]}`] })} disabled={saving} label={label} onClick={() => void zaloFor(t, `pos:${t[posField]}`)} />
+                            : t[accField] && <ZaloButton linked={zaloOf(t[accField]!)} code={zaloCode[t[accField]!]} onGuide={() => setGuide({ userId: t[accField]!, code: zaloCode[t[accField]!] })} disabled={saving} label={label} onClick={() => void zaloFor(t, t[accField]!)} />}
                           <select aria-label={`Tài khoản web của ${label} ${t.name}`} title="Tài khoản đăng nhập web (không bắt buộc, gắn sau cũng được)" value={t[accField] ?? ''} onChange={(e) => edit(t.key, { [accField]: e.target.value || null })}
                             className={`max-w-36 rounded-full border border-dashed bg-surface px-2 py-0.5 text-[11.5px] ${t[accField] ? 'text-ink' : 'text-ink-3'}`}>
                             <option value="">TK web: chưa gắn</option>
@@ -283,14 +285,15 @@ export function TeamSheetPanel() {
           </div>
         </div>
       )}
+      {guide && <ZaloLinkGuide open name={guide.userId.startsWith('pos:') ? nameOf.get(guide.userId.slice(4)) ?? 'người này' : data?.accounts?.find((x) => x.id === guide.userId)?.name ?? 'người này'} code={guide.code} demo={demo} onClose={() => setGuide(null)} />}
     </ChartCard>
   );
 }
 
 /** Nút Zalo cạnh Mentor / Leader: đã nối thì hiện dấu xanh, chưa thì bấm lấy mã 6 số nhắn cho bot. Không bắt buộc. */
-function ZaloButton({ linked, code, disabled, label, onClick }: { linked?: TeamZaloState; code?: string; disabled: boolean; label: string; onClick: () => void }) {
+function ZaloButton({ linked, code, disabled, label, onClick, onGuide }: { linked?: TeamZaloState; code?: string; disabled: boolean; label: string; onClick: () => void; onGuide: () => void }) {
   if (linked?.linked) return <span className="inline-flex items-center gap-0.5 rounded-full bg-tint px-1.5 tap py-0.5 text-[11px] font-semibold text-primary" title={`Đã nối Zalo · báo cáo theo ${linked.teamName}`}><MessageCircle size={11} />Zalo</span>;
-  if (code) return <span className="rounded-full border border-[var(--primary)] px-1.5 py-0.5 text-[11px] text-ink" title="Nhắn mã này cho bot Zalo · hết hạn sau 24 giờ">Nhắn bot: <b className="num text-primary">{code}</b></span>;
+  if (code) return <button type="button" onClick={onGuide} className="rounded-full border border-[var(--primary)] px-1.5 py-0.5 text-[11px] text-ink hover:bg-tint-2" title="Bấm xem lại cách nối · mã hết hạn sau 24 giờ">Nhắn bot: <b className="num text-primary">{code}</b></button>;
   return (
     <button type="button" disabled={disabled} onClick={onClick} title={disabled ? `Chọn ${label} trước` : 'Lấy mã nối Zalo (tự lưu chia team nếu chưa lưu)'}
       className="inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[11px] text-ink-2 hover:border-[var(--primary)] hover:text-primary disabled:opacity-50">

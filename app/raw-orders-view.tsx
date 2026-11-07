@@ -14,7 +14,7 @@ import { POS } from '@/lib/shared/report-model';
 import { PeriodFields } from './overview-view';
 import { useTeam } from './team-store';
 import { takeNavHint } from './nav-focus';
-import { ChartCard, ErrorBox, EmptyState, KpiCard, PageHeader, STATUS_VARS, SkeletonTable, StatusChip, TableWrap, Toolbar, dt, money, pct, posName, posVar, scrollToEl, timeOnly, toast, vi, type Tone } from './ui-kit';
+import { ChartCard, ErrorBox, EmptyState, KpiCard, PageHeader, STATUS_VARS, SkeletonTable, StatusChip, TableWrap, orderStatusTone, Toolbar, dt, money, pct, posName, posVar, scrollToEl, timeOnly, toast, vi } from './ui-kit';
 
 type SyncRow = { posId: string; records: number; withConfirmation: number; withSeller: number; withAssignmentTime: number; lastSyncAt: string | null; lastError: string | null; status: string; errors24h: number; backfillCursor: { month: string; completed?: boolean } | null; earliestCreatedAt: string | null; latestCreatedAt: string | null };
 type Order = { marketerId: string | null; marketerName: string | null; orderOrigin: 'self' | 'mkt'; id: string; orderId: string; posId: string; posName: string; phone: string | null; customer: string | null; createdAt: string | null; updatedAt: string | null; fetchedAt: string; statusCode: number | null; statusName: string; sellerName: string | null; sellerAssignedAt: string | null; currentTotal: number | null; net: number | null; firstConfirmedAt: string | null; closerName: string | null; deliveredAt: string | null; historyLimited: boolean; hasRaw: boolean; source: string | null };
@@ -32,7 +32,7 @@ type Detail = Order & {
 type Employee = { id: string; name: string; department: string | null; posIds?: string[] };
 const GROUPS: Record<string, string> = { '': 'Tất cả trạng thái', new: 'Mới', confirmed: 'Đã chốt (chờ XN, đã XN)', shipping: 'Chuyển hàng (đóng hàng, đã gửi)', delivered: 'Giao thành công', returned: 'Hoàn', cancelled: 'Hủy / xóa', unconfirmed: 'Đã chốt nhưng thiếu mốc XN', limited: 'Thiếu lịch sử / JSON gốc' };
 const CHECKS: [keyof Detail['checks'], string][] = [['created', 'Có dữ liệu tạo đơn'], ['assigned', 'Có mốc giao người bán'], ['confirmed', 'Có mốc xác nhận'], ['history', 'Có lịch sử trạng thái'], ['raw', 'Có JSON gốc']];
-const statusTone = (code: number | null): Tone => code === null ? 'gray' : [0, 17].includes(code) ? 'gray' : [2].includes(code) ? 'orange' : [3, 16].includes(code) ? 'green' : [4, 5, 15].includes(code) ? 'purple' : [6, 7].includes(code) ? 'red' : 'blue';
+const statusTone = orderStatusTone;
 const groupOf = (code: number | null) => code === null ? 'new' : code === 0 ? 'new' : [8, 9, 2].includes(code) ? 'shipping' : [3, 16].includes(code) ? 'delivered' : [4, 5, 15].includes(code) ? 'returned' : [6, 7].includes(code) ? 'cancelled' : 'confirmed';
 
 /** Tiêu đề mục nhỏ trong panel chi tiết. */

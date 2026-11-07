@@ -14,7 +14,7 @@ import type { LucideIcon } from 'lucide-react';
 import { Area, Bar, BarChart, CartesianGrid, ComposedChart, LabelList, XAxis, YAxis } from 'recharts';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip } from '@/components/ui/chart';
 import { CountUp } from './ui/count-up';
-import { DeltaPill, EmptyState, SegmentedControl, SortTh, TableWrap, delta, dmy, money, short, shortMoney, useSort, vi } from './ui-kit';
+import { DeltaPill, EmptyState, StatusChip, orderStatusTone, SegmentedControl, SortTh, TableWrap, delta, dmy, money, short, shortMoney, useSort, vi } from './ui-kit';
 import { useApi } from './use-api';
 import { useMotionOK } from './ui/motion';
 import { setTeam, useTeam, type Team as Seg } from './team-store';
@@ -150,7 +150,7 @@ function RankChart({ rows, onPick, motionOn, seg }: { rows: Row[]; onPick: (id: 
 type SortKey = 'name' | 'cost' | 'net' | 'newNet' | 'cskhNet' | 'roas' | 'closed' | 'phones' | 'cpc' | 'cpl' | 'share';
 
 type OrderKind = 'new' | 'cskh';
-type MktOrder = { id: string; orderId: string; posName: string; phone: string | null; confirmedAt: string; status: string; marketer: string | null; seller: string | null; net: number };
+type MktOrder = { id: string; orderId: string; posName: string; phone: string | null; confirmedAt: string; status: string; statusCode?: number; marketer: string | null; seller: string | null; net: number };
 /** Bấm "x đơn" ở cột DT New / DT CSKH: danh sách đơn tạo ra số đó, cùng kỳ và POS (anh Vũ 07/11/2026). */
 function OrdersSheet({ pick, start, end, posIds, team, onClose }: { pick: { row: Row; kind: OrderKind; team: boolean } | null; start: string; end: string; posIds: string[]; team: boolean; onClose: () => void }) {
   const p = new URLSearchParams({ start, end, posIds: posIds.join(','), kind: pick?.kind ?? 'new' });
@@ -171,7 +171,7 @@ function OrdersSheet({ pick, start, end, posIds, team, onClose }: { pick: { row:
           <TableWrap><table className="tbl"><thead><tr><th>Mã đơn</th><th>POS</th><th>SĐT</th>{(pick?.team || team) && <th>Marketer</th>}<th>Người chốt</th><th>Trạng thái</th><th className="n">Doanh thu</th></tr></thead>
             <tbody>{data.orders.map((o) => <tr key={o.id}>
               <td className="font-medium">{o.orderId}<span className="block text-[11px] font-normal text-ink-3">{dmy(vnDay(o.confirmedAt))} {vnTime(o.confirmedAt)}</span></td>
-              <td>{o.posName}</td><td className="num">{o.phone ?? '—'}</td>{(pick?.team || team) && <td>{o.marketer ?? '—'}</td>}<td>{o.seller ?? '—'}</td><td>{o.status}</td><td className="n">{money(o.net)}</td>
+              <td>{o.posName}</td><td className="num">{o.phone ?? '—'}</td>{(pick?.team || team) && <td>{o.marketer ?? '—'}</td>}<td>{o.seller ?? '—'}</td><td><StatusChip tone={orderStatusTone(o.statusCode)}>{o.status}</StatusChip></td><td className="n">{money(o.net)}</td>
             </tr>)}</tbody></table></TableWrap>
         </> : <EmptyState text="Không có đơn." />)}
       </div>

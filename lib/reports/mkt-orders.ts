@@ -33,7 +33,7 @@ export async function mktOrders(db: D1Database, opts: { posIds: string[]; market
   return {
     more: list.length > MKT_ORDER_LIMIT,
     orders: list.slice(0, MKT_ORDER_LIMIT).map((r) => ({
-      id: r.id, orderId: r.source_order_id, posName: opts.posName(r.pos_id), phone: r.phone, confirmedAt: r.first_confirmed_at, status: opts.status(Number(r.status_code)),
+      id: r.id, orderId: r.source_order_id, posName: opts.posName(r.pos_id), phone: r.phone, confirmedAt: r.first_confirmed_at, status: opts.status(Number(r.status_code)), statusCode: Number(r.status_code),
       marketer: nameOf.get(r.marketer_id) ?? null, seller: r.seller_id ? nameOf.get(r.seller_id) ?? null : null, net: Number(r.net),
     })),
   };

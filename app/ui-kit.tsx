@@ -78,6 +78,19 @@ export function DeltaPill({ value, suffix = '', invert = false, label, variant =
   );
 }
 
+/** Màu ô trạng thái đơn theo kiểu Pancake (anh Vũ 07/11/2026: "cho thành ô màu giống trên POS"). */
+export function orderStatusTone(code: number | null | undefined): Tone {
+  if (code === null || code === undefined) return 'gray';
+  if (code === 1) return 'blue';
+  if (code === 17 || code === 0) return 'gray';
+  if ([8, 11, 12, 13, 20].includes(code)) return 'teal';
+  if (code === 9) return 'lime';
+  if (code === 2) return 'purple';
+  if ([3, 16].includes(code)) return 'green';
+  if ([4, 15].includes(code)) return 'orange';
+  if ([5, 6].includes(code)) return 'red';
+  return 'gray';
+}
 export function StatusChip({ tone = 'gray', children, className = '' }: { tone?: Tone; children: ReactNode; className?: string }) {
   return <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONES[tone]} ${className}`}>{children}</span>;
 }

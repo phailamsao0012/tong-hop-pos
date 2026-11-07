@@ -131,7 +131,7 @@ function EmpTable({ rows, tone, compact = false, metric = 'rate', onNavigate }: 
         {rows.map((e, i) => (
           <tr key={e.sellerId}>
             <td className="num text-ink-3">{i + 1}</td>
-            <td><button type="button" onClick={() => onNavigate('compare')} title={`${e.name} · mở So sánh nhân viên`} className="block w-full rounded-[4px] text-left font-medium leading-snug tap text-ink outline-none [overflow-wrap:anywhere] hover:text-primary focus-visible:shadow-[0_0_0_2px_var(--ring)]">{e.name}</button></td>
+            <td className="whitespace-normal"><button type="button" onClick={() => onNavigate('compare')} title={`${e.name} · mở So sánh nhân viên`} className="block w-full whitespace-normal rounded-[4px] text-left font-medium leading-snug tap text-ink outline-none [overflow-wrap:anywhere] hover:text-primary focus-visible:shadow-[0_0_0_2px_var(--ring)]">{e.name}</button></td>
             <td className={`n ${tone === 'green' ? 'text-good' : 'text-bad'}`}>{shortMoney(e.averageOrder ?? 0)}</td>
             {!compact && <td className="n text-ink-2">{vi.format(e.closedOrders)}</td>}
           </tr>
@@ -146,8 +146,8 @@ function EmpTable({ rows, tone, compact = false, metric = 'rate', onNavigate }: 
         {rows.map((e, i) => (
           <tr key={e.sellerId}>
             <td className="num text-ink-3">{i + 1}</td>
-            <td>
-              <button type="button" onClick={() => onNavigate('compare')} title={`${e.name} · mở So sánh nhân viên`} className="block w-full rounded-[4px] text-left font-medium leading-snug tap text-ink outline-none [overflow-wrap:anywhere] transition-colors duration-[var(--dur)] ease-[var(--ease)] hover:text-primary focus-visible:shadow-[0_0_0_2px_var(--ring)]">{e.name}</button>
+            <td className="whitespace-normal">
+              <button type="button" onClick={() => onNavigate('compare')} title={`${e.name} · mở So sánh nhân viên`} className="block w-full whitespace-normal rounded-[4px] text-left font-medium leading-snug tap text-ink outline-none [overflow-wrap:anywhere] transition-colors duration-[var(--dur)] ease-[var(--ease)] hover:text-primary focus-visible:shadow-[0_0_0_2px_var(--ring)]">{e.name}</button>
             </td>
             <td className={`n ${tone === 'green' ? 'text-good' : 'text-bad'}`} title={compact ? `${vi.format(closeRateTop(e, ms.rateBase))} / ${vi.format(closeRateBase(e, ms.rateBase))} đơn đã chốt` : undefined}>{pct(closeRateOf(e, ms.rateBase))}</td>
             {!compact && (
@@ -546,11 +546,11 @@ export function CenterView({ onNavigate, canRegenerateAi = false, canForecast = 
           <BlockNote error={errors.overview} hasData={!!cur} onRetry={reload} />
           {cur && (
             <div className="space-y-4">
-              {team !== 'cskh' && <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {team !== 'cskh' && <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                 <div className="min-w-0"><div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[.07em] text-good">Sale · tỷ lệ chốt cao nhất</div><EmpTable rows={topEmp} tone="green" onNavigate={onNavigate} /></div>
                 <div className="min-w-0"><div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[.07em] text-bad">Sale · cần hỗ trợ</div><EmpTable rows={lowEmp} tone="red" onNavigate={onNavigate} /></div>
               </div>}
-              {team !== 'sale' && <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {team !== 'sale' && <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                 <div className="min-w-0"><div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[.07em] text-good">CSKH · AOV cao nhất</div><EmpTable rows={topAov} tone="green" metric="aov" onNavigate={onNavigate} /></div>
                 <div className="min-w-0"><div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[.07em] text-bad">CSKH · AOV thấp nhất</div><EmpTable rows={lowAov} tone="red" metric="aov" onNavigate={onNavigate} /></div>
               </div>}
