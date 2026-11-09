@@ -130,7 +130,8 @@ async function staleFallback(origin: string, staleKey: string) {
 // sống 30 giây: khóa này theo trạm Cloudflare và không nguyên tử, nên chỉ bớt tính trùng chứ không chắc chắn một (QA 10/10/2026).
 // Lượt tính ngầm lỗi thì khóa tự hết hạn sau 30 giây, lượt đọc sau đó tính lại. Người vừa ghi (cookie thp_w) luôn tính thẳng.
 const SWR_LOCK_TTL_S = 30;
-const swrOn = (env: Cloudflare.Env) => env.THP_SWR === '1';
+// 09/11/2026 anh Vũ duyệt bật tạm trên web thật vì D1 quá tải (lỗi 500): bật mặc định, đặt THP_SWR="0" để tắt.
+const swrOn = (env: Cloudflare.Env) => env.THP_SWR !== '0';
 const revalidating = new Set<string>();
 async function takeLock(origin: string, key: string) {
   const cache = await caches.open('thp-reports');
