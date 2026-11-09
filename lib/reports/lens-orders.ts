@@ -63,12 +63,15 @@ async function periodReport(
   const narrowed = true; // Không dùng stats_daily khi lọc team MKT.
   // Kỳ so sánh cắt giờ, không lọc thêm: ngày đủ đọc bảng tổng hợp, chỉ ngày cuối đọc đơn gốc (xem SegmentBase).
   const base = cutoffUtc && !narrowed ? { start, lastDay: end, lastDayStartUtc: vnRangeUtc(end, end).startUtc } : null;
-  const virtual = segmentedStats(posIds, startUtc, endUtc, team, filters, employeeIds, base, unit);
+  const segmentReady = false; // Giữ đường cũ vì lensDatabase chỉ lọc phạm vi MKT trên đơn gốc.
+  const read = { start, end, ready: segmentReady };
+  const virtual = segmentedStats(posIds, startUtc, endUtc, team, filters, employeeIds, base, unit, read);
+  const totals = segmentedStats(posIds, startUtc, endUtc, team, filters, employeeIds, base, unit, { ...read, withProducts: false });
   const filtered = narrowed || !!cutoffUtc;
   const sellerProductReady = !filtered && await sellerProductStatsReady(db);
   const stats = (sql: string) => {
     const useRaw = filtered;
-    return { bind: (...args: (string | number)[]) => db.prepare((useRaw ? virtual.sql : '') + sql).bind(...(useRaw ? virtual.binds : []), ...args) };
+    return { bind: (...args: (string | number)[]) => db.prepare((useRaw ? totals.sql : '') + sql).bind(...(useRaw ? totals.binds : []), ...args) };
   };
   // Số khách: SĐT khác nhau của đơn tạo trong kỳ (all) và của đơn chốt trong kỳ theo ngày chốt (closed).
   const customerWhere = `pos_id IN (${posPlaceholders}) AND phone IS NOT NULL AND phone<>'' AND status_code<>7${employeeFilter}${rawFilter.sql}`;
@@ -185,8 +188,9 @@ async function buildLensReport(database: D1Database, options: OverviewOptions, l
   const allTotal = (currentBase ?? currentRaw).total;
   const filters = options.filters ?? EMPTY_ORDER_FILTERS;
   const { startUtc, endUtc } = vnRangeUtc(start, end);
+  const summaryReady = false; // Bộ lọc lens có thể chứa điều kiện trên đơn gốc.
   const querySummary = (f: OrderFilters, team = options.team ?? 'all', group = '') => {
-    const v = segmentedStats(posIds, startUtc, endUtc, team, f, employeeIds, null, unit);
+    const v = segmentedStats(posIds, startUtc, endUtc, team, f, employeeIds, null, unit, { start, end, ready: summaryReady, withProducts: false });
     return db.prepare(v.sql + `SELECT ${group ? 'marketer_id,' : ''}${sumColumns} FROM stats_daily ${group}`).bind(...v.binds);
   };
   const segs = segmentsFor(posIds);
