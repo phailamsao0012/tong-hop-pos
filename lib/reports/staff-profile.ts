@@ -4,7 +4,8 @@
 // không quét bảng đơn gốc; giới hạn 24 tháng gần nhất. Số trong kỳ đang chọn vẫn lấy ở lib/reports/staff-detail-report.ts.
 import { POS } from '@/lib/shared/report-model';
 import { vnRangeUtc } from '@/lib/shared/report-time';
-import { teamSubquery } from '@/lib/teams/team';
+import { nameSuffixDept, teamSubquery } from '@/lib/teams/team';
+import type { ProfilePerson } from '@/lib/reports/staff-profile-list';
 import { staffTenure, type Tenure } from '@/lib/teams/tenure';
 import { badgeBook, type Badge } from '@/lib/reports/staff-badges';
 
@@ -141,4 +142,13 @@ export async function staffProfile(db: D1Database, id: string, today: string, pi
       products: 'Sản phẩm tháng này: số lượng trên đơn chốt, không tính quà tặng.',
     },
   };
+}
+
+/** Mọi người có tài khoản POS thuộc Sale, CSKH (theo team) hoặc MKT (hậu tố tên) cho trang Hồ sơ nhân sự. Bảng pos_users nhỏ (vài trăm dòng). */
+export async function profilePeople(db: D1Database): Promise<ProfilePerson[]> {
+  const rows = await db.prepare(`SELECT user_id AS id, MAX(name) AS name,
+        MAX(CASE WHEN user_id IN ${teamSubquery('sale', false)} THEN 'sale' WHEN user_id IN ${teamSubquery('cskh', false)} THEN 'cskh'
+          WHEN ${nameSuffixDept(['mkt'])} = 'mkt' THEN 'mkt' END) AS dept
+      FROM pos_users GROUP BY user_id`).all<{ id: string; name: string | null; dept: ProfilePerson['dept'] | null }>();
+  return rows.results.filter((r): r is ProfilePerson => !!r.dept && !!r.name).map((r) => ({ id: r.id, name: r.name.trim(), dept: r.dept }));
 }

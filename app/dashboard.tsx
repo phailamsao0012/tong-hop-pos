@@ -1,9 +1,9 @@
 'use client';
 
-import { StaffProfileHost } from './staff-profile';
+import { currentStaffProfile, setProfileEnabled, subscribeStaffProfile } from './staff-profile-link';
 import { focusAfterNav } from './nav-focus';
 import { Spotlight } from './spotlight';
-import { Fragment, Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { Fragment, Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent } from 'react';
 import {
   Activity,
   Undo2,
@@ -22,7 +22,7 @@ import {
   SlidersHorizontal,
   UsersRound,
 } from 'lucide-react';
-import { AlertTriangle, LogOut, Maximize2, MonitorPlay, X, ChevronLeft, Menu, PhoneCall, HeartHandshake, House, TrendingUp, UserCheck, Sparkles, ShieldCheck, Package, Shuffle, UserX } from 'lucide-react';
+import { AlertTriangle, LogOut, Maximize2, MonitorPlay, X, ChevronLeft, Menu, PhoneCall, HeartHandshake, House, TrendingUp, UserCheck, Sparkles, ShieldCheck, Package, Shuffle, UserX, IdCard } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, XAxis } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -123,6 +123,7 @@ import {
 // Mỗi trang là một gói mã riêng, chỉ tải khi mở (trang đầu nhẹ hơn nhiều); mã của trang đã mở được giữ lại.
 const ReturnsView = lazy(() => import('./returns-view').then((m) => ({ default: m.ReturnsView })));
 const GrowthView = lazy(() => import('./growth-view').then((m) => ({ default: m.GrowthView })));
+const StaffProfilePage = lazy(() => import('./staff-profile').then((m) => ({ default: m.StaffProfilePage })));
 const GiaoViecView = lazy(() => import('./giao-viec-view').then(m => ({ default: m.GiaoViecView })));
 const GiaoViecChatView = lazy(() => import('./giao-viec-chat-view').then(m => ({ default: m.GiaoViecChatView })));
 const GiaoViecHopView = lazy(() => import('./giao-viec-hop-view').then(m => ({ default: m.GiaoViecHopView })));
@@ -189,6 +190,7 @@ type View = 'giao-viec' | 'giao-viec-chat' | 'giao-viec-hop' | 'giao-viec-zalo' 
   | 'tasks'
   | 'returns'
   | 'growth'
+  | 'ho-so'
   | 'center'
   | 'overview'
   | 'dormant'
@@ -393,6 +395,7 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'mentor', label: 'Team của tôi', icon: UsersRound },
   { id: 'returns', label: 'Lý do hoàn', icon: Undo2 },
   { id: 'growth', label: 'Tăng trưởng nhân viên', icon: TrendingUp },
+  { id: 'ho-so', label: 'Hồ sơ nhân sự', icon: IdCard },
   { id: 'ai-ask', label: 'Hỏi AI', icon: AiBotGlyph as unknown as typeof Activity },
   { id: 'center', label: 'Điều hành', icon: LayoutDashboard },
   { id: 'overview', label: 'Tổng quan POS', icon: BarChart3 },
@@ -840,6 +843,17 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
     return v && navigation.some((n) => n.id === v) && !(v in CRM_VIEWS) ? (v as View) : 'center';
   });
   setPageDept(PAGE_DEPT.get(view) ?? null);
+  // Bấm tên ở bảng nào cũng sang trang Hồ sơ nhân sự (anh Vũ 09/11/2026); chỉ chủ hệ thống. Nhớ trang cũ cho nút Quay lại.
+  const profileOn = canView(user, 'ho-so');
+  useLayoutEffect(() => { setProfileEnabled(profileOn); }, [profileOn]);
+  const profileTarget = useSyncExternalStore(subscribeStaffProfile, currentStaffProfile, () => null);
+  const [profileBack, setProfileBack] = useState<View | null>(null);
+  const lastProfileAt = useRef(profileTarget?.at ?? 0);
+  useEffect(() => {
+    if (!profileTarget || profileTarget.at === lastProfileAt.current) return;
+    lastProfileAt.current = profileTarget.at;
+    if (view !== 'ho-so') { setProfileBack(view); setView('ho-so'); window.scrollTo({ top: 0 }); }
+  }, [profileTarget, view]);
   const [openDept, setOpenDept] = useState<string>();
   const deptOf = (v: View) => firstDeptOf(v, openDept);
   const activeDept = deptOf(view)?.key;
@@ -1332,7 +1346,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   const title = navigation.find((n) => n.id === view)?.label ?? '';
   const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
   const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  const SELF_HEADED: View[] = ['giao-viec', 'giao-viec-chat', 'giao-viec-hop', 'giao-viec-zalo', 'giao-viec-kpi', 'giao-viec-bao-cao', 'mentor', 'returns', 'growth', 'tasks', 'custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'ai-ask', 'uncounted'];
+  const SELF_HEADED: View[] = ['giao-viec', 'giao-viec-chat', 'giao-viec-hop', 'giao-viec-zalo', 'giao-viec-kpi', 'giao-viec-bao-cao', 'mentor', 'returns', 'growth', 'ho-so', 'tasks', 'custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'ai-ask', 'uncounted'];
   const changeFilters = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
   const setPeriodChoice = (choice: string) => {
@@ -1635,7 +1649,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               ) : undefined}
             />
           )}
-          {!['giao-viec', 'giao-viec-chat', 'giao-viec-hop', 'giao-viec-zalo', 'giao-viec-kpi', 'giao-viec-bao-cao', 'mentor', 'growth', 'custom', 'config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'ai-ask', 'uncounted'].includes(view) && (
+          {!['giao-viec', 'giao-viec-chat', 'giao-viec-hop', 'giao-viec-zalo', 'giao-viec-kpi', 'giao-viec-bao-cao', 'mentor', 'growth', 'ho-so', 'custom', 'config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'ai-ask', 'uncounted'].includes(view) && (
             <Toolbar className="mb-5">
               <span className="px-1.5 text-[12.5px] font-semibold text-ink-2">
                 Bộ lọc
@@ -1711,6 +1725,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {!gated && view === 'custom' && <CustomReportView />}
           {!gated && view === 'compare' && <CompareView />}
           {!gated && canView(user, view) && view === 'growth' && <GrowthView key={activeDept} navDept={activeDept} />}
+          {!gated && canView(user, view) && view === 'ho-so' && <StaffProfilePage onBack={profileBack ? () => { setView(profileBack); setProfileBack(null); } : undefined} />}
           {!gated && view === 'batches' && <BatchesView />}
           {!gated && view === 'raw-orders' && <RawOrdersView onSyncNow={() => { void syncRecentAll(true); }} syncing={autoSyncing} />}
           {!gated && view === 'customers' && <CustomersPage key={searchQuery} initialQ={searchQuery} canExport={canExport(user)} />}
@@ -2137,7 +2152,6 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
         </DialogContent>
       </Dialog>
       <Toaster />
-      <StaffProfileHost />
     </SidebarProvider>
   );
 }

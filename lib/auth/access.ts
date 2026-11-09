@@ -65,7 +65,8 @@ export const isOwner = (a: { role: Role }) => a.role === 'owner';
 export const KPI_VIEWS = ['cskh-kpi', 'sale-kpi'];
 /** Trang chỉ chủ hệ thống: cấu hình, nhật ký, KPI. */
 /** Tăng trưởng nhân viên: số của từng người theo ngày, chỉ chủ hệ thống (anh Vũ 28/10/2026). */
-export const OWNER_VIEWS = ['ai-ask', 'config', 'audit', 'dispatch', 'growth', ...KPI_VIEWS];
+/** Hồ sơ nhân sự ('ho-so'): chỉ chủ hệ thống (anh Vũ 09/11/2026). */
+export const OWNER_VIEWS = ['ai-ask', 'config', 'audit', 'dispatch', 'growth', 'ho-so', ...KPI_VIEWS];
 /** Trang Tuyển dụng (ứng viên, SĐT, CV): chỉ chủ hệ thống và giám đốc, không cần cấp trong danh sách trang. */
 export const DIRECTOR_VIEWS = ['recruit', 'people', 'person', 'levels', 'org'];
 // Trang tự mở theo trang đã được cấp (khỏi phải cấp thêm quyền): Tự ups & từ MKT cho ai xem được Cuộc gọi / Khách theo nhân viên;
@@ -109,7 +110,7 @@ export function parseAccess(row: { role: unknown; views_json?: string | null; po
 }
 
 /** API nào cần trang nào (khớp tiền tố đường dẫn). Không có trong danh sách = mọi người đăng nhập đều gọi được (đã bị thu hẹp POS/nhóm). */
-const OWNER_ONLY = ['/api/ai/ask', '/api/ai/forecast/review', '/api/ai/pack', '/api/ai/insights', '/api/ai/pair', '/api/dispatch', '/api/users', '/api/config', '/api/connection', '/api/telegram', '/api/sync/scheduler', '/api/import', '/api/audit', '/api/hr-sync', '/api/backup', '/api/reports/growth'];
+const OWNER_ONLY = ['/api/ai/ask', '/api/ai/forecast/review', '/api/ai/pack', '/api/ai/insights', '/api/ai/pair', '/api/dispatch', '/api/users', '/api/config', '/api/connection', '/api/telegram', '/api/sync/scheduler', '/api/import', '/api/audit', '/api/hr-sync', '/api/backup', '/api/reports/growth', '/api/reports/staff-profile'];
 const VIEW_GATES: [string, string[]][] = [
   ['/api/reports/advisor', ['overview', 'sale-overview', 'cskh-overview', 'marketing', 'van-don']],
   ['/api/reports/trend-cards', ['overview', 'sale-overview', 'cskh-overview', 'marketing', 'van-don']],
