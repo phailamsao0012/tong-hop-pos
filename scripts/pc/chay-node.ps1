@@ -2,11 +2,11 @@
 # Task Scheduler "THP Web" gọi script này. Web dừng hay lỗi thì 5 giây sau tự chạy lại. Cron mỗi phút chạy trong tiến trình Node
 # (không cần task "THP Cron"). Bản build: trong $App chạy `pnpm build` rồi `pnpm build:pc` (ra dist\pc\server.js).
 # Quay lại wrangler: đổi action của "THP Web" về chay-web.ps1, bật lại "THP Cron", ghi "wrangler" vào C:\thp\che-do-web.txt.
-# 09/11/2026: web PC chạy bản build ở worktree C:\thp\codex-bang (nhánh codex/bang-tinh-san: bảng tính sẵn nhóm sản phẩm / nguồn đơn).
+# 09/11/2026: web PC chạy bản build ở worktree C:\thp\codex-tai2 (nhánh codex/giam-tai-2: bảng tính sẵn + đầu trang Cuộc gọi, danh sách MKT, nhớ phiên 60 giây; migration 0052 đã áp lên C:\thp\db\thp.sqlite).
 # Đổi bản chạy: build bản mới ở thư mục khác, sửa $App, rồi khởi động lại task "THP Web". Tiến trình cũ chạy quyền hệ thống,
 # nên cần PowerShell quyền admin (Stop-Process) hoặc khởi động lại máy.
 param(
-  [string]$App = 'C:\thp\codex-bang',
+  [string]$App = 'C:\thp\codex-tai2',
   [string]$Db = 'C:\thp\db\thp.sqlite',
   [string]$Vars = 'C:\thp\bi-mat\.dev.vars',
   [int]$Port = 8787
