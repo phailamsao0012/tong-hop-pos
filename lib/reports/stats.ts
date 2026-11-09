@@ -4,6 +4,7 @@
 //   - ngày CHỐT (xác nhận lần đầu): closed_* — trùng cách Pancake tính "Đơn chốt / Doanh thu";
 //   - ngày GIAO người bán: assigned_orders ("đơn chia").
 // Chỉ các (POS, ngày) có đơn thay đổi mới được tính lại; upsert bỏ qua dòng không đổi.
+import { segmentKeyExpr, marketerValue } from '@/lib/pancake/order-segments';
 import { VN_OFFSET_HOURS, addDays, vnDayStartUtc } from '@/lib/shared/report-time';
 import type { SourceOrder } from '@/lib/pancake/pancake';
 import { SENT_CODES } from '@/lib/reports/shipping-lines';
@@ -52,6 +53,7 @@ export const STAT_COLUMNS = [...CREATED_COLUMNS, ...CLOSED_COLUMNS, 'assigned_or
 /** Thêm cột assigned_closed_orders vào stats_daily nếu chưa có (bảng cũ). Nhớ bằng cờ, không giữ Promise dùng chung giữa các yêu cầu. */
 let statsSchemaReady = false;
 export async function ensureStatsSchema(db: D1Database) {
+  await ensureSegmentSchema(db);
   if (statsSchemaReady) return;
   try { await db.prepare('ALTER TABLE stats_daily ADD COLUMN assigned_closed_orders INTEGER NOT NULL DEFAULT 0').run(); }
   catch (e) { if (!/duplicate column/i.test(String(e))) throw e; }
@@ -168,7 +170,7 @@ export async function rebuildStats(db: D1Database, dirty: DirtyBuckets) {
   for (const [posId, days] of dirty) {
     for (const range of dayRanges(days)) {
       const startUtc = vnDayStartUtc(range.start), endUtc = vnDayStartUtc(addDays(range.end, 1));
-      const [createdRows, closedRows, closedQty, assignedRows, sellerProductRows, sellerProductOld, mktRows, mktOld] = await db.batch([
+      const [createdRows, closedRows, closedQty, assignedRows, sellerProductRows, sellerProductOld, mktRows, mktOld, ...segmentResults] = await db.batch([
         db.prepare(`SELECT ${dayExpr('created_at')} AS day, COALESCE(seller_id,'') AS seller_id, ${createdSelect}
           FROM raw_pos_orders WHERE pos_id=? AND created_at>=? AND created_at<? GROUP BY 1, 2`).bind(posId, startUtc, endUtc),
         db.prepare(`SELECT ${dayExpr('first_closed_at')} AS day, COALESCE(seller_id,'') AS seller_id, ${closedSelect}
@@ -184,6 +186,7 @@ export async function rebuildStats(db: D1Database, dirty: DirtyBuckets) {
         db.prepare(sellerProductExisting).bind(posId, range.start, range.end),
         // Số MKT theo ngày xác nhận (stats_daily_mkt, 0050).
         ...mktReads(db, posId, range),
+        ...segmentReads(db, posId, range),
       ]);
       // Gộp ba cơ sở theo (ngày, người bán).
       const merged = new Map<string, Record<string, number>>();
@@ -203,7 +206,7 @@ export async function rebuildStats(db: D1Database, dirty: DirtyBuckets) {
       for (const r of closedQty.results as Row[]) bucket(String(r.day), String(r.seller_id ?? '')).closed_quantity = Number(r.quantity ?? 0);
       for (const r of assignedRows.results as Row[]) { const b = bucket(String(r.day), String(r.seller_id ?? '')); b.assigned_orders = Number(r.assigned_orders ?? 0); b.assigned_closed_orders = Number(r.assigned_closed_orders ?? 0); }
 
-      const statements: D1PreparedStatement[] = [];
+      const statements: D1PreparedStatement[] = segmentStatements(db, posId, range, segmentResults, now);
       const keepSellers = new Map<string, string[]>(), keepProducts = new Map<string, string[]>();
       for (const [key, values] of merged) {
         const [day, seller] = key.split(' ');
@@ -358,4 +361,118 @@ export function monthDays(month: string) {
   const days = new Set<string>();
   for (let d = `${month}-01`; d.slice(0, 7) === month; d = addDays(d, 1)) days.add(d);
   return days;
+}
+
+/** Tạo bảng trên PC chưa áp migration; nhớ riêng từng DB demo/test. */
+const segmentSchemas = new WeakSet<D1Database>();
+export async function ensureSegmentSchema(db: D1Database) {
+  if (segmentSchemas.has(db)) return;
+  const exists = await db.prepare("SELECT 1 AS x FROM sqlite_master WHERE type='table' AND name='stats_daily_segment'").first();
+  if (exists) { segmentSchemas.add(db); return; }
+  await db.prepare(`CREATE TABLE IF NOT EXISTS stats_daily_segment (
+    id TEXT PRIMARY KEY NOT NULL, pos_id TEXT NOT NULL, day TEXT NOT NULL,
+    seller_id TEXT NOT NULL DEFAULT '', segment TEXT NOT NULL, marketer_id TEXT NOT NULL DEFAULT '',
+    ${STAT_COLUMNS.map(c => `${c} INTEGER NOT NULL DEFAULT 0`).join(',')}, updated_at TEXT NOT NULL
+  )`).run();
+  await db.prepare('CREATE INDEX IF NOT EXISTS idx_stats_daily_segment_pos_day ON stats_daily_segment(pos_id, day)').run();
+  segmentSchemas.add(db);
+}
+
+export const SEGMENT_READY_KEY = 'stats_segment_epoch';
+export const SEGMENT_EPOCH = 1;
+/** Chưa điền đủ lịch sử luôn đọc đường cũ; nhớ cờ 60 giây mỗi isolate. */
+let segmentReady = { value: false, at: 0 };
+export async function segmentStatsReady(db: D1Database) {
+  if (Date.now() - segmentReady.at < 60000) return segmentReady.value;
+  let value = false;
+  try {
+    const r = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(SEGMENT_READY_KEY).first<{ value: string }>();
+    value = r?.value === String(SEGMENT_EPOCH);
+  } catch { value = false; }
+  segmentReady = { value, at: Date.now() };
+  return value;
+}
+/** Chỉ cho test: quên cờ đã nhớ. */
+export function resetSegmentReadyMemo() {
+  segmentReady = { value: false, at: 0 };
+}
+
+function segmentReads(db: D1Database, posId: string, range: { start: string; end: string }) {
+  const dimensions = `COALESCE(o.seller_id,'') AS seller_id, ${segmentKeyExpr('o')} AS segment, COALESCE(${marketerValue('o')},'') AS marketer_id`;
+  const start = vnDayStartUtc(range.start), end = vnDayStartUtc(addDays(range.end, 1));
+  const event = (date: string, values: string, where = '') => db.prepare(`SELECT ${dayExpr(date)} AS day, ${dimensions}, ${values}
+    FROM raw_pos_orders o WHERE o.pos_id=? AND ${date}>=? AND ${date}<? ${where} GROUP BY 1,2,3,4`).bind(posId, start, end);
+  return [
+    event('o.created_at', createdSelect),
+    event('o.first_closed_at', closedSelect, `AND o.${CLOSED}`),
+    db.prepare(`SELECT ${dayExpr('o.first_closed_at')} AS day, ${dimensions}, SUM(i.quantity) AS closed_quantity
+      FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
+      WHERE o.pos_id=? AND o.first_closed_at>=? AND o.first_closed_at<? AND o.${CLOSED} AND i.is_bonus=0 GROUP BY 1,2,3,4`).bind(posId, start, end),
+    event('o.seller_assigned_at', `COUNT(*) AS assigned_orders, SUM(CASE WHEN ${CLOSED} THEN 1 ELSE 0 END) AS assigned_closed_orders`, 'AND status_code<>7'),
+    db.prepare(`SELECT id, ${STAT_COLUMNS.join(',')} FROM stats_daily_segment WHERE pos_id=? AND day>=? AND day<=?`).bind(posId, range.start, range.end),
+  ];
+}
+function segmentStatements(db: D1Database, posId: string, range: { start: string; end: string }, results: D1Result[], now: string) {
+  const merged = new Map<string, Row>();
+  for (const result of results.slice(0, 4)) for (const r of result.results as Row[]) {
+    const key = JSON.stringify([r.day, r.seller_id, r.segment, r.marketer_id]);
+    let row = merged.get(key);
+    if (!row) { row = { day: r.day, seller_id: r.seller_id, segment: r.segment, marketer_id: r.marketer_id }; merged.set(key, row); }
+    for (const c of STAT_COLUMNS) if (c in r) row[c] = Number(r[c] ?? 0);
+  }
+  return diffStatements(db, 'stats_daily_segment', r => ({ pos_id: posId, day: String(r.day), seller_id: String(r.seller_id), segment: String(r.segment), marketer_id: String(r.marketer_id) }),
+    STAT_COLUMNS, range, [...merged.values()], results[4].results as Row[], now);
+}
+/** Điền theo tháng sự kiện, gồm cả đơn tạo tháng trước nhưng chốt/chia trong tháng này. */
+export async function backfillSegmentMonth(db: D1Database, posId: string, month: string) {
+  await ensureSegmentSchema(db);
+  const days = [...monthDays(month)], range = { start: days[0], end: days[days.length - 1] };
+  const results = await db.batch(segmentReads(db, posId, range));
+  return run(db, segmentStatements(db, posId, range, results, new Date().toISOString()));
+}
+/** Liệt kê cả ba cơ sở ngày để không bỏ sót tháng chốt/chia sau tháng tạo cuối cùng. */
+export async function segmentMonths(db: D1Database) {
+  const rows = await db.prepare(`SELECT pos_id, substr(day,1,7) AS month FROM (
+    SELECT pos_id, ${dayExpr('created_at')} AS day FROM raw_pos_orders
+    UNION SELECT pos_id, ${dayExpr('first_closed_at')} AS day FROM raw_pos_orders
+    UNION SELECT pos_id, ${dayExpr('seller_assigned_at')} AS day FROM raw_pos_orders
+  ) WHERE day IS NOT NULL GROUP BY pos_id, month ORDER BY month DESC, pos_id`).all<{pos_id: string; month: string}>();
+  return rows.results.map(r => `${r.pos_id}:${r.month}`);
+}
+
+/** Một lần mỗi ngày sau 02:30 VN; chỉ kiểm bảng đã điền đủ, sửa đúng các ngày lệch. Không gửi tin ra ngoài. */
+export async function checkSegmentStatsNightly(db: D1Database, now = new Date()) {
+  const vn = new Date(now.getTime() + VN_OFFSET_HOURS * 3600000).toISOString();
+  const day = vn.slice(0, 10), key = 'stats_segment_checked_day';
+  if (vn.slice(11, 16) < '02:30' || !await segmentStatsReady(db)) return 0;
+  const checked = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(key).first<{value: string}>();
+  if (checked?.value === day) return 0;
+  const start = addDays(day, -6);
+  const sums = STAT_COLUMNS.map(c => `SUM(${c}) AS ${c}`).join(',');
+  const [daily, segments] = await db.batch(['stats_daily', 'stats_daily_segment'].map(table =>
+    db.prepare(`SELECT pos_id, day, ${sums} FROM ${table} WHERE day>=? AND day<=? GROUP BY pos_id,day`).bind(start, day)));
+  const old = new Map((daily.results as Row[]).map(r => [JSON.stringify([r.pos_id, r.day]), r]));
+  const next = new Map((segments.results as Row[]).map(r => [JSON.stringify([r.pos_id, r.day]), r]));
+  const dirty: DirtyBuckets = new Map();
+  for (const k of new Set([...old.keys(), ...next.keys()])) {
+    const a = old.get(k), b = next.get(k);
+    if (STAT_COLUMNS.every(c => Number(a?.[c] ?? 0) === Number(b?.[c] ?? 0))) continue;
+    const r = a ?? b!;
+    const pos = String(r.pos_id);
+    if (!dirty.has(pos)) dirty.set(pos, new Set());
+    dirty.get(pos)!.add(String(r.day));
+  }
+  let writes = 0;
+  if (dirty.size) {
+    writes += await rebuildStats(db, dirty);
+    const count = [...dirty.values()].reduce((n, days) => n + days.size, 0);
+    const message = `Đối chiếu bảng nhóm sản phẩm: đã tính lại ${count} ngày POS bị lệch trong 7 ngày gần nhất.`;
+    console.warn(message);
+    const r = await db.prepare('INSERT INTO alert_log (id,owner_id,kind,employee_id,day,sent_at,message,ok,error) VALUES (?,?,?,?,?,?,?,?,?)')
+      .bind(crypto.randomUUID(), 'system', 'stats_segment_mismatch', null, day, now.toISOString(), message, 1, null).run();
+    writes += Number(r.meta?.rows_written ?? 0);
+  }
+  const r = await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at WHERE app_settings.value IS NOT excluded.value')
+    .bind(key, day, now.toISOString()).run();
+  return writes + Number(r.meta?.rows_written ?? 0);
 }

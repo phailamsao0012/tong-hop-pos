@@ -1,3 +1,4 @@
+import { SEGMENT_EPOCH, SEGMENT_READY_KEY, backfillSegmentMonth, segmentMonths, checkSegmentStatsNightly } from '@/lib/reports/stats';
 import { addUsage, cycleSummary, observeD1, type UsageDay } from '@/lib/ops/d1-usage';
 import { markDataChanged, trackDataWrites } from '@/lib/ops/data-version';
 import { DurableObject } from 'cloudflare:workers';
@@ -48,6 +49,8 @@ type State = {
   /** (POS:tháng) còn phải điền stats_daily_mkt (migration 0050); null = chưa liệt kê. */
   mktPending?: string[] | null;
   mktEpoch?: number;
+  segmentPending?: string[] | null;
+  segmentEpoch?: number;
   /** (POS:tháng) còn phải điền giờ gửi first_sent_at (migration 0043); null = chưa liệt kê. */
   sentPending?: string[] | null;
   sentEpoch?: number;
@@ -82,6 +85,7 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
     if (state.customerEpoch !== CUSTOMER_EPOCH) { state.customerEpoch = CUSTOMER_EPOCH; state.customerPending = null; }
     if (state.sellerProductEpoch !== SELLER_PRODUCT_EPOCH) { state.sellerProductEpoch = SELLER_PRODUCT_EPOCH; state.sellerProductPending = null; }
     if (state.mktEpoch !== MKT_EPOCH) { state.mktEpoch = MKT_EPOCH; state.mktPending = null; }
+    if (state.segmentEpoch !== SEGMENT_EPOCH) { state.segmentEpoch = SEGMENT_EPOCH; state.segmentPending = null; }
     if (state.sentEpoch !== SENT_AT_EPOCH) { state.sentEpoch = SENT_AT_EPOCH; state.sentPending = null; }
     return state;
   }
@@ -234,6 +238,21 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
           .bind(MKT_READY_KEY, String(MKT_EPOCH), new Date().toISOString()).run();
       }
     }
+    // Điền lịch sử nhóm sản phẩm theo tháng sự kiện, mới trước cũ sau, trong cùng ngân sách ngắn.
+    if (!s.statsPending.length && !s.customerPending.length && !s.sellerProductPending?.length && !s.mktPending?.length) {
+      if (s.segmentPending == null) s.segmentPending = await segmentMonths(db);
+      while (s.segmentPending.length && light()) {
+        const [posId, month] = s.segmentPending[0].split(':');
+        writes += await backfillSegmentMonth(db, posId, month);
+        s.segmentPending.shift();
+        await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes });
+      }
+      if (!s.segmentPending.length) {
+        const r = await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at WHERE app_settings.value IS NOT excluded.value')
+          .bind(SEGMENT_READY_KEY, String(SEGMENT_EPOCH), new Date().toISOString()).run();
+        writes += Number(r.meta?.rows_written ?? 0);
+      }
+    }
     // Giờ gửi first_sent_at (0043, Vận đơn theo ngày gửi hàng): điền đơn cũ sau cùng, ngắn như trên; xong thì ghi cờ để Vận đơn đổi cách tính.
     if (!s.statsPending.length && !s.customerPending.length && !s.sellerProductPending?.length) {
       const posOf = (list: string[]) => [...new Set(list.map((x) => x.split(':')[0]))];
@@ -355,7 +374,10 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
           stages.stats = (stages.stats ?? 0) + Number(meta.rows_written ?? 0);
           sizeBytes = typeof meta.size_after === 'number' ? meta.size_after : null;
         });
-        try { s.writesUsed += await this.buildPendingStats(s, statsDb); } finally {
+        try {
+          s.writesUsed += await this.buildPendingStats(s, statsDb);
+          if (s.writesUsed < DEFAULT_BUDGET.backfillCap) s.writesUsed += await checkSegmentStatsNightly(statsDb);
+        } finally {
           if (tracker.changed()) {
             // Một dòng app_settings: cộng vào hạn mức ngày, không tính vào giai đoạn "stats" của bảng lượt ghi.
             try { s.writesUsed += await markDataChanged(this.env.DB); } catch (error) { console.error('mark data changed failed', error); }

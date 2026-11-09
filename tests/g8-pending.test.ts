@@ -59,7 +59,8 @@ void test('G8: repeated existing/new customers and orders use the latest pending
           if (mode === 'ordersBackfill') await s.syncBackfill(f.db, shop, 'fake', { month: '2026-10', page: 1 }, 10);
           if (mode === 'ordersRecent') await s.syncRecent(f.db, shop, 'fake', 3);
           const tables = ['pos_customers', 'customer_notes', 'raw_pos_orders', 'raw_pos_order_items', 'customer_stats', 'customer_seller_stats',
-            ...f.raw.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'stats_daily%'").all().map((r) => String(r.name))];
+            // stats_daily_segment (0051) chưa có trong mã cũ: đối chiếu riêng ở tests/stats-segment.test.ts.
+            ...f.raw.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'stats_daily%' AND name<>'stats_daily_segment'").all().map((r) => String(r.name))];
           const snapshot = Object.fromEntries(tables.map((table) => [table, f.raw.prepare(`SELECT * FROM ${table} ORDER BY id`).all().map((r) => {
             const row = { ...r }; delete row.fetched_at;
             if (table.startsWith('stats_') || table.startsWith('customer_') && table !== 'customer_notes') delete row.updated_at;

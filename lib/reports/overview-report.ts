@@ -1,3 +1,4 @@
+import { segmentStatsReady } from '@/lib/reports/stats';
 // Báo cáo tổng quan (dùng chung cho API web và bot Telegram). Đọc bảng số liệu ngày đã tính sẵn;
 // số khách (đếm SĐT khác nhau) đọc bảng đơn theo index.
 import { env } from 'cloudflare:workers';
@@ -57,18 +58,21 @@ async function periodReport(
   const employeeFilter = (employeeIds.length ? ` AND seller_id IN (${employeeIds.map(() => '?').join(',')})` : '') + teamFilter('seller_id', team, true, unit) + countedFilter('seller_id');
   const where = `pos_id IN (${posPlaceholders}) AND day>=? AND day<=?${employeeFilter}`;
   const binds = [...posIds, start, end, ...employeeIds];
-  // cutoffUtc: kỳ so sánh cắt ở cùng giờ hiện tại, bảng tổng hợp theo ngày không cắt được giờ nên đọc thẳng đơn gốc.
+  // cutoffUtc: dùng bảng tính sẵn cho ngày đủ khi phù hợp, chỉ ngày cuối đọc đơn gốc tới cùng mốc giờ.
   const { startUtc, endUtc } = cutoffUtc ? { startUtc: vnRangeUtc(start, end).startUtc, endUtc: cutoffUtc } : vnRangeUtc(start, end);
   const rawFilter = orderFilterSql(filters, team, 'raw_pos_orders');
   const narrowed = filters.productSegment !== 'all' || team === 'cskh' || !filters.status.isDefault;
-  // Kỳ so sánh cắt giờ, không lọc thêm: ngày đủ đọc bảng tổng hợp, chỉ ngày cuối đọc đơn gốc (xem SegmentBase).
-  const base = cutoffUtc && !narrowed ? { start, lastDay: end, lastDayStartUtc: vnRangeUtc(end, end).startUtc } : null;
-  const virtual = segmentedStats(posIds, startUtc, endUtc, team, filters, employeeIds, base, unit);
+  // Chưa sẵn sàng: giữ đường cũ; khi lọc, chỉ ghép ngày đủ nếu bảng nhóm đã sẵn sàng.
+  const segmentReady = await segmentStatsReady(db);
+  const base = cutoffUtc && filters.status.isDefault && (!narrowed || segmentReady) ? { start, lastDay: end, lastDayStartUtc: vnRangeUtc(end, end).startUtc } : null;
+  const read = { start, end, ready: segmentReady };
+  const virtual = segmentedStats(posIds, startUtc, endUtc, team, filters, employeeIds, base, unit, read);
+  const totals = segmentedStats(posIds, startUtc, endUtc, team, filters, employeeIds, base, unit, { ...read, withProducts: false });
   const filtered = narrowed || !!cutoffUtc;
   const sellerProductReady = !filtered && await sellerProductStatsReady(db);
   const stats = (sql: string) => {
     const useRaw = filtered;
-    return { bind: (...args: (string | number)[]) => db.prepare((useRaw ? virtual.sql : '') + sql).bind(...(useRaw ? virtual.binds : []), ...args) };
+    return { bind: (...args: (string | number)[]) => db.prepare((useRaw ? totals.sql : '') + sql).bind(...(useRaw ? totals.binds : []), ...args) };
   };
   // Số khách: SĐT khác nhau của đơn tạo trong kỳ (all) và của đơn chốt trong kỳ theo ngày chốt (closed).
   const customerWhere = `pos_id IN (${posPlaceholders}) AND phone IS NOT NULL AND phone<>'' AND status_code<>7${employeeFilter}${rawFilter.sql}`;
@@ -185,8 +189,9 @@ export async function overviewReport(options: OverviewOptions) {
   const allTotal = (currentBase ?? currentRaw).total;
   const filters = options.filters ?? EMPTY_ORDER_FILTERS;
   const { startUtc, endUtc } = vnRangeUtc(start, end);
+  const summaryReady = await segmentStatsReady(env.DB);
   const querySummary = (f: OrderFilters, team = options.team ?? 'all', group = '') => {
-    const v = segmentedStats(posIds, startUtc, endUtc, team, f, employeeIds, null, unit);
+    const v = segmentedStats(posIds, startUtc, endUtc, team, f, employeeIds, null, unit, { start, end, ready: summaryReady, withProducts: false });
     return env.DB.prepare(v.sql + `SELECT ${group ? 'marketer_id,' : ''}${sumColumns} FROM stats_daily ${group}`).bind(...v.binds);
   };
   const segs = segmentsFor(posIds);

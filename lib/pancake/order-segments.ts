@@ -1,3 +1,4 @@
+import { addDays, vnDayStartUtc } from '@/lib/shared/report-time';
 import { CLOSED, NET, STAT_COLUMNS, STATUS_GROUPS, dayExpr } from '@/lib/reports/stats';
 import { countedFilter, teamFilter, type HrUnit, type Team } from '@/lib/teams/team';
 import { parseStatus, statusSql, type StatusFilter } from '@/lib/pancake/order-status';
@@ -40,14 +41,22 @@ export const closedDate = (f: OrderFilters, alias = '') => f.status.isDefault ? 
 export const closedWhere = (f: OrderFilters, alias = '') => f.status.isDefault ? `${alias}${CLOSED}` : statusSql(f.status, `${alias}status_code`);
 // The Marketer field, not arbitrary order tags, determines the CSKH acquisition source.
 export const marketerValue = (alias = 'o') => `NULLIF(TRIM(${alias}.marketer_id),'')`;
-export function orderFilterSql(filters: OrderFilters, team: Team, alias = 'o') {
-  const conditions: string[] = [], binds: string[] = [];
+function segmentParts(alias: string) {
   const item = (match: string) => `EXISTS (SELECT 1 FROM raw_pos_order_items si WHERE si.order_id=${alias}.id AND si.is_bonus=0 AND si.quantity>0 AND (${match}))`;
   const antibiotic = item(`LOWER(si.name) LIKE '%gentadox%' OR LOWER(si.name) LIKE '%detox%' OR (${alias}.pos_id='${ANTIBIOTIC_EXTRA_POS}' AND (LOWER(si.name) LIKE '%oxy%huy%' OR LOWER(si.name) LIKE '%nano shield%'))`);
   // SK, GK là chữ riêng trong tên (như loại đơn ở Vận đơn, lib/shipping-lines.ts); thiếu sản phẩm khớp thì theo nhãn đơn SK + GK.
   const word = `(' '||REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(si.name),'+',' '),'-',' '),'(',' '),')',' '),'/',' ')||' ')`;
   const skgk = `(${item(`${word} LIKE '% sk %' OR ${word} LIKE '% gk %' OR LOWER(si.name) LIKE '%godkill%' OR LOWER(si.name) LIKE '%god kill%'`)} OR EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(${alias}.tags_json) THEN ${alias}.tags_json ELSE '[]' END) st WHERE REPLACE(UPPER(TRIM(json_extract(st.value,'$.name'))),' ','')='SK+GK'))`;
   const notOxy = `${alias}.pos_id<>'${COMBO_OXY_POS}'`;
+  return { antibiotic, skgk, notOxy };
+}
+export function segmentKeyExpr(alias = 'o') {
+  const { antibiotic, skgk, notOxy } = segmentParts(alias);
+  return `CASE WHEN NOT (${notOxy}) THEN 'oxy' WHEN ${antibiotic} THEN 'gentadox' WHEN ${skgk} THEN 'skgk' ELSE 'khac' END`;
+}
+export function orderFilterSql(filters: OrderFilters, team: Team, alias = 'o') {
+  const conditions: string[] = [], binds: string[] = [];
+  const { antibiotic, skgk, notOxy } = segmentParts(alias);
   if (filters.productSegment === 'gentadox') conditions.push(`${notOxy} AND ${antibiotic}`);
   if (filters.productSegment === 'skgk') conditions.push(`${notOxy} AND NOT ${antibiotic} AND ${skgk}`);
   if (filters.productSegment === 'khac') conditions.push(`${notOxy} AND NOT ${antibiotic} AND NOT ${skgk}`);
@@ -68,7 +77,9 @@ export function orderFilterSql(filters: OrderFilters, team: Team, alias = 'o') {
  * tổng hợp stats_daily, chỉ ngày cuối [lastDayStartUtc, endUtc) tính từ đơn gốc. Trước đây cả kỳ quét đơn gốc 5–6 lần mỗi lượt mở Tổng quan,
  * chiếm gần nửa thời gian D1 khi test tải (10/10/2026). Cùng quy tắc với stats_daily (lib/stats.ts) nên tổng không đổi. */
 export type SegmentBase = { start: string; lastDay: string; lastDayStartUtc: string };
-export function segmentedStats(posIds: string[], startUtc: string, endUtc: string, team: Team, filters: OrderFilters, employeeIds: string[] = [], base: SegmentBase | null = null, unit: HrUnit | null = null) {
+export type SegmentReadOptions = { start: string; end: string; ready: boolean; withProducts?: boolean };
+export function segmentedStats(posIds: string[], startUtc: string, endUtc: string, team: Team, filters: OrderFilters, employeeIds: string[] = [], base: SegmentBase | null = null, unit: HrUnit | null = null, read: SegmentReadOptions | null = null) {
+  const withProducts = read?.withProducts !== false;
   const filter = orderFilterSql(filters, team);
   const seller = employeeIds.length ? ` AND o.seller_id IN (${employeeIds.map(() => '?').join(',')})` : '';
   const gross = 'COALESCE(current_total,0)';
@@ -94,14 +105,15 @@ export function segmentedStats(posIds: string[], startUtc: string, endUtc: strin
   const ph = posIds.map(() => '?').join(',');
   const baseSql = base ? `SELECT pos_id, seller_id, '' AS marketer_id, day, ${STAT_COLUMNS.join(',')} FROM main.stats_daily WHERE pos_id IN (${ph}) AND day>=? AND day<? UNION ALL\n      ` : '';
   const eventRange = base ? [base.lastDayStartUtc, endUtc] : [startUtc, endUtc];
-  return {
-    sql: `WITH segment_orders AS NOT MATERIALIZED (
+  const rawOrders = `segment_orders AS NOT MATERIALIZED (
       SELECT o.* FROM raw_pos_orders o WHERE o.pos_id IN (${ph})${teamFilter('o.seller_id', team, true, unit)}${countedFilter('o.seller_id')}${seller}${filter.sql}
-    ), stats_daily AS (
+    )`;
+  const rawDaily = `stats_daily AS (
       ${baseSql}${event('created_at', values, '')} UNION ALL
       ${event(closedDate(filters), closed, `AND ${closedWhere(filters)}`)} UNION ALL
       ${event('seller_assigned_at', { assigned_orders: '1', assigned_closed_orders: `CASE WHEN ${closedWhere(filters)} THEN 1 ELSE 0 END` }, 'AND status_code<>7')}
-    ), stats_daily_product AS (
+    )`;
+  const products = `stats_daily_product AS (
       SELECT o.pos_id, ${dayExpr(closedDate(filters, 'o.'))} AS day, i.product_id, MAX(i.name) AS name,
         1 AS orders, SUM(i.quantity) AS quantity, SUM(i.line_total) AS total,
         SUM(CASE WHEN i.is_bonus=0 THEN i.quantity ELSE 0 END) AS closed_quantity,
@@ -112,8 +124,27 @@ export function segmentedStats(posIds: string[], startUtc: string, endUtc: strin
       FROM segment_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
       WHERE ${closedDate(filters, 'o.')}>=? AND ${closedDate(filters, 'o.')}<? AND ${closedWhere(filters, 'o.')}
       GROUP BY o.id, i.product_id
-    ) `,
-    binds: [...posIds, ...employeeIds, ...filter.binds, ...(base ? [...posIds, base.start, base.lastDay] : []),
-      ...Array.from({ length: 3 }, () => eventRange).flat(), startUtc, endUtc],
+    )`;
+  const ready = !!read?.ready && filters.status.isDefault && startUtc === vnDayStartUtc(read.start) && (base ? base.start === read.start && base.lastDay === read.end && base.lastDayStartUtc === vnDayStartUtc(read.end) && endUtc >= base.lastDayStartUtc && endUtc <= vnDayStartUtc(addDays(read.end, 1)) : endUtc === vnDayStartUtc(addDays(read.end, 1)));
+  // Keep the existing stats_daily base for unfiltered cutoff periods.
+  const segmentReady = ready && !(base && filters.productSegment === 'all' && team !== 'cskh');
+  const needsRaw = !segmentReady || !!base || withProducts;
+  const origin = team === 'cskh' ? filters.orderOrigin : 'all';
+  const segment = filters.productSegment !== 'all' ? ' AND segment=?' : '';
+  const originSql = origin === 'self' ? " AND marketer_id=''" : origin === 'mkt' ? " AND marketer_id<>''" + (filters.marketerId ? ' AND marketer_id=?' : '') : '';
+  const daily = segmentReady ? `stats_daily AS (
+    SELECT pos_id,seller_id,marketer_id,day,${STAT_COLUMNS.join(',')} FROM main.stats_daily_segment o
+    WHERE pos_id IN (${ph}) AND day>=? AND day${base ? '<' : '<='}?${teamFilter('o.seller_id', team, true, unit)}${countedFilter('o.seller_id')}${seller}${segment}${originSql}
+    ${base ? `UNION ALL ${event('created_at', values, '')} UNION ALL ${event(closedDate(filters), closed, `AND ${closedWhere(filters)}`)} UNION ALL ${event('seller_assigned_at', { assigned_orders: '1', assigned_closed_orders: `CASE WHEN ${closedWhere(filters)} THEN 1 ELSE 0 END` }, 'AND status_code<>7')}` : ''}
+  )` : rawDaily;
+  const rawBinds = [...posIds, ...employeeIds, ...filter.binds];
+  const dailyBinds = segmentReady ? [...posIds, read.start, read.end, ...employeeIds,
+    ...(filters.productSegment !== 'all' ? [filters.productSegment] : []),
+    ...(origin === 'mkt' && filters.marketerId ? [filters.marketerId] : []),
+    ...(base ? Array.from({ length: 3 }, () => eventRange).flat() : [])]
+    : [...(base ? [...posIds, base.start, base.lastDay] : []), ...Array.from({ length: 3 }, () => eventRange).flat()];
+  return {
+    sql: `WITH ${[...(needsRaw ? [rawOrders] : []), daily, ...(withProducts ? [products] : [])].join(', ')} `,
+    binds: [...(needsRaw ? rawBinds : []), ...dailyBinds, ...(withProducts ? [startUtc, endUtc] : [])],
   };
 }
