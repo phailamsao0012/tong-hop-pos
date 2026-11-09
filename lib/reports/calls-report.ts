@@ -38,8 +38,20 @@ export function freshCoverage(value: string | null | undefined, now: number): Co
     return typeof c.at === 'number' && c.cov && now - c.at <= COVERAGE_TTL_MS && c.at <= now ? c.cov : null;
   } catch { return null; }
 }
+// Vá nóng 09/11/2026: nhớ trong isolate 10 phút và gộp các lượt gọi cùng lúc (câu đếm đọc 1,2 triệu dòng, hết hạn là nhiều request cùng chạy).
+const COVERAGE_MEMO_MS = 10 * 60000;
+const coverageMemo = new WeakMap<D1Database, Map<string, { at: number; cov: Coverage }>>();
 export async function callsCoverage(db: D1Database, posIds: string[], now = Date.now()): Promise<Coverage> {
   const key = `calls_coverage:${[...posIds].sort().join(',')}`;
+  const memo = coverageMemo.get(db) ?? new Map<string, { at: number; cov: Coverage }>();
+  coverageMemo.set(db, memo);
+  const hit = memo.get(key);
+  if (hit && now - hit.at < COVERAGE_MEMO_MS && hit.at <= now) return hit.cov;
+  const cov = await loadCoverage(db, posIds, key, now);
+  memo.set(key, { at: now, cov });
+  return cov;
+}
+async function loadCoverage(db: D1Database, posIds: string[], key: string, now: number): Promise<Coverage> {
   const saved = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(key).first<{ value: string }>();
   const cached = freshCoverage(saved?.value, now);
   if (cached) return cached;
