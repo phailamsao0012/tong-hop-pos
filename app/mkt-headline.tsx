@@ -9,7 +9,8 @@
 import { useMemo, useState } from 'react';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { usePosStaffFilter } from './pos-store';
-import { ArrowRight, BadgeDollarSign, CalendarDays, Check, CheckCircle2, Coins, Megaphone, Package, Percent, Phone, TrendingUp, UsersRound, UserRound, Wallet, X } from 'lucide-react';
+import { ProfileLink } from './staff-profile-link';
+import { ArrowRight, BadgeDollarSign, CalendarDays, Check, Filter, CheckCircle2, Coins, Megaphone, Package, Percent, Phone, TrendingUp, UsersRound, UserRound, Wallet, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Area, Bar, BarChart, CartesianGrid, ComposedChart, LabelList, XAxis, YAxis } from 'recharts';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip } from '@/components/ui/chart';
@@ -184,7 +185,8 @@ const vnTime = (iso: string) => vnDate(iso).slice(11, 16);
 
 // Doanh thu tách từng dòng (anh Vũ 28/10/2026: thấy doanh thu CSKH của từng marketer, không chỉ tổng). Dòng theo thời gian không có số tách.
 const splitOfRow = (m: Row['m']) => 'newNet' in m ? m as Metrics & NewSplit : null;
-function BreakdownTable({ rows, first, onPick, onOrders, totalCost: _totalCost, keepOrder, showSplit = false }: { rows: Row[]; first: string; onPick?: (id: string) => void; onOrders?: (row: Row, kind: OrderKind) => void; totalCost: number; keepOrder?: boolean; showSplit?: boolean }) {
+/** profile: dòng là một marketer → bấm tên mở hồ sơ làm việc, nút phễu cạnh tên để lọc (anh Vũ 09/11/2026: bấm tên phải ra hồ sơ). */
+function BreakdownTable({ rows, first, onPick, onOrders, totalCost: _totalCost, keepOrder, showSplit = false, profile = false }: { rows: Row[]; first: string; onPick?: (id: string) => void; onOrders?: (row: Row, kind: OrderKind) => void; totalCost: number; keepOrder?: boolean; showSplit?: boolean; profile?: boolean }) {
   const sort = useSort<SortKey>('net');
   const shown = keepOrder && sort.key === 'net' && sort.desc ? rows : sort.apply(rows, (r, k) => {
     switch (k) {
@@ -212,7 +214,11 @@ function BreakdownTable({ rows, first, onPick, onOrders, totalCost: _totalCost, 
         return (
           <tr key={r.id} className={`${r.active ? 'bg-tint-2' : ''} ${r.dim ? 'opacity-55' : ''}`}>
             <td className="min-w-40">
-              {onPick ? <button type="button" onClick={() => onPick(r.id)} className="flex items-center gap-1.5 text-left font-semibold text-ink tap hover:text-primary" title={r.active ? 'Bỏ lọc' : 'Bấm để lọc cả khối theo dòng này'}>
+              {profile && !r.id.startsWith('__') ? <span className="flex items-center gap-1.5">
+                {onPick && <button type="button" onClick={() => onPick(r.id)} aria-pressed={r.active} aria-label={r.active ? `Bỏ lọc ${r.name}` : `Lọc cả khối theo ${r.name}`} title={r.active ? 'Bỏ lọc' : 'Lọc cả khối theo người này'}
+                  className={`grid size-6 shrink-0 place-items-center rounded-md tap hover:bg-tint-2 hover:text-primary ${r.active ? 'text-primary' : 'text-ink-3'}`}>{r.active ? <Check size={14} /> : <Filter size={13} />}</button>}
+                <ProfileLink id={r.id} name={r.name} className="font-semibold text-ink" />
+              </span> : onPick ? <button type="button" onClick={() => onPick(r.id)} className="flex items-center gap-1.5 text-left font-semibold text-ink tap hover:text-primary" title={r.active ? 'Bỏ lọc' : 'Bấm để lọc cả khối theo dòng này'}>
                 {r.active && <Check size={14} className="shrink-0 text-primary" />}{r.name}
               </button> : <span className="font-semibold">{r.name}</span>}
               {(r.sub || r.note) && <span className="block max-w-72 whitespace-normal text-[11px] font-normal leading-snug text-ink-3">{[r.sub, r.note].filter(Boolean).join(' · ')}</span>}
@@ -402,7 +408,7 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
         {tab === 'teams' && !data.teams.some((t) => t.id !== '__unassigned') && <p className="text-[11.5px] text-ink-3">Chưa chia team Marketing. Chia ở nút <b>Quản lý team MKT</b> đầu trang.</p>}
         {tab !== 'time' && onPick && <RankChart seg={shown} rows={[...tabRows].sort((a, b) => (b.m.net + b.m.cost) - (a.m.net + a.m.cost))} onPick={onPick} motionOn={motionOn} />}
         <BreakdownTable rows={tabRows} first={tab === 'people' ? 'Marketer' : tab === 'teams' ? 'Team' : tab === 'products' ? 'Sản phẩm' : data.bucket === 'day' ? 'Ngày' : data.bucket === 'week' ? 'Tuần' : 'Tháng'}
-          onPick={onPick} totalCost={totalCost} keepOrder={tab === 'time'} showSplit={shown === 'all'}
+          onPick={onPick} totalCost={totalCost} keepOrder={tab === 'time'} showSplit={shown === 'all'} profile={tab === 'people'}
           onOrders={product === null && (tab === 'people' || tab === 'teams') ? (row, kind) => setOrders({ row, kind, team: tab === 'teams' }) : undefined} />
         <OrdersSheet pick={orders} start={start} end={end} posIds={posIds} team={false} onClose={() => setOrders(null)} />
       </div>
