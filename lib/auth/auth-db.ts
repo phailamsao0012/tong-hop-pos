@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers';
+import { forgetUserSessions, forgetSessionId } from '@/lib/auth/auth';
 
 // Câu SQL của các route app/api/auth/* (cải tổ B3, 02/11/2026): route chỉ kiểm đầu vào, gọi hàm ở đây và trả JSON.
 // Chuyển nguyên câu từ route sang, không đổi điều kiện hay cột trả về.
@@ -72,6 +73,7 @@ export async function setPasswordDropSessions(
         ),
     env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(userId),
   ]);
+  forgetUserSessions(userId);
 }
 
 export async function insertOwner(
@@ -130,6 +132,7 @@ export async function insertPasskey(p: {
       p.createdAt,
     )
     .run();
+  forgetUserSessions(p.userId);
 }
 
 export const activePasskey = (id: string) =>
@@ -167,6 +170,7 @@ export async function deletePasskey(id: string, userId: string) {
   await env.DB.prepare('DELETE FROM passkeys WHERE id=? AND user_id=?')
     .bind(id, userId)
     .run();
+  forgetUserSessions(userId);
 }
 
 // ---- trạng thái bảo mật ----
@@ -215,6 +219,7 @@ export async function saveTotpSecret(
   )
     .bind(userId, secretEnc, now)
     .run();
+  forgetUserSessions(userId);
 }
 
 export async function enableTotp(userId: string, now: string) {
@@ -223,6 +228,7 @@ export async function enableTotp(userId: string, now: string) {
   )
     .bind(now, now, userId)
     .run();
+  forgetUserSessions(userId);
 }
 
 export async function disableTotp(userId: string, now: string) {
@@ -231,6 +237,7 @@ export async function disableTotp(userId: string, now: string) {
   )
     .bind(now, userId)
     .run();
+  forgetUserSessions(userId);
 }
 
 // ---- phiên đăng nhập ----
@@ -278,5 +285,7 @@ export async function revokeSessions(
     res = await env.DB.prepare(`DELETE FROM sessions WHERE id=?${guard}`)
       .bind(q.one.id, ...g)
       .run();
+  if ('one' in q) forgetSessionId(q.one.id);
+  else forgetUserSessions('others' in q ? q.others.userId : q.userAll.userId);
   return res.meta.changes ?? 0;
 }

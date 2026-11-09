@@ -1,6 +1,5 @@
-// Danh sách người từng là Marketer trên đơn (đánh dấu "MKT" ở trang chia team MKT). Câu DISTINCT quét toàn bộ bảng đơn
-// (số đo D1 04/11/2026: hơn 100 lần mỗi ngày, mỗi lần quét cả bảng) nên lưu sẵn trong app_settings, làm mới sau 6 giờ.
-// Danh sách gần như không đổi; người mới chỉ chậm hiện dấu "MKT" tối đa 6 giờ (vẫn nhận ra qua bộ phận có chữ MKT / marketing).
+// Danh sách Marketer trên đơn, duy trì cùng batch đồng bộ trong marketer_ids.
+// Chưa điền bảng xong thì giữ cache/đường DISTINCT cũ để không trả thiếu người.
 export const MARKETER_IDS_KEY = 'marketer_ids_v1';
 export const MARKETER_IDS_TTL_MS = 6 * 3600 * 1000;
 
@@ -28,6 +27,47 @@ export function parseCachedIds(
 // Vá nóng 09/11/2026: nhớ trong isolate 10 phút và gộp các lượt gọi cùng lúc (trước đây hết hạn là nhiều request cùng quét cả bảng).
 const MEMO_MS = 10 * 60000;
 const memo = new WeakMap<D1Database, { at: number; ids: Set<string> }>();
+export const MARKETER_READY_KEY = 'marketer_ids_ready_v2';
+export const MARKETER_CLEANUP_KEY = 'marketer_ids_cleaned_day_v1';
+export function forgetMarketerIds(db: D1Database) { memo.delete(db); }
+
+/** Một POS mỗi lượt, chỉ chạy bởi bộ hẹn giờ ngoài giờ xem (00–05h VN). */
+export async function backfillMarketerIds(db: D1Database, now = new Date()): Promise<number> {
+  if ((now.getUTCHours() + 7) % 24 >= 5) return 0;
+  const ready = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(MARKETER_READY_KEY).first<{ value: string }>();
+  if (ready?.value === '1') {
+    const day = new Date(now.getTime() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+    const cleaned = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(MARKETER_CLEANUP_KEY).first<{ value: string }>();
+    if (cleaned?.value === day) return 0;
+    const results = await db.batch([
+      db.prepare("DELETE FROM marketer_ids WHERE marketer_id NOT IN (SELECT DISTINCT TRIM(marketer_id) FROM raw_pos_orders WHERE marketer_id IS NOT NULL AND TRIM(marketer_id)<>'')"),
+      db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at WHERE app_settings.value IS NOT excluded.value').bind(MARKETER_CLEANUP_KEY, day, now.toISOString()),
+    ]);
+    forgetMarketerIds(db);
+    return results.reduce((n, r) => n + Number(r.meta.rows_written ?? r.meta.changes ?? 0), 0);
+  }
+  const next = await db.prepare("SELECT id FROM pos_shops WHERE NOT EXISTS (SELECT 1 FROM app_settings WHERE key='marketer_ids_filled:'||pos_shops.id) ORDER BY id LIMIT 1").first<{ id: string }>();
+  const at = now.toISOString();
+  if (next) {
+    const results = await db.batch([
+      db.prepare("INSERT INTO marketer_ids (marketer_id,first_seen_at,last_seen_at) SELECT DISTINCT TRIM(marketer_id),?,? FROM raw_pos_orders WHERE pos_id=? AND marketer_id IS NOT NULL AND TRIM(marketer_id)<>'' ON CONFLICT(marketer_id) DO NOTHING").bind(at, at, next.id),
+      db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO NOTHING').bind(`marketer_ids_filled:${next.id}`, '1', at),
+    ]);
+    return results.reduce((n, r) => n + Number(r.meta.rows_written ?? r.meta.changes ?? 0), 0);
+  } else {
+    const result = await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at WHERE app_settings.value IS NOT excluded.value').bind(MARKETER_READY_KEY, '1', at).run();
+    forgetMarketerIds(db);
+    return Number(result.meta.rows_written ?? result.meta.changes ?? 0);
+  }
+}
+
+/** Gọi cùng batch ghi đơn; lặp nguồn không đổi không tạo câu ghi mới. */
+export function marketerStatements(db: D1Database, current: string | number | null | undefined, previous: string | number | null | undefined, now: string) {
+  const id = String(current ?? '').trim(), old = String(previous ?? '').trim();
+  if (id === old) return [];
+  forgetMarketerIds(db);
+  return id ? [db.prepare('INSERT INTO marketer_ids (marketer_id,first_seen_at,last_seen_at) VALUES (?,?,?) ON CONFLICT(marketer_id) DO NOTHING').bind(id, now, now)] : [];
+}
 export async function marketerIds(
   db: D1Database,
   now = Date.now(),
@@ -42,6 +82,11 @@ async function loadMarketerIds(
   db: D1Database,
   now: number,
 ): Promise<Set<string>> {
+  const ready = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(MARKETER_READY_KEY).first<{ value: string }>();
+  if (ready?.value === '1') {
+    const rows = await db.prepare('SELECT marketer_id FROM marketer_ids').all<{ marketer_id: string }>();
+    return new Set(rows.results.map(r => r.marketer_id));
+  }
   const saved = await db
     .prepare('SELECT value FROM app_settings WHERE key=?')
     .bind(MARKETER_IDS_KEY)

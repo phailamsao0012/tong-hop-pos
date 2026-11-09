@@ -1,6 +1,6 @@
 import { primaryOwnerId } from '@/lib/auth/primary-owner';
 import { auditHeaders } from '@/lib/ops/audit';
-import { forbidden, getSessionUser, normalizeEmail, passwordProblem, hashPassword, unauthorized } from '@/lib/auth/auth';
+import { forbidden, getSessionUser, normalizeEmail, passwordProblem, hashPassword, unauthorized, forgetUserSessions } from '@/lib/auth/auth';
 import { isOwner, parseRole } from '@/lib/auth/access';
 import { groupPosPeople, teamChoices, type PosPersonRow } from '@/lib/teams/account-from-pos';
 import { parseMarketingTeams } from '@/lib/teams/marketing-teams';
@@ -116,6 +116,7 @@ export async function PUT(request: Request) {
   if (canManage && (body.disabled === true || body.password !== undefined || body.views !== undefined || body.posIds !== undefined || body.team !== undefined || body.role !== undefined || body.employeeId !== undefined))
     statements.push(deleteSessionsStatement(id));
   await runStatements(statements);
+  forgetUserSessions(id);
   if (owned.length) await refreshTeamSource(true);
   const changed = sets.filter((x) => x !== 'updated_at=?').map((x) => x.split('=')[0]).map((k) => ({ name: 'tên', title: 'chức danh', manager_id: 'quản lý', role: 'vai trò', views_json: 'trang', pos_ids_json: 'POS', team: 'nhóm', disabled: body.disabled ? 'khóa' : 'mở khóa', password_hash: 'mật khẩu' }[k] ?? k)).concat(owned.length ? ['team phụ trách'] : []);
   return Response.json({ ok: true }, { headers: auditHeaders(`${target.email}: ${changed.join(', ')}`) });
@@ -130,5 +131,6 @@ export async function DELETE(request: Request) {
   // Chỉ chủ hệ thống gốc xóa được chủ hệ thống khác; không ai xóa được chủ hệ thống gốc.
   if (target && parseRole(target.role) === 'owner' && (owner!.userId !== await primaryOwnerId() || id === await primaryOwnerId())) return Response.json({ error: 'Chỉ chủ hệ thống gốc mới xóa được tài khoản chủ hệ thống khác.' }, { status: 403 });
   await deleteUser(id);
+  forgetUserSessions(id);
   return Response.json({ ok: true }, { headers: auditHeaders(`Xóa ${target?.email ?? id}`) });
 }

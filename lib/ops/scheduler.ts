@@ -1,4 +1,6 @@
 import { SEGMENT_EPOCH, SEGMENT_READY_KEY, backfillSegmentMonth, segmentMonths, checkSegmentStatsNightly } from '@/lib/reports/stats';
+import { backfillMarketerIds } from '@/lib/teams/marketer-ids';
+import { backfillCallsCoverage } from '@/lib/reports/calls-coverage';
 import { addUsage, cycleSummary, observeD1, type UsageDay } from '@/lib/ops/d1-usage';
 import { markDataChanged, trackDataWrites } from '@/lib/ops/data-version';
 import { DurableObject } from 'cloudflare:workers';
@@ -375,6 +377,8 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
           sizeBytes = typeof meta.size_after === 'number' ? meta.size_after : null;
         });
         try {
+          if (s.writesUsed < DEFAULT_BUDGET.backfillCap) s.writesUsed += await backfillMarketerIds(statsDb);
+          if (s.writesUsed < DEFAULT_BUDGET.backfillCap) s.writesUsed += await backfillCallsCoverage(statsDb);
           s.writesUsed += await this.buildPendingStats(s, statsDb);
           if (s.writesUsed < DEFAULT_BUDGET.backfillCap) s.writesUsed += await checkSegmentStatsNightly(statsDb);
         } finally {

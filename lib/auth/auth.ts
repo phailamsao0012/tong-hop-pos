@@ -138,18 +138,32 @@ function readCookie(cookieHeader: string | null, name: string) {
 
 export async function destroySession(cookieHeader: string | null) {
   const token = readCookie(cookieHeader, SESSION_COOKIE);
-  if (token) { const key = await sha256(token); sessionMemo.delete(key); await env.DB.prepare('DELETE FROM sessions WHERE id=?').bind(key).run(); }
+  if (token) { const key = await sha256(token); await env.DB.prepare('DELETE FROM sessions WHERE id=?').bind(key).run(); forgetSessionId(key); }
 }
 
 type UserRow = { id: string; email: string; name: string; role: string; disabled: number; expires_at: string; title: string | null; views_json: string | null; pos_ids_json: string | null; team: string | null; totp_enabled_at: string | null; passkeys: number };
 
-// Nhớ kết quả tra phiên 15 giây trong isolate: một lần mở trang bắn 8–10 request API song song, mỗi request trước đây tra D1 2–3 lần.
-const SESSION_MEMO_MS = 15000;
+// Nhớ kết quả tra phiên 60 giây trong isolate; thao tác bảo mật xoá nhớ của người bị đổi.
+const SESSION_MEMO_MS = 60000;
 const sessionMemo = new Map<string, { user: SessionUser | null; exp: number }>();
+let sessionGeneration = 0;
+/** Xoá cả phiên thật lẫn các góc xem như của người bị đổi, trong isolate hiện tại. */
+export function forgetUserSessions(userId: string) {
+  sessionGeneration++;
+  for (const [key, value] of sessionMemo) if (value.user?.userId === userId) sessionMemo.delete(key);
+  for (const [key, value] of actingMemo) if (value.user?.userId === userId || key.startsWith(`${userId}|`) || key.endsWith(`|${userId}`)) actingMemo.delete(key);
+}
+/** Khi thu hồi bằng mã phiên, xoá đúng phiên kể cả cookie khác với phiên đang xử lý. */
+export function forgetSessionId(key: string) {
+  sessionGeneration++;
+  const userId = sessionMemo.get(key)?.user?.userId;
+  sessionMemo.delete(key);
+  if (userId) forgetUserSessions(userId);
+}
 /** Quên phiên đã nhớ (đăng xuất, bật/tắt 2FA) để thay đổi có hiệu lực ngay. */
 export async function forgetSession(cookieHeader: string | null) {
   const token = readCookie(cookieHeader, SESSION_COOKIE);
-  if (token) sessionMemo.delete(await sha256(token));
+  if (token) forgetSessionId(await sha256(token));
 }
 
 async function realUserFromCookie(cookieHeader: string | null): Promise<SessionUser | null> {
@@ -158,10 +172,12 @@ async function realUserFromCookie(cookieHeader: string | null): Promise<SessionU
   const key = await sha256(token);
   const hit = sessionMemo.get(key);
   if (hit && hit.exp > Date.now()) return hit.user;
+  const generation = sessionGeneration;
   const user = await loadUser(key);
   if (user) touchSession(key);
   if (sessionMemo.size > 500) sessionMemo.clear();
-  sessionMemo.set(key, { user, exp: Date.now() + SESSION_MEMO_MS });
+  // Lượt đọc bắt đầu trước thao tác thu hồi không được điền lại memo sau khi đã xoá.
+  if (generation === sessionGeneration) sessionMemo.set(key, { user, exp: Date.now() + SESSION_MEMO_MS });
   return user;
 }
 
@@ -173,13 +189,14 @@ async function userFromCookie(cookieHeader: string | null): Promise<SessionUser 
   const targetId = decodeURIComponent(target);
   const key = `${real.userId}|${targetId}`, hit = actingMemo.get(key);
   if (hit && hit.exp > Date.now()) return hit.user ?? real;
+  const generation = sessionGeneration;
   const row = await env.DB.prepare('SELECT u.id,u.email,u.name,u.role,u.disabled,u.title,u.views_json,u.pos_ids_json,u.team FROM users u WHERE u.id=?').bind(targetId).first<Omit<UserRow, 'expires_at' | 'totp_enabled_at' | 'passkeys'>>();
   // Không xem như chủ hệ thống khác hay tài khoản đã khoá: dùng lại tài khoản thật.
   const acting = row && !row.disabled && row.id !== real.userId && parseAccess(row).role !== 'owner'
     ? { ...(await sessionUserFor({ ...row, totp_enabled_at: null, passkeys: 0 })), mfaRequired: false, actingAs: { ownerId: real.userId, ownerName: real.displayName } }
     : null;
   if (actingMemo.size > 100) actingMemo.clear();
-  actingMemo.set(key, { user: acting, exp: Date.now() + SESSION_MEMO_MS });
+  if (generation === sessionGeneration) actingMemo.set(key, { user: acting, exp: Date.now() + SESSION_MEMO_MS });
   return acting ?? real;
 }
 

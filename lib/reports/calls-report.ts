@@ -42,6 +42,9 @@ export function freshCoverage(value: string | null | undefined, now: number): Co
 const COVERAGE_MEMO_MS = 10 * 60000;
 const coverageMemo = new WeakMap<D1Database, Map<string, { at: number; cov: Coverage }>>();
 export async function callsCoverage(db: D1Database, posIds: string[], now = Date.now()): Promise<Coverage> {
+  const prepared = await db.prepare(`SELECT COUNT(*) AS ready, COALESCE(SUM(customers),0) AS customers, COALESCE(SUM(notes),0) AS notes, MIN(first_note) AS first_note, MAX(last_fetch) AS last_fetch FROM calls_coverage_pos WHERE pos_id IN (${posIds.map(() => '?').join(',')})`).bind(...posIds).first<Coverage & { ready: number }>();
+  // Chỉ bỏ cache khi tất cả POS được chọn đã có số chính xác. Chưa điền xong giữ đường cũ.
+  if (prepared && Number(prepared.ready) === new Set(posIds).size) return { customers: prepared.customers, notes: prepared.notes, first_note: prepared.first_note, last_fetch: prepared.last_fetch };
   const key = `calls_coverage:${[...posIds].sort().join(',')}`;
   const memo = coverageMemo.get(db) ?? new Map<string, { at: number; cov: Coverage }>();
   coverageMemo.set(db, memo);
