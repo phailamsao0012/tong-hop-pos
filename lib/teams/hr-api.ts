@@ -1,5 +1,6 @@
 // Tra / ghi D1 cho các API web nhân sự gọi (app/api/hr/*). Tách khỏi các route đó (cải tổ B5, 05/11/2026), câu SQL giữ nguyên.
 import { env } from 'cloudflare:workers';
+import { forgetUserSessions } from '@/lib/auth/auth';
 import { parseRole } from '@/lib/auth/access';
 import { HANDOFF_TTL_MS } from '@/lib/teams/hr-link';
 import type { PosStaffRow } from '@/lib/teams/hr-link';
@@ -16,10 +17,14 @@ export const markCandidateCreated = (employeeId: string, id: string) => env.DB.p
 /** Tài khoản web chính theo mã (để khoá khi nghỉ việc). */
 export const userById = (id: string) => env.DB.prepare('SELECT id,email,name,role,disabled FROM users WHERE id=?').bind(id).first<{ id: string; email: string; name: string; role: string; disabled: number }>();
 /** Khoá tài khoản và đăng xuất mọi phiên. */
-export const disableUser = (id: string) => env.DB.batch([
+export const disableUser = async (id: string) => {
+  const result = await env.DB.batch([
     env.DB.prepare('UPDATE users SET disabled=1, updated_at=? WHERE id=?').bind(new Date().toISOString(), id),
     env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(id),
-]);
+  ]);
+  forgetUserSessions(id);
+  return result;
+};
 
 /** Lưu mã chuyển đăng nhập (băm) và dọn mã hết hạn. */
 export const saveHandoff = async (code: string, user: { userId: string }, now: number) => env.DB.batch([

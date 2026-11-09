@@ -1,4 +1,5 @@
 import { observeD1 } from '@/lib/ops/d1-usage';
+import { marketerStatements } from '@/lib/teams/marketer-ids';
 import { markDataChanged, trackDataWrites } from '@/lib/ops/data-version';
 import { normalizePhone } from '@/lib/reports/customer-stats';
 import { drainPendingNotes, loadCskhWatch, noteStatements, parseCustomerCursor, saveCskhWatch, syncCskhNotedWatch, syncCskhWatch, syncCustomersBackfill, syncCustomersRecent } from '@/lib/pancake/customers-sync';
@@ -181,6 +182,7 @@ export function orderStatements(db: D1Database, posId: string, shopId: string, o
   }
   for (const id of previous.keys()) statements.push(db.prepare('DELETE FROM raw_pos_order_items WHERE id=?').bind(id));
   if (includeNotes) statements.push(...noteStatements(db, posId, str(o.customer?.id) ?? str(o.customer?.customer_id), normalizePhone(str(o.bill_phone_number) ?? '') || null, o.customer?.notes ?? null, now, 'order'));
+  statements.push(...marketerStatements(db, row.marketer_id, stored?.row.marketer_id, now));
   if (pending) {
     // Mirror the sequential upsert, including columns intentionally absent from SET.
     const next = { ...row };
