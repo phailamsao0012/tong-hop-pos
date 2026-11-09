@@ -35,18 +35,6 @@ installDemo();
 // Vá nóng 09/11/2026 (D1 quá tải): khóa đã kèm phiên bản dữ liệu nên giữ lâu hơn không làm số cũ đi; đồng bộ có dữ liệu mới là khóa đổi.
 const REPORT_CACHE_TTL_MS = 15 * 60000;
 const SHARED_CACHE_TTL_S = 15 * 60;
-// Mỗi isolate chỉ cho tối đa ngần này báo cáo tính từ D1 cùng lúc, phần còn lại xếp hàng: tránh dồn cục làm D1 báo "overloaded".
-const REPORT_COMPUTE_MAX = 2;
-let computing = 0;
-const computeQueue: (() => void)[] = [];
-async function limitCompute<T>(fn: () => Promise<T>): Promise<T> {
-  if (computing >= REPORT_COMPUTE_MAX) await new Promise<void>((resolve) => computeQueue.push(resolve));
-  computing += 1;
-  try { return await fn(); } finally {
-    computing -= 1;
-    computeQueue.shift()?.();
-  }
-}
 const REPORT_CACHE_MAX_BYTES = 3_000_000;
 const REPORT_CACHE_MAX_ENTRIES = 80;
 type CachedResponse = { at: number; status: number; headers: [string, string][]; body: ArrayBuffer };
@@ -187,7 +175,7 @@ async function cachedReport(request: Request, env: Cloudflare.Env, ctx: Executio
   // Tính từ D1, nhớ vào cả hai tầng (khóa theo phiên bản và bản gần nhất).
   const compute = async (keep: boolean) => {
     let response: Response | null = null;
-    try { response = await limitCompute(run); } catch (error) { console.error('report failed', pathname, error); }
+    try { response = await run(); } catch (error) { console.error('report failed', pathname, error); }
     if (!response || response.status >= 500) return { response, entry: null };
     if (keep) own.response = response;
     const entry = await capture(response);
