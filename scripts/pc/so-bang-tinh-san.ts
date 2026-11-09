@@ -25,8 +25,11 @@ const ranges: [string, string][] = [['2026-10-10', '2026-11-08'], ['2026-11-01',
 const teams: Team[] = ['all', 'sale', 'cskh'];
 let ok = 0, bad = 0, oldMs = 0, newMs = 0;
 const lech: string[] = [];
-for (const [start, end] of ranges) {
-  const startUtc = vnDayStartUtc(start), endUtc = vnDayStartUtc(addDays(end, 1));
+// Kỳ so sánh "cùng mốc giờ": cắt ở 13:37 giờ VN của ngày cuối (06:37 UTC).
+const cases = [...ranges.map(([s, e]) => ({ start: s, end: e, cutoff: null as string | null })), ...ranges.map(([s, e]) => ({ start: s, end: e, cutoff: `${e}T06:37:00.000Z` }))];
+for (const { start, end, cutoff } of cases) {
+  const startUtc = vnDayStartUtc(start), endUtc = cutoff ?? vnDayStartUtc(addDays(end, 1));
+  const base = cutoff ? { start, lastDay: end, lastDayStartUtc: vnDayStartUtc(end) } : null;
   for (const team of teams) {
     const origins: [OrderFilters['orderOrigin'], string][] = team === 'cskh' ? [['all', ''], ['self', ''], ['mkt', ''], ['mkt', marketer]] : [['all', '']];
     for (const productSegment of ['all', ...segmentsFor(posIds)] as OrderFilters['productSegment'][]) {
@@ -34,7 +37,9 @@ for (const [start, end] of ranges) {
         if (productSegment === 'all' && orderOrigin === 'all') continue; // không lọc thì báo cáo đọc stats_daily như cũ
         const f: OrderFilters = { ...EMPTY_ORDER_FILTERS, productSegment, orderOrigin, marketerId };
         const run = async (ready: boolean) => {
-          const v = segmentedStats(posIds, startUtc, endUtc, team, f, [], null, null, ready ? { start, end, ready: true, withProducts: false } : null);
+          const v = ready
+            ? segmentedStats(posIds, startUtc, endUtc, team, f, [], base, null, { start, end, ready: true, withProducts: false })
+            : segmentedStats(posIds, startUtc, endUtc, team, f, [], null, null, null);
           const s = Date.now();
           const row = await db.prepare(v.sql + `SELECT ${sum} FROM stats_daily`).bind(...v.binds).first<Record<string, number>>();
           return { row: row ?? {}, ms: Date.now() - s };
@@ -42,7 +47,7 @@ for (const [start, end] of ranges) {
         const a = await run(false), b = await run(true);
         oldMs += a.ms; newMs += b.ms;
         const diff = STAT_COLUMNS.filter((c) => Number(a.row[c] ?? 0) !== Number(b.row[c] ?? 0));
-        if (diff.length) { bad++; lech.push(`${start}..${end} team=${team} nhóm=${productSegment} nguồn=${orderOrigin}${marketerId ? '+1 marketer' : ''}: lệch cột ${diff.join(',')}`); }
+        if (diff.length) { bad++; lech.push(`${start}..${end}${cutoff ? ' cắt giờ' : ''} team=${team} nhóm=${productSegment} nguồn=${orderOrigin}${marketerId ? '+1 marketer' : ''}: lệch cột ${diff.join(',')}`); }
         else ok++;
       }
     }

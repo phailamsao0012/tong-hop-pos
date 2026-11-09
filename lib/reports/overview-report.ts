@@ -58,13 +58,13 @@ async function periodReport(
   const employeeFilter = (employeeIds.length ? ` AND seller_id IN (${employeeIds.map(() => '?').join(',')})` : '') + teamFilter('seller_id', team, true, unit) + countedFilter('seller_id');
   const where = `pos_id IN (${posPlaceholders}) AND day>=? AND day<=?${employeeFilter}`;
   const binds = [...posIds, start, end, ...employeeIds];
-  // cutoffUtc: kỳ so sánh cắt ở cùng giờ hiện tại, bảng tổng hợp theo ngày không cắt được giờ nên đọc thẳng đơn gốc.
+  // cutoffUtc: dùng bảng tính sẵn cho ngày đủ khi phù hợp, chỉ ngày cuối đọc đơn gốc tới cùng mốc giờ.
   const { startUtc, endUtc } = cutoffUtc ? { startUtc: vnRangeUtc(start, end).startUtc, endUtc: cutoffUtc } : vnRangeUtc(start, end);
   const rawFilter = orderFilterSql(filters, team, 'raw_pos_orders');
   const narrowed = filters.productSegment !== 'all' || team === 'cskh' || !filters.status.isDefault;
-  // Kỳ so sánh cắt giờ, không lọc thêm: ngày đủ đọc bảng tổng hợp, chỉ ngày cuối đọc đơn gốc (xem SegmentBase).
-  const base = cutoffUtc && !narrowed ? { start, lastDay: end, lastDayStartUtc: vnRangeUtc(end, end).startUtc } : null;
-  const segmentReady = !cutoffUtc && await segmentStatsReady(db);
+  // Chưa sẵn sàng: giữ đường cũ; khi lọc, chỉ ghép ngày đủ nếu bảng nhóm đã sẵn sàng.
+  const segmentReady = await segmentStatsReady(db);
+  const base = cutoffUtc && filters.status.isDefault && (!narrowed || segmentReady) ? { start, lastDay: end, lastDayStartUtc: vnRangeUtc(end, end).startUtc } : null;
   const read = { start, end, ready: segmentReady };
   const virtual = segmentedStats(posIds, startUtc, endUtc, team, filters, employeeIds, base, unit, read);
   const totals = segmentedStats(posIds, startUtc, endUtc, team, filters, employeeIds, base, unit, { ...read, withProducts: false });

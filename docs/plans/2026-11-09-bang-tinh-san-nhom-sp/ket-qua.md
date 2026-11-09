@@ -42,3 +42,41 @@ Thực hiện lần lượt bước 1–6 trên nhánh có sẵn `codex/bang-tin
 - Chạy lại bốn lệnh chuẩn, formatter và migration local ngoài sandbox.
 - Kiểm riêng tối ưu lens MKT nếu muốn mở rộng phạm vi hỗ trợ; hiện cố ý giữ đường cũ để đúng số.
 - Theo plan: trước khi lên thật, đối chiếu trên bản sao dữ liệu thật chỉ ở PC trong 30 ngày × các bộ lọc. Chưa thực hiện bước này và chưa triển khai.
+
+---
+
+# Kết quả sửa kiểm bài dbf2dca
+
+Đã xử lý theo thứ tự 1 → 2 → 3 → 4. Không commit, không deploy. Giữ nhánh có sẵn `codex/bang-tinh-san`.
+
+## 1. Kỳ so sánh cắt giờ
+
+- Khi bảng nhóm sẵn sàng và trạng thái mặc định: ngày đủ đọc `stats_daily_segment`, ngày cuối chỉ đọc ba loại sự kiện trong `[lastDayStartUtc, cutoffUtc)`.
+- Giữ các lọc team, người được tính, người bán, nhóm, nguồn/Marketer; nguồn chỉ áp dụng CSKH.
+- Không lọc thêm vẫn dùng base `stats_daily` cũ. Bảng chưa sẵn sàng hoặc trạng thái khác giữ đường cũ, tránh lấy bảng tổng hợp không có chiều lọc.
+- Test so tuyệt đối tất cả `STAT_COLUMNS` ở cutoff 13:37 VN, kỳ một ngày và nhiều ngày, 360 tổ hợp lọc mỗi kỳ. Áp cùng bộ lọc ngoài CTE như báo cáo thật cho base cũ.
+
+## 2. Sản phẩm CSKH: khác plan, giữ số cũ
+
+Chưa chuyển CSKH sang `stats_daily_seller_product`: thử chuyển và đối chiếu phát hiện `orders` không cùng cách tính. Đường bảng tính sẵn đếm dòng mặt hàng; đường CSKH gốc nhóm theo `(order_id, product_id)` nên chỉ đếm một lần khi một sản phẩm có nhiều dòng trong đơn (ví dụ dòng thường và dòng quà tặng).
+
+Fixture hoàn toàn giả có hai dòng cùng sản phẩm mỗi đơn: bảng tính sẵn trả số đơn sản phẩm gấp đôi đường CSKH gốc, dù các chỉ số tiền và lượng bằng nhau. Theo chỉ dẫn giữ đúng số cũ khi plan khác code, giữ nguyên nhánh sản phẩm CSKH. Thêm test chứng minh sai khác và khóa hành vi giữ số cũ. Claude cần điều chỉnh plan về cách bảo toàn `orders` trước khi chuyển nguồn đọc; không sửa cách ghi bảng hay định nghĩa số ngoài phạm vi này.
+
+## 3. Cờ sẵn sàng
+
+`segmentStatsReady` nhớ cả true/false 60 giây mỗi isolate như `mktStatsReady`; thêm `resetSegmentReadyMemo` và gọi ở test khi đổi fixture/cờ. Test kiểm tra sát biên 60 giây và xóa nhớ.
+
+## 4. Khóa quy tắc nhóm
+
+Test SHA-256 của `segmentKeyExpr('o')` theo `SEGMENT_EPOCH = 1`: `9840301b1e415b8049277632905f2861d90d61894374a1813a29cdc6602db18a`. Thông báo lỗi: “đổi quy tắc nhóm thì tăng SEGMENT_EPOCH và cập nhật băm”. Không đổi biểu thức hay epoch.
+
+## Kiểm tra
+
+- `pnpm typecheck`: đạt.
+- `node node_modules/typescript/bin/tsc --noEmit`: đạt.
+- `pnpm test`: không chạy được test trong sandbox, lỗi `spawn EPERM` khi tạo tiến trình test.
+- Thay thế: `node --import ./tests/support/register-native.mjs --test --experimental-test-isolation=none tests/stats-segment.test.ts`: 9/9 đạt.
+- `pnpm lint`: không đạt do lỗi hiện có ở nhiều file. Lint riêng bốn file thay đổi chỉ báo import `CLOSED` chưa dùng trong `overview-report.ts`; import này đã có trước sửa, không thêm lỗi lint mới.
+- `pnpm build`: không chạy xong trong sandbox; lỗi `spawn EPERM` khi nạp cấu hình Vite, kèm lỗi dependency native Tailwind/Lightning CSS. Chưa xác nhận build hoặc demo giao diện PC.
+
+Không sửa workflow, cấu hình Wrangler, migration, quyền xem hoặc dữ liệu thật. Hai file plan/kiểm bài có sẵn chưa được theo dõi vẫn được giữ nguyên.

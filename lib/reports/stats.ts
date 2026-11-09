@@ -380,12 +380,21 @@ export async function ensureSegmentSchema(db: D1Database) {
 
 export const SEGMENT_READY_KEY = 'stats_segment_epoch';
 export const SEGMENT_EPOCH = 1;
-/** Chưa điền đủ lịch sử luôn đọc đường cũ; đọc cờ trực tiếp mỗi lượt báo cáo. */
+/** Chưa điền đủ lịch sử luôn đọc đường cũ; nhớ cờ 60 giây mỗi isolate. */
+let segmentReady = { value: false, at: 0 };
 export async function segmentStatsReady(db: D1Database) {
+  if (Date.now() - segmentReady.at < 60000) return segmentReady.value;
+  let value = false;
   try {
     const r = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(SEGMENT_READY_KEY).first<{ value: string }>();
-    return r?.value === String(SEGMENT_EPOCH);
-  } catch { return false; }
+    value = r?.value === String(SEGMENT_EPOCH);
+  } catch { value = false; }
+  segmentReady = { value, at: Date.now() };
+  return value;
+}
+/** Chỉ cho test: quên cờ đã nhớ. */
+export function resetSegmentReadyMemo() {
+  segmentReady = { value: false, at: 0 };
 }
 
 function segmentReads(db: D1Database, posId: string, range: { start: string; end: string }) {

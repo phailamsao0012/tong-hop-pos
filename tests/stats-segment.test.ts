@@ -1,11 +1,12 @@
+import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { emptyDb } from './support/d1-sqlite';
-import { STAT_COLUMNS, STATUS_GROUPS, rebuildStats, markDirtyOrder, backfillSegmentMonth, segmentMonths, segmentStatsReady, checkSegmentStatsNightly, SEGMENT_READY_KEY, SEGMENT_EPOCH, type DirtyBuckets } from '../lib/reports/stats';
-import { EMPTY_ORDER_FILTERS, segmentedStats, type ProductSegment, type OrderOrigin } from '../lib/pancake/order-segments';
+import { STAT_COLUMNS, STATUS_GROUPS, rebuildStats, markDirtyOrder, backfillSegmentMonth, segmentMonths, segmentStatsReady, resetSegmentReadyMemo, checkSegmentStatsNightly, SEGMENT_READY_KEY, SEGMENT_EPOCH, type DirtyBuckets } from '../lib/reports/stats';
+import { EMPTY_ORDER_FILTERS, segmentedStats, segmentKeyExpr, type ProductSegment, type OrderOrigin } from '../lib/pancake/order-segments';
 import { parseStatus } from '../lib/pancake/order-status';
 import { vnRangeUtc } from '../lib/shared/report-time';
-import type { Team } from '../lib/teams/team';
+import { teamFilter, countedFilter, type Team } from '../lib/teams/team';
 import { env } from 'cloudflare:workers';
 import { overviewReport } from '../lib/reports/overview-report';
 import { SyncScheduler } from '../lib/ops/scheduler';
@@ -14,6 +15,7 @@ const POS = ['oxytetra', 'sieu-vo-gao', 'demo-a', 'demo-b', 'demo-c', 'demo-d'];
 const START = '2026-09-30', END = '2026-10-02';
 const sums = STAT_COLUMNS.map(c => `COALESCE(SUM(${c}),0) AS ${c}`).join(',');
 async function fixture() {
+  resetSegmentReadyMemo();
   const { raw, db } = emptyDb();
   for (const [id, name, department] of [['sale', 'Demo SALE', 'Sale'], ['care', 'Demo CSKH', 'CSKH'], ['excluded', 'Demo kho', 'Kho']])
     raw.prepare('INSERT INTO pos_users(id,pos_id,user_id,name,department,fetched_at) VALUES (?,?,?,?,?,?)').run(id, POS[0], id, name, department, START);
@@ -68,6 +70,7 @@ void test('segment stats: all columns, filters and dirty updates equal the origi
     assert.ok((await segmentMonths(db)).includes(`${POS[0]}:2026-10`));
     assert.equal(await segmentStatsReady(db),false);
     raw.prepare('INSERT INTO app_settings(key,value,updated_at) VALUES (?,?,?)').run(SEGMENT_READY_KEY,String(SEGMENT_EPOCH),START);
+    resetSegmentReadyMemo();
     assert.equal(await segmentStatsReady(db),true);
   } finally { raw.close(); }
 });
@@ -96,6 +99,7 @@ void test('nightly reconciliation gates time/readiness, repairs both missing and
     const now = new Date('2026-10-02T19:30:00Z'); // 02:30 VN ngày 03
     assert.equal(await checkSegmentStatsNightly(db,now),0);
     raw.prepare('INSERT INTO app_settings(key,value,updated_at) VALUES (?,?,?)').run(SEGMENT_READY_KEY,String(SEGMENT_EPOCH),START);
+    resetSegmentReadyMemo();
     raw.exec("UPDATE stats_daily_segment SET net=net+1 WHERE pos_id='demo-a'; DELETE FROM stats_daily_segment WHERE pos_id='demo-b';");
     // Bucket thừa có đủ số để phép so tổng phát hiện.
     raw.exec("INSERT INTO stats_daily_segment(id,pos_id,day,seller_id,segment,marketer_id,orders,updated_at) VALUES ('extra','demo-c','2026-10-03','','khac','',1,'demo')");
@@ -123,6 +127,7 @@ void test('overview totals and summaries stop using segment_orders after readine
     const before = await overviewReport(options);
     const rawCount = statements.filter(s => s.includes('segment_orders')).length;
     raw.prepare('INSERT INTO app_settings(key,value,updated_at) VALUES (?,?,?)').run(SEGMENT_READY_KEY,String(SEGMENT_EPOCH),START);
+    resetSegmentReadyMemo();
     statements.length = 0;
     const after = await overviewReport(options);
     assert.deepEqual(after.current,before.current);
@@ -157,7 +162,81 @@ void test('scheduler backfills event months newest first and publishes readiness
     await build(state,observed);
     assert.equal(state.segmentPending!.length,0);
     assert.ok(saved.length >= POS.length * 2);
+    resetSegmentReadyMemo();
     assert.equal(await segmentStatsReady(db),true);
     compare(raw);
   } finally { raw.close(); }
+});
+
+void test('cutoff at 13:37 VN equals raw events for one day and multiple days across every filter', async () => {
+  const { raw, db } = await fixture();
+  try {
+    // Events on both sides of cutoff; full days retain all three event types.
+    raw.exec("UPDATE raw_pos_orders SET created_at='2026-10-02T07:00:00',first_closed_at='2026-10-02T07:00:00',seller_assigned_at='2026-10-02T07:00:00' WHERE id='demo-1'");
+    // Refresh precomputed days after moving events.
+    await rebuildStats(db,new Map(POS.map(p => [p,new Set([START,'2026-10-01',END])])));
+    for (const start of [START, END])
+      for (const productSegment of ['all','gentadox','skgk','khac','oxy'] as ProductSegment[])
+        for (const team of ['all','sale','cskh'] as Team[])
+          for (const [orderOrigin,marketerId] of [['all',''],['self',''],['mkt',''],['mkt','demo-mkt']] as [OrderOrigin,string][])
+            for (const employees of [[],['care'],['sale','care']]) {
+              const f = {...EMPTY_ORDER_FILTERS,productSegment,orderOrigin,marketerId};
+              const startUtc = vnRangeUtc(start,END).startUtc, endUtc = '2026-10-02T06:37:00';
+              const base = {start,lastDay:END,lastDayStartUtc:vnRangeUtc(END,END).startUtc};
+              const old = segmentedStats(POS,startUtc,endUtc,team,f,employees);
+              const next = segmentedStats(POS,startUtc,endUtc,team,f,employees,base,null,{start,end:END,ready:true,withProducts:false});
+              const query = (v: typeof old) => raw.prepare(v.sql + `SELECT pos_id,day,seller_id,${sums} FROM stats_daily WHERE 1=1${teamFilter('seller_id',team,true)}${countedFilter('seller_id')} ${employees.length ? `AND seller_id IN (${employees.map(e => `'${e}'`).join(',')})` : ''} GROUP BY 1,2,3 ORDER BY 1,2,3`).all(...v.binds);
+              assert.deepEqual(query(next),query(old),JSON.stringify([start,productSegment,team,orderOrigin,marketerId,employees]));
+              assert.match(next.sql, team !== 'cskh' && productSegment === 'all' ? /main.stats_daily WHERE/ : /main.stats_daily_segment/);
+            }
+  } finally { raw.close(); }
+});
+
+void test('CSKH keeps original product order counts when duplicate item rows differ from precomputed stats', async (t) => {
+  const { raw, db } = await fixture();
+  Object.assign(env,{DB:db});
+  try {
+    const options = {posIds:POS,start:START,end:END,team:'cskh' as const};
+    const before = await overviewReport(options);
+    raw.prepare('INSERT INTO app_settings(key,value,updated_at) VALUES (?,?,?)').run('stats_seller_product_ready','1',START);
+    const statements: string[] = [];
+    const observed = new Proxy(db,{get(target,property) {
+      if (property === 'prepare') return (sql: string) => { statements.push(sql); return target.prepare(sql); };
+      const value = Reflect.get(target,property);
+      return typeof value === 'function' ? value.bind(target) : value;
+    }});
+    Object.assign(env,{DB:observed});
+    const later = Date.now() + 60001;
+    t.mock.method(Date, 'now', () => later);
+    const after = await overviewReport(options);
+    assert.deepEqual(after.current.byProduct,before.current.byProduct);
+    assert.ok(!statements.some(s => s.includes('FROM stats_daily_seller_product')));
+    assert.equal(Number(raw.prepare("SELECT SUM(orders) AS n FROM stats_daily_seller_product WHERE seller_id='care'").get()!.n),before.current.byProduct.reduce((n,p) => n+p.orders,0)*2);
+  } finally { Object.assign(env,{DB:db}); raw.close(); }
+});
+
+void test('segment expression is locked to its epoch', () => {
+  const hashes: Record<number,string> = {1:'9840301b1e415b8049277632905f2861d90d61894374a1813a29cdc6602db18a'};
+  assert.equal(createHash('sha256').update(segmentKeyExpr('o')).digest('hex'),hashes[SEGMENT_EPOCH], '\u0111\u1ed5i quy t\u1eafc nh\u00f3m th\u00ec t\u0103ng SEGMENT_EPOCH v\u00e0 c\u1eadp nh\u1eadt b\u0103m');
+});
+
+void test('segment readiness caches true and false for 60 seconds and can reset', async (t) => {
+  resetSegmentReadyMemo();
+  let now = 100000, calls = 0, value = '0';
+  t.mock.method(Date,'now',() => now);
+  const db = {prepare: () => ({bind: () => ({first: async () => {calls++; return {value};}})})} as unknown as D1Database;
+  assert.equal(await segmentStatsReady(db),false);
+  value = String(SEGMENT_EPOCH);
+  now += 59999;
+  assert.equal(await segmentStatsReady(db),false);
+  assert.equal(calls,1);
+  now++;
+  assert.equal(await segmentStatsReady(db),true);
+  assert.equal(calls,2);
+  value = '0';
+  assert.equal(await segmentStatsReady(db),true);
+  resetSegmentReadyMemo();
+  assert.equal(await segmentStatsReady(db),false);
+  assert.equal(calls,3);
+  resetSegmentReadyMemo();
 });

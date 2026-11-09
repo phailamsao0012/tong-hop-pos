@@ -125,21 +125,26 @@ export function segmentedStats(posIds: string[], startUtc: string, endUtc: strin
       WHERE ${closedDate(filters, 'o.')}>=? AND ${closedDate(filters, 'o.')}<? AND ${closedWhere(filters, 'o.')}
       GROUP BY o.id, i.product_id
     )`;
-  const ready = !!read?.ready && filters.status.isDefault && !base && startUtc === vnDayStartUtc(read.start) && endUtc === vnDayStartUtc(addDays(read.end, 1));
+  const ready = !!read?.ready && filters.status.isDefault && startUtc === vnDayStartUtc(read.start) && (base ? base.start === read.start && base.lastDay === read.end && base.lastDayStartUtc === vnDayStartUtc(read.end) && endUtc >= base.lastDayStartUtc && endUtc <= vnDayStartUtc(addDays(read.end, 1)) : endUtc === vnDayStartUtc(addDays(read.end, 1)));
+  // Keep the existing stats_daily base for unfiltered cutoff periods.
+  const segmentReady = ready && !(base && filters.productSegment === 'all' && team !== 'cskh');
+  const needsRaw = !segmentReady || !!base || withProducts;
   const origin = team === 'cskh' ? filters.orderOrigin : 'all';
   const segment = filters.productSegment !== 'all' ? ' AND segment=?' : '';
   const originSql = origin === 'self' ? " AND marketer_id=''" : origin === 'mkt' ? " AND marketer_id<>''" + (filters.marketerId ? ' AND marketer_id=?' : '') : '';
-  const daily = ready ? `stats_daily AS (
+  const daily = segmentReady ? `stats_daily AS (
     SELECT pos_id,seller_id,marketer_id,day,${STAT_COLUMNS.join(',')} FROM main.stats_daily_segment o
-    WHERE pos_id IN (${ph}) AND day>=? AND day<=?${teamFilter('o.seller_id', team, true, unit)}${countedFilter('o.seller_id')}${seller}${segment}${originSql}
+    WHERE pos_id IN (${ph}) AND day>=? AND day${base ? '<' : '<='}?${teamFilter('o.seller_id', team, true, unit)}${countedFilter('o.seller_id')}${seller}${segment}${originSql}
+    ${base ? `UNION ALL ${event('created_at', values, '')} UNION ALL ${event(closedDate(filters), closed, `AND ${closedWhere(filters)}`)} UNION ALL ${event('seller_assigned_at', { assigned_orders: '1', assigned_closed_orders: `CASE WHEN ${closedWhere(filters)} THEN 1 ELSE 0 END` }, 'AND status_code<>7')}` : ''}
   )` : rawDaily;
   const rawBinds = [...posIds, ...employeeIds, ...filter.binds];
-  const dailyBinds = ready ? [...posIds, read.start, read.end, ...employeeIds,
+  const dailyBinds = segmentReady ? [...posIds, read.start, read.end, ...employeeIds,
     ...(filters.productSegment !== 'all' ? [filters.productSegment] : []),
-    ...(origin === 'mkt' && filters.marketerId ? [filters.marketerId] : [])]
+    ...(origin === 'mkt' && filters.marketerId ? [filters.marketerId] : []),
+    ...(base ? Array.from({ length: 3 }, () => eventRange).flat() : [])]
     : [...(base ? [...posIds, base.start, base.lastDay] : []), ...Array.from({ length: 3 }, () => eventRange).flat()];
   return {
-    sql: `WITH ${[...(!ready || withProducts ? [rawOrders] : []), daily, ...(withProducts ? [products] : [])].join(', ')} `,
-    binds: [...(!ready || withProducts ? rawBinds : []), ...dailyBinds, ...(withProducts ? [startUtc, endUtc] : [])],
+    sql: `WITH ${[...(needsRaw ? [rawOrders] : []), daily, ...(withProducts ? [products] : [])].join(', ')} `,
+    binds: [...(needsRaw ? rawBinds : []), ...dailyBinds, ...(withProducts ? [startUtc, endUtc] : [])],
   };
 }
