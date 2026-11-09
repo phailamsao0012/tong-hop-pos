@@ -61,3 +61,8 @@ Test đồng hồ giả chứng minh hit đến 59.999 ms, đọc lại ở 60.0
 - `git diff --check`: qua.
 
 Chưa áp migration lên DB thật/bản sao nguồn. Migration phải có trước code mới; chờ các lượt điền ngoài giờ xong mới bỏ đường fallback. Chỉ mục/trigger thêm chi phí ghi cho dữ liệu thay đổi; fixture ước lượng số ghi hiện tại không tính trigger, nên kết quả giảm ghi của G/K không phải phép đo đầy đủ chi phí trigger khi bảng coverage đã được điền.
+
+
+## S?a theo ki?m b?i 1f8fce1 (09/11/2026)
+
+?? ho?n th?nh hai ?i?m theo th? t?, kh?ng commit. Chi ti?t t?i [ket-qua-kiem-bai-1f8fce1.md](ket-qua-kiem-bai-1f8fce1.md). Code ??ng b? kh?ng b?o ??m fetched_at ch? t?ng; ?? gi? nh?nh t?nh l?i MAX khi gi?m ?? b?o to?n s? c?. Native tests 18/18 qua, typecheck v? lint file s?a qua. pnpm test b? spawn EPERM; pnpm build g?p spawn EPERM v? l?i dependency native trong m?i tr??ng sandbox. ??i chi?u b?n sao PC: c? 6 t? h?p Cu?c g?i v? danh s?ch MKT sau d?n kh?p c?ch c?.

@@ -42,8 +42,8 @@ CREATE TRIGGER calls_coverage_note_delete AFTER DELETE ON customer_notes BEGIN
   WHERE pos_id=OLD.pos_id;
 END;
 --> statement-breakpoint
-CREATE TRIGGER calls_coverage_note_update AFTER UPDATE OF pos_id,created_at,fetched_at ON customer_notes
-WHEN OLD.pos_id IS NOT NEW.pos_id OR OLD.created_at IS NOT NEW.created_at OR OLD.fetched_at IS NOT NEW.fetched_at BEGIN
+CREATE TRIGGER calls_coverage_note_move AFTER UPDATE OF pos_id,created_at,fetched_at ON customer_notes
+WHEN OLD.pos_id IS NOT NEW.pos_id BEGIN
   UPDATE calls_coverage_pos SET notes=notes-1,
     first_note=CASE WHEN OLD.created_at=first_note THEN (SELECT MIN(created_at) FROM customer_notes WHERE pos_id=OLD.pos_id) ELSE first_note END,
     last_fetch=CASE WHEN OLD.fetched_at=last_fetch THEN (SELECT MAX(fetched_at) FROM customer_notes WHERE pos_id=OLD.pos_id) ELSE last_fetch END
@@ -51,5 +51,17 @@ WHEN OLD.pos_id IS NOT NEW.pos_id OR OLD.created_at IS NOT NEW.created_at OR OLD
   UPDATE calls_coverage_pos SET notes=notes+1,
     first_note=CASE WHEN first_note IS NULL OR NEW.created_at<first_note THEN NEW.created_at ELSE first_note END,
     last_fetch=CASE WHEN last_fetch IS NULL OR NEW.fetched_at>last_fetch THEN NEW.fetched_at ELSE last_fetch END
+  WHERE pos_id=NEW.pos_id;
+END;
+--> statement-breakpoint
+CREATE TRIGGER calls_coverage_note_update AFTER UPDATE OF pos_id,created_at,fetched_at ON customer_notes
+WHEN OLD.pos_id = NEW.pos_id AND (OLD.created_at IS NOT NEW.created_at OR OLD.fetched_at IS NOT NEW.fetched_at) BEGIN
+  UPDATE calls_coverage_pos SET
+    first_note=CASE
+      WHEN OLD.created_at=first_note AND NEW.created_at>OLD.created_at THEN (SELECT MIN(created_at) FROM customer_notes WHERE pos_id=NEW.pos_id)
+      WHEN first_note IS NULL OR NEW.created_at<first_note THEN NEW.created_at ELSE first_note END,
+    last_fetch=CASE
+      WHEN OLD.fetched_at=last_fetch AND NEW.fetched_at<OLD.fetched_at THEN (SELECT MAX(fetched_at) FROM customer_notes WHERE pos_id=NEW.pos_id)
+      WHEN last_fetch IS NULL OR NEW.fetched_at>last_fetch THEN NEW.fetched_at ELSE last_fetch END
   WHERE pos_id=NEW.pos_id;
 END;

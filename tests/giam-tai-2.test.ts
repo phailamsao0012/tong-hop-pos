@@ -49,7 +49,14 @@ void test('MKT: điền từng POS ngoài giờ, đường mới bằng DISTINCT
     };
     await check();
     await save({ ...o, id: 'o2', marketer: { id: 'm2' } }); await check();
-    await save({ ...o, marketer: { id: 'm3' } }); await check();
+    await save({ ...o, marketer: { id: 'm3' } });
+    assert.ok((await marketerIds(f.db)).has('m1'));
+    assert.ok(await backfillMarketerIds(f.db, new Date(at)) > 0);
+    await check();
+    const prepare = f.db.prepare.bind(f.db);
+    f.db.prepare = ((sql: string) => { assert.ok(!sql.startsWith('DELETE')); return prepare(sql); }) as typeof f.db.prepare;
+    assert.equal(await backfillMarketerIds(f.db, new Date(at)), 0);
+    f.db.prepare = prepare;
     const removed = { ...o, status: 7, marketer: { id: 'm3' } };
     await save(removed); await check();
     assert.ok((await marketerIds(f.db)).has('m3'));
@@ -80,6 +87,8 @@ void test('Coverage: bảng đếm bằng câu cũ sau thêm/đổi/xoá khách 
     for (const sql of [
       "INSERT INTO customer_notes(id,pos_id,created_at,fetched_at) VALUES ('n2','p','2026-11-08T01:00:00','2026-11-10T02:00:00')",
       "UPDATE pos_customers SET assigned_user_id='b'",
+      "UPDATE customer_notes SET fetched_at='2026-11-12T02:00:00' WHERE id='n2'",
+      "UPDATE customer_notes SET created_at='2026-11-07T01:00:00' WHERE id='n2'",
       "UPDATE customer_notes SET created_at='2026-11-11T01:00:00',fetched_at='2026-11-07T02:00:00' WHERE id='n2'",
       "UPDATE customer_notes SET pos_id='q' WHERE id='n'",
       "UPDATE pos_customers SET pos_id='q'",

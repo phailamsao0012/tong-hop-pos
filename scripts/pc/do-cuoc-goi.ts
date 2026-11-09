@@ -19,6 +19,18 @@ try {
     await db.exec('ANALYZE temp.pos_customers');
     await db.exec(`INSERT INTO calls_coverage_pos SELECT s.id,(SELECT COUNT(*) FROM pos_customers WHERE pos_id=s.id),COUNT(n.id),MIN(n.created_at),MAX(n.fetched_at) FROM pos_shops s LEFT JOIN customer_notes n ON n.pos_id=s.id GROUP BY s.id`);
   }
+  if (process.argv.includes('--candidate')) {
+    await db.exec('CREATE TEMP TABLE marketer_ids (marketer_id TEXT PRIMARY KEY)');
+    for (const pos of (await db.prepare('SELECT id FROM pos_shops').all<{ id: string }>()).results) {
+      await db.prepare("INSERT INTO marketer_ids SELECT DISTINCT TRIM(marketer_id) FROM raw_pos_orders WHERE pos_id=? AND marketer_id IS NOT NULL AND TRIM(marketer_id)<>'' ON CONFLICT DO NOTHING").bind(pos.id).run();
+    }
+    await db.exec("INSERT INTO marketer_ids VALUES ('__kiem_bai_ao__') ON CONFLICT DO NOTHING");
+    await db.exec("DELETE FROM marketer_ids WHERE marketer_id NOT IN (SELECT DISTINCT TRIM(marketer_id) FROM raw_pos_orders WHERE marketer_id IS NOT NULL AND TRIM(marketer_id)<>'')");
+    const actual = await db.prepare('SELECT marketer_id FROM marketer_ids ORDER BY marketer_id').all();
+    const expected = await db.prepare("SELECT DISTINCT TRIM(marketer_id) AS marketer_id FROM raw_pos_orders WHERE marketer_id IS NOT NULL AND TRIM(marketer_id)<>'' ORDER BY marketer_id").all();
+    assert.ok(JSON.stringify(actual.results) === JSON.stringify(expected.results), 'Danh s?ch MKT sau d?n ph?i b?ng DISTINCT c?');
+    lines.push('', 'Danh s?ch MKT sau ?i?n t?ng POS v? d?n ??m kh?p DISTINCT c?; kh?ng xu?t ID.', '');
+  }
   const posIds = (await db.prepare('SELECT id FROM pos_shops ORDER BY id').all<{ id: string }>()).results.map(r => r.id);
   if (posIds.length !== 6) throw new Error('Bản sao không có đúng 6 POS');
   for (const [period, start] of [['Hôm nay', '2026-11-09'], ['7 ngày', '2026-11-03'], ['Tháng này', '2026-11-01']]) for (const team of ['all', 'cskh'] as const) {
