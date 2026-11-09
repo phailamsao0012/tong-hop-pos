@@ -1,21 +1,21 @@
 'use client';
 
-// Hồ sơ làm việc siêu chi tiết của một nhân sự (anh Vũ 03/11/2026, nhắc 07/11). Bấm tên ở bất kỳ bảng nào mở khung này
-// (openStaffProfile). Số tính ở lib/reports/staff-profile.ts.
-import { useEffect, useState, useSyncExternalStore } from 'react';
-import { closeStaffProfile, currentStaffProfile, subscribeStaffProfile } from './staff-profile-link';
+// Hồ sơ làm việc siêu chi tiết của một nhân sự (anh Vũ 03/11/2026, nhắc 07/11). Từ 09/11 là trang riêng "Hồ sơ nhân sự"; bấm tên
+// ở bất kỳ bảng nào chuyển sang trang này (openStaffProfile). Số tính ở lib/reports/staff-profile.ts.
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { currentStaffProfile, openStaffProfile, subscribeStaffProfile } from './staff-profile-link';
+import { filterPeople, type ProfileDeptFilter, type ProfilePerson } from '@/lib/reports/staff-profile-list';
 import { todayVn } from '@/lib/shared/report-time';
-import { Award, CalendarDays, Crown, Flag, Package, TrendingUp, UserRound } from 'lucide-react';
+import { ArrowLeft, Award, CalendarDays, Crown, Flag, Package, Search, TrendingUp, UserRound, Users } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ReferenceLine, XAxis, YAxis } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { JOIN_SOURCE_LABELS } from '@/lib/reports/growth-calc';
 import { RATE_THRESHOLDS } from '@/lib/reports/metrics';
 import type { MonthRow, StaffProfile } from '@/lib/reports/staff-profile';
 import { STAFF_STATUSES } from '@/lib/teams/staff-status';
 import { ORDER_STATUS } from '@/lib/pancake/pancake';
 import { useStaffStatus, STATUS_CLASS } from './staff-name';
-import { money, pct, shortMoney, vi } from './ui-kit';
+import { SegmentedControl, money, pct, shortMoney, vi } from './ui-kit';
 import { BadgeShelf } from './staff-badges';
 import { apiJson } from './api-fetch';
 
@@ -199,30 +199,100 @@ export function StaffProfileBody({ data, today, onPick }: { data: StaffProfile; 
   );
 }
 
-/** Gắn một lần ở khung trang; mở khi có người bấm tên. */
-export function StaffProfileHost() {
+/** Trang Hồ sơ nhân sự (anh Vũ 09/11/2026: trang riêng, tách bạch, chỉ anh và anh Nghĩa xem). Trái: tìm tên + lọc bộ phận + danh sách;
+ *  phải: hồ sơ người đang chọn. Điện thoại: một cột, chọn người thì hiện hồ sơ, nút "Danh sách" để quay lại. Mã người ghi lên địa chỉ (?id=) để F5 giữ nguyên. */
+export function StaffProfilePage({ onBack }: { onBack?: () => void }) {
   const [today] = useState(() => todayVn());
   const target = useSyncExternalStore(subscribeStaffProfile, currentStaffProfile, () => null);
+  const status = useStaffStatus();
+  const [people, setPeople] = useState<ProfilePerson[] | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
+  const [q, setQ] = useState('');
+  const [dept, setDept] = useState<ProfileDeptFilter>('all');
+  const [showList, setShowList] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void apiJson<{ people: ProfilePerson[] }>('/api/reports/staff-profile?list=1').then((r) => { if (live) setPeople(r.people); }, (e: Error) => { if (live) setListError(e.message); });
+    return () => { live = false; };
+  }, []);
+  // F5: lấy lại người đang xem từ địa chỉ.
+  useEffect(() => {
+    if (currentStaffProfile()) return;
+    const id = new URLSearchParams(window.location.search).get('id');
+    if (id) openStaffProfile(id, '');
+  }, []);
+  const id = target?.id ?? null;
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (id) url.searchParams.set('id', id); else url.searchParams.delete('id');
+    window.history.replaceState(window.history.state, '', url);
+    setShowList(false);
+  }, [id]);
+  useEffect(() => () => { const url = new URL(window.location.href); url.searchParams.delete('id'); window.history.replaceState(window.history.state, '', url); }, []);
+
   const [state, setState] = useState<{ id: string; key: string; data?: StaffProfile; error?: string } | null>(null);
   const [pick, setPick] = useState<{ id: string; pos: string[] }>({ id: '', pos: [] });
-  const pos = target && pick.id === target.id ? pick.pos : [];
+  const pos = id && pick.id === id ? pick.pos : [];
   const key = pos.join(',');
   useEffect(() => {
-    if (!target) return;
+    if (!id) return;
     let live = true;
-    void apiJson<StaffProfile>(`/api/reports/staff-profile?id=${encodeURIComponent(target.id)}${key ? `&pos=${encodeURIComponent(key)}` : ''}`)
-      .then((data) => { if (live) setState({ id: target.id, key, data }); }, (e: Error) => { if (live) setState({ id: target.id, key, error: e.message }); });
+    void apiJson<StaffProfile>(`/api/reports/staff-profile?id=${encodeURIComponent(id)}${key ? `&pos=${encodeURIComponent(key)}` : ''}`)
+      .then((data) => { if (live) setState({ id, key, data }); }, (e: Error) => { if (live) setState({ id, key, error: e.message }); });
     return () => { live = false; };
-  }, [target, key]);
-  const loading = state?.id === target?.id && state?.key !== key;
+  }, [id, key]);
+  const loading = state?.id === id && state?.key !== key;
+  const shown = useMemo(() => (people ? filterPeople(people, q, dept, (pid) => status[pid] === 'left') : []), [people, q, dept, status]);
+  const name = (state?.id === id ? state?.data?.name : undefined) || target?.name || people?.find((p) => p.id === id)?.name;
+
+  const list = (
+    <aside aria-label="Danh sách nhân sự" className={`min-w-0 flex-col gap-2 lg:sticky lg:top-[calc(env(safe-area-inset-top,0px)+4.5rem)] lg:flex lg:max-h-[calc(100dvh-6rem)] ${id && !showList ? 'hidden' : 'flex'}`}>
+      <label className="relative block">
+        <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-3" aria-hidden="true" />
+        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm tên…" aria-label="Tìm tên nhân sự"
+          className="h-9 w-full rounded-lg border border-line bg-surface pl-8 pr-2 text-[13.5px] outline-none focus-visible:border-primary" />
+      </label>
+      <SegmentedControl<ProfileDeptFilter> ariaLabel="Lọc bộ phận" size="sm" value={dept} onChange={setDept}
+        options={[{ value: 'all', label: 'Tất cả' }, { value: 'sale', label: 'Sale' }, { value: 'cskh', label: 'CSKH' }, { value: 'mkt', label: 'MKT' }]} />
+      {listError ? <p role="alert" className="text-[13px] text-bad">{listError}</p> : !people ? <p className="text-[13px] text-ink-3">Đang tải danh sách…</p> : (
+        <ul className="min-h-0 flex-1 overflow-y-auto rounded-xl border border-line">
+          {shown.length ? shown.map((p) => {
+            const s = status[p.id];
+            return (
+              <li key={p.id} className="border-b border-line last:border-b-0">
+                <button type="button" onClick={() => openStaffProfile(p.id, p.name)} aria-current={p.id === id ? 'true' : undefined}
+                  className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-[13.5px] tap hover:bg-tint-2 ${p.id === id ? 'bg-tint-2 font-semibold text-primary' : ''}`}>
+                  <span className={`min-w-0 truncate ${p.id === id || !s ? '' : STATUS_CLASS[s]}`}>{p.name}</span>
+                  <span className="shrink-0 text-[11px] text-ink-3">{s ? STAFF_STATUSES[s] : DEPT[p.dept]}</span>
+                </button>
+              </li>
+            );
+          }) : <li className="px-3 py-3 text-[13px] text-ink-3">Không có ai khớp.</li>}
+        </ul>
+      )}
+      {people && <p className="text-[11px] text-ink-3">{vi.format(shown.length)} / {vi.format(people.length)} người · người có tài khoản POS thuộc Sale, CSKH (theo team) hoặc tên có hậu tố MKT</p>}
+    </aside>
+  );
+
   return (
-    <Sheet open={!!target} onOpenChange={(open) => { if (!open) closeStaffProfile(); }}>
-      <SheetContent className="overflow-y-auto data-[side=right]:w-full data-[side=right]:max-w-full data-[side=right]:sm:max-w-3xl">
-        <SheetHeader className="pr-12"><SheetTitle>{state?.data?.name ?? target?.name ?? 'Hồ sơ nhân sự'}</SheetTitle><SheetDescription>Hồ sơ làm việc từ ngày vào tới hôm nay</SheetDescription></SheetHeader>
-        <div className="px-4 pb-6" aria-live="polite">
-          {state?.id === target?.id && state?.error ? <p role="alert" className="text-bad">{state.error}</p> : state?.id !== target?.id || !state?.data ? <p className="text-ink-3">Đang tải hồ sơ…</p> : <div className={loading ? 'opacity-50 transition-opacity' : 'transition-opacity'} aria-busy={loading}><StaffProfileBody data={state.data} today={today} onPick={(p) => target && setPick({ id: target.id, pos: p })} /></div>}
-        </div>
-      </SheetContent>
-    </Sheet>
+    <div className="flex min-w-0 flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {onBack && <button type="button" onClick={onBack} className="tap inline-flex items-center gap-1 rounded-md px-2 py-1 text-[13px] text-ink-2 hover:bg-tint-2 hover:text-primary"><ArrowLeft size={15} />Quay lại</button>}
+        <h2 className="text-lg font-semibold text-ink">Hồ sơ nhân sự</h2>
+        {id && !showList && <button type="button" onClick={() => setShowList(true)} className="tap ml-auto inline-flex items-center gap-1 rounded-md border border-line px-2.5 py-1 text-[13px] lg:hidden"><Users size={14} />Danh sách</button>}
+      </div>
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
+        {list}
+        <section aria-label="Hồ sơ" aria-live="polite" className={`min-w-0 ${id && !showList ? '' : 'max-lg:hidden'}`}>
+          {!id ? <p className="rounded-xl border border-dashed border-line p-6 text-center text-[13.5px] text-ink-3">Chọn một người ở danh sách để xem hồ sơ.</p>
+            : <>
+              <h3 className="mb-2 text-xl font-semibold text-ink">{name ?? 'Nhân sự'}</h3>
+              {state?.id === id && state?.error ? <p role="alert" className="text-bad">{state.error}</p>
+                : state?.id !== id || !state?.data ? <p className="text-ink-3">Đang tải hồ sơ…</p>
+                : <div className={loading ? 'opacity-50 transition-opacity' : undefined}><StaffProfileBody data={state.data} today={today} onPick={(p) => setPick({ id, pos: p })} /></div>}
+            </>}
+        </section>
+      </div>
+    </div>
   );
 }
