@@ -25,9 +25,27 @@ export function parseCachedIds(
   }
 }
 
+// Vá nóng 09/11/2026: nhớ trong isolate 10 phút và gộp các lượt gọi cùng lúc (trước đây hết hạn là nhiều request cùng quét cả bảng).
+const MEMO_MS = 10 * 60000;
+const memo = new WeakMap<D1Database, { at: number; ids: Set<string> }>();
+const pending = new WeakMap<D1Database, Promise<Set<string>>>();
 export async function marketerIds(
   db: D1Database,
   now = Date.now(),
+): Promise<Set<string>> {
+  const m = memo.get(db);
+  if (m && now - m.at < MEMO_MS && m.at <= now) return m.ids;
+  const p = pending.get(db);
+  if (p) return p;
+  const job = loadMarketerIds(db, now)
+    .then((ids) => { memo.set(db, { at: now, ids }); return ids; })
+    .finally(() => pending.delete(db));
+  pending.set(db, job);
+  return job;
+}
+async function loadMarketerIds(
+  db: D1Database,
+  now: number,
 ): Promise<Set<string>> {
   const saved = await db
     .prepare('SELECT value FROM app_settings WHERE key=?')

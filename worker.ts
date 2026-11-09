@@ -32,8 +32,21 @@ installDemo();
 // đồng bộ có dữ liệu mới là khóa đổi, người mở sau tính lại từ D1 nên số luôn mới bằng lần đồng bộ gần nhất (anh Vũ 10/10/2026: "tôi cần
 // dữ liệu realtime"). Mục đích: nhiều người/nhiều thẻ mở cùng một báo cáo không bắt D1 tính lại từng lần (D1 chạy tuần tự từng câu;
 // test tải 10/10/2026: quá ~10 lời gọi/giây là D1 báo "overloaded").
-const REPORT_CACHE_TTL_MS = 90000;
-const SHARED_CACHE_TTL_S = 300;
+// Vá nóng 09/11/2026 (D1 quá tải): khóa đã kèm phiên bản dữ liệu nên giữ lâu hơn không làm số cũ đi; đồng bộ có dữ liệu mới là khóa đổi.
+const REPORT_CACHE_TTL_MS = 15 * 60000;
+const SHARED_CACHE_TTL_S = 15 * 60;
+// Mỗi isolate chỉ cho tối đa ngần này báo cáo tính từ D1 cùng lúc, phần còn lại xếp hàng: tránh dồn cục làm D1 báo "overloaded".
+const REPORT_COMPUTE_MAX = 2;
+let computing = 0;
+const computeQueue: (() => void)[] = [];
+async function limitCompute<T>(fn: () => Promise<T>): Promise<T> {
+  if (computing >= REPORT_COMPUTE_MAX) await new Promise<void>((resolve) => computeQueue.push(resolve));
+  computing += 1;
+  try { return await fn(); } finally {
+    computing -= 1;
+    computeQueue.shift()?.();
+  }
+}
 const REPORT_CACHE_MAX_BYTES = 3_000_000;
 const REPORT_CACHE_MAX_ENTRIES = 80;
 type CachedResponse = { at: number; status: number; headers: [string, string][]; body: ArrayBuffer };
@@ -174,7 +187,7 @@ async function cachedReport(request: Request, env: Cloudflare.Env, ctx: Executio
   // Tính từ D1, nhớ vào cả hai tầng (khóa theo phiên bản và bản gần nhất).
   const compute = async (keep: boolean) => {
     let response: Response | null = null;
-    try { response = await run(); } catch (error) { console.error('report failed', pathname, error); }
+    try { response = await limitCompute(run); } catch (error) { console.error('report failed', pathname, error); }
     if (!response || response.status >= 500) return { response, entry: null };
     if (keep) own.response = response;
     const entry = await capture(response);
@@ -413,7 +426,7 @@ export default {
     ctx.waitUntil(import('@/lib/zalo/zalo-poll').then((m) => m.maybeZaloPoll()).catch(() => console.error('zalo poll failed')));
     ctx.waitUntil(import('@/lib/zalo/zalo-tick').then((m) => m.maybeZaloTick(controller.scheduledTime)).catch(() => console.error('zalo tick failed')));
     ctx.waitUntil(import('@/lib/bot/stuck-alert').then((m) => m.maybeStuckAlert(controller.scheduledTime)).catch((error) => console.error('stuck alert failed', error)));
-    ctx.waitUntil(warmRecentReports(env, ctx).catch((error) => console.error('warm reports failed', error)));
+    // Vá nóng 09/11/2026: tắt làm nóng báo cáo trên web chính (cron mỗi phút) để bớt tải D1; người mở báo cáo vẫn tính đúng số mới nhất.
     if (new Date(controller.scheduledTime).getUTCMinutes() % 5 !== 0) return;
     // Canh gác lớp 2: bộ hẹn giờ im quá 15 phút (hoặc gọi không được) thì Worker tự gửi Telegram, không nhờ DO hay alarm.
     ctx.waitUntil(checkScheduler(env, () => scheduler(env).status()).catch((error) => console.error('watch sched failed', error)));
