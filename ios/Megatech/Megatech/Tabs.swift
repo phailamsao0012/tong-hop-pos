@@ -584,8 +584,10 @@ struct MoreGroup: View {
                         HStack(spacing: 12) {
                             MetricIcon(x.icon, size: 18).foregroundStyle(tint(x.id)).frame(width: 44, height: 44).background(tint(x.id).opacity(0.12), in: .rect(cornerRadius: MT.rCell))
                             Text(x.title).mtFont(.body).foregroundStyle(Color.ink)
+                                .fixedSize(horizontal: false, vertical: true)
                             Spacer(); Image(systemName: "chevron.right").mtFont(.caption).foregroundStyle(Color.inkSoft)
                         }.padding(12).contentShape(.rect)
+                            .accessibilityElement(children: .combine)
                     }.buttonStyle(MTPressStyle())
                     if i < rows.count - 1 { Divider().padding(.leading, 58) }
                 }
@@ -625,15 +627,20 @@ struct SatelliteSection: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(m.title).mtFont(.body).foregroundStyle(Color.ink)
+                        .fixedSize(horizontal: false, vertical: true)
                     Circle().fill(dot).frame(width: 7, height: 7)
                 }
-                if !sub.isEmpty { Text(sub).mtFont(.caption).foregroundStyle(known && m.down ? Color.bad : Color.inkSoft).lineLimit(1) }
+                if !sub.isEmpty {
+                    Text(sub).mtFont(.caption).foregroundStyle(known && m.down ? Color.bad : Color.inkSoft)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             Spacer()
             if known, let b = m.badge, b > 0 { Text("\(b)").mtFont(.caption).foregroundStyle(.white).padding(.horizontal, 6).padding(.vertical, 2).background(Color.bad, in: .capsule) }
             if known { Image(systemName: "chevron.right").mtFont(.caption).foregroundStyle(Color.inkSoft) }
         }
         .padding(12).contentShape(.rect).opacity(known ? 1 : 0.55)
+        .accessibilityElement(children: .combine)
     }
     private func moduleTone(_ module: API.SatModule) -> Color {
         if module.status == nil { return .gray }
