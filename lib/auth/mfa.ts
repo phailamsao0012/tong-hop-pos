@@ -10,7 +10,11 @@ export const DEVICE_COOKIE = 'thp_device';
 
 /** Vai trò bắt buộc bật 2 lớp (mã ứng dụng hoặc passkey). 08/10/2026 anh Vũ dặn: chỉ Giám đốc (và Chủ hệ thống) bắt buộc;
  *  Trưởng nhóm, Nhân viên không bắt buộc, vẫn xem web bình thường, muốn thì tự bật trong Bảo mật. */
-export const mfaRequiredFor = (role: Role) => env.DEMO_MODE !== '1' && (role === 'owner' || role === 'director');
+/** Anh Vũ 10/11/2026 "hiện tại bỏ tất cả các bước xác thực 2 lớp đi, cho dễ dàng": THP_NO_MFA="1" thì đăng nhập chỉ cần
+ *  email + mật khẩu (không mã email, không duyệt trên app, không mã ứng dụng) và không vai trò nào bắt buộc bật 2 lớp.
+ *  Bỏ biến này là quay lại như cũ, không cần sửa code. */
+export const noMfa = () => env.THP_NO_MFA === '1';
+export const mfaRequiredFor = (role: Role) => env.DEMO_MODE !== '1' && !noMfa() && (role === 'owner' || role === 'director');
 
 export const sha256b64 = async (v: string) => btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(v)))));
 export const randomToken = (bytes = 32) => { const b = crypto.getRandomValues(new Uint8Array(bytes)); return btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };

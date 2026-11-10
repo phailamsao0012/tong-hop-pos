@@ -54,6 +54,8 @@ const ctx = (): Ctx => ({
 const vars = {
   ...(existsSync(join(DIST, 'server', 'wrangler.json')) ? (JSON.parse(readFileSync(join(DIST, 'server', 'wrangler.json'), 'utf8')) as { vars?: Record<string, string> }).vars : {}),
   ...(process.env.THP_VARS ? parseVars(readFileSync(process.env.THP_VARS, 'utf8')) : {}),
+  // Công tắc không bí mật đặt ngay trong script chạy (vd. THP_NO_MFA, THP_READ_ONLY), không phải sửa file khoá.
+  ...Object.fromEntries(Object.entries(process.env).filter(([k, v]) => /^THP_(NO_MFA|READ_ONLY|SWR)$/.test(k) && typeof v === 'string')) as Record<string, string>,
 };
 installCaches();
 const db = await openD1(resolve(DB_FILE), { readers: Number(process.env.THP_READERS ?? 6) });

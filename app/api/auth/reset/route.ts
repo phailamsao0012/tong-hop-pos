@@ -1,7 +1,7 @@
 import { setPasswordDropSessions, userByEmail, userById } from '@/lib/auth/auth-db';
 import { LOCKED_MESSAGE, hashPassword, loginBlocked, normalizeEmail, passwordProblem, recordLoginFailure } from '@/lib/auth/auth';
 import { startSession } from '@/lib/auth/login-session';
-import { OTP_MINUTES, bumpChallenge, createChallenge, dropChallenge, loadChallenge, maskEmail, mfaState, otpCode, sha256b64 } from '@/lib/auth/mfa';
+import { OTP_MINUTES, bumpChallenge, createChallenge, dropChallenge, loadChallenge, maskEmail, mfaState, noMfa, otpCode, sha256b64 } from '@/lib/auth/mfa';
 import { mailConfigured, resetMail, sendMail } from '@/lib/ops/mail';
 import { audit } from '@/lib/ops/audit';
 
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     await setPasswordDropSessions(user.id, await hashPassword(body.password));
     await audit({ action: 'password.reset', userId: user.id, email: user.email, request, status: 200 });
     const mfa = await mfaState(user.id);
-    if (mfa.totpEnabled) return Response.json({ step: 'login' });
+    if (mfa.totpEnabled && !noMfa()) return Response.json({ step: 'login' });
     return new Response(JSON.stringify({ step: 'done' }), { headers: await startSession(request, user, 'reset', { trust: true }) });
   }
   return Response.json({ error: 'Thao tác không hợp lệ.' }, { status: 400 });

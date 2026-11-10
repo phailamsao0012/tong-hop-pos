@@ -2,7 +2,7 @@ import { userByEmail } from '@/lib/auth/auth-db';
 import { LOCKED_MESSAGE, clearLoginFailures, loginBlocked, normalizeEmail, recordLoginFailure, verifyPassword } from '@/lib/auth/auth';
 import { createLoginRequest, hasActiveApp } from '@/lib/auth/login-requests';
 import { startSession } from '@/lib/auth/login-session';
-import { OTP_MINUTES, createChallenge, deviceTrusted, maskEmail, mfaState, otpCode, sha256b64, sweepChallenges } from '@/lib/auth/mfa';
+import { OTP_MINUTES, createChallenge, deviceTrusted, maskEmail, mfaState, noMfa, otpCode, sha256b64, sweepChallenges } from '@/lib/auth/mfa';
 import { mailConfigured, otpMail, sendMail } from '@/lib/ops/mail';
 import { audit } from '@/lib/ops/audit';
 
@@ -28,6 +28,11 @@ export async function POST(request: Request) {
   if (!ok || !user) { recordLoginFailure(email); await audit({ action: 'login.fail', email, userId: user?.id, name: user?.name, detail: user ? (user.disabled ? 'Tài khoản đã khóa' : 'Sai mật khẩu') : 'Email không tồn tại', request, status: 401 }); return Response.json({ error: 'Email hoặc mật khẩu không đúng.' }, { status: 401 }); }
   clearLoginFailures(email);
   void sweepChallenges().catch(() => undefined);
+  // Tắt 2 lớp (THP_NO_MFA=1, anh Vũ 10/11/2026): đúng mật khẩu là vào luôn.
+  if (noMfa()) {
+    await audit({ action: 'login', userId: user.id, email: user.email, name: user.name, detail: 'Mật khẩu (đã tắt xác thực 2 lớp)', request, status: 200 });
+    return new Response(JSON.stringify({ step: 'done' }), { headers: await startSession(request, user, 'password') });
+  }
   const mfa = await mfaState(user.id);
   const trusted = await deviceTrusted(user.id, request.headers.get('cookie'));
   const remember = body.remember !== false;
