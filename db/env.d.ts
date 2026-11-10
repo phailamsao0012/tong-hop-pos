@@ -37,6 +37,8 @@ declare namespace Cloudflare {
     THP_READ_ONLY?: string;
     /** "1": bỏ mọi bước xác thực 2 lớp khi đăng nhập (lib/auth/mfa.ts noMfa). Anh Vũ 10/11/2026. */
     THP_NO_MFA?: string;
+    /** Thông báo hiện ở trang đăng nhập (trống thì không hiện). Anh Vũ 10/11/2026: báo web cũ bảo trì. */
+    THP_LOGIN_NOTICE?: string;
     /** OAuth client ID (loại Web) trên Google Cloud cho nút Đăng nhập bằng Google; trống thì ẩn nút. Không phải bí mật. */
     GOOGLE_CLIENT_ID?: string;
     /** Kho R2 riêng tư cho sao lưu đêm (lib/backup.ts). Hiện chỉ bản demo có; web thật chưa gắn thì sao lưu ghi "chưa cấu hình". */

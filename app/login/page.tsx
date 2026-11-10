@@ -15,5 +15,5 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   }
   if (!(await hasAnyUser())) redirect('/setup');
   // Màn mở đầu logo + linh vật Megatech: anh Vũ chốt ok 09/10, bật cả web thật.
-  return <AuthForm mode="login" intro google={!!env.GOOGLE_CLIENT_ID?.trim()} />;
+  return <AuthForm mode="login" intro google={!!env.GOOGLE_CLIENT_ID?.trim()} notice={env.THP_LOGIN_NOTICE?.trim() || undefined} />;
 }

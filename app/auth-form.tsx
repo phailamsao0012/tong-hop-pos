@@ -45,7 +45,8 @@ const Walker = () => (
 );
 
 /** intro: chạy màn mở đầu logo MEGATECH trước khi hiện thẻ đăng nhập (app/logo-intro.tsx; bật ở trang đăng nhập cả demo và web thật từ 09/10). */
-export function AuthForm({ mode, demo, google, intro }: { mode: 'login' | 'setup'; demo?: DemoLogin; google?: boolean; intro?: boolean }) {
+/** notice: thông báo ở trang đăng nhập (THP_LOGIN_NOTICE, anh Vũ 10/11/2026: báo web cũ bảo trì, mời đặt mật khẩu ở web mới). */
+export function AuthForm({ mode, demo, google, intro, notice }: { mode: 'login' | 'setup'; demo?: DemoLogin; google?: boolean; intro?: boolean; notice?: string }) {
   const [introStage, setIntroStage] = useState<'play' | 'reveal' | 'done'>(intro ? 'play' : 'done');
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
@@ -288,6 +289,11 @@ export function AuthForm({ mode, demo, google, intro }: { mode: 'login' | 'setup
                 </button>
               ))}
             </div>
+          </div>
+        )}
+        {notice && mode === 'login' && step.step === 'form' && (
+          <div className="demo-login" role="note">
+            <p className="text-[13px] leading-snug whitespace-pre-line">{notice}</p>
           </div>
         )}
         {step.step === 'form' && step.notice && <p role="status" className="den-msg ok"><CheckCircle2 size={15} className="mt-0.5 shrink-0" /><span>{step.notice}</span></p>}
