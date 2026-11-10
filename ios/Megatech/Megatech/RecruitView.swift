@@ -47,7 +47,7 @@ struct RecruitView: View {
                         LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                             Button { status = ""; tab = "list" } label: { StatCard(icon: "person.text.rectangle.fill", tint: .good, label: "Tổng ứng viên", value: Fmt.int(Double(d.candidates.count)), sub: "Từ \(d.sources?.count ?? 4) file Google Sheets") }
                             Button { status = "review"; tab = "list" } label: { StatCard(icon: "hourglass", tint: .warn, label: "Đang xét duyệt", value: Fmt.int(Double(count(["new", "review"]))), sub: "Mới nhận + đang xem") }
-                            Button { status = "booked"; tab = "list" } label: { StatCard(icon: "person.wave.2.fill", tint: .blue, label: "Phỏng vấn", value: Fmt.int(Double(count(["booked", "interviewed"]))), sub: "Đã book + đã đến PV") }
+                            Button { status = "booked"; tab = "list" } label: { StatCard(icon: "person.wave.2.fill", tint: Palette.info, label: "Phỏng vấn", value: Fmt.int(Double(count(["booked", "interviewed"]))), sub: "Đã book + đã đến PV") }
                             Button { status = "trial"; tab = "list" } label: { StatCard(icon: "checkmark.circle.fill", tint: .good, label: "Đã tuyển", value: Fmt.int(Double(count(["passed", "trial"]))), sub: "Pass PV + thử việc") }
                         }.buttonStyle(.plain)
                     }

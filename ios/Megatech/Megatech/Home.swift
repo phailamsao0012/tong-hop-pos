@@ -214,7 +214,7 @@ struct OverviewView: View {
         let cancelled: Double = (groups["cancelled"]?.orders ?? 0) + (groups["returned"]?.orders ?? 0)
         return [("Đã thanh toán", groups["delivered"]?.orders ?? 0, .good),
                 ("Đang xử lý", processing, .warn),
-                ("Chờ xác nhận", groups["new"]?.orders ?? 0, .orange),
+                ("Chờ xác nhận", groups["new"]?.orders ?? 0, Palette.mtWarningInk),
                 ("Đã hủy", cancelled, .bad)]
     }
     private func q(_ group: String, _ basis: String, _ title: String) -> OrderQuery { OrderQuery(start: range.0, end: range.1, posIds: posIds, group: group, basis: basis, title: title) }
@@ -255,11 +255,11 @@ struct OverviewView: View {
                         Button { explain = MetricExplain(title: "Tổng đơn hàng", value: Fmt.int(t.orders), definition: "Số đơn được tạo trong kỳ (theo ngày tạo), không tính đơn đã xóa.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.int($0.orders)) }, count: canList ? Int(t.orders) : nil, query: canList ? q("", "created", "Đơn tạo") : nil) } label: {
                             KpiCard(icon: "ic_m_orders", tint: .good, label: "Tổng đơn hàng", value: Fmt.int(t.orders), delta: Fmt.delta(t.orders, p?.orders)) }
                         Button { explain = MetricExplain(title: "Doanh thu đơn chốt", value: Fmt.money(t.closedNet), definition: "Tiền (sau giảm giá và quà, không cộng phí ship) của các đơn chốt trong kỳ: đơn vào Chờ xác nhận lần đầu trong kỳ, xếp theo giờ vào Chờ xác nhận. Đơn đang huỷ không tính, đơn hoàn vẫn tính. Chỉ tính người bán có hậu tố SALE, CSKH, MKT (đơn chưa gắn người bán vẫn tính). Cùng số với ô \"Doanh thu đơn chốt\" ở Tổng quan POS trên web.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.money($0.closedNet)) }, reconcile: rec) } label: {
-                            KpiCard(icon: "ic_m_revenue", tint: .teal, label: "Doanh thu đơn chốt", value: Fmt.vnd(t.closedNet), delta: Fmt.delta(t.closedNet, p?.closedNet), money: t.closedNet) }
+                            KpiCard(icon: "ic_m_revenue", tint: Palette.teal, label: "Doanh thu đơn chốt", value: Fmt.vnd(t.closedNet), delta: Fmt.delta(t.closedNet, p?.closedNet), money: t.closedNet) }
                         Button { explain = MetricExplain(title: "Tỷ lệ chốt", value: Fmt.pct(t.shownRate), definition: "\(MetricPrefs.shared.rateHint).\n\(t.rateFrac).\nĐổi ở Thêm → Cách tính.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.pct($0.shownRate)) }) } label: {
-                            KpiCard(icon: "ic_m_rate", tint: .purple, label: "Tỷ lệ chốt", value: Fmt.pct(t.shownRate), delta: (t.shownRate != nil && p?.shownRate != nil) ? Fmt.points(t.shownRate! - p!.shownRate!) : nil, deltaGood: (t.shownRate ?? 0) >= (p?.shownRate ?? 0), note: t.rateFrac) }
+                            KpiCard(icon: "ic_m_rate", tint: Palette.mtRolePurpleInk, label: "Tỷ lệ chốt", value: Fmt.pct(t.shownRate), delta: (t.shownRate != nil && p?.shownRate != nil) ? Fmt.points(t.shownRate! - p!.shownRate!) : nil, deltaGood: (t.shownRate ?? 0) >= (p?.shownRate ?? 0), note: t.rateFrac) }
                         Button { explain = MetricExplain(title: "Khách mua hàng", value: Fmt.int(t.customers ?? 0), definition: "Số SĐT khác nhau có đơn tạo trong kỳ. Trong đó \(Fmt.int(t.closedCustomers ?? 0)) SĐT có đơn chốt.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.int($0.customers ?? 0)) }, count: canList ? Int(t.orders) : nil, query: canList ? q("", "created", "Đơn tạo") : nil) } label: {
-                            KpiCard(icon: "ic_m_customers", tint: .blue, label: "Khách mua hàng", value: Fmt.int(t.customers ?? 0), delta: Fmt.delta(t.customers ?? 0, p?.customers)) }
+                            KpiCard(icon: "ic_m_customers", tint: Palette.info, label: "Khách mua hàng", value: Fmt.int(t.customers ?? 0), delta: Fmt.delta(t.customers ?? 0, p?.customers)) }
                     }.buttonStyle(.plain)
                     .environment(\.thinking, loading)
                     if let rec { ScopeStrip(text: rec.text, trailing: rec.ok ? "✓" : "⚠", tone: rec.ok ? Palette.good : Palette.warn).reveal() }
@@ -452,10 +452,10 @@ struct CenterBlocks: View {
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }.buttonStyle(.plain)
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                NavigationLink(value: q("", "created", "Đơn tạo mới")) { KpiCard(icon: "ic_m_orders", tint: .blue, label: "Đơn tạo mới", value: Fmt.int(t.orders), delta: Fmt.delta(t.orders, p?.orders), note: "\(Fmt.int(t.customers ?? 0)) khách") }
+                NavigationLink(value: q("", "created", "Đơn tạo mới")) { KpiCard(icon: "ic_m_orders", tint: Palette.info, label: "Đơn tạo mới", value: Fmt.int(t.orders), delta: Fmt.delta(t.orders, p?.orders), note: "\(Fmt.int(t.customers ?? 0)) khách") }
                 NavigationLink(value: q("closed", "confirmed", "Đơn chốt")) { KpiCard(icon: "ic_m_closed", tint: .good, label: "Đơn chốt", value: Fmt.int(t.closedOrders), delta: Fmt.delta(t.closedOrders, p?.closedOrders), note: "Tỷ lệ chốt \(Fmt.pct(t.shownRate)) · \(t.rateFrac)") }
-                NavigationLink(value: q("closed", "confirmed", "Đơn chốt")) { KpiCard(icon: "ic_m_revenue", tint: .teal, label: "Doanh thu đơn chốt", value: Fmt.shortMoney(t.closedNet), delta: Fmt.delta(t.closedNet, p?.closedNet), note: "GTTB \(Fmt.shortMoney(t.averageOrder ?? 0))", money: t.closedNet) }
-                KpiCard(icon: "ic_m_aov", tint: .gray, label: "Giá trị TB đơn (AOV)", value: Fmt.shortMoney(t.averageOrder ?? 0), delta: Fmt.delta(t.averageOrder ?? 0, p?.averageOrder), note: "Doanh thu ÷ đơn chốt", money: t.averageOrder ?? 0)
+                NavigationLink(value: q("closed", "confirmed", "Đơn chốt")) { KpiCard(icon: "ic_m_revenue", tint: Palette.teal, label: "Doanh thu đơn chốt", value: Fmt.shortMoney(t.closedNet), delta: Fmt.delta(t.closedNet, p?.closedNet), note: "GTTB \(Fmt.shortMoney(t.averageOrder ?? 0))", money: t.closedNet) }
+                KpiCard(icon: "ic_m_aov", tint: Palette.gray, label: "Giá trị TB đơn (AOV)", value: Fmt.shortMoney(t.averageOrder ?? 0), delta: Fmt.delta(t.averageOrder ?? 0, p?.averageOrder), note: "Doanh thu ÷ đơn chốt", money: t.averageOrder ?? 0)
                 NavigationLink(value: q("delivered", "created", "Giao thành công")) { KpiCard(icon: "shippingbox.fill", tint: .lime, label: "Giao thành công", value: Fmt.int(t.groups["delivered"]?.orders ?? 0), delta: Fmt.delta(t.groups["delivered"]?.orders ?? 0, p?.groups["delivered"]?.orders), note: "\(Fmt.shortMoney(t.groups["delivered"]?.net ?? 0)) · tính theo ngày tạo") }
                 NavigationLink(value: Route.page("shift")) { KpiCard(icon: "flame.fill", tint: .warn, label: "Chốt nóng \(shiftName) hôm nay", value: Fmt.pct(shift?.total.rate), delta: shift.flatMap { s in (s.total.rate != nil && s.yesterday.rate != nil) ? Fmt.points(s.total.rate! - s.yesterday.rate!) : nil }, deltaGood: (shift?.total.rate ?? 0) >= (shift?.yesterday.rate ?? 0), note: shift.map { "\(Fmt.int($0.total.closed)) chốt / \(Fmt.int($0.total.received)) số nhận" } ?? "—") }
             }.buttonStyle(.plain)
@@ -531,7 +531,7 @@ struct CenterBlocks: View {
                 if applied != nil { Text("Vận hành đơn chưa lọc theo team.").font(.caption).foregroundStyle(Color.inkSoft) }
                 Text("Chốt → xuất đi → đã nhận · theo giờ chốt trong kỳ").font(.footnote).foregroundStyle(Color.inkSoft)
                 NavigationLink(value: q("closed", "confirmed", "Đơn chốt")) { FunnelLine(label: "Đơn chốt", n: closed, of: closed, tint: .good) }.buttonStyle(.plain)
-                NavigationLink(value: q("shipped", "confirmed", "Đã xuất đi")) { FunnelLine(label: "Đã xuất đi", n: shipped, of: closed, tint: .blue) }.buttonStyle(.plain)
+                NavigationLink(value: q("shipped", "confirmed", "Đã xuất đi")) { FunnelLine(label: "Đã xuất đi", n: shipped, of: closed, tint: Palette.info) }.buttonStyle(.plain)
                 NavigationLink(value: q("delivered", "confirmed", "Đã nhận")) { FunnelLine(label: "Đã nhận", n: dl, of: closed, tint: .good) }.buttonStyle(.plain)
                 ViewThatFits(in: .horizontal) {
                     HStack { pipelinePills(T) }

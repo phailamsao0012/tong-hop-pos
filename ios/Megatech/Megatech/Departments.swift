@@ -769,7 +769,7 @@ struct VanDonView: View {
             Panel {
                 HStack { Text("Từ Chờ xác nhận đến giao").mtFont(.cardHeader).foregroundStyle(Color.ink); Spacer(); Hint(text: "Số đơn") }
                 FunnelLine(label: "Vào Chờ xác nhận", n: t.closed, of: t.closed, tint: .good)
-                FunnelLine(label: "Đã xác nhận", n: t.confirmed, of: t.closed, tint: .blue)
+                FunnelLine(label: "Đã xác nhận", n: t.confirmed, of: t.closed, tint: Palette.info)
                 FunnelLine(label: "Đã chuyển đi", n: t.sent, of: t.closed, tint: .warn)
                 FunnelLine(label: "Đã nhận", n: t.delivered, of: t.closed, tint: .good)
                 FunnelLine(label: "Hoàn", n: t.returned, of: t.closed, tint: .bad)
@@ -780,7 +780,7 @@ struct VanDonView: View {
             Panel {
                 HStack { Text("Đơn vào Chờ xác nhận").mtFont(.cardHeader).foregroundStyle(Color.ink); Spacer(); Hint(text: "Theo ngày vào Chờ XN") }
                 FunnelLine(label: "Vào Chờ xác nhận", n: t.closed, of: t.closed, tint: .good)
-                FunnelLine(label: "Đã xác nhận", n: t.confirmed, of: t.closed, tint: .blue)
+                FunnelLine(label: "Đã xác nhận", n: t.confirmed, of: t.closed, tint: Palette.info)
                 funnelTags(t)
             }
             Panel {

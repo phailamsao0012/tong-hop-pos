@@ -39,7 +39,7 @@ struct PipelineView: View {
     private var mainKey: String { "\(period.key)|\(basis)|\(pos)" }
     private var recentKey: String { "\(period.key)|\(basis)|\(pos)|\(status)" }
     static let stages: [(key: String, group: String, label: String, icon: String, color: Color)] = [
-        ("unconfirmed", "unconfirmed", "Mới", "ic_m_orders", .good), ("processing", "processing", "Xác nhận", "ic_m_closed", .warn), ("shipping", "shipping", "Giao vận", "ic_m_shipping", .blue), ("delivered", "delivered", "Đã giao", "checkmark.circle.fill", .good), ("returned", "returned", "Trả hàng", "ic_m_returned", .bad),
+        ("unconfirmed", "unconfirmed", "Mới", "ic_m_orders", .good), ("processing", "processing", "Xác nhận", "ic_m_closed", .warn), ("shipping", "shipping", "Giao vận", "ic_m_shipping", Palette.info), ("delivered", "delivered", "Đã giao", "checkmark.circle.fill", .good), ("returned", "returned", "Trả hàng", "ic_m_returned", .bad),
     ]
     private func q(_ group: String, _ title: String) -> OrderQuery { OrderQuery(start: period.range.0, end: period.range.1, posIds: posIds, group: group, basis: basis == "confirmed" ? "confirmed" : "created", title: title) }
     private func n(_ b: [String: API.Bucket], _ k: String) -> Double { b[k]?.orders ?? 0 }
@@ -51,7 +51,7 @@ struct PipelineView: View {
             // chính, SearchText.codesByKey; chưa thì trong kỳ đang xem); tên khách trong kỳ và POS đang xem.
             HStack(spacing: 8) {
                 SearchField(prompt: "Tìm SĐT, mã đơn hoặc tên khách", text: $typed) { scheduleSearch(typed, delay: .zero) }
-                NavigationLink(value: Route.orders(q(status, "Đơn hàng"))) { Image(systemName: "line.3.horizontal.decrease").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.ink).frame(width: 40, height: 40).background(Color.card, in: .rect(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.black.opacity(0.08))) }.buttonStyle(.plain)
+                NavigationLink(value: Route.orders(q(status, "Đơn hàng"))) { Image(systemName: "line.3.horizontal.decrease").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.ink).frame(width: 40, height: 40).background(Color.card, in: .rect(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.mtCardBorder)) }.buttonStyle(.plain)
             }
             searchResults
             PeriodChips(period: periodBinding)

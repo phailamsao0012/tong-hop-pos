@@ -358,7 +358,7 @@ struct BarChart: View {
 }
 struct PieChart: View {
     let points: [(String, Double)]
-    static let colors: [Color] = [.good, .blue, .warn, .purple, .teal, .bad, .gray]
+    static let colors: [Color] = [.good, Palette.info, .warn, Palette.mtRolePurpleInk, Palette.teal, .bad, Palette.gray]
     var body: some View {
         let total = max(1, points.reduce(0) { $0 + $1.1 })
         HStack(spacing: 16) {
@@ -427,7 +427,7 @@ struct AuditView: View {
         .task(id: "\(group)|\(day.key)") { await load(next: false) }
     }
     private func icon(_ a: String) -> String { a.hasPrefix("login") ? "arrow.right.square.fill" : a == "logout" ? "arrow.left.square.fill" : a == "export" ? "doc.fill" : a.hasPrefix("password") || a.hasPrefix("totp") || a.hasPrefix("passkey") || a.hasPrefix("device") ? "lock.fill" : a == "view" ? "eye.fill" : "pencil" }
-    private func tint(_ a: String, _ s: Int?) -> Color { if let s, s >= 400 { return .bad }; return a.hasPrefix("login") ? .good : a == "logout" ? .inkSoft : a == "export" ? .blue : a.hasPrefix("password") || a.hasPrefix("totp") || a.hasPrefix("passkey") || a.hasPrefix("device") ? .purple : a == "view" ? .gray : .warn }
+    private func tint(_ a: String, _ s: Int?) -> Color { if let s, s >= 400 { return .bad }; return a.hasPrefix("login") ? .good : a == "logout" ? .inkSoft : a == "export" ? Palette.info : a.hasPrefix("password") || a.hasPrefix("totp") || a.hasPrefix("passkey") || a.hasPrefix("device") ? Palette.mtRolePurpleInk : a == "view" ? Palette.gray : .warn }
     @MainActor private func load(next: Bool) async {
         do { let r = try await API.audit(q: q, page: next ? (data?.page ?? 0) + 1 : 1, group: group, from: day.range.0, to: day.range.1); items = next ? items + r.items : r.items; data = r; error = nil } catch { self.error = error.localizedDescription }
     }

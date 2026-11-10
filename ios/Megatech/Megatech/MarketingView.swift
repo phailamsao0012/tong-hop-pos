@@ -229,7 +229,7 @@ struct MarketingView: View {
                         definition: "Tiền các đơn có Marketer đã xác nhận trên Pancake trong kỳ (theo ngày xác nhận lần đầu), sau giảm giá và quà tặng, không cộng phí ship. Không tính đơn mới, chờ xác nhận, huỷ, xoá. \(scopeText).\nĐơn MKT do Sale hoặc CSKH gọi chốt nên cũng có trong doanh thu bộ phận đó; doanh thu Sale, CSKH, MKT xem riêng, không cộng lại.\n" + (posLimited ? "Không tính ROAS khi chỉ xem một số POS: chi phí quảng cáo là của mọi POS." : "ROAS = doanh thu ÷ chi phí quảng cáo, chỉ tính marketer có chi phí\(c.partial ? " (kỳ này \(Fmt.money(c.coveredNet ?? 0)) trên \(Fmt.money(c.net)))" : ""): kỳ này \(Fmt.roas(c.roas)), kỳ trước \(Fmt.roas(p.roas)).") ,
                         period: periodLabel(d), previous: ("Kỳ trước", Fmt.money(p.net)))
                 }
-                MktBig(icon: "wallet.pass.fill", tint: .orange, label: "Chi phí quảng cáo", value: Fmt.shortVnd(c.cost),
+                MktBig(icon: "wallet.pass.fill", tint: Palette.mtWarningInk, label: "Chi phí quảng cáo", value: Fmt.shortVnd(c.cost),
                        delta: Fmt.delta(c.cost, p.cost), upIsGood: false,
                        sub: c.cost > 0 ? "\(Fmt.int(c.marketers ?? 0)) marketer có chi phí\(posLimited ? " · mọi POS" : "") · kỳ trước \(Fmt.short(p.cost))" : "Chưa có chi phí trong kỳ (sheet chưa gửi hoặc chưa nhập)") {
                     explain = MetricExplain(title: "Chi phí quảng cáo", value: Fmt.money(c.cost),
@@ -241,7 +241,7 @@ struct MarketingView: View {
             revenueSplit(c, scope: periodLabel(d))
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                 Button { explain = MetricExplain(title: "Số về", value: "\(Fmt.int(c.phones)) số", definition: "Số điện thoại khác nhau trên các đơn có Marketer được tạo trong kỳ (số MKT đưa về cho Sale, CSKH gọi). Kỳ này có \(Fmt.int(c.orders)) đơn có Marketer được tạo. Không tính đơn đã xoá. \(scopeText).", period: periodLabel(d), previous: ("Kỳ trước", "\(Fmt.int(p.phones)) số")) } label: {
-                    KpiCard(icon: "phone.fill", tint: .teal, label: "Số về", value: Fmt.int(c.phones), delta: Fmt.delta(c.phones, p.phones), note: "\(Fmt.int(c.orders)) đơn lên")
+                    KpiCard(icon: "phone.fill", tint: Palette.teal, label: "Số về", value: Fmt.int(c.phones), delta: Fmt.delta(c.phones, p.phones), note: "\(Fmt.int(c.orders)) đơn lên")
                 }.buttonStyle(.plain)
                 Button { explain = MetricExplain(title: "Đơn chốt", value: Fmt.int(c.closed), definition: "Số đơn có Marketer đã xác nhận trên Pancake trong kỳ (theo ngày xác nhận lần đầu): số MKT đưa về đã thành đơn. Không tính đơn mới, chờ xác nhận, huỷ, xoá. \(scopeText).", period: periodLabel(d), previous: ("Kỳ trước", Fmt.int(p.closed))) } label: {
                     KpiCard(icon: "ic_m_closed", tint: .good, label: "Đơn chốt", value: Fmt.int(c.closed), delta: Fmt.delta(c.closed, p.closed))
@@ -595,13 +595,13 @@ private struct MktDelta: View {
     let text: String; let good: Bool; var onDark = false
     var body: some View {
         let up = !text.hasPrefix("-")
-        let color: Color = onDark ? (good ? Color.lime : Color(red: 1, green: 0.62, blue: 0.6)) : (good ? .good : .bad)
+        let color: Color = onDark ? (good ? Color.lime : Color.mtDangerInk) : (good ? .good : .bad)
         HStack(spacing: 3) {
             Image(systemName: up ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill").font(.system(size: 8))
             Text(text).mtFont(.caption)
         }
         .foregroundStyle(color).padding(.horizontal, 7).padding(.vertical, 3)
-        .background(onDark ? Color.white.opacity(0.1) : color.opacity(0.1), in: .capsule)
+        .background(onDark ? Color.mtSurfaceCell : color.opacity(0.1), in: .capsule)
     }
 }
 
@@ -644,8 +644,8 @@ private struct MktRowView: View {
                     }
                 }
                 VStack(spacing: 3) {
-                    Bar(value: m.cost / maxCost, tint: .orange, height: 5)
-                    Bar(value: m.phones / maxPhones, tint: .teal, height: 5)
+                    Bar(value: m.cost / maxCost, tint: Palette.mtWarningInk, height: 5)
+                    Bar(value: m.phones / maxPhones, tint: Palette.teal, height: 5)
                 }
                 Text(ratios ? "Chi phí \(Fmt.short(m.cost)) · CP/số \(m.costPerLead.map { Fmt.short($0) } ?? "—") · CP/đơn \(m.costPerClosed.map { Fmt.short($0) } ?? "—")" : "Chi phí \(Fmt.short(m.cost)) (mọi POS)")
                     .mtFont(.caption).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.85).monospacedDigit()
@@ -690,7 +690,7 @@ private struct MktChart: View {
                     Text("số / đơn").mtFont(.caption).foregroundStyle(Color.inkSoft)
                 }
                 HStack(spacing: 12) {
-                    legend(.teal, "Số về"); legend(.good, "Đơn chốt")
+                    legend(Palette.teal, "Số về"); legend(.good, "Đơn chốt")
                     Spacer()
                 }
                 if let s = selected {

@@ -187,9 +187,9 @@ struct CallsView: View {
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                     KpiCard(icon: "ic_m_calls", tint: .good, label: "Cuộc gọi (ghi chú)", value: Fmt.int(notes), note: "\(rows.filter { $0.notes > 0 }.count) nhân viên · \(Int(days)) ngày")
                     KpiCard(icon: "ic_m_customers", tint: .good, label: "Số khách đã gọi", value: Fmt.int(cust), note: "TB \(Fmt.int(cust / people / days)) khách/người/ngày")
-                    KpiCard(icon: "ic_m_calls", tint: .blue, label: "Cuộc gọi / người / ngày", value: Fmt.int(notes / people / days), note: "Trung bình toàn nhóm")
+                    KpiCard(icon: "ic_m_calls", tint: Palette.info, label: "Cuộc gọi / người / ngày", value: Fmt.int(notes / people / days), note: "Trung bình toàn nhóm")
                     NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, group: "closed", basis: "confirmed", title: "Đơn chốt \(isCskh ? "CSKH" : "Sale")"))) { KpiCard(icon: "ic_m_closed", tint: .bad, label: "Đơn chốt (theo người bán)", value: Fmt.int(orders), note: "\(Fmt.shortMoney(net)) · AOV \(Fmt.shortMoney(orders > 0 ? net / orders : 0))") }.buttonStyle(.plain)
-                    if let cv = d.coverage { KpiCard(icon: "cylinder.split.1x2.fill", tint: .gray, label: "Dữ liệu ghi chú đã gom", value: Fmt.int(cv.notes), note: "\(Fmt.int(cv.customers)) khách · cập nhật \(cv.lastFetch.map { Fmt.dateTime($0) } ?? "—")") }
+                    if let cv = d.coverage { KpiCard(icon: "cylinder.split.1x2.fill", tint: Palette.gray, label: "Dữ liệu ghi chú đã gom", value: Fmt.int(cv.notes), note: "\(Fmt.int(cv.customers)) khách · cập nhật \(cv.lastFetch.map { Fmt.dateTime($0) } ?? "—")") }
                 }
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -269,7 +269,7 @@ struct CustomerCallList: View {
             ForEach(rows.prefix(30)) { r in
                 NavigationLink(value: Route.customer(posId: r.posId, phone: r.phone ?? "")) {
                     HStack(alignment: .top, spacing: 10) {
-                        Avatar(name: r.name ?? "K", size: 40, tint: done ? .brand : .blue)
+                        Avatar(name: r.name ?? "K", size: 40, tint: done ? .brand : Palette.info)
                         VStack(alignment: .leading, spacing: 4) {
                             HStack { Text(r.name ?? r.phone ?? "Khách").mtFont(.body).foregroundStyle(Color.ink).lineLimit(1); Spacer(); Text(r.lastNoteAt.map { Fmt.time($0) } ?? "").mtFont(.caption).foregroundStyle(Color.inkSoft) }
                             HStack(spacing: 8) { HStack(spacing: 4) { Image(systemName: "phone").mtFont(.caption); Text(r.phone ?? "") }.mtFont(.caption).foregroundStyle(Color.inkSoft); Tag(text: r.lastNoteAt == nil ? "Chưa liên hệ" : "Đã liên hệ", tone: r.lastNoteAt == nil ? .red : .green) }
@@ -330,7 +330,7 @@ struct CareView: View {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 2), spacing: MT.cellGap) {
                     PrioTile(label: "Cần chăm sóc", n: over20, tint: .bad, on: prio == "20") { prio = prio == "20" ? "" : "20"; minDays = prio.isEmpty ? 0 : 20; sort = "note_old" }
                     PrioTile(label: "Có nguy cơ rời", n: over7, tint: .warn, on: prio == "7") { prio = prio == "7" ? "" : "7"; minDays = prio.isEmpty ? 0 : 7; sort = "note_old" }
-                    PrioTile(label: "Chưa ghi chú", n: never, tint: .blue, on: prio == "never") { prio = prio == "never" ? "" : "never"; minDays = 0; sort = prio.isEmpty ? "note_old" : "note_old" }
+                    PrioTile(label: "Chưa ghi chú", n: never, tint: Palette.info, on: prio == "never") { prio = prio == "never" ? "" : "never"; minDays = 0; sort = prio.isEmpty ? "note_old" : "note_old" }
                     PrioTile(label: "Vừa chăm sóc", n: today, tint: .good, on: prio == "today") { prio = prio == "today" ? "" : "today"; minDays = 0; sort = prio.isEmpty ? "note_old" : "note_new" }
                 }
                 HStack(spacing: 8) {
@@ -406,7 +406,7 @@ struct RepurchaseView: View {
             if let d = data {
                 HStack(spacing: 10) {
                     KpiCard(icon: "ic_m_upsell", tint: .good, label: "Khách mua lại", value: Fmt.int(d.summary.repurchase.customers), delta: Fmt.delta(d.summary.repurchase.customers, prev?.summary.repurchase.customers), note: "So với kỳ trước")
-                    KpiCard(icon: "ic_m_revenue", tint: .teal, label: "Doanh thu từ khách cũ", value: Fmt.vnd(d.summary.repurchase.net), delta: Fmt.delta(d.summary.repurchase.net, prev?.summary.repurchase.net))
+                    KpiCard(icon: "ic_m_revenue", tint: Palette.teal, label: "Doanh thu từ khách cũ", value: Fmt.vnd(d.summary.repurchase.net), delta: Fmt.delta(d.summary.repurchase.net, prev?.summary.repurchase.net))
                 }
                 Panel {
                     HStack { Text("Phễu cơ hội mua lại").mtFont(.cardHeader); Spacer(); Hint(text: "Trọn đời") }
@@ -450,7 +450,7 @@ struct RepurchaseView: View {
                     ForEach(Array(d.recent.prefix(15).enumerated()), id: \.offset) { _, r in
                         Panel(padding: 12) {
                             HStack(spacing: 10) {
-                                Avatar(name: r.phone, size: 38, tint: .blue)
+                                Avatar(name: r.phone, size: 38, tint: Palette.info)
                                 VStack(alignment: .leading, spacing: 2) {
                                     HStack { Text(r.phone).mtFont(.body).foregroundStyle(Color.ink); Spacer(); Text(Fmt.vnd(r.net)).mtFont(.body).foregroundStyle(Color.good) }
                                     HStack(spacing: 4) { PosLabel(id: r.posId, name: r.posName); Text("· \(r.sellerName)").lineLimit(1) }.mtFont(.caption).foregroundStyle(Color.inkSoft)
@@ -460,7 +460,7 @@ struct RepurchaseView: View {
                             HStack(spacing: 8) {
                                 if let u = URL(string: "tel:\(r.phone)") { Link(destination: u) { ActionPill(icon: "phone.fill", text: "Gọi ngay", tint: .good) } }
                                 if let u = URL(string: "sms:\(r.phone)") { Link(destination: u) { ActionPill(icon: "message.fill", text: "Nhắn tin", tint: .brand) } }
-                                NavigationLink(value: Route.customer(posId: r.posId, phone: r.phone)) { ActionPill(icon: "person.text.rectangle", text: "Hồ sơ", tint: .purple) }.buttonStyle(.plain)
+                                NavigationLink(value: Route.customer(posId: r.posId, phone: r.phone)) { ActionPill(icon: "person.text.rectangle", text: "Hồ sơ", tint: Palette.mtRolePurpleInk) }.buttonStyle(.plain)
                             }.padding(.top, 8)
                         }
                     }
@@ -528,7 +528,7 @@ struct DormantView: View {
                     ForEach(rows) { r in
                         NavigationLink(value: Route.customer(posId: r.posId, phone: r.phone)) {
                             HStack(spacing: 10) {
-                                Avatar(name: r.name ?? r.phone, size: 40, tint: .blue)
+                                Avatar(name: r.name ?? r.phone, size: 40, tint: Palette.info)
                                 VStack(alignment: .leading, spacing: 3) {
                                     HStack(spacing: 6) { Text(r.name ?? r.phone).mtFont(.body).foregroundStyle(Color.ink).lineLimit(1); Tag(text: r.successNet >= 2_000_000 ? "Ưu tiên cao" : r.successNet >= 700_000 ? "Ưu tiên trung bình" : "Ưu tiên thấp", tone: r.successNet >= 2_000_000 ? .red : r.successNet >= 700_000 ? .orange : .green) }
                                     Text("\(Fmt.int(r.daysSinceSuccess ?? 0)) ngày chưa mua").mtFont(.caption).foregroundStyle(Color.bad)
@@ -804,9 +804,9 @@ struct CompareView: View {
                 }
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                     KpiCard(icon: "ic_m_staff", tint: .good, label: "Tổng nhân sự", value: Fmt.int(Double(list.count)), note: "Có đơn chia hoặc đơn chốt trong kỳ")
-                    KpiCard(icon: "ic_m_orders", tint: .blue, label: "Tổng đơn chia", value: Fmt.int(assigned), delta: Fmt.delta(assigned, pAssigned), note: "Trung bình \(Fmt.int(assigned / Double(max(1, list.count)))) đơn/người")
+                    KpiCard(icon: "ic_m_orders", tint: Palette.info, label: "Tổng đơn chia", value: Fmt.int(assigned), delta: Fmt.delta(assigned, pAssigned), note: "Trung bình \(Fmt.int(assigned / Double(max(1, list.count)))) đơn/người")
                     NavigationLink(value: Route.orders(OrderQuery.from(filters, group: "closed", basis: "confirmed", title: "Đơn chốt"))) { KpiCard(icon: "ic_m_closed", tint: .good, label: "Tổng đơn chốt", value: Fmt.int(closed), delta: Fmt.delta(closed, pClosed), note: "Tỷ lệ chốt chung \(Fmt.pct(den > 0 ? closed / den * 100 : nil))") }.buttonStyle(.plain)
-                    KpiCard(icon: "ic_m_rate", tint: .purple, label: "Trung vị tỷ lệ chốt", value: Fmt.pct(med), delta: (med != nil && pMed != nil) ? Fmt.points(med! - pMed!) : nil, deltaGood: (med ?? 0) >= (pMed ?? 0), note: "Mục tiêu tham chiếu \(Fmt.pct0(MetricPrefs.shared.goodRate))")
+                    KpiCard(icon: "ic_m_rate", tint: Palette.mtRolePurpleInk, label: "Trung vị tỷ lệ chốt", value: Fmt.pct(med), delta: (med != nil && pMed != nil) ? Fmt.points(med! - pMed!) : nil, deltaGood: (med ?? 0) >= (pMed ?? 0), note: "Mục tiêu tham chiếu \(Fmt.pct0(MetricPrefs.shared.goodRate))")
                 }
                 if let b = best {
                     NavigationLink(value: Route.staffDetail(.of(b, in: filters, period: period, hrTeam: applied?.id))) {

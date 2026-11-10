@@ -160,7 +160,7 @@ struct UsersSheet: View {
                 ForEach(users) { u in
                     Button { edit = u } label: {
                         HStack(spacing: 10) {
-                            Avatar(name: u.name, size: 34, tint: u.disabled ? .gray : .brand)
+                            Avatar(name: u.name, size: 34, tint: u.disabled ? Palette.gray : .brand)
                             VStack(alignment: .leading, spacing: 2) { Text(u.name).font(.subheadline.weight(.semibold)).foregroundStyle(.primary); Text("\(u.email) · \(roleName(u.role))\(u.team == "sale" ? " · Sale" : u.team == "cskh" ? " · CSKH" : "")").font(.caption).foregroundStyle(.secondary).lineLimit(1) }
                             Spacer(); if u.disabled { Tag(text: "Đã khoá", tone: .red) } else { Text(u.lastLoginAt.map { "vào \(Fmt.day($0))" } ?? "chưa đăng nhập").font(.caption2).foregroundStyle(.secondary) }
                         }

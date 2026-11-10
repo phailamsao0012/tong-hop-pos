@@ -18,7 +18,7 @@ struct ReconcileLine: View {
     let state: (ok: Bool, text: String)
     var body: some View {
         Label(state.text, systemImage: state.ok ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
-            .font(.caption).foregroundStyle(state.ok ? Color.good : .orange)
+            .font(.caption).foregroundStyle(state.ok ? Color.good : Palette.mtWarningInk)
             .padding(10).frame(maxWidth: .infinity, alignment: .leading)
             .background((state.ok ? Color.good : Color.warn).opacity(0.1), in: .rect(cornerRadius: 10))
     }

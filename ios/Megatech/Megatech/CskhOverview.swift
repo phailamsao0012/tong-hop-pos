@@ -283,6 +283,6 @@ private struct MiniKpi: View {
             Text(sub).mtFont(.caption).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.8)
         }
         .padding(10).frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.black.opacity(0.03), in: .rect(cornerRadius: 10))
+        .background(Color.mtSurfaceCell, in: .rect(cornerRadius: 10))
     }
 }

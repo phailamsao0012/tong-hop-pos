@@ -132,7 +132,7 @@ private struct Surface: ViewModifier {
 private struct CardShadow: ViewModifier {
     @Environment(\.colorScheme) private var scheme
     func body(content: Content) -> some View {
-        content.shadow(color: scheme == .dark ? .black.opacity(0.13) : Color(hex: 0x143823).opacity(0.07), radius: 12, y: 10)
+        content.shadow(color: Palette.mtTextPrimary.opacity(scheme == .dark ? 0.13 : 0.07), radius: 12, y: 10)
     }
 }
 

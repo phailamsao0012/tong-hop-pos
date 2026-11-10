@@ -42,14 +42,14 @@ struct ShiftView: View {
                 }
                 // 4 số của ca
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                    NavigationLink(value: Route.orders(OrderQuery(start: day, end: day, group: "", basis: "assigned", title: "Số đã nhận"))) { KpiCard(icon: "phone.arrow.down.left.fill", tint: .blue, label: "Số đã nhận", value: Fmt.int(d.total.received), delta: Fmt.delta(d.total.received, d.yesterday.received)) }
+                    NavigationLink(value: Route.orders(OrderQuery(start: day, end: day, group: "", basis: "assigned", title: "Số đã nhận"))) { KpiCard(icon: "phone.arrow.down.left.fill", tint: Palette.info, label: "Số đã nhận", value: Fmt.int(d.total.received), delta: Fmt.delta(d.total.received, d.yesterday.received)) }
                     NavigationLink(value: Route.orders(OrderQuery(start: day, end: day, group: "closed", basis: "confirmed", title: "Số đã chốt"))) { KpiCard(icon: "ic_m_closed", tint: .good, label: "Số đã chốt", value: Fmt.int(d.total.closed), delta: Fmt.delta(d.total.closed, d.yesterday.closed)) }
                     VStack(alignment: .leading, spacing: MT.cellGap) {
                         Text("Tỷ lệ chốt nóng").mtFont(.caption).foregroundStyle(Palette.muted)
                         MTRateBadge(rate: d.total.rate, kind: .saleClose)
                         Text("hôm qua \(Fmt.pct(d.yesterday.rate))").mtFont(.caption).foregroundStyle(Palette.muted)
                     }.frame(maxWidth: .infinity, alignment: .leading).padding(MT.cardPad).tileSurface()
-                    NavigationLink(value: Route.orders(OrderQuery(start: day, end: day, group: "closed", basis: "confirmed", title: "Đơn chốt"))) { KpiCard(icon: "ic_m_revenue", tint: .teal, label: "Giá trị đơn chốt", value: Fmt.shortMoney(d.staff.reduce(0) { $0 + $1.hotValue }), note: "so cùng ca hôm qua") }
+                    NavigationLink(value: Route.orders(OrderQuery(start: day, end: day, group: "closed", basis: "confirmed", title: "Đơn chốt"))) { KpiCard(icon: "ic_m_revenue", tint: Palette.teal, label: "Giá trị đơn chốt", value: Fmt.shortMoney(d.staff.reduce(0) { $0 + $1.hotValue }), note: "so cùng ca hôm qua") }
                 }.buttonStyle(.plain)
                 // Hiệu suất nhân viên
                 SectionHead(title: "Hiệu suất nhân viên", action: showAll ? "Thu gọn" : "Xem tất cả")

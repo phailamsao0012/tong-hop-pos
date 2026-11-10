@@ -84,8 +84,8 @@ struct PosChip: View {
                 if on { Image(systemName: "checkmark").font(.system(size: 8, weight: .heavy)).foregroundStyle(.white).frame(width: 16, height: 16).background(c, in: .circle) }
             }
             .padding(.leading, 5).padding(.trailing, on ? 6 : 11).padding(.vertical, 4)
-            .background(on ? c.opacity(0.08) : Color.black.opacity(0.04), in: .capsule)
-            .overlay(Capsule().strokeBorder(on ? c.opacity(0.55) : Color.black.opacity(0.1), lineWidth: on ? 1.5 : 1))
+            .background(on ? c.opacity(0.08) : Color.mtSurfaceCell, in: .capsule)
+            .overlay(Capsule().strokeBorder(on ? c.opacity(0.55) : Color.mtCardBorder, lineWidth: on ? 1.5 : 1))
             .animation(.snappy(duration: 0.25), value: on)
         }.buttonStyle(.plain)
     }
@@ -140,8 +140,8 @@ struct PosMiniChip: View {
                 if let state { Circle().fill(state == "error" ? Color.bad : Color.warn).frame(width: 5, height: 5) }
             }
             .padding(.leading, tight ? 2 : 3).padding(.trailing, tight ? 5 : 7).padding(.vertical, 5)
-            .background(on ? c.opacity(0.1) : Color.black.opacity(0.04), in: .capsule)
-            .overlay(Capsule().strokeBorder(on ? c.opacity(0.6) : Color.black.opacity(0.1), lineWidth: on ? 1.5 : 1))
+            .background(on ? c.opacity(0.1) : Color.mtSurfaceCell, in: .capsule)
+            .overlay(Capsule().strokeBorder(on ? c.opacity(0.6) : Color.mtCardBorder, lineWidth: on ? 1.5 : 1))
             .animation(.snappy(duration: 0.25), value: on)
         }
         .buttonStyle(.plain)

@@ -154,6 +154,7 @@ struct MTStickyColumnTable<Row: Identifiable, Column: Identifiable, Name: View, 
     @ViewBuilder let cell: (Row, Column) -> Cell
     @State private var offset: CGFloat = 0
     @ScaledMetric(relativeTo: .footnote) private var scale: CGFloat = 1
+    private var scaledColumnWidth: CGFloat { columnWidth * scale }
     private var height: CGFloat { rowHeight * scale }
     private func rowName(_ row: Row) -> some View {
         name(row).fixedSize(horizontal: false, vertical: true).frame(width: nameWidth, height: height, alignment: .leading)
@@ -177,14 +178,14 @@ struct MTStickyColumnTable<Row: Identifiable, Column: Identifiable, Name: View, 
                                 VStack(spacing: 0) {
                                     Button { sort(column) } label: {
                                         Text(title(column) + (selectedColumn == column.id ? (descending ? " ▼" : " ▲") : ""))
-                                            .mtFont(.cardHeader).frame(width: columnWidth, height: height)
+                                            .mtFont(.cardHeader).frame(width: scaledColumnWidth, height: height)
                                     }.buttonStyle(MTPressStyle())
                                     ForEach(rows) { row in
-                                        cell(row, column).mtFont(.body).frame(width: columnWidth, height: height, alignment: .trailing)
+                                        cell(row, column).mtFont(.body).lineLimit(1).minimumScaleFactor(0.6).frame(width: scaledColumnWidth, height: height, alignment: .trailing)
                                             .accessibilityElement(children: .combine).accessibilityHint(title(column) + (scope.isEmpty ? "" : ", " + scope))
                                     }
                                     if let total {
-                                        cell(total, column).mtFont(.body).frame(width: columnWidth, height: height, alignment: .trailing).background(Palette.mtSurfaceCell)
+                                        cell(total, column).mtFont(.body).lineLimit(1).minimumScaleFactor(0.6).frame(width: scaledColumnWidth, height: height, alignment: .trailing).background(Palette.mtSurfaceCell)
                                             .accessibilityElement(children: .combine).accessibilityHint("Tổng, " + title(column) + (scope.isEmpty ? "" : ", " + scope))
                                     }
                                 }.id(column.id)
@@ -197,13 +198,13 @@ struct MTStickyColumnTable<Row: Identifiable, Column: Identifiable, Name: View, 
                     }.coordinateSpace(name: "mt-table")
                         .onPreferenceChange(MTTableOffset.self) { offset = $0 }
                         .overlay(alignment: .trailing) {
-                            if CGFloat(columns.count) * columnWidth + offset > viewport.size.width + 1 {
+                            if CGFloat(columns.count) * scaledColumnWidth + offset > viewport.size.width + 1 {
                                 LinearGradient(colors: [.clear, Palette.mtSurfaceCard], startPoint: .leading, endPoint: .trailing)
                                     .frame(width: 24).allowsHitTesting(false).accessibilityHidden(true)
                             }
                         }
                         .overlay(alignment: .topTrailing) {
-                            if CGFloat(columns.count) * columnWidth + offset > viewport.size.width + 1 {
+                            if CGFloat(columns.count) * scaledColumnWidth + offset > viewport.size.width + 1 {
                                 Text("⇄").foregroundStyle(Palette.muted).accessibilityLabel("Cuộn ngang để xem thêm cột").allowsHitTesting(false)
                             }
                         }

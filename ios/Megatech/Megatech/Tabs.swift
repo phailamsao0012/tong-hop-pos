@@ -674,6 +674,7 @@ enum DebugTour {
     @MainActor static func run(nav: AppNav) async {
         if ProcessInfo.processInfo.environment["MEGATECH_TOUR_SEARCH"] == "1" { await search(nav: nav); return }
         let mode = ProcessInfo.processInfo.environment["MEGATECH_TOUR"]
+        if mode == "giaodien" { await interfaceTour(nav: nav); return }
         if mode == "reload" { await reload(nav: nav); return }
         if mode == "kypos" { await periodPos(nav: nav); return }
         if mode == "kypos-mo-lai" { await periodPosReopened(nav: nav); return }
@@ -698,6 +699,53 @@ enum DebugTour {
             (6, { nav.tab = .overview; nav.overviewScroll = CompanyDept.sale.rawValue }),
         ]
         await play(steps)
+    }
+
+    @MainActor private static func interfaceTour(nav: AppNav) async {
+        nav.period = .month; nav.pos = ""; nav.product = "all"; nav.hrUnit = nil
+        func mark(_ stage: String) { print("[UI] moc=\(stage)"); fflush(stdout) }
+        func pause(_ stage: String, seconds: Double = 8) async {
+            await play([(seconds, {})]); mark(stage); await play([(4, {})])
+        }
+        func ready(_ check: () -> Bool) async -> Bool {
+            for _ in 0..<240 {
+                if check() { return true }
+                if MktNvTour.failed { break }
+                try? await Task.sleep(for: .milliseconds(250))
+            }
+            mark("loi-tai"); return false
+        }
+        await play([(0.35, { nav.tab = .home; nav.homePath = [] })])
+        await pause("hom-nay")
+        await play([(0.35, { nav.tab = .overview; nav.overviewPath = []; nav.overviewScroll = "sale" })])
+        await pause("tong-quan")
+        nav.overviewScroll = "center"; await pause("tong-quan-so-lieu", seconds: 4)
+        nav.overviewPath = [.overviewPos("")]; await pause("tong-quan-pos")
+        nav.overviewPath = []
+        await play([(0.35, { nav.tab = .orders; nav.ordersPath = [] })])
+        await pause("don-hang")
+        await play([(0.35, { nav.tab = .depts; nav.deptsPath = [] })])
+        await pause("phong-ban", seconds: 4)
+        MktNvTour.compare = false; MktNvTour.failed = false
+        nav.deptsPath = [.dept(.sale, period: .month)]
+        await pause("sale")
+        nav.deptsPath = [.dept(.sale, period: .month, page: "compare")]
+        guard await ready({ MktNvTour.compare }) else { return }
+        await pause("nhan-vien", seconds: 3)
+        MktNvTour.staff = false; DebugTap.shared.tap("nv-mo")
+        guard await ready({ MktNvTour.staff }) else { return }
+        await pause("nhan-vien-mot", seconds: 3)
+        nav.deptsPath = [.dept(.cskh, period: .month)]; await pause("cskh")
+        MktNvTour.marketing = false
+        nav.deptsPath = [.dept(.mkt, period: .month)]
+        guard await ready({ MktNvTour.marketing }) else { return }
+        await pause("mkt", seconds: 3)
+        nav.deptsPath = [.dept(.vandon, period: .month)]; await pause("van-don")
+        nav.deptsPath = [.alerts]; await pause("thong-bao", seconds: 5)
+        await play([(0.35, { nav.tab = .more })])
+        await pause("them", seconds: 4)
+        nav.tab = .depts; nav.deptsPath = [.hr("overview")]; await pause("nhan-su")
+        mark("xong")
     }
 
     @MainActor private static func marketingStaff(nav: AppNav) async {
@@ -1246,7 +1294,7 @@ enum DebugTour {
 /// Bản Debug: lượt tự xem (MEGATECH_TOUR=chamso) "chạm" một chỗ trên màn (máy ảo không chạm được). target: tên chỗ chạm
 /// ("nhan-vien": dòng đầu bảng TOP 5 ở Tổng quan; "van-don": thẻ Đơn chuyển đi; "dong": đóng bảng giải thích); tick tăng mỗi lần.
 enum MktNvTour {
-    static var active: Bool { ProcessInfo.processInfo.environment["MEGATECH_TOUR"] == "mktnv" }
+    static var active: Bool { ["mktnv", "giaodien"].contains(ProcessInfo.processInfo.environment["MEGATECH_TOUR"] ?? "") }
     static var marketing = false, rank = false, compare = false, staff = false, done = false, failed = false
     static func number(_ value: Double?) -> String { value.map { String($0) } ?? "-" }
     static func path(_ path: String) -> String {

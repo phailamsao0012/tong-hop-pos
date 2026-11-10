@@ -48,7 +48,7 @@ extension View { func reveal() -> some View { modifier(Reveal()) } }
 
 enum Thinking {
     /// Bảng màu vòng: vàng chanh → xanh lá → xanh dương → tím → hồng → vàng chanh.
-    static let palette: [Color] = [Color(hex: 0xd9f36d), Color(hex: 0x1baf7a), Color(hex: 0x2a78d6), Color(hex: 0x7f6fd2), Color(hex: 0xe87ba4), Color(hex: 0xd9f36d)]
+    static let palette: [Color] = [Palette.mtSuccessInk, Palette.mtBrandPrimary, Palette.info, Palette.mtRolePurpleInk, Palette.mtDangerInk, Palette.mtSuccessInk]
     static func conic(_ angle: Angle = .zero) -> AngularGradient { AngularGradient(colors: palette, center: .center, angle: angle) }
     static let captions = ["Đang tổng hợp số liệu…", "Đang đối chiếu 6 POS…", "Đang tính doanh thu và tỷ lệ chốt…", "Sắp xong…"]
 }
@@ -143,7 +143,7 @@ struct SkeletonGrid: View {
             ThinkingLoader(height: 44, ring: false)
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                 ForEach(0..<tiles, id: \.self) { _ in
-                    KpiCard(icon: "chart.bar.fill", tint: .gray, label: "Đang tải số liệu", value: "000.000.000", note: "so với kỳ trước")
+                    KpiCard(icon: "chart.bar.fill", tint: Palette.gray, label: "Đang tải số liệu", value: "0900000001", note: "so với kỳ trước")
                         .redacted(reason: .placeholder)
                 }
             }

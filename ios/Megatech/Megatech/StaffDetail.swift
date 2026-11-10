@@ -215,7 +215,7 @@ struct StaffDetailView: View {
         .id("nv-reasons")
         #endif
         if let tags = d.otherTags, !tags.isEmpty {
-            Panel { Text(StaffDetailTerms.otherTags).bold(); ForEach(tags, id: \.tag) { t in Text("\(t.tag) · \(Fmt.int(t.n))").font(.caption).padding(5).background(Color.gray.opacity(0.1), in: Capsule()) } }
+            Panel { Text(StaffDetailTerms.otherTags).bold(); ForEach(tags, id: \.tag) { t in Text("\(t.tag) · \(Fmt.int(t.n))").font(.caption).padding(5).background(Palette.gray.opacity(0.1), in: Capsule()) } }
         }
         if let reason { Button(StaffDetailTerms.filter(reason)) { self.reason = nil } }
         if let status { Button(StaffDetailTerms.filter(d.statuses.first { $0.key == status }?.label ?? status)) { self.status = nil } }

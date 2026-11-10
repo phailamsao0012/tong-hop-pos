@@ -263,9 +263,9 @@ struct HROverviewView: View {
                 scope: periodLabel + " · Mọi chi nhánh · Cuối kỳ", comparison: changeText,
                 comparisonGood: change >= 0, action: { store.filter(); go("list") })
             LazyVGrid(columns: Self.grid, spacing: MT.cellGap) {
-            KpiCard(icon: "person.badge.plus", tint: .blue, label: "Vào", value: HRText.num(t.joined), note: "Người mới trong kỳ")
+            KpiCard(icon: "person.badge.plus", tint: Palette.info, label: "Vào", value: HRText.num(t.joined), note: "Người mới trong kỳ")
             KpiCard(icon: "person.badge.minus", tint: .bad, label: "Nghỉ", value: HRText.num(t.left), note: "Nghỉ việc trong kỳ")
-            KpiCard(icon: "ic_m_rate", tint: .purple, label: "Tỉ lệ nghỉ", value: Fmt.pct(t.turnover), note: "Số nghỉ / quân số bình quân")
+            KpiCard(icon: "ic_m_rate", tint: Palette.mtRolePurpleInk, label: "Tỉ lệ nghỉ", value: Fmt.pct(t.turnover), note: "Số nghỉ / quân số bình quân")
             Button { store.filter(status: "thu_viec"); go("list") } label: { KpiCard(icon: "hourglass", tint: .warn, label: "Thử việc", value: HRText.num(d.probation), note: "Đang thử việc · chạm để xem") }.buttonStyle(.plain)
             Button { go("approvals") } label: { KpiCard(icon: "checkmark.seal.fill", tint: store.decidable > 0 ? .bad : .good, label: "Chờ duyệt", value: Fmt.int(Double(store.decidable)), note: store.decidable > 0 ? "Bạn duyệt được · chạm để xem" : "Không có việc chờ") }.buttonStyle(.plain)
             }
@@ -636,9 +636,9 @@ struct PersonView: View {
                 scope: Fmt.monthLabel(p.month) + " · Tài khoản POS đang xem",
                 comparison: p.revenue.flatMap { Fmt.delta($0, p.prevSameDays) })
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                KpiCard(icon: "ic_m_closed", tint: .blue, label: "Đơn chốt", value: Fmt.int(p.closedOrders ?? 0), note: "Trong tháng")
+                KpiCard(icon: "ic_m_closed", tint: Palette.info, label: "Đơn chốt", value: Fmt.int(p.closedOrders ?? 0), note: "Trong tháng")
                 KpiCard(icon: "trophy.fill", tint: .warn, label: "Hạng trong bộ phận", value: rank, note: p.rank == nil ? "Chưa có doanh thu" : "Theo doanh thu tháng")
-                KpiCard(icon: "sum", tint: .purple, label: "Từ trước tới nay", value: Fmt.shortMoney(p.lifetime?.revenue ?? 0), note: "\(Fmt.int(p.lifetime?.closedOrders ?? 0)) đơn chốt\(since)")
+                KpiCard(icon: "sum", tint: Palette.mtRolePurpleInk, label: "Từ trước tới nay", value: Fmt.shortMoney(p.lifetime?.revenue ?? 0), note: "\(Fmt.int(p.lifetime?.closedOrders ?? 0)) đơn chốt\(since)")
             }
             Text("So với cùng kỳ tháng trước (cùng số ngày): \(Fmt.shortMoney(p.prevSameDays ?? 0))").mtFont(.caption).foregroundStyle(Color.inkSoft)
             if !pts.isEmpty {

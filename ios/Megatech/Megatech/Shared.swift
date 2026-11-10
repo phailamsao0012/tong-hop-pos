@@ -481,8 +481,8 @@ struct CustomerDetailView: View {
                             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                                 KpiCard(icon: "ic_m_orders", tint: .good, label: "Đơn tạo / chốt", value: "\(Fmt.int(s.orders)) / \(Fmt.int(s.closedOrders))")
                                 KpiCard(icon: "checkmark.seal.fill", tint: .good, label: "Mua thành công", value: Fmt.int(s.successOrders))
-                                KpiCard(icon: "ic_m_aov", tint: .teal, label: "Giá trị TB đơn", value: Fmt.shortMoney(s.averageOrder ?? 0))
-                                KpiCard(icon: "ic_m_returned", tint: .orange, label: "Hoàn / hủy", value: "\(Fmt.int(s.returnedOrders)) / \(Fmt.int(s.cancelledOrders))")
+                                KpiCard(icon: "ic_m_aov", tint: Palette.teal, label: "Giá trị TB đơn", value: Fmt.shortMoney(s.averageOrder ?? 0))
+                                KpiCard(icon: "ic_m_returned", tint: Palette.mtWarningInk, label: "Hoàn / hủy", value: "\(Fmt.int(s.returnedOrders)) / \(Fmt.int(s.cancelledOrders))")
                             }
                         }
                         Panel { SectionHead(title: "Lịch sử mua hàng", action: "Xem tất cả").onTapGesture { tab = "history" }; OrderTimeline(orders: Array(d.orders.prefix(4))) }
@@ -540,7 +540,7 @@ struct CustomerSearchView: View {
                 PageTitle(title: "Hồ sơ khách hàng", subtitle: "Tìm theo số điện thoại hoặc tên", icon: "person.text.rectangle.fill")
                 HStack(spacing: 8) {
                     SearchField(prompt: "Tìm theo số điện thoại hoặc tên khách hàng", text: $q) { scheduleSearch(delay: .zero) }
-                    Menu { Button("Tất cả POS") { pos = "" }; ForEach(PosBreakdown.order, id: \.self) { id in Button(PosBreakdown.names[id] ?? id) { pos = id } } } label: { Image(systemName: "line.3.horizontal.decrease").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.ink).frame(width: 40, height: 40).background(Color.card, in: .rect(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.black.opacity(0.08))) }
+                    Menu { Button("Tất cả POS") { pos = "" }; ForEach(PosBreakdown.order, id: \.self) { id in Button(PosBreakdown.names[id] ?? id) { pos = id } } } label: { Image(systemName: "line.3.horizontal.decrease").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.ink).frame(width: 40, height: 40).background(Color.card, in: .rect(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.mtCardBorder)) }
                 }
                 if !pos.isEmpty { Tag(text: "Chỉ tìm trong \(PosBreakdown.names[pos] ?? pos)", tone: .blue) }
                 results
@@ -653,7 +653,7 @@ struct ExplainSheet: View {
                 Section("Cách tính") { Text(m.definition).font(.subheadline) }
                 if let r = m.reconcile {
                     Section("Đối chiếu") {
-                        Label(r.text, systemImage: r.ok ? "checkmark.seal.fill" : "exclamationmark.triangle.fill").foregroundStyle(r.ok ? Color.good : .orange).font(.subheadline)
+                        Label(r.text, systemImage: r.ok ? "checkmark.seal.fill" : "exclamationmark.triangle.fill").foregroundStyle(r.ok ? Color.good : Palette.mtWarningInk).font(.subheadline)
                     }
                 }
                 if let q = m.query {

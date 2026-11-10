@@ -698,6 +698,38 @@ jobs:
               fail('thiếu hoặc sai dữ liệu đối chiếu API; không in đường dẫn hay nội dung trả về')
           sys.exit(1 if failed else 0)
           PY14
+          # 15. Giao diện 1.0: chụp các màn chính, sáng rồi tối (chỉ ảnh, không video).
+          ui_stages=(hom-nay tong-quan tong-quan-so-lieu tong-quan-pos don-hang phong-ban sale nhan-vien nhan-vien-mot cskh mkt van-don thong-bao them nhan-su)
+          wait_ui() {
+            local deadline=$((SECONDS + ${2:-90})) log="$3"
+            while (( SECONDS < deadline )); do
+              if grep -q '^\[UI\] moc=loi-tai$' "$log"; then
+                echo "::error::15-giao-dien: lỗi tải khi chờ mốc $1"; tail -n 40 "$log" | grep -E '^\[(UI|MOC|MKT|NV)\]' || true; return 1
+              fi
+              if grep -q "^\[UI\] moc=$1$" "$log"; then sleep 1; return 0; fi
+              sleep 0.2
+            done
+            echo "::error::15-giao-dien: thiếu mốc $1"; tail -n 40 "$log" | grep -E '^\[(UI|MOC|MKT|NV)\]' || true; return 1
+          }
+          for mode in sang toi; do
+            xcrun simctl terminate "$UDID" "$BUNDLE" || true
+            if [ "$mode" = toi ]; then xcrun simctl ui "$UDID" appearance dark; else xcrun simctl ui "$UDID" appearance light; fi
+            log15="$RUNNER_TEMP/ui-15-$mode.txt"
+            vars15=(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
+              SIMCTL_CHILD_MEGATECH_TOUR=giaodien SIMCTL_CHILD_MEGATECH_NAV_RESET=1)
+            env "${vars15[@]}" xcrun simctl launch --stdout="$log15" "$UDID" "$BUNDLE" > /dev/null
+            face_on_ask "$log15"
+            for stage in "${ui_stages[@]}"; do
+              wait_ui "$stage" 90 "$log15"
+              xcrun simctl io "$UDID" screenshot "$OUT/15-$mode-$stage.png"
+            done
+            wait_ui xong 30 "$log15"
+          done
+          xcrun simctl ui "$UDID" appearance light
+          n15=$(ls "$OUT"/15-*.png 2>/dev/null | wc -l | tr -d ' ')
+          if [ "$n15" != "$(( ${#ui_stages[@]} * 2 ))" ]; then echo "::error::15-giao-dien: thiếu ảnh ($n15/$(( ${#ui_stages[@]} * 2 )))"; exit 1; fi
+          grep -hE '^\[UI\]' "$RUNNER_TEMP"/ui-15-*.txt > "$OUT/15-giao-dien-app.txt" || true
+          mark "het-15"
           # Cờ Face ID mỗi lần vào app ở đoạn 7–11: lúc Face ID đúng, lúc vào app, lúc app active lại, có chạm trần giữ cờ hay không
           # (chỉ tên mốc và mili giây) ở co-face-id.txt, để soi chỗ màn che chớp lên ngay sau Face ID.
           for f in moc-7-1 moc-7-2 moc-8 nho-9-1 nho-9-2 cham-10 tim-11; do

@@ -154,7 +154,7 @@ struct SecurityView: View {
                     // Khoá app luôn bật (09/10/2026): không còn công tắc tắt hay chọn thời gian chờ.
                     Panel(padding: 12) {
                         HStack(spacing: 10) {
-                            Image(systemName: Biometric.icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.blue).frame(width: 44, height: 44).background(Color.blue.opacity(0.12), in: .rect(cornerRadius: MT.rCell))
+                            Image(systemName: Biometric.icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.info).frame(width: 44, height: 44).background(Palette.info.opacity(0.12), in: .rect(cornerRadius: MT.rCell))
                             VStack(alignment: .leading, spacing: 2) { Text("Khoá app bằng \(AppLock.biometryName)").mtFont(.body).foregroundStyle(Color.ink); Text("Mở app và mỗi lần quay lại app đều phải \(AppLock.biometryName), mật mã iPhone hoặc mật khẩu MEGATECH; màn đa nhiệm luôn che số liệu").mtFont(.caption).foregroundStyle(Color.inkSoft) }
                             Spacer()
                             Text("Luôn bật").mtFont(.caption).foregroundStyle(Color.good).padding(.horizontal, 8).padding(.vertical, 4).background(Color.good.opacity(0.12), in: .capsule)
@@ -163,7 +163,7 @@ struct SecurityView: View {
 
                     Text("Phương thức đăng nhập").mtFont(.body).foregroundStyle(Color.ink)
                     VStack(spacing: 0) {
-                        MethodRow(icon: "faceid", tint: .blue, title: "Passkey (Face ID)", sub: d.passkeys.isEmpty ? "Chưa có passkey nào" : "\(d.passkeys.count) passkey · gỡ ở mục dưới", on: !d.passkeys.isEmpty)
+                        MethodRow(icon: "faceid", tint: Palette.info, title: "Passkey (Face ID)", sub: d.passkeys.isEmpty ? "Chưa có passkey nào" : "\(d.passkeys.count) passkey · gỡ ở mục dưới", on: !d.passkeys.isEmpty)
                         Divider().padding(.leading, 56)
                         Button { sheet = d.totpEnabled ? .totpDisable : .totpSetup } label: { MethodRow(icon: "lock.fill", tint: .good, title: "Xác thực 2 bước (2FA)", sub: d.totpEnabled ? "Mã ứng dụng đang bật · chạm để tắt" : "Bảo vệ tài khoản bằng mã xác thực · chạm để bật", on: d.totpEnabled) }.buttonStyle(.plain)
                     }.background(Color.mtSurfaceCard, in: .rect(cornerRadius: MT.rCard)).overlay(RoundedRectangle(cornerRadius: MT.rCard).stroke(Color.mtCardBorder)).cardShadow()
@@ -335,7 +335,7 @@ struct SessionsSection: View {
     var body: some View {
         HStack {
             Text("Thiết bị đang đăng nhập").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink)
-            if let rows { Text("\(rows.count)").mtFont(.caption).foregroundStyle(Color.inkSoft).padding(.horizontal, 6).padding(.vertical, 2).background(Color.black.opacity(0.06), in: .capsule) }
+            if let rows { Text("\(rows.count)").mtFont(.caption).foregroundStyle(Color.inkSoft).padding(.horizontal, 6).padding(.vertical, 2).background(Color.mtSurfaceCell, in: .capsule) }
             Spacer()
             if isOwner { Toggle(isOn: $all) { Text("Mọi tài khoản").mtFont(.caption).foregroundStyle(Color.inkSoft) }.toggleStyle(.switch).tint(.good).fixedSize() }
         }
@@ -377,7 +377,7 @@ struct SessionsSection: View {
             ForEach(Array(list.enumerated()), id: \.element.id) { i, s in
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: icon(s)).font(.system(size: 15, weight: .semibold)).foregroundStyle(s.current ? Color.good : Color.ink).frame(width: 36, height: 36)
-                        .background((s.current ? Color.good : Color.black).opacity(s.current ? 0.12 : 0.05), in: .rect(cornerRadius: 10))
+                        .background(s.current ? Color.mtSuccessBg : Color.mtSurfaceCell, in: .rect(cornerRadius: 10))
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 6) {
                             Text(s.device).mtFont(.body).foregroundStyle(Color.ink).lineLimit(1)
