@@ -40,7 +40,7 @@ const source = JSON.parse(readFileSync('dist/server/wrangler.demo.json', 'utf8')
 const config = Object.fromEntries(['name', 'main', 'compatibility_date', 'compatibility_flags', 'assets', 'durable_objects', 'migrations'].filter(k => source[k] !== undefined).map(k => [k, source[k]]));
 config.d1_databases = source.d1_databases.map(d => ({ binding: d.binding, database_name: d.database_name, database_id: d.database_id, migrations_dir: d.migrations_dir }));
 config.triggers = { crons: [] };
-config.vars = { ...source.vars, DEMO_MODE: '1', LOCAL_DEV: '1' };
+config.vars = { ...source.vars, DEMO_MODE: '1', LOCAL_DEV: '1', PANCAKE_POS_API_KEY: 'web-ao-demo-only' };
 writeFileSync('dist/server/wrangler.ci.json', JSON.stringify(config));
 writeFileSync('dist/server/wrangler.ci-d1.json', JSON.stringify({ name: config.name, compatibility_date: config.compatibility_date, d1_databases: config.d1_databases }));
 NODE
@@ -78,10 +78,33 @@ with (root / 'web-ao.log').open('w') as log:
     p = Popen(['pnpm', 'exec', 'wrangler', 'dev', '--config', 'dist/server/wrangler.ci.json', '--local', '--ip', '127.0.0.1', '--port', '8788', '--persist-to', str(root / 'wstate')], stdout=log, stderr=STDOUT, start_new_session=True)
 (root / 'web-ao.pid').write_text(str(p.pid))
 PY
+# Không in header, cookie hay toàn bộ thân phản hồi; chỉ trường error của JSON demo.
+request() {
+  local method=$1 route=$2 output=$3 code status=0
+  shift 3
+  : > "$output"
+  code=$(curl --silent --max-time 180 -X "$method" -b "$work/cookies" \
+    -o "$output" -w '%{http_code}' "$@" "$base$route" 2> "$work/curl.log") || status=$?
+  http_code=${code:-000}
+  if [ "$status" != 0 ] || [ "$code" != 200 ]; then
+    node - "$method" "${route%%\?*}" "${code:-000}" "$output" <<'NODE'
+const fs = require('fs');
+const [method, route, code, file] = process.argv.slice(2);
+let error = 'Không có trường error JSON';
+try { const body = JSON.parse(fs.readFileSync(file, 'utf8')); if (typeof body.error === 'string') error = body.error; } catch {}
+// JSON.stringify giữ thông báo trên một dòng, không cho chèn lệnh workflow.
+console.error(`web-ao: ${method} ${route} HTTP ${code} error=${JSON.stringify(error)}`);
+NODE
+    if [ "$status" != 0 ]; then return "$status"; fi
+    return 1
+  fi
+}
+get() { request GET "$1" "$2"; }
 deadline=$((SECONDS + 180))
 while :; do
-  code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "$base/api/auth/me" || true)
-  if [[ "$code" =~ ^[1-5][0-9][0-9]$ ]]; then break; fi
+  # 401 nghĩa là máy chủ đã trả lời; đây là phép dò trước đăng nhập.
+  if request GET /api/auth/me "$work/probe.json" --max-time 5; then break; fi
+  if [[ "$http_code" =~ ^[1-5][0-9][0-9]$ ]]; then break; fi
   if [ "$SECONDS" -ge "$deadline" ]; then
     safe_tail
     echo '::error::web-ao: hết giờ chờ'
@@ -89,25 +112,46 @@ while :; do
   fi
   sleep 2
 done
-get() { curl --fail --silent --show-error --max-time 180 -b "$work/cookies" "$base$1" -o "$2"; }
 # Trang đăng nhập mới gọi ensureDemoSeed; API đăng nhập không tự tạo tài khoản.
 get /login "$work/login.html"
-curl --fail --silent --show-error --max-time 180 -c "$work/cookies" -H 'content-type: application/json' \
-  -d '{"email":"chu@demo.megatech.vn","password":"demo@2026","remember":true}' "$base/api/auth/login" -o "$work/login.json"
+request POST /api/auth/login "$work/login.json" -c "$work/cookies" -H 'content-type: application/json' \
+  -d '{"email":"chu@demo.megatech.vn","password":"demo@2026","remember":true}'
 grep -q thp_session "$work/cookies" || { echo '::error::web-ao: không có phiên demo'; exit 1; }
+# ensureDemoSeed không tạo pos_shops. Connection ghép Shop ID số từ Pancake giả;
+# chuỗi cấu hình demo ở trên chỉ để qua kiểm tra thiếu key, không phải bí mật.
 get /api/connection "$work/connection.json"
+node - "$work/connection.json" <<'NODE'
+const fs = require('fs');
+const r = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+if (r.status !== 'verified' || r.unmatched?.length) {
+  console.error('::error::web-ao: connection chưa ghép đủ shop demo');
+  process.exit(1);
+}
+NODE
 get /api/sync/pos "$work/pos.json"
-node -e 'const fs=require("fs"); for(const p of JSON.parse(fs.readFileSync(process.argv[1]))) console.log(p.posId)' "$work/pos.json" > "$work/pos.txt"
+# Đối chiếu id với POS của chính mã đang build, không suy đoán dạng phản hồi.
+node - "$work/pos.json" > "$work/pos.txt" <<'NODE'
+const fs = require('fs');
+const source = fs.readFileSync('lib/shared/report-model.ts', 'utf8').split('] as const;')[0];
+const ids = [...source.matchAll(/\bid:\s*'([^']+)'/g)].map(m => m[1]);
+const rows = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+if (!ids.length || !Array.isArray(rows) || rows.length !== ids.length ||
+    new Set(rows.map(p => p.posId)).size !== ids.length || rows.some(p => !ids.includes(p.posId))) {
+  console.error('::error::web-ao: sync/pos không trả đủ id POS hợp lệ');
+  process.exit(1);
+}
+for (const id of ids) console.log(id);
+NODE
 while IFS= read -r pos; do
   for action in users products recent; do
-    curl --fail --silent --show-error --max-time 180 -b "$work/cookies" -H 'content-type: application/json' \
-      -d "{\"posId\":\"$pos\",\"action\":\"$action\"}" "$base/api/sync/pos" -o "$work/sync.json"
+    request POST /api/sync/pos "$work/sync.json" -H 'content-type: application/json' \
+      -d "{\"posId\":\"$pos\",\"action\":\"$action\"}"
   done
   # Nạp tháng này và tháng trước bằng route đồng bộ sẵn có.
   complete=0
   for ((attempt=0; attempt<60; attempt++)); do
-    curl --fail --silent --show-error --max-time 180 -b "$work/cookies" -H 'content-type: application/json' \
-      -d "{\"posId\":\"$pos\",\"action\":\"backfill\"}" "$base/api/sync/pos" -o "$work/sync.json"
+    request POST /api/sync/pos "$work/sync.json" -H 'content-type: application/json' \
+      -d "{\"posId\":\"$pos\",\"action\":\"backfill\"}"
     if node -e 'const fs=require("fs");const r=JSON.parse(fs.readFileSync(process.argv[1]));const d=new Date();d.setUTCDate(1);d.setUTCMonth(d.getUTCMonth()-1);process.exit(r.completed||r.cursor?.completed||(r.cursor?.month && r.cursor.month<d.toISOString().slice(0,7))?0:1)' "$work/sync.json"; then
       complete=1
       break
@@ -115,12 +159,21 @@ while IFS= read -r pos; do
   done
   [ "$complete" = 1 ] || { echo '::error::web-ao: đồng bộ chưa xong'; exit 1; }
 done < "$work/pos.txt"
-get /api/reports/overview "$work/overview.json"
+# Tổng quan yêu cầu khoảng ngày; cùng lịch Việt Nam với báo cáo.
+period=$(node -e 'const d=new Date(Date.now()+7*3600000).toISOString().slice(0,10);console.log(`start=${d.slice(0,7)}-01&end=${d}`)')
+get "/api/reports/overview?$period" "$work/overview.json"
+node - "$work/overview.json" <<'NODE'
+const fs = require('fs');
+const total = JSON.parse(fs.readFileSync(process.argv[2], 'utf8')).current?.total;
+if (!total || !(total.orders > 0)) {
+  console.error('::error::web-ao: overview chưa có đơn ảo trong kỳ');
+  process.exit(1);
+}
+NODE
 get '/api/reports/staff-profile?list=1' "$work/people.json"
 id=$(node -e 'const fs=require("fs"); const p=JSON.parse(fs.readFileSync(process.argv[1])).people[0]; if(!p)process.exit(1); process.stdout.write(encodeURIComponent(p.id))' "$work/people.json")
-code=$(curl --silent --show-error --max-time 180 -b "$work/cookies" -o "$work/profile.json" -w '%{http_code}' "$base/api/reports/staff-profile?id=$id")
-echo "web-ao: staff-profile HTTP $code"
-[ "$code" = 200 ] || exit 1
+get "/api/reports/staff-profile?id=$id" "$work/profile.json"
+echo "web-ao: staff-profile HTTP 200"
 echo "BASE=$base" >> "$GITHUB_ENV"
 echo "BASE=$base"
 echo 'web-ao: sẵn sàng'
