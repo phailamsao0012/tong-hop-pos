@@ -492,18 +492,25 @@ struct MoreHome: View {
             TabPage(title: "Thêm", subtitle: "Tài khoản, tiện ích, cài đặt") {
                 if let me = auth.me {
                     Panel {
-                        HStack(spacing: 12) {
+                        VStack(spacing: MT.cellGap) {
                             Avatar(name: me.displayName, size: 48)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(me.displayName).font(.system(size: 16, weight: .bold)).foregroundStyle(Color.ink)
-                                Text(me.title?.isEmpty == false ? me.title! : me.email).font(.system(size: 12)).foregroundStyle(Color.inkSoft)
+                                Text(me.displayName).mtFont(.cardHeader).foregroundStyle(Color.mtTextPrimary)
+                                Text(me.title?.isEmpty == false ? me.title! : roleTitle(me.role)).mtFont(.caption).foregroundStyle(Color.mtTextSecondary)
                             }
-                            Spacer()
                             Tag(text: roleTitle(me.role), tone: .green)
+                            ScanLoginRow()
                         }
+                        .frame(maxWidth: .infinity)
                     }
-                    ScanLoginRow()
                     ForEach(MORE_GROUPS, id: \.0) { title, pages in MoreGroup(title: title, rows: Self.rows(title, pages, me)) }
+                    if me.canView("sale-kpi") {
+                        NavigationLink { SaleKpiReadView() } label: {
+                            Label("KPI Sale & Team", systemImage: "target")
+                                .mtFont(.cardHeader).frame(maxWidth: .infinity, minHeight: 44)
+                                .foregroundStyle(Color.mtBrandPrimary).tileSurface()
+                        }.buttonStyle(MTPressStyle())
+                    }
                     SatelliteSection(me: me)
                 }
                 PrivacyRow()
@@ -560,21 +567,29 @@ struct PrivacyRow: View {
 /// Một nhóm dòng ở tab Thêm (Tiện ích, Cài đặt).
 struct MoreGroup: View {
     let title: String; let rows: [MoreRow]
+    private func tint(_ id: String) -> Color {
+        switch id {
+        case "monthly", "custom-report": return .mtSuccessInk
+        case "security", "audit": return .mtRolePurpleInk
+        case "config", "metrics": return .mtWarningInk
+        default: return .mtBrandPrimary
+        }
+    }
     var body: some View {
         if !rows.isEmpty {
-            Text(title).font(.system(size: 13, weight: .bold)).foregroundStyle(Color.inkSoft).padding(.top, 4)
+            Text(title).mtFont(.body).foregroundStyle(Color.inkSoft).padding(.top, 4)
             VStack(spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { i, x in
                     NavigationLink(value: x.route) {
                         HStack(spacing: 12) {
-                            MetricIcon(x.icon, size: 14).foregroundStyle(Color.brand).frame(width: 34, height: 34).background(Color.brandSoft, in: .rect(cornerRadius: 9))
-                            Text(x.title).font(.system(size: 14, weight: .medium)).foregroundStyle(Color.ink)
-                            Spacer(); Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.inkSoft)
+                            MetricIcon(x.icon, size: 18).foregroundStyle(tint(x.id)).frame(width: 44, height: 44).background(tint(x.id).opacity(0.12), in: .rect(cornerRadius: MT.rCell))
+                            Text(x.title).mtFont(.body).foregroundStyle(Color.ink)
+                            Spacer(); Image(systemName: "chevron.right").mtFont(.caption).foregroundStyle(Color.inkSoft)
                         }.padding(12).contentShape(.rect)
-                    }.buttonStyle(.plain)
+                    }.buttonStyle(MTPressStyle())
                     if i < rows.count - 1 { Divider().padding(.leading, 58) }
                 }
-            }.background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
+            }.background(Color.mtSurfaceCard, in: .rect(cornerRadius: MT.rCard)).overlay(RoundedRectangle(cornerRadius: MT.rCard).stroke(Color.mtCardBorder)).cardShadow()
         }
     }
 }
@@ -589,7 +604,7 @@ struct SatelliteSection: View {
     var body: some View {
         let list = rows
         if !list.isEmpty {
-            Text("Web vệ tinh").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.inkSoft).padding(.top, 4)
+            Text("Web vệ tinh").mtFont(.body).foregroundStyle(Color.inkSoft).padding(.top, 4)
             VStack(spacing: 0) {
                 ForEach(Array(list.enumerated()), id: \.element.id) { i, m in
                     if SatelliteCenter.known.contains(m.id) {
@@ -599,24 +614,24 @@ struct SatelliteSection: View {
                     }
                     if i < list.count - 1 { Divider().padding(.leading, 58) }
                 }
-            }.background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
+            }.background(Color.mtSurfaceCard, in: .rect(cornerRadius: MT.rCard)).overlay(RoundedRectangle(cornerRadius: MT.rCard).stroke(Color.mtCardBorder)).cardShadow()
         }
     }
     private func row(_ m: API.SatModule, known: Bool) -> some View {
         let dot: Color = moduleTone(m)
         let sub: String = moduleSubtitle(m, known: known)
         return HStack(spacing: 12) {
-            MetricIcon(m.icon ?? "square.grid.2x2.fill", size: 14).foregroundStyle(Color.brand).frame(width: 34, height: 34).background(Color.brandSoft, in: .rect(cornerRadius: 9))
+            MetricIcon(m.icon ?? "square.grid.2x2.fill", size: 14).foregroundStyle(Color.brand).frame(width: 44, height: 44).background(Color.brandSoft, in: .rect(cornerRadius: MT.rCell))
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(m.title).font(.system(size: 14, weight: .medium)).foregroundStyle(Color.ink)
+                    Text(m.title).mtFont(.body).foregroundStyle(Color.ink)
                     Circle().fill(dot).frame(width: 7, height: 7)
                 }
-                if !sub.isEmpty { Text(sub).font(.system(size: 10)).foregroundStyle(known && m.down ? Color.bad : Color.inkSoft).lineLimit(1) }
+                if !sub.isEmpty { Text(sub).mtFont(.caption).foregroundStyle(known && m.down ? Color.bad : Color.inkSoft).lineLimit(1) }
             }
             Spacer()
-            if known, let b = m.badge, b > 0 { Text("\(b)").font(.system(size: 10, weight: .bold)).foregroundStyle(.white).padding(.horizontal, 6).padding(.vertical, 2).background(Color.bad, in: .capsule) }
-            if known { Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.inkSoft) }
+            if known, let b = m.badge, b > 0 { Text("\(b)").mtFont(.caption).foregroundStyle(.white).padding(.horizontal, 6).padding(.vertical, 2).background(Color.bad, in: .capsule) }
+            if known { Image(systemName: "chevron.right").mtFont(.caption).foregroundStyle(Color.inkSoft) }
         }
         .padding(12).contentShape(.rect).opacity(known ? 1 : 0.55)
     }

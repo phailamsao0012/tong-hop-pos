@@ -13,6 +13,7 @@ enum DecodeSelfTest {
         staffDetail(&r)
         appB5(&r)
         appB6(&r)
+        appB7(&r)
         emit(r.failed == 0 ? "DECODE_TEST OK \(r.total) cases" : "DECODE_TEST FAILED \(r.failed)/\(r.total)")
         exit(r.failed == 0 ? 0 : 1)
     }
@@ -33,6 +34,32 @@ enum DecodeSelfTest {
                 check(code, false)
                 return nil
             }
+        }
+    }
+    private static func appB7(_ r: inout Run) {
+        let month = #"{"month":"2026-11","net":30,"closedOrders":12,"rate":null,"rank":1,"of":12}"#
+        let base = #""tenure":null,"posCreated":null,"firstOrderDay":null,"months":[],"badges":[],"definitions":{}"#
+        if let report = r.decode("B7_HR_BEST", API.HRProfileAchievements.self,
+            "{" + base + ",\"best\":{\"month\":" + month + ",\"rateMonth\":null},\"topMonths\":[" + month + "]}") {
+            r.check("B7_HR_BEST_VALUES", report.best?.month?.net == 30 && report.topMonths?.first?.rank == 1 && report.profile.months.isEmpty)
+        }
+        for extra in ["", #", "best":null,"topMonths":null"#] {
+            if let report = r.decode("B7_HR_OPTIONAL", API.HRProfileAchievements.self, "{" + base + extra + "}") {
+                r.check("B7_HR_OPTIONAL_VALUES", report.best == nil && report.topMonths == nil)
+            }
+        }
+        let full = #"{"month":"2026-11","items":{"employee:staff-a":{"assigned":30,"closed":12,"orders":12,"upsellRate":30,"products":{"line-a":12}}}}"#
+        if let d = r.decode("B7_KPI_FULL", API.Kpi2Report.self, full) {
+            let g = d.items["employee:staff-a"]
+            r.check("B7_KPI_VALUES", d.month == "2026-11" && g?.assigned == 30 && g?.closed == 12 && g?.orders == 12 && g?.upsellRate == 30 && g?.products?["line-a"] == 12)
+        }
+        for fields in ["{}", #"{"assigned":null,"closed":null,"orders":null,"upsellRate":null,"products":null}"#] {
+            if let g = r.decode("B7_KPI_OPTIONAL", API.Kpi2Goal.self, fields) {
+                r.check("B7_KPI_NIL", g.assigned == nil && g.closed == nil && g.orders == nil && g.upsellRate == nil && g.products == nil)
+            }
+        }
+        if let d = r.decode("B7_KPI_EMPTY", API.Kpi2Report.self, #"{"month":"2026-11","items":{}}"#) {
+            r.check("B7_KPI_EMPTY_ITEMS", d.items.isEmpty)
         }
     }
     private static func appB6(_ r: inout Run) {

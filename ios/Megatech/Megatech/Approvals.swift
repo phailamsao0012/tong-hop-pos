@@ -201,15 +201,15 @@ struct ScanLoginRow: View {
     var body: some View {
         Button { scanning = true } label: {
             HStack(spacing: 12) {
-                Image(systemName: "qrcode.viewfinder").font(.system(size: 16, weight: .semibold)).foregroundStyle(Color.lime).frame(width: 40, height: 40).background(Color.brandDeep, in: .rect(cornerRadius: 10))
+                Image(systemName: "qrcode.viewfinder").font(.title3).foregroundStyle(Color.mtSuccessInk).frame(width: 44, height: 44).background(Color.mtSuccessBg, in: .rect(cornerRadius: MT.rCell))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Quét đăng nhập máy tính").font(.system(size: 14, weight: .bold)).foregroundStyle(Color.ink)
-                    Text("Quét mã QR trên màn đăng nhập web, xác nhận bằng \(Biometric.name)").font(.system(size: 11)).foregroundStyle(Color.inkSoft).lineLimit(2)
+                    Text("Quét đăng nhập máy tính").mtFont(.body).foregroundStyle(Color.ink)
+                    Text("Quét mã QR trên màn đăng nhập web, xác nhận bằng \(Biometric.name)").mtFont(.caption).foregroundStyle(Color.inkSoft).lineLimit(2)
                 }
-                Spacer(); Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.inkSoft)
-            }.padding(12).background(Color.card, in: .rect(cornerRadius: 14)).cardShadow().contentShape(.rect)
+                Spacer(); Image(systemName: "chevron.right").mtFont(.caption).foregroundStyle(Color.inkSoft)
+            }.padding(12).background(Color.card, in: .rect(cornerRadius: MT.rCard)).cardShadow().contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(MTPressStyle())
         .fullScreenCover(isPresented: $scanning) { QRScanScreen() }
     }
 }

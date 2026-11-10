@@ -154,21 +154,21 @@ struct MetricSettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 PageTitle(title: "Cách tính", subtitle: "Một cách tính cho mọi trang báo cáo")
-                if let e = prefs.error { Label(e, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad).font(.system(size: 12)) }
+                if let e = prefs.error { Label(e, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad).mtFont(.body) }
                 group("Tỷ lệ chốt so với", icon: "ic_m_rate", keys: Self.rateKeys, bases: l.rateBases, selected: s.rateBase) { var n = s; n.rateBase = $0; return n }
                 group("Tỷ lệ hoàn chia cho", icon: "ic_m_returned", keys: Self.returnKeys, bases: l.returnBases, selected: s.returnBase) { var n = s; n.returnBase = $0; return n }
                 group("Mua thành công gồm", icon: "checkmark.seal", keys: Self.successKeys, bases: l.successBases, selected: s.success) { var n = s; n.success = $0; return n }
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: "info.circle.fill").font(.system(size: 15)).foregroundStyle(Color.good)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Lưu theo tài khoản: web và app dùng chung. Khối Số tham chiếu Pancake luôn giữ cách Pancake tính.").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink)
-                        Text(prefs.own ? "Bạn đang dùng cách tính riêng." : "Bạn đang dùng mặc định công ty.").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                        Text("Lưu theo tài khoản: web và app dùng chung. Khối Số tham chiếu Pancake luôn giữ cách Pancake tính.").mtFont(.caption).foregroundStyle(Color.ink)
+                        Text(prefs.own ? "Bạn đang dùng cách tính riêng." : "Bạn đang dùng mặc định công ty.").mtFont(.caption).foregroundStyle(Color.inkSoft)
                     }
                 }.padding(12).frame(maxWidth: .infinity, alignment: .leading).background(Color.brandSoft, in: .rect(cornerRadius: 12))
                 if prefs.own {
                     Button { Task { await prefs.reset() } } label: {
-                        HStack(spacing: 8) { Image(systemName: "arrow.counterclockwise"); Text("Về mặc định công ty") }.font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.ink)
-                            .frame(maxWidth: .infinity).padding(.vertical, 12).background(Color.card, in: .rect(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.black.opacity(0.1)))
+                        HStack(spacing: 8) { Image(systemName: "arrow.counterclockwise"); Text("Về mặc định công ty") }.mtFont(.body).foregroundStyle(Color.ink)
+                            .frame(maxWidth: .infinity).padding(.vertical, 12).background(Color.card, in: .rect(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.mtCardBorder))
                     }.buttonStyle(.plain).disabled(prefs.saving)
                 }
             }.padding(16).padding(.bottom, 90)
@@ -180,7 +180,7 @@ struct MetricSettingsView: View {
     }
 
     @ViewBuilder private func group(_ title: String, icon: String, keys: [String], bases: [String: API.MetricBase], selected: String, make: @escaping (String) -> MetricSettings) -> some View {
-        HStack(spacing: 6) { MetricIcon(icon, size: 12, weight: .bold).foregroundStyle(Color.brand); Text(title).font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink) }.padding(.top, 4)
+        HStack(spacing: 6) { MetricIcon(icon, size: 12, weight: .bold).foregroundStyle(Color.brand); Text(title).mtFont(.body).foregroundStyle(Color.ink) }.padding(.top, 4)
         VStack(spacing: 0) {
             let shown = keys.filter { bases[$0] != nil }
             ForEach(Array(shown.enumerated()), id: \.element) { i, k in
@@ -189,7 +189,7 @@ struct MetricSettingsView: View {
                     HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(b.label).font(.system(size: 14, weight: on ? .semibold : .medium)).foregroundStyle(Color.ink)
-                            Text(b.hint).font(.system(size: 10)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
+                            Text(b.hint).mtFont(.caption).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
                         }
                         Spacer()
                         Image(systemName: on ? "checkmark.circle.fill" : "circle").font(.system(size: 18)).foregroundStyle(on ? Color.good : Color.inkSoft.opacity(0.5))
@@ -197,7 +197,7 @@ struct MetricSettingsView: View {
                 }.buttonStyle(.plain).disabled(prefs.saving)
                 if i < shown.count - 1 { Divider().padding(.leading, 12) }
             }
-        }.background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
+        }.background(Color.mtSurfaceCard, in: .rect(cornerRadius: MT.rCard)).overlay(RoundedRectangle(cornerRadius: MT.rCard).stroke(Color.mtCardBorder)).cardShadow()
     }
 }
 

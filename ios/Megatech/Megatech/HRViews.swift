@@ -84,6 +84,9 @@ enum HRText {
     /// So khớp không dấu: gõ "nguyen" vẫn ra "Nguyễn".
     static func fold(_ s: String) -> String { SearchText.fold(s) }
     static func num(_ v: Int?) -> String { Fmt.int(Double(v ?? 0)) }
+    static func roleInk(_ title: String?) -> Color {
+        (title ?? "").localizedCaseInsensitiveContains("leader") ? .mtRolePurpleInk : .mtTextSecondary
+    }
     /// Độ sâu từng phòng trong cây (danh sách đã theo thứ tự cha trước con).
     static func depths(_ rows: [(String, String?)]) -> [String: Int] {
         var out: [String: Int] = [:]
@@ -223,7 +226,7 @@ struct HROverviewView: View {
                     if !d.series.isEmpty { chart(d) }
                     flows("Người mới vào", d.joined, leaving: false, all: $allJoined)
                     flows("Người nghỉ việc", d.left, leaving: true, all: $allLeft)
-                    Text("Quân số = người đang làm ở cuối kỳ. Tỉ lệ nghỉ = số nghỉ trong kỳ / quân số bình quân đầu và cuối kỳ. Chi nhánh lấy theo hồ sơ, không có thì theo phòng của vai trò chính.").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                    Text("Quân số = người đang làm ở cuối kỳ. Tỉ lệ nghỉ = số nghỉ trong kỳ / quân số bình quân đầu và cuối kỳ. Chi nhánh lấy theo hồ sơ, không có thì theo phòng của vai trò chính.").mtFont(.caption).foregroundStyle(Color.inkSoft)
                 } else if store.overviewError == nil { SkeletonGrid(tiles: 6); Skeleton(height: 160) }
             }.padding(16)
         }
@@ -241,27 +244,31 @@ struct HROverviewView: View {
     private func unplaced(_ n: Int) -> some View {
         Button { store.filter(dept: "__none"); go("list") } label: {
             HStack(spacing: 10) {
-                Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 15, weight: .bold)).foregroundStyle(.white).frame(width: 34, height: 34).background(Color.warn, in: .circle)
+                Image(systemName: "exclamationmark.triangle.fill").mtFont(.cardHeader).foregroundStyle(.white).frame(width: 44, height: 44).background(Color.warn, in: .circle)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(n) người đang làm chưa được xếp phòng ban").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.warn)
-                    Text("Nhờ HR xếp phòng để số theo phòng ban và chi nhánh đúng. Chạm để xem danh sách.").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                    Text("\(n) người đang làm chưa được xếp phòng ban").mtFont(.body).foregroundStyle(Color.warn)
+                    Text("Nhờ HR xếp phòng để số theo phòng ban và chi nhánh đúng. Chạm để xem danh sách.").mtFont(.caption).foregroundStyle(Color.inkSoft)
                 }
                 Spacer(minLength: 0)
-                Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.warn)
-            }.padding(12).background(Color.warn.opacity(0.08), in: .rect(cornerRadius: 14)).overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.warn.opacity(0.25)))
+                Image(systemName: "chevron.right").mtFont(.caption).foregroundStyle(Color.warn)
+            }.padding(12).background(Color.warn.opacity(0.08), in: .rect(cornerRadius: MT.rCard)).overlay(RoundedRectangle(cornerRadius: MT.rCard).stroke(Color.warn.opacity(0.25)))
         }.buttonStyle(.plain)
     }
     private func kpis(_ d: API.HR.Overview) -> some View {
         let t = d.total
         let change = (t.end ?? 0) - (t.start ?? 0)
         let changeText: String? = change == 0 ? nil : (change > 0 ? "+\(change)" : "\(change)") + " người"
-        return LazyVGrid(columns: Self.grid, spacing: 10) {
-            KpiCard(icon: "ic_m_staff", tint: .good, label: "Quân số", value: HRText.num(t.end), delta: changeText, note: "Đầu kỳ \(HRText.num(t.start)) người")
+        return VStack(spacing: MT.cardGap) {
+            MTMetricHeroCard(label: "Quân số", value: t.end.map { Fmt.int(Double($0)) + " người" } ?? "—",
+                scope: periodLabel + " · Mọi chi nhánh · Cuối kỳ", comparison: changeText,
+                comparisonGood: change >= 0, action: { store.filter(); go("list") })
+            LazyVGrid(columns: Self.grid, spacing: MT.cellGap) {
             KpiCard(icon: "person.badge.plus", tint: .blue, label: "Vào", value: HRText.num(t.joined), note: "Người mới trong kỳ")
             KpiCard(icon: "person.badge.minus", tint: .bad, label: "Nghỉ", value: HRText.num(t.left), note: "Nghỉ việc trong kỳ")
             KpiCard(icon: "ic_m_rate", tint: .purple, label: "Tỉ lệ nghỉ", value: Fmt.pct(t.turnover), note: "Số nghỉ / quân số bình quân")
             Button { store.filter(status: "thu_viec"); go("list") } label: { KpiCard(icon: "hourglass", tint: .warn, label: "Thử việc", value: HRText.num(d.probation), note: "Đang thử việc · chạm để xem") }.buttonStyle(.plain)
             Button { go("approvals") } label: { KpiCard(icon: "checkmark.seal.fill", tint: store.decidable > 0 ? .bad : .good, label: "Chờ duyệt", value: Fmt.int(Double(store.decidable)), note: store.decidable > 0 ? "Bạn duyệt được · chạm để xem" : "Không có việc chờ") }.buttonStyle(.plain)
+            }
         }
         .environment(\.thinking, store.overviewLoading)
     }
@@ -274,18 +281,18 @@ struct HROverviewView: View {
                     Button { store.filter(office: o.id); go("list") } label: {
                         VStack(alignment: .leading, spacing: 5) {
                             HStack(spacing: 6) {
-                                Image(systemName: none ? "questionmark.circle.fill" : "building.2.fill").font(.system(size: 12, weight: .semibold)).foregroundStyle(none ? Color.warn : Color.brand)
-                                Text(o.name).font(.system(size: 12, weight: .bold)).foregroundStyle(Color.ink).lineLimit(1)
+                                Image(systemName: none ? "questionmark.circle.fill" : "building.2.fill").mtFont(.body).foregroundStyle(none ? Color.warn : Color.brand)
+                                Text(o.name).mtFont(.body).foregroundStyle(Color.ink).lineLimit(1)
                             }
                             HStack(alignment: .firstTextBaseline, spacing: 4) {
                                 Text(HRText.num(o.headcount)).font(.system(size: 22, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).monospacedDigit()
-                                Text("người").font(.system(size: 11)).foregroundStyle(Color.inkSoft)
+                                Text("người").mtFont(.caption).foregroundStyle(Color.inkSoft)
                             }
-                            Text("+\(HRText.num(o.joined)) vào · \(HRText.num(o.left)) nghỉ").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
-                            Text((o.probation ?? 0) > 0 ? "\(HRText.num(o.probation)) đang thử việc" : "Không ai thử việc").font(.system(size: 10, weight: .semibold)).foregroundStyle((o.probation ?? 0) > 0 ? Color.warn : Color.inkSoft)
+                            Text("+\(HRText.num(o.joined)) vào · \(HRText.num(o.left)) nghỉ").mtFont(.caption).foregroundStyle(Color.inkSoft)
+                            Text((o.probation ?? 0) > 0 ? "\(HRText.num(o.probation)) đang thử việc" : "Không ai thử việc").mtFont(.caption).foregroundStyle((o.probation ?? 0) > 0 ? Color.warn : Color.inkSoft)
                         }
                         .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
+                        .background(Color.card, in: .rect(cornerRadius: MT.rCard)).cardShadow()
                     }.buttonStyle(.plain)
                 }
             }
@@ -295,7 +302,7 @@ struct HROverviewView: View {
         let depth = HRText.depths(d.departments.map { ($0.id, $0.parent_id) })
         let maxN = Double(max(1, d.departments.map { $0.headcount ?? 0 }.max() ?? 1))
         return Panel {
-            HStack { Text("Theo phòng ban").font(.system(size: 15, weight: .bold)); Spacer(); Hint(text: "Quân số cuối kỳ") }
+            HStack { Text("Theo phòng ban").mtFont(.cardHeader); Spacer(); Hint(text: "Quân số cuối kỳ") }
             ForEach(d.departments) { x in
                 let level = min(3, depth[x.id] ?? 0)
                 let flow = (x.joined ?? 0) + (x.left ?? 0) > 0 ? "+\(HRText.num(x.joined)) −\(HRText.num(x.left))" : ""
@@ -304,8 +311,8 @@ struct HROverviewView: View {
                         Text(x.name).font(.system(size: 12, weight: level == 0 ? .semibold : .regular)).foregroundStyle(Color.ink).lineLimit(1)
                             .padding(.leading, CGFloat(level) * 10).frame(width: 130, alignment: .leading)
                         Bar(value: Double(x.headcount ?? 0) / maxN, tint: level == 0 ? .good : Color.good.opacity(0.6), height: 7)
-                        Text(HRText.num(x.headcount)).font(.system(size: 12, weight: .bold)).foregroundStyle(Color.ink).monospacedDigit().frame(width: 32, alignment: .trailing)
-                        Text(flow).font(.system(size: 9)).foregroundStyle(Color.inkSoft).monospacedDigit().frame(width: 44, alignment: .trailing)
+                        Text(HRText.num(x.headcount)).mtFont(.body).foregroundStyle(Color.ink).monospacedDigit().frame(width: 32, alignment: .trailing)
+                        Text(flow).mtFont(.caption).foregroundStyle(Color.inkSoft).monospacedDigit().frame(width: 44, alignment: .trailing)
                     }.padding(.vertical, 3).contentShape(.rect)
                 }.buttonStyle(.plain)
             }
@@ -315,9 +322,9 @@ struct HROverviewView: View {
         let pts: [(String, Double)] = d.series.map { (Fmt.monthShort($0.month), Double($0.headcount ?? 0)) }
         let maxFlow = CGFloat(max(1, d.series.map { max($0.joined ?? 0, $0.left ?? 0) }.max() ?? 1))
         return Panel {
-            HStack { Text("Quân số 12 tháng").font(.system(size: 15, weight: .bold)); Spacer(); Hint(text: "Cuối mỗi tháng") }
+            HStack { Text("Quân số 12 tháng").mtFont(.cardHeader); Spacer(); Hint(text: "Cuối mỗi tháng") }
             if pts.count > 1 { LineChart(points: pts, tint: .good, height: 120) }
-            Text("Vào / nghỉ theo tháng").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink).padding(.top, 4)
+            Text("Vào / nghỉ theo tháng").mtFont(.body).foregroundStyle(Color.ink).padding(.top, 4)
             HStack(alignment: .bottom, spacing: 4) {
                 ForEach(Array(d.series.enumerated()), id: \.offset) { _, m in
                     VStack(spacing: 3) {
@@ -325,13 +332,13 @@ struct HROverviewView: View {
                             GrowBar(height: max(2, 44 * CGFloat(m.joined ?? 0) / maxFlow), color: .good)
                             GrowBar(height: max(2, 44 * CGFloat(m.left ?? 0) / maxFlow), color: .bad)
                         }.frame(height: 44, alignment: .bottom)
-                        Text(Fmt.monthShort(m.month)).font(.system(size: 8)).foregroundStyle(Color.inkSoft).lineLimit(1)
+                        Text(Fmt.monthShort(m.month)).mtFont(.caption).foregroundStyle(Color.inkSoft).lineLimit(1)
                     }.frame(maxWidth: .infinity)
                 }
             }
             HStack(spacing: 12) {
-                HStack(spacing: 4) { Circle().fill(Color.good).frame(width: 7, height: 7); Text("Vào").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }
-                HStack(spacing: 4) { Circle().fill(Color.bad).frame(width: 7, height: 7); Text("Nghỉ").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }
+                HStack(spacing: 4) { Circle().fill(Color.good).frame(width: 7, height: 7); Text("Vào").mtFont(.caption).foregroundStyle(Color.inkSoft) }
+                HStack(spacing: 4) { Circle().fill(Color.bad).frame(width: 7, height: 7); Text("Nghỉ").mtFont(.caption).foregroundStyle(Color.inkSoft) }
             }
         }
     }
@@ -339,24 +346,24 @@ struct HROverviewView: View {
         let shown = all.wrappedValue ? rows : Array(rows.prefix(8))
         return Panel {
             HStack {
-                Text("\(title) · \(rows.count)").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink)
+                Text("\(title) · \(rows.count)").mtFont(.cardHeader).foregroundStyle(Color.ink)
                 Spacer()
-                if rows.count > 8 { Button(all.wrappedValue ? "Thu gọn" : "Xem tất cả") { withAnimation { all.wrappedValue.toggle() } }.font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.brand) }
+                if rows.count > 8 { Button(all.wrappedValue ? "Thu gọn" : "Xem tất cả") { withAnimation { all.wrappedValue.toggle() } }.mtFont(.body).foregroundStyle(Color.brand) }
             }
-            if rows.isEmpty { Text(leaving ? "Không ai nghỉ trong kỳ." : "Chưa có người mới trong kỳ.").font(.system(size: 12)).foregroundStyle(Color.inkSoft) }
+            if rows.isEmpty { Text(leaving ? "Không ai nghỉ trong kỳ." : "Chưa có người mới trong kỳ.").mtFont(.body).foregroundStyle(Color.inkSoft) }
             ForEach(Array(shown.enumerated()), id: \.offset) { _, f in
                 let place = [f.department, f.office].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
                 NavigationLink(value: Route.hrPerson(f.employee_id)) {
                     HStack(spacing: 10) {
                         Avatar(name: f.name ?? "?", size: 34, tint: leaving ? Color.bad : Color.good)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(API.HR.displayName(f.name)).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1)
-                            Text(place.isEmpty ? (leaving ? "Không rõ phòng" : "Chưa xếp phòng") : place).font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1)
-                            if leaving, let r = f.reason, !r.isEmpty { Text("Lý do: \(r)").font(.system(size: 10)).foregroundStyle(Color.bad).lineLimit(1) }
+                            Text(API.HR.displayName(f.name)).mtFont(.body).foregroundStyle(Color.ink).lineLimit(1)
+                            Text(place.isEmpty ? (leaving ? "Không rõ phòng" : "Chưa xếp phòng") : place).mtFont(.caption).foregroundStyle(Color.inkSoft).lineLimit(1)
+                            if leaving, let r = f.reason, !r.isEmpty { Text("Lý do: \(r)").mtFont(.caption).foregroundStyle(Color.bad).lineLimit(1) }
                         }
                         Spacer(minLength: 4)
-                        Text(Fmt.day(f.day)).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.inkSoft).monospacedDigit()
-                        Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.inkSoft)
+                        Text(Fmt.day(f.day)).mtFont(.caption).foregroundStyle(Color.inkSoft).monospacedDigit()
+                        Image(systemName: "chevron.right").mtFont(.caption).foregroundStyle(Color.inkSoft)
                     }.padding(.vertical, 4).contentShape(.rect)
                 }.buttonStyle(.plain)
             }
@@ -373,11 +380,11 @@ struct HRPeopleList: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundStyle(Color.inkSoft)
-                    TextField("Tìm theo tên, mã nhân sự, số điện thoại", text: $store.q).font(.system(size: 13)).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    Image(systemName: "magnifyingglass").mtFont(.body).foregroundStyle(Color.inkSoft)
+                    TextField("Tìm theo tên, mã nhân sự, số điện thoại", text: $store.q).mtFont(.body).textInputAutocapitalization(.never).autocorrectionDisabled()
                     if !store.q.isEmpty { Button { store.q = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(Color.inkSoft) }.buttonStyle(.plain) }
                 }
-                .padding(.horizontal, 12).padding(.vertical, 10).background(Color.card, in: .rect(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.black.opacity(0.08)))
+                .padding(.horizontal, 12).padding(.vertical, 10).background(Color.card, in: .rect(cornerRadius: MT.rCell)).overlay(RoundedRectangle(cornerRadius: MT.rCell).stroke(Color.mtCardBorder))
                 if let e = store.peopleError, store.people == nil { Label(e, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad).font(.subheadline) }
                 if let d = store.people {
                     filters(d)
@@ -385,10 +392,12 @@ struct HRPeopleList: View {
                     let names = Dictionary(d.offices.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
                     let live = Set(d.departments.map(\.id))
                     SectionHead(title: "Danh sách nhân sự", action: "\(list.count) người")
+                    MTMetricHeroCard(label: "Danh sách nhân sự", value: Fmt.int(Double(list.count)) + " người",
+                        scope: "Theo bộ lọc chi nhánh · Trạng thái · Phòng ban đang chọn")
                     LazyVStack(spacing: 10) {
                         ForEach(list) { p in row(p, offices: names, live: live) }
                     }
-                    if list.isEmpty { Panel { Text("Không có ai khớp bộ lọc.").font(.system(size: 12)).foregroundStyle(Color.inkSoft) } }
+                    if list.isEmpty { Panel { Text("Không có ai khớp bộ lọc.").mtFont(.body).foregroundStyle(Color.inkSoft) } }
                 } else if store.peopleError == nil { Skeleton(height: 44); Skeleton(height: 300) }
             }.padding(16)
         }
@@ -460,26 +469,26 @@ struct HRPeopleList: View {
         return (role.isEmpty ? "Chưa ghi chức danh" : role, false)
     }
     private func row(_ p: API.HR.Person, offices: [String: String], live: Set<String>) -> some View {
-        let sub = [p.code, p.office_id.flatMap { offices[$0] }, p.phone].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+        let sub = [p.code, p.office_id.flatMap { offices[$0] }].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
         let role = roleLine(p, live: live)
         return NavigationLink(value: Route.hrPerson(p.id)) {
             HStack(spacing: 10) {
                 Avatar(name: p.name, size: 40, tint: HRText.tone(p.status).color)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 4) {
-                        Text(p.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1)
-                        if let n = p.nickname, !n.isEmpty { Text("(\(n))").font(.system(size: 11)).foregroundStyle(Color.inkSoft).lineLimit(1) }
+                        Text(p.name).mtFont(.body).foregroundStyle(Color.ink).lineLimit(1)
+                        if let n = p.nickname, !n.isEmpty { Text("(\(n))").mtFont(.caption).foregroundStyle(Color.inkSoft).lineLimit(1) }
                     }
-                    Text(role.text).font(.system(size: 11)).foregroundStyle(role.warn ? Color.warn : Color.inkSoft).lineLimit(1)
-                    if !sub.isEmpty { Text(sub).font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1) }
+                    Text(role.text).mtFont(.caption).foregroundStyle(role.warn ? Color.warn : HRText.roleInk(role.text)).fixedSize(horizontal: false, vertical: true)
+                    if !sub.isEmpty { Text(sub).mtFont(.caption).foregroundStyle(HRText.roleInk(sub)).fixedSize(horizontal: false, vertical: true) }
                 }
                 Spacer(minLength: 4)
                 VStack(alignment: .trailing, spacing: 4) {
                     Tag(text: p.status_label ?? p.status ?? "—", tone: HRText.tone(p.status))
-                    if (p.concurrent ?? 0) > 0 { Text("+\(p.concurrent ?? 0) kiêm nhiệm").font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.blue) }
+                    if (p.concurrent ?? 0) > 0 { Text("+\(p.concurrent ?? 0) kiêm nhiệm").mtFont(.caption).foregroundStyle(Color.mtBrandPrimary) }
                 }
-                Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.inkSoft)
-            }.padding(12).background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
+                Image(systemName: "chevron.right").mtFont(.caption).foregroundStyle(Color.inkSoft)
+            }.padding(MT.cardPad).background(Color.mtSurfaceCard, in: .rect(cornerRadius: MT.rCard)).overlay(RoundedRectangle(cornerRadius: MT.rCard).stroke(Color.mtCardBorder)).cardShadow()
         }.buttonStyle(.plain)
     }
 }
@@ -488,15 +497,21 @@ struct HRPeopleList: View {
 
 struct PersonView: View {
     let id: String
-    @Environment(\.openURL) private var openURL
+    @Environment(AuthModel.self) private var auth
     @State private var d: API.HR.PersonDetail?
     @State private var error: String?
+    @State private var profile: API.StaffProfileReport?
+    @State private var achievements: API.HRProfileAchievements?
+    @State private var profileError: String?
+    @State private var profileMissing = false
+    @State private var profileLoading = false
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 if let error, d == nil { Label(error, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad) }
                 if let d {
                     header(d.employee)
+                    if auth.me?.role == "owner", d.performance?.posUserId != nil { profileContent }
                     if let p = d.performance { performance(p) }
                     info(d.employee)
                     if !d.assignments.isEmpty { roles(d.assignments) }
@@ -509,6 +524,78 @@ struct PersonView: View {
         .navigationTitle("Hồ sơ nhân sự").navigationBarTitleDisplayMode(.inline).brandNav()
         .refreshable { await load() }
         .task { await load() }
+        .task(id: d?.performance?.posUserId) { await loadProfile() }
+    }
+    @ViewBuilder private var profileContent: some View {
+        if let profile {
+            Panel {
+                Text("Mốc hành trình nhân sự").mtFont(.cardHeader)
+                if let tenure = profile.tenure {
+                    Text("T" + Fmt.int(Double(tenure.t))).mtFont(.cardMetric).foregroundStyle(Color.mtSuccessInk)
+                }
+                milestone("Ngày vào", profile.tenure?.joined)
+                milestone("Tài khoản POS", profile.posCreated)
+                milestone("Đơn đầu tiên", profile.firstOrderDay)
+                if let definition = profile.definitions["joined"] { Text(definition).mtFont(.caption).foregroundStyle(Color.mtTextSecondary) }
+            }
+            if let achievements, achievements.best?.month != nil || !(achievements.topMonths ?? []).isEmpty {
+                Panel {
+                    Text("Thành tích tốt nhất & Top bộ phận").mtFont(.cardHeader)
+                    Text("Tài khoản POS đang xem · Mọi POS · Các tháng máy chủ trả").mtFont(.caption).foregroundStyle(Color.mtTextSecondary)
+                    if let month = achievements.best?.month {
+                        Text("Tháng cao nhất: \(Fmt.shortMoney(month.net)) · \(Fmt.monthLabel(month.month))").mtFont(.body)
+                    }
+                    ForEach(achievements.topMonths ?? []) { month in
+                        HStack {
+                            Text(Fmt.monthLabel(month.month))
+                            Spacer()
+                            Text(month.rank.map { "Hạng " + Fmt.int(Double($0)) } ?? "—")
+                        }.mtFont(.body)
+                    }
+                }
+            }
+            if !profile.badges.isEmpty {
+                Panel {
+                    Text("Huy hiệu thành tích").mtFont(.cardHeader)
+                    Text("Huy hiệu tính trên mọi POS · Tài khoản POS đang xem").mtFont(.caption).foregroundStyle(Color.mtTextSecondary)
+                    ForEach(profile.badges) { badge in
+                        HStack(alignment: .top, spacing: MT.cellGap) {
+                            Image(systemName: "medal.fill").foregroundStyle(Color.mtWarningInk)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(badge.label).mtFont(.cardHeader)
+                                Text(badge.note).mtFont(.caption)
+                            }
+                            Spacer(minLength: 0)
+                            Text(badge.tier).mtFont(.caption).foregroundStyle(Color.mtRolePurpleInk)
+                        }.padding(MT.cellGap).tileSurface().accessibilityElement(children: .combine)
+                    }
+                }
+            }
+        } else if profileMissing { StateView(empty: "Chưa có trên máy chủ") }
+        else if let profileError { StateView(error: profileError) { await loadProfile() } }
+        else if profileLoading { StateView(loading: "Đang tải hành trình làm việc…") }
+    }
+    private func milestone(_ title: String, _ day: String?) -> some View {
+        HStack(alignment: .top, spacing: MT.cellGap) {
+            Image(systemName: "circle.inset.filled").foregroundStyle(Color.mtBrandPrimary)
+            Text(title)
+            Spacer()
+            Text(day.map(Fmt.day) ?? "—").monospacedDigit()
+        }.mtFont(.body).padding(MT.cellGap).tileSurface().accessibilityElement(children: .combine)
+    }
+    @MainActor private func loadProfile() async {
+        profile = nil; achievements = nil; profileError = nil; profileMissing = false
+        guard auth.me?.role == "owner", let posUser = d?.performance?.posUserId else { return }
+        profileLoading = true; defer { profileLoading = false }
+        do {
+            let result = try await API.hrProfileAchievements(id: posUser)
+            try Task.checkCancellation()
+            profile = result.profile; achievements = result
+        } catch {
+            guard !Task.isCancelled else { return }
+            profileMissing = (error as? API.APIError)?.status == 404
+            if !profileMissing { profileError = LoadError.text(error) }
+        }
     }
     @MainActor private func load() async {
         do { d = try await API.hrPerson(id: id); error = nil } catch { if !Task.isCancelled { self.error = error.localizedDescription } }
@@ -524,23 +611,17 @@ struct PersonView: View {
             HStack(alignment: .top, spacing: 12) {
                 Avatar(name: e.name, size: 56, tint: HRText.tone(e.status).color)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(e.name).font(.system(size: 17, weight: .bold)).foregroundStyle(Color.ink)
+                    Text(e.name).mtFont(.cardHeader).foregroundStyle(Color.ink)
                     let nick: String? = (e.nickname ?? "").isEmpty ? nil : "“\(e.nickname ?? "")”"
                     let sub = [e.code, nick].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
-                    if !sub.isEmpty { Text(sub).font(.system(size: 11)).foregroundStyle(Color.inkSoft) }
-                    if let line = roleLine(e) { Text(line).font(.system(size: 12)).foregroundStyle(Color.ink).lineLimit(2) }
+                    if !sub.isEmpty { Text(sub).mtFont(.caption).foregroundStyle(Color.inkSoft) }
+                    if let line = roleLine(e) { Text(line).mtFont(.body).foregroundStyle(HRText.roleInk(line)).padding(6).background(Color.mtRolePurpleBg, in: .rect(cornerRadius: 6)).fixedSize(horizontal: false, vertical: true) }
                     HStack(spacing: 6) {
                         Tag(text: e.status_label ?? e.status ?? "—", tone: HRText.tone(e.status))
                         if let o = e.office_name, !o.isEmpty { Tag(text: o, tone: .blue, dot: true) }
                     }
                 }
                 Spacer(minLength: 0)
-            }
-            if let phone = HRText.dial(e.phone) {
-                HStack(spacing: 8) {
-                    Button { if let u = URL(string: "tel:\(phone)") { openURL(u) } } label: { ActionPill(icon: "phone.fill", text: "Gọi", tint: .good) }.buttonStyle(.plain)
-                    Button { if let u = URL(string: "sms:\(phone)") { openURL(u) } } label: { ActionPill(icon: "message.fill", text: "Nhắn", tint: .brand) }.buttonStyle(.plain)
-                }.padding(.top, 4)
             }
         }
     }
@@ -549,17 +630,20 @@ struct PersonView: View {
         let rank = p.rank.map { "\($0)/\(p.peers ?? 0)" } ?? "—"
         let since = (p.lifetime?.firstDay).map { " · từ \(Fmt.day($0))" } ?? ""
         return VStack(alignment: .leading, spacing: 10) {
-            HStack { Text("Bán hàng tháng \(Fmt.monthLabel(p.month))").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink); Spacer(); Hint(text: "Từ dữ liệu POS") }
+            HStack { Text("Bán hàng tháng \(Fmt.monthLabel(p.month))").mtFont(.cardHeader).foregroundStyle(Color.ink); Spacer(); Hint(text: "Từ dữ liệu POS") }
+            Text("Tài khoản POS đang xem · Tổng từ trước tới nay không cộng nhiều tài khoản").mtFont(.caption).foregroundStyle(Color.mtTextSecondary)
+            MTMetricHeroCard(label: "Doanh thu tháng", value: p.revenue.map(Fmt.shortMoney) ?? "—",
+                scope: Fmt.monthLabel(p.month) + " · Tài khoản POS đang xem",
+                comparison: p.revenue.flatMap { Fmt.delta($0, p.prevSameDays) })
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                KpiCard(icon: "ic_m_revenue", tint: .good, label: "Doanh thu tháng", value: Fmt.shortMoney(p.revenue ?? 0), delta: Fmt.delta(p.revenue ?? 0, p.prevSameDays), note: "Chưa có số cùng kỳ")
                 KpiCard(icon: "ic_m_closed", tint: .blue, label: "Đơn chốt", value: Fmt.int(p.closedOrders ?? 0), note: "Trong tháng")
                 KpiCard(icon: "trophy.fill", tint: .warn, label: "Hạng trong bộ phận", value: rank, note: p.rank == nil ? "Chưa có doanh thu" : "Theo doanh thu tháng")
                 KpiCard(icon: "sum", tint: .purple, label: "Từ trước tới nay", value: Fmt.shortMoney(p.lifetime?.revenue ?? 0), note: "\(Fmt.int(p.lifetime?.closedOrders ?? 0)) đơn chốt\(since)")
             }
-            Text("So với cùng kỳ tháng trước (cùng số ngày): \(Fmt.shortMoney(p.prevSameDays ?? 0))").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+            Text("So với cùng kỳ tháng trước (cùng số ngày): \(Fmt.shortMoney(p.prevSameDays ?? 0))").mtFont(.caption).foregroundStyle(Color.inkSoft)
             if !pts.isEmpty {
                 Panel {
-                    HStack { Text("Doanh thu 6 tháng").font(.system(size: 14, weight: .bold)); Spacer(); Hint(text: "Doanh thu đơn chốt theo tháng") }
+                    HStack { Text("Doanh thu 6 tháng").mtFont(.body); Spacer(); Hint(text: "Doanh thu đơn chốt theo tháng") }
                     BarChart(points: pts, money: true)
                 }
             }
@@ -567,13 +651,11 @@ struct PersonView: View {
     }
     private func info(_ e: API.HR.Profile) -> some View {
         Panel {
-            Text("Thông tin chung").font(.system(size: 13, weight: .bold))
+            Text("Thông tin chung").mtFont(.body)
             Group {
                 infoRow("Mã nhân sự", e.code)
                 infoRow("Giới tính", HRText.gender(e.gender))
                 infoRow("Ngày sinh", e.birth_date.map { Fmt.day($0) })
-                infoRow("Số điện thoại", e.phone)
-                infoRow("Email", e.email)
                 infoRow("Chi nhánh", e.office_name)
                 infoRow("Trình độ", e.education)
             }
@@ -598,7 +680,7 @@ struct PersonView: View {
     }
     private func roles(_ list: [API.HR.Assignment]) -> some View {
         Panel {
-            Text("Vai trò & chức vụ").font(.system(size: 13, weight: .bold))
+            Text("Vai trò & chức vụ").mtFont(.body)
             ForEach(list) { a in
                 let open = a.open ?? (a.end_on == nil)
                 let primary = a.is_primary == true
@@ -607,10 +689,10 @@ struct PersonView: View {
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: open ? (primary ? "star.circle.fill" : "plus.circle.fill") : "clock.arrow.circlepath").font(.system(size: 15)).foregroundStyle(open ? Color.good : Color.inkSoft).frame(width: 20)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(title.isEmpty ? "Chưa ghi chức danh" : title).font(.system(size: 12, weight: .semibold)).foregroundStyle(open ? Color.ink : Color.inkSoft)
-                        if let dn = a.department_name, !dn.isEmpty { Text(dn).font(.system(size: 11)).foregroundStyle(Color.inkSoft) }
-                        Text(Fmt.span(a.start_on, a.end_on)).font(.system(size: 10)).foregroundStyle(Color.inkSoft)
-                        if let m = a.manager_name, !m.isEmpty { Text("Quản lý trực tiếp: \(m)").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }
+                        Text(title.isEmpty ? "Chưa ghi chức danh" : title).mtFont(.body).foregroundStyle(open ? HRText.roleInk(title) : Color.inkSoft)
+                        if let dn = a.department_name, !dn.isEmpty { Text(dn).mtFont(.caption).foregroundStyle(Color.inkSoft) }
+                        Text(Fmt.span(a.start_on, a.end_on)).mtFont(.caption).foregroundStyle(Color.inkSoft)
+                        if let m = a.manager_name, !m.isEmpty { Text("Quản lý trực tiếp: \(m)").mtFont(.caption).foregroundStyle(Color.inkSoft) }
                     }
                     Spacer(minLength: 4)
                     Tag(text: tag.0, tone: tag.1)
@@ -621,12 +703,12 @@ struct PersonView: View {
     private func reporting(_ d: API.HR.PersonDetail) -> some View {
         Panel {
             if !d.chain.isEmpty {
-                Text("Báo cáo cho").font(.system(size: 13, weight: .bold))
+                Text("Báo cáo cho").mtFont(.body)
                 ForEach(Array(d.chain.enumerated()), id: \.element.id) { i, b in personRow(b, note: i == 0 ? "Quản lý trực tiếp" : "Cấp trên") }
             }
             if !d.reports.isEmpty {
                 if !d.chain.isEmpty { Divider() }
-                Text("Cấp dưới trực tiếp · \(d.reports.count) người").font(.system(size: 13, weight: .bold))
+                Text("Cấp dưới trực tiếp · \(d.reports.count) người").mtFont(.body)
                 ForEach(d.reports) { b in personRow(b, note: nil) }
             }
         }
@@ -637,28 +719,28 @@ struct PersonView: View {
             HStack(spacing: 10) {
                 Avatar(name: b.full_name ?? "?", size: 32)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(API.HR.displayName(b.full_name)).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1)
-                    if !sub.isEmpty { Text(sub).font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1) }
+                    Text(API.HR.displayName(b.full_name)).mtFont(.body).foregroundStyle(Color.ink).lineLimit(1)
+                    if !sub.isEmpty { Text(sub).mtFont(.caption).foregroundStyle(Color.inkSoft).lineLimit(1) }
                 }
                 Spacer()
-                Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.inkSoft)
+                Image(systemName: "chevron.right").mtFont(.caption).foregroundStyle(Color.inkSoft)
             }.padding(.vertical, 4).contentShape(.rect)
         }.buttonStyle(.plain)
     }
     private func history(_ list: [API.HR.StatusEntry]) -> some View {
         Panel {
-            Text("Lịch sử trạng thái").font(.system(size: 13, weight: .bold))
+            Text("Lịch sử trạng thái").mtFont(.body)
             ForEach(Array(list.enumerated()), id: \.offset) { i, s in
                 HStack(alignment: .top, spacing: 10) {
                     VStack(spacing: 0) {
                         Circle().fill(HRText.tone(s.status).color).frame(width: 9, height: 9).padding(.top, 4)
-                        if i < list.count - 1 { Rectangle().fill(Color.black.opacity(0.08)).frame(width: 2).frame(maxHeight: .infinity) }
+                        if i < list.count - 1 { Rectangle().fill(Color.mtCardBorder).frame(width: 2).frame(maxHeight: .infinity) }
                     }
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(s.status_label ?? s.status ?? "—").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink)
-                        Text(s.effective_on.map { "Từ \(Fmt.day($0))" } ?? "Chưa ghi ngày").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
-                        if let r = s.reason, !r.isEmpty { Text("Lý do: \(r)").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }
-                        if let n = s.note, !n.isEmpty { Text(n).font(.system(size: 10)).foregroundStyle(Color.inkSoft) }
+                        Text(s.status_label ?? s.status ?? "—").mtFont(.body).foregroundStyle(Color.ink)
+                        Text(s.effective_on.map { "Từ \(Fmt.day($0))" } ?? "Chưa ghi ngày").mtFont(.caption).foregroundStyle(Color.inkSoft)
+                        if let r = s.reason, !r.isEmpty { Text("Lý do: \(r)").mtFont(.caption).foregroundStyle(Color.inkSoft) }
+                        if let n = s.note, !n.isEmpty { Text(n).mtFont(.caption).foregroundStyle(Color.inkSoft) }
                     }.padding(.bottom, 8)
                 }
             }
@@ -666,18 +748,18 @@ struct PersonView: View {
     }
     private func requests(_ list: [API.HR.ChangeRequest]) -> some View {
         Panel {
-            Text("Yêu cầu thay đổi gần đây").font(.system(size: 13, weight: .bold))
+            Text("Yêu cầu thay đổi gần đây").mtFont(.body)
             ForEach(list.prefix(10)) { r in
                 let st = HRText.state(r.state)
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(alignment: .top) {
-                        Text(r.summary ?? HRText.kind(r.kind)).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink)
+                        Text(r.summary ?? HRText.kind(r.kind)).mtFont(.body).foregroundStyle(Color.ink)
                         Spacer(minLength: 6)
                         Tag(text: st.0, tone: st.1)
                     }
-                    Text("Gửi bởi \(r.requested_by_name ?? "—") · \(Fmt.dateTime(r.requested_at))").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
-                    if let by = r.decided_by_name, !by.isEmpty { Text("\(r.state == "rejected" ? "Từ chối" : "Duyệt") bởi \(by) · \(Fmt.dateTime(r.decided_at))").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }
-                    if let n = r.decision_note, !n.isEmpty { Text("Ghi chú: \(n)").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }
+                    Text("Gửi bởi \(r.requested_by_name ?? "—") · \(Fmt.dateTime(r.requested_at))").mtFont(.caption).foregroundStyle(Color.inkSoft)
+                    if let by = r.decided_by_name, !by.isEmpty { Text("\(r.state == "rejected" ? "Từ chối" : "Duyệt") bởi \(by) · \(Fmt.dateTime(r.decided_at))").mtFont(.caption).foregroundStyle(Color.inkSoft) }
+                    if let n = r.decision_note, !n.isEmpty { Text("Ghi chú: \(n)").mtFont(.caption).foregroundStyle(Color.inkSoft) }
                 }.padding(.vertical, 4)
             }
         }
@@ -699,17 +781,17 @@ struct HROrgView: View {
             VStack(alignment: .leading, spacing: 12) {
                 PageTitle(title: "Sơ đồ tổ chức", subtitle: "Chạm một phòng để xem người trong đó", trailing: AnyView(toggleAll))
                 HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundStyle(Color.inkSoft)
-                    TextField("Tìm người hoặc phòng ban", text: $q).font(.system(size: 13)).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    Image(systemName: "magnifyingglass").mtFont(.body).foregroundStyle(Color.inkSoft)
+                    TextField("Tìm người hoặc phòng ban", text: $q).mtFont(.body).textInputAutocapitalization(.never).autocorrectionDisabled()
                     if !q.isEmpty { Button { q = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(Color.inkSoft) }.buttonStyle(.plain) }
                 }
-                .padding(.horizontal, 12).padding(.vertical, 10).background(Color.card, in: .rect(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.black.opacity(0.08)))
+                .padding(.horizontal, 12).padding(.vertical, 10).background(Color.card, in: .rect(cornerRadius: MT.rCell)).overlay(RoundedRectangle(cornerRadius: MT.rCell).stroke(Color.mtCardBorder))
                 if let e = store.orgError, store.org == nil { Label(e, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad).font(.subheadline) }
                 if let d = store.org {
                     if q.trimmingCharacters(in: .whitespaces).isEmpty {
                         let totals = headcounts(d.units)
                         ForEach(branches(d.units)) { b in branch(b, totals: totals) }
-                        if d.units.isEmpty { Panel { Text("Chưa có phòng ban nào.").font(.system(size: 12)).foregroundStyle(Color.inkSoft) } }
+                        if d.units.isEmpty { Panel { Text("Chưa có phòng ban nào.").mtFont(.body).foregroundStyle(Color.inkSoft) } }
                     } else { matches(d) }
                 } else if store.orgError == nil { Skeleton(height: 60); Skeleton(height: 220) }
             }.padding(16)
@@ -721,8 +803,8 @@ struct HROrgView: View {
         Button {
             withAnimation(.snappy(duration: 0.25)) { open = open.isEmpty ? Set((store.org?.units ?? []).map(\.id)) : [] }
         } label: {
-            Text(open.isEmpty ? "Mở hết" : "Thu gọn").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink)
-                .padding(.horizontal, 10).padding(.vertical, 7).background(Color.card, in: .rect(cornerRadius: 8)).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.black.opacity(0.12)))
+            Text(open.isEmpty ? "Mở hết" : "Thu gọn").mtFont(.caption).foregroundStyle(Color.ink)
+                .padding(.horizontal, 10).padding(.vertical, 7).background(Color.card, in: .rect(cornerRadius: 8)).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.mtCardBorder))
         }.buttonStyle(.plain)
     }
     /// Nhóm theo chi nhánh: phòng chưa gắn chi nhánh (thường là Ban Giám đốc) lên đầu, rồi theo thứ tự xuất hiện.
@@ -779,10 +861,10 @@ struct HROrgView: View {
         let rows = lines(b.units)
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Image(systemName: b.id == "__none" ? "building.columns.fill" : "building.2.fill").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.brand)
-                Text(b.name).font(.system(size: 14, weight: .bold)).foregroundStyle(Color.ink)
+                Image(systemName: b.id == "__none" ? "building.columns.fill" : "building.2.fill").mtFont(.body).foregroundStyle(Color.brand)
+                Text(b.name).mtFont(.body).foregroundStyle(Color.ink)
                 Spacer()
-                Text("\(b.units.count) phòng / team").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                Text("\(b.units.count) phòng / team").mtFont(.caption).foregroundStyle(Color.inkSoft)
             }
             VStack(spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { i, l in
@@ -790,7 +872,7 @@ struct HROrgView: View {
                     else if let m = l.member { memberRow(m, depth: l.depth, head: l.isHead) }
                     if i < rows.count - 1 { Divider().padding(.leading, CGFloat(l.depth) * 14 + 12) }
                 }
-            }.background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
+            }.background(Color.card, in: .rect(cornerRadius: MT.rCard)).cardShadow()
         }
     }
     private func unitRow(_ u: API.HR.OrgUnit, depth: Int, total: Int) -> some View {
@@ -799,14 +881,14 @@ struct HROrgView: View {
             withAnimation(.snappy(duration: 0.25)) { toggle(u.id) }
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: isOpen ? "chevron.down" : "chevron.right").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.inkSoft).frame(width: 12)
-                Image(systemName: HRText.kindIcon(u.kind)).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.brand).frame(width: 28, height: 28).background(Color.brandSoft, in: .rect(cornerRadius: 8))
+                Image(systemName: isOpen ? "chevron.down" : "chevron.right").mtFont(.caption).foregroundStyle(Color.inkSoft).frame(width: 12)
+                Image(systemName: HRText.kindIcon(u.kind)).mtFont(.body).foregroundStyle(Color.brand).frame(width: 28, height: 28).background(Color.brandSoft, in: .rect(cornerRadius: 8))
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(u.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1)
-                    Text(u.head.map { "Phụ trách: \(API.HR.displayName($0.full_name))" } ?? "Chưa có người phụ trách").font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1)
+                    Text(u.name).mtFont(.body).foregroundStyle(Color.ink).lineLimit(1)
+                    Text(u.head.map { "Phụ trách: \(API.HR.displayName($0.full_name))" } ?? "Chưa có người phụ trách").mtFont(.caption).foregroundStyle(Color.inkSoft).lineLimit(1)
                 }
                 Spacer(minLength: 4)
-                Text("\(total) người").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.ink).monospacedDigit()
+                Text("\(total) người").mtFont(.caption).foregroundStyle(Color.ink).monospacedDigit()
             }
             .padding(.vertical, 9).padding(.trailing, 12).padding(.leading, 10 + CGFloat(depth) * 14).contentShape(.rect)
         }.buttonStyle(.plain)
@@ -822,11 +904,11 @@ struct HROrgView: View {
                 Avatar(name: m.full_name ?? "?", size: 28, tint: head ? Color.good : Color.brand)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(API.HR.displayName(m.full_name)).font(.system(size: 12, weight: head ? .bold : .medium)).foregroundStyle(Color.ink).lineLimit(1)
-                    if !sub.isEmpty { Text(sub).font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1) }
+                    if !sub.isEmpty { Text(sub).mtFont(.caption).foregroundStyle(Color.inkSoft).lineLimit(1) }
                 }
                 Spacer(minLength: 4)
                 if head { Tag(text: "Phụ trách", tone: .green) }
-                Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundStyle(Color.inkSoft)
+                Image(systemName: "chevron.right").mtFont(.caption).foregroundStyle(Color.inkSoft)
             }
             .padding(.vertical, 6).padding(.trailing, 12).padding(.leading, 10 + CGFloat(depth) * 14 + 20).contentShape(.rect)
         }.buttonStyle(.plain)
@@ -844,7 +926,7 @@ struct HROrgView: View {
         }
         let parents = Dictionary(d.units.map { ($0.id, $0.parent_id) }, uniquingKeysWith: { a, _ in a })
         return VStack(alignment: .leading, spacing: 10) {
-            if units.isEmpty && people.isEmpty { Panel { Text("Không thấy người hay phòng nào khớp.").font(.system(size: 12)).foregroundStyle(Color.inkSoft) } }
+            if units.isEmpty && people.isEmpty { Panel { Text("Không thấy người hay phòng nào khớp.").mtFont(.body).foregroundStyle(Color.inkSoft) } }
             if !units.isEmpty {
                 SectionHead(title: "Phòng ban", action: "\(units.count)")
                 VStack(spacing: 0) {
@@ -857,17 +939,17 @@ struct HROrgView: View {
                             open.formUnion(path); q = ""
                         } label: {
                             HStack(spacing: 8) {
-                                Image(systemName: HRText.kindIcon(u.kind)).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.brand).frame(width: 28, height: 28).background(Color.brandSoft, in: .rect(cornerRadius: 8))
+                                Image(systemName: HRText.kindIcon(u.kind)).mtFont(.body).foregroundStyle(Color.brand).frame(width: 28, height: 28).background(Color.brandSoft, in: .rect(cornerRadius: 8))
                                 VStack(alignment: .leading, spacing: 1) {
-                                    Text(u.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink)
-                                    Text([u.office_name, "\(u.members.count) người"].compactMap { $0 }.joined(separator: " · ")).font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                                    Text(u.name).mtFont(.body).foregroundStyle(Color.ink)
+                                    Text([u.office_name, "\(u.members.count) người"].compactMap { $0 }.joined(separator: " · ")).mtFont(.caption).foregroundStyle(Color.inkSoft)
                                 }
                                 Spacer()
-                                Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.inkSoft)
+                                Image(systemName: "chevron.right").mtFont(.caption).foregroundStyle(Color.inkSoft)
                             }.padding(10).contentShape(.rect)
                         }.buttonStyle(.plain)
                     }
-                }.background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
+                }.background(Color.card, in: .rect(cornerRadius: MT.rCard)).cardShadow()
             }
             if !people.isEmpty {
                 SectionHead(title: "Nhân sự", action: "\(people.count) người")
@@ -877,15 +959,15 @@ struct HROrgView: View {
                             HStack(spacing: 8) {
                                 Avatar(name: m.full_name ?? "?", size: 30)
                                 VStack(alignment: .leading, spacing: 1) {
-                                    Text(API.HR.displayName(m.full_name)).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink)
-                                    Text([m.title_name ?? m.level_name, unit].compactMap { $0 }.joined(separator: " · ")).font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1)
+                                    Text(API.HR.displayName(m.full_name)).mtFont(.body).foregroundStyle(Color.ink)
+                                    Text([m.title_name ?? m.level_name, unit].compactMap { $0 }.joined(separator: " · ")).mtFont(.caption).foregroundStyle(Color.inkSoft).lineLimit(1)
                                 }
                                 Spacer()
-                                Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.inkSoft)
+                                Image(systemName: "chevron.right").mtFont(.caption).foregroundStyle(Color.inkSoft)
                             }.padding(10).contentShape(.rect)
                         }.buttonStyle(.plain)
                     }
-                }.background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
+                }.background(Color.card, in: .rect(cornerRadius: MT.rCard)).cardShadow()
             }
         }
     }
@@ -911,10 +993,14 @@ struct HRApprovalsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 PageTitle(title: "Duyệt thay đổi", subtitle: "Đổi chức vụ, trạng thái do HR gửi lên")
+                if let pending = store.pending {
+                    MTMetricHeroCard(label: "Yêu cầu đang chờ", value: Fmt.int(Double(pending.count)) + " yêu cầu",
+                        scope: "Phạm vi nhân sự được xem · Chờ duyệt")
+                }
                 Segmented(selection: $tab, options: [("pending", "Chờ duyệt"), ("done", "Đã xử lý")])
                 if let t = toast {
-                    Label(t.text, systemImage: t.ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill").font(.system(size: 12, weight: .semibold)).foregroundStyle(t.ok ? Color.good : Color.bad)
-                        .padding(10).frame(maxWidth: .infinity, alignment: .leading).background((t.ok ? Color.good : Color.bad).opacity(0.1), in: .rect(cornerRadius: 10))
+                    Label(t.text, systemImage: t.ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill").mtFont(.body).foregroundStyle(t.ok ? Color.good : Color.bad)
+                        .padding(10).frame(maxWidth: .infinity, alignment: .leading).background((t.ok ? Color.good : Color.bad).opacity(0.1), in: .rect(cornerRadius: MT.rCell))
                 }
                 if let e = store.approvalsError, list == nil { Label(e, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad).font(.subheadline) }
                 if tab == "pending" && !mine.isEmpty {
@@ -922,7 +1008,7 @@ struct HRApprovalsView: View {
                         .disabled(!busy.isEmpty).opacity(busy.isEmpty ? 1 : 0.5)
                 }
                 if let rows = list {
-                    if rows.isEmpty { Panel { Text(tab == "done" ? "Chưa có yêu cầu nào được xử lý." : "Không có yêu cầu nào đang chờ duyệt.").font(.system(size: 12)).foregroundStyle(Color.inkSoft) } }
+                    if rows.isEmpty { Panel { Text(tab == "done" ? "Chưa có yêu cầu nào được xử lý." : "Không có yêu cầu nào đang chờ duyệt.").mtFont(.body).foregroundStyle(Color.inkSoft) } }
                     ForEach(rows) { r in card(r) }
                 } else if store.approvalsError == nil { Skeleton(height: 130); Skeleton(height: 130) }
             }.padding(16)
@@ -948,40 +1034,40 @@ struct HRApprovalsView: View {
                 HStack(spacing: 10) {
                     Avatar(name: r.employee_name ?? "?", size: 36)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(API.HR.displayName(r.employee_name)).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1)
+                        Text(API.HR.displayName(r.employee_name)).mtFont(.body).foregroundStyle(Color.ink).lineLimit(1)
                         Tag(text: r.kind_label ?? HRText.kind(r.kind), tone: .blue)
                     }
                     Spacer(minLength: 4)
                     VStack(alignment: .trailing, spacing: 3) {
                         Tag(text: st.0, tone: st.1)
-                        Text(Ago.text(r.requested_at) ?? "").font(.system(size: 9)).foregroundStyle(Color.inkSoft)
+                        Text(Ago.text(r.requested_at) ?? "").mtFont(.caption).foregroundStyle(Color.inkSoft)
                     }
                 }.contentShape(.rect)
             }.buttonStyle(.plain).disabled(r.employee_id == nil)
-            Text(r.summary ?? "—").font(.system(size: 13)).foregroundStyle(Color.ink)
-            Text("Gửi bởi \(r.requested_by_name ?? "—") · \(Fmt.dateTime(r.requested_at))").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+            Text(r.summary ?? "—").mtFont(.body).foregroundStyle(Color.ink)
+            Text("Gửi bởi \(r.requested_by_name ?? "—") · \(Fmt.dateTime(r.requested_at))").mtFont(.caption).foregroundStyle(Color.inkSoft)
             if r.state == "pending" {
                 if r.can_decide == true {
                     HStack(spacing: 8) {
                         Button { confirmIds = [r.id]; confirming = true } label: {
-                            HStack(spacing: 5) { Image(systemName: "checkmark"); Text("Duyệt") }.font(.system(size: 13, weight: .bold)).foregroundStyle(.white)
-                                .frame(maxWidth: .infinity).padding(.vertical, 10).background(Color.good, in: .rect(cornerRadius: 10))
+                            HStack(spacing: 5) { Image(systemName: "checkmark"); Text("Duyệt") }.mtFont(.body).foregroundStyle(.white)
+                                .frame(maxWidth: .infinity).padding(.vertical, 10).background(Color.good, in: .rect(cornerRadius: MT.rCell))
                         }.buttonStyle(.plain)
                         Button { rejecting = HRReject(ids: [r.id], title: r.summary ?? HRText.kind(r.kind)) } label: {
-                            HStack(spacing: 5) { Image(systemName: "xmark"); Text("Từ chối") }.font(.system(size: 13, weight: .bold)).foregroundStyle(Color.bad)
-                                .frame(maxWidth: .infinity).padding(.vertical, 10).overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.bad.opacity(0.5), lineWidth: 1.5))
+                            HStack(spacing: 5) { Image(systemName: "xmark"); Text("Từ chối") }.mtFont(.body).foregroundStyle(Color.bad)
+                                .frame(maxWidth: .infinity).padding(.vertical, 10).overlay(RoundedRectangle(cornerRadius: MT.rCell).stroke(Color.bad.opacity(0.5), lineWidth: 1.5))
                         }.buttonStyle(.plain)
                     }.disabled(working).opacity(working ? 0.5 : 1)
                 } else {
-                    Text("Chờ \(r.approver_name ?? "người có quyền") duyệt").font(.system(size: 11)).foregroundStyle(Color.inkSoft)
+                    Text("Chờ \(r.approver_name ?? "người có quyền") duyệt").mtFont(.caption).foregroundStyle(Color.inkSoft)
                 }
             } else {
-                if let by = r.decided_by_name, !by.isEmpty { Text("\(rejected ? "Từ chối" : "Duyệt") bởi \(by) · \(Fmt.dateTime(r.decided_at))").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }
-                if let n = r.decision_note, !n.isEmpty { Text("\(rejected ? "Lý do" : "Ghi chú"): \(n)").font(.system(size: 11)).foregroundStyle(rejected ? Color.bad : Color.inkSoft) }
+                if let by = r.decided_by_name, !by.isEmpty { Text("\(rejected ? "Từ chối" : "Duyệt") bởi \(by) · \(Fmt.dateTime(r.decided_at))").mtFont(.caption).foregroundStyle(Color.inkSoft) }
+                if let n = r.decision_note, !n.isEmpty { Text("\(rejected ? "Lý do" : "Ghi chú"): \(n)").mtFont(.caption).foregroundStyle(rejected ? Color.bad : Color.inkSoft) }
             }
         }
         .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
+        .background(Color.card, in: .rect(cornerRadius: MT.rCard)).cardShadow()
         .thinkingGlow(working, radius: 14)
     }
     /// Gửi duyệt / từ chối, rồi tải lại danh sách chờ và số trên huy hiệu.

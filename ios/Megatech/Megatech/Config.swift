@@ -15,7 +15,7 @@ struct ConfigView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 PageTitle(title: "Cấu hình & kết nối", subtitle: "Kết nối ổn định. Làm chủ hệ thống.", trailing: AnyView(Tag(text: isOwner ? "Chỉ dành cho Admin" : "Chỉ xem", tone: .green, dot: true)))
-                if let toast { Text(toast).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.good).padding(10).background(Color.brandSoft, in: .rect(cornerRadius: 10)) }
+                if let toast { Text(toast).mtFont(.caption).foregroundStyle(Color.good).padding(10).background(Color.brandSoft, in: .rect(cornerRadius: MT.rCell)) }
                 SectionHead(title: "Kết nối hệ thống POS", action: "\(sync.pos.count) shop")
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
                     ForEach(PosBreakdown.order, id: \.self) { id in
@@ -25,51 +25,51 @@ struct ConfigView: View {
                         Button { if isOwner { sheet = nil; shopEdit = shop ?? API.ConfigShop(id: id, name: PosBreakdown.names[id] ?? id, shopId: "", status: nil, lastSyncAt: nil, historyStart: nil, lastError: nil) } } label: {
                             VStack(alignment: .leading, spacing: 5) {
                                 PosBadge(id: id, size: 28)
-                                Text(PosBreakdown.short[id] ?? id).font(.system(size: 11, weight: .bold)).foregroundStyle(Color.ink).lineLimit(1)
-                                HStack(spacing: 4) { Circle().fill(err ? Color.bad : slow ? Color.warn : Color.good).frame(width: 6, height: 6); Text(err ? "Gián đoạn" : slow ? "Chậm" : "Hoạt động").font(.system(size: 9, weight: .semibold)).foregroundStyle(err ? Color.bad : slow ? Color.warn : Color.good) }
-                                Text(p.map { "Đồng bộ: \(sync.age($0) < 60 ? "\(sync.age($0)) phút" : sync.age($0) < 1440 ? "\(sync.age($0) / 60) giờ" : "\(sync.age($0) / 1440) ngày") trước" } ?? "Chưa có").font(.system(size: 8)).foregroundStyle(Color.inkSoft).lineLimit(1)
-                                Text("Shop ID \(shop?.shopId?.isEmpty == false ? shop!.shopId! : "—")").font(.system(size: 8)).foregroundStyle(Color.inkSoft).lineLimit(1)
-                                if isOwner { Button { Task { await syncNow(id) } } label: { if busy.contains(id) { Text("Đang đồng bộ…").font(.system(size: 8, weight: .bold)).foregroundStyle(Color.inkSoft).padding(.horizontal, 5).padding(.vertical, 2).overlay(ThinkingBorder(radius: 5, line: 1.5, glow: false)) } else { Text("Đồng bộ ngay").font(.system(size: 8, weight: .bold)).foregroundStyle(Color.brand) } }.buttonStyle(.plain).disabled(busy.contains(id)) }
+                                Text(PosBreakdown.short[id] ?? id).mtFont(.caption).foregroundStyle(Color.ink).lineLimit(1)
+                                HStack(spacing: 4) { Circle().fill(err ? Color.bad : slow ? Color.warn : Color.good).frame(width: 6, height: 6); Text(err ? "Gián đoạn" : slow ? "Chậm" : "Hoạt động").mtFont(.caption).foregroundStyle(err ? Color.bad : slow ? Color.warn : Color.good) }
+                                Text(p.map { "Đồng bộ: \(sync.age($0) < 60 ? "\(sync.age($0)) phút" : sync.age($0) < 1440 ? "\(sync.age($0) / 60) giờ" : "\(sync.age($0) / 1440) ngày") trước" } ?? "Chưa có").mtFont(.caption).foregroundStyle(Color.inkSoft).lineLimit(1)
+                                Text("Shop ID \(shop?.shopId?.isEmpty == false ? shop!.shopId! : "—")").mtFont(.caption).foregroundStyle(Color.inkSoft).lineLimit(1)
+                                if isOwner { Button { Task { await syncNow(id) } } label: { if busy.contains(id) { Text("Đang đồng bộ…").mtFont(.caption).foregroundStyle(Color.inkSoft).padding(.horizontal, 5).padding(.vertical, 2).overlay(ThinkingBorder(radius: 5, line: 1.5, glow: false)) } else { Text("Đồng bộ ngay").mtFont(.caption).foregroundStyle(Color.brand) } }.buttonStyle(.plain).disabled(busy.contains(id)) }
                             }.frame(maxWidth: .infinity, alignment: .leading).padding(10).background(err ? Color.bad.opacity(0.06) : Color.card, in: .rect(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke(err ? Color.bad.opacity(0.3) : Color.clear)).cardShadow()
                         }.buttonStyle(.plain)
                     }
                 }
-                if let e = sync.pos.first(where: { $0.lastError != nil })?.lastError { Text("Lỗi gần nhất: \(e)").font(.system(size: 10)).foregroundStyle(Color.bad) }
+                if let e = sync.pos.first(where: { $0.lastError != nil })?.lastError { Text("Lỗi gần nhất: \(e)").mtFont(.caption).foregroundStyle(Color.bad) }
                 Panel(padding: 12) {
                     HStack(spacing: 10) {
-                        Image(systemName: "clock.fill").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.good).frame(width: 34, height: 34).background(Color.brandSoft, in: .rect(cornerRadius: 9))
-                        VStack(alignment: .leading, spacing: 2) { Text("Lịch đồng bộ dữ liệu").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink); Text("Tự động mỗi 5 phút (Cloudflare) · khách hàng và ghi chú vài phút một lần").font(.system(size: 10)).foregroundStyle(Color.inkSoft); Text("Lần đồng bộ gần nhất: \(sync.pos.compactMap(\.lastSyncAt).max().map { Fmt.dateTime($0) } ?? "—")").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }
+                        Image(systemName: "clock.fill").mtFont(.body).foregroundStyle(Color.good).frame(width: 44, height: 44).background(Color.brandSoft, in: .rect(cornerRadius: MT.rCell))
+                        VStack(alignment: .leading, spacing: 2) { Text("Lịch đồng bộ dữ liệu").mtFont(.body).foregroundStyle(Color.ink); Text("Tự động mỗi 5 phút (Cloudflare) · khách hàng và ghi chú vài phút một lần").mtFont(.caption).foregroundStyle(Color.inkSoft); Text("Lần đồng bộ gần nhất: \(sync.pos.compactMap(\.lastSyncAt).max().map { Fmt.dateTime($0) } ?? "—")").mtFont(.caption).foregroundStyle(Color.inkSoft) }
                         Spacer()
-                        if isOwner { Button { Task { for id in PosBreakdown.order { await syncNow(id) } } } label: { Text("Đồng bộ tất cả").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink).padding(.horizontal, 10).padding(.vertical, 7).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.black.opacity(0.15))) }.buttonStyle(.plain) }
+                        if isOwner { Button { Task { for id in PosBreakdown.order { await syncNow(id) } } } label: { Text("Đồng bộ tất cả").mtFont(.caption).foregroundStyle(Color.ink).padding(.horizontal, 10).padding(.vertical, 7).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.mtCardBorder)) }.buttonStyle(.plain) }
                     }
                 }
                 HStack(alignment: .top, spacing: 10) {
-                    Button { sheet = .teams } label: { Panel(padding: 12) { HStack(spacing: 6) { Image(systemName: "person.2.fill").foregroundStyle(Color.good); Text("Phân công theo team").font(.system(size: 12, weight: .bold)).foregroundStyle(Color.ink) }; Text("Team Marketing và marketer phụ trách từng nhân viên.").font(.system(size: 10)).foregroundStyle(Color.inkSoft); Text("Mở thiết lập ›").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.brand).padding(.top, 4) } }.buttonStyle(.plain)
-                    Button { if isOwner { sheet = .users } } label: { Panel(padding: 12) { HStack(spacing: 6) { Image(systemName: "checklist").foregroundStyle(Color.good); Text("Thiết lập quyền truy cập").font(.system(size: 12, weight: .bold)).foregroundStyle(Color.ink) }; VStack(alignment: .leading, spacing: 3) { ForEach(["Tài khoản & vai trò", "Trang được xem", "POS được xem", "Đội Sale / CSKH"], id: \.self) { t in HStack(spacing: 5) { Image(systemName: "checkmark.square.fill").font(.system(size: 9)).foregroundStyle(Color.good); Text(t).font(.system(size: 9)).foregroundStyle(Color.inkSoft) } } }; Text(isOwner ? "Quản lý người dùng ›" : "Chỉ chủ hệ thống").font(.system(size: 10, weight: .bold)).foregroundStyle(isOwner ? Color.brand : Color.inkSoft).padding(.top, 4) } }.buttonStyle(.plain)
+                    Button { sheet = .teams } label: { Panel(padding: 12) { HStack(spacing: 6) { Image(systemName: "person.2.fill").foregroundStyle(Color.good); Text("Phân công theo team").mtFont(.body).foregroundStyle(Color.ink) }; Text("Team Marketing và marketer phụ trách từng nhân viên.").mtFont(.caption).foregroundStyle(Color.inkSoft); Text("Mở thiết lập ›").mtFont(.caption).foregroundStyle(Color.brand).padding(.top, 4) } }.buttonStyle(.plain)
+                    Button { if isOwner { sheet = .users } } label: { Panel(padding: 12) { HStack(spacing: 6) { Image(systemName: "checklist").foregroundStyle(Color.good); Text("Thiết lập quyền truy cập").mtFont(.body).foregroundStyle(Color.ink) }; VStack(alignment: .leading, spacing: 3) { ForEach(["Tài khoản & vai trò", "Trang được xem", "POS được xem", "Đội Sale / CSKH"], id: \.self) { t in HStack(spacing: 5) { Image(systemName: "checkmark.square.fill").mtFont(.caption).foregroundStyle(Color.good); Text(t).mtFont(.caption).foregroundStyle(Color.inkSoft) } } }; Text(isOwner ? "Quản lý người dùng ›" : "Chỉ chủ hệ thống").mtFont(.caption).foregroundStyle(isOwner ? Color.brand : Color.inkSoft).padding(.top, 4) } }.buttonStyle(.plain)
                 }
                 Button { if isOwner { sheet = .alert } } label: {
                     Panel(padding: 12) {
                         HStack(spacing: 10) {
-                            Image(systemName: "bell.badge.fill").font(.system(size: 14, weight: .semibold)).foregroundStyle(.white).frame(width: 34, height: 34).background(Color.warn, in: .circle)
+                            Image(systemName: "bell.badge.fill").mtFont(.body).foregroundStyle(.white).frame(width: 44, height: 44).background(Color.warn, in: .circle)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Cảnh báo tỷ lệ chốt thấp").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink)
-                                if let a = config?.alert { Text(a.enabled ? "Đang bật · dưới \(Fmt.pct0(Double(a.threshold))) khi ≥ \(a.minReceived) số · ca \(a.shiftStart)–\(a.shiftEnd) · \(a.employeeIds.isEmpty ? "mọi nhân viên" : "\(a.employeeIds.count) nhân viên")" : "Đang tắt").font(.system(size: 10)).foregroundStyle(a.enabled ? Color.good : Color.inkSoft) } else { Text("—").font(.system(size: 10)) }
+                                Text("Cảnh báo tỷ lệ chốt thấp").mtFont(.body).foregroundStyle(Color.ink)
+                                if let a = config?.alert { Text(a.enabled ? "Đang bật · dưới \(Fmt.pct0(Double(a.threshold))) khi ≥ \(a.minReceived) số · ca \(a.shiftStart)–\(a.shiftEnd) · \(a.employeeIds.isEmpty ? "mọi nhân viên" : "\(a.employeeIds.count) nhân viên")" : "Đang tắt").mtFont(.caption).foregroundStyle(a.enabled ? Color.good : Color.inkSoft) } else { Text("—").mtFont(.caption) }
                             }
-                            Spacer(); if isOwner { Text("Cấu hình").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink).padding(.horizontal, 12).padding(.vertical, 7).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.black.opacity(0.15))) }
+                            Spacer(); if isOwner { Text("Cấu hình").mtFont(.caption).foregroundStyle(Color.ink).padding(.horizontal, 12).padding(.vertical, 7).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.mtCardBorder)) }
                         }
                     }
                 }.buttonStyle(.plain)
                 Button { sheet = .telegram } label: {
                     Panel(padding: 12) {
                         HStack(spacing: 10) {
-                            Image(systemName: "paperplane.fill").font(.system(size: 14, weight: .semibold)).foregroundStyle(.white).frame(width: 34, height: 34).background(Color.blue, in: .circle)
-                            VStack(alignment: .leading, spacing: 2) { Text("Kết nối Telegram").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink); HStack(spacing: 4) { Text("Trạng thái:").font(.system(size: 11)).foregroundStyle(Color.inkSoft); Text(tg == nil ? "—" : tg!.hasToken && tg!.botError == nil ? "Hoạt động" : "Chưa sẵn sàng").font(.system(size: 11, weight: .bold)).foregroundStyle(tg?.hasToken == true && tg?.botError == nil ? Color.good : Color.warn) }; Text(tg?.bot?.username.map { "Bot @\($0) · \(tg?.allowed.count ?? 0) chat được phép" } ?? "Nhận cảnh báo hệ thống, lỗi đồng bộ, tuyển dụng, báo cáo nhanh.").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }
-                            Spacer(); Text("Kiểm tra").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink).padding(.horizontal, 12).padding(.vertical, 7).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.black.opacity(0.15)))
+                            Image(systemName: "paperplane.fill").mtFont(.body).foregroundStyle(.white).frame(width: 44, height: 44).background(Color.mtBrandPrimary, in: .circle)
+                            VStack(alignment: .leading, spacing: 2) { Text("Kết nối Telegram").mtFont(.body).foregroundStyle(Color.ink); HStack(spacing: 4) { Text("Trạng thái:").mtFont(.caption).foregroundStyle(Color.inkSoft); Text(tg == nil ? "—" : tg!.hasToken && tg!.botError == nil ? "Hoạt động" : "Chưa sẵn sàng").mtFont(.caption).foregroundStyle(tg?.hasToken == true && tg?.botError == nil ? Color.good : Color.warn) }; Text(tg?.bot?.username.map { "Bot @\($0) · \(tg?.allowed.count ?? 0) chat được phép" } ?? "Nhận cảnh báo hệ thống, lỗi đồng bộ, tuyển dụng, báo cáo nhanh.").mtFont(.caption).foregroundStyle(Color.inkSoft) }
+                            Spacer(); Text("Kiểm tra").mtFont(.caption).foregroundStyle(Color.ink).padding(.horizontal, 12).padding(.vertical, 7).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.mtCardBorder))
                         }
                     }
                 }.buttonStyle(.plain)
                 Button { sheet = .shifts } label: {
-                    Panel(padding: 12) { HStack(spacing: 10) { Image(systemName: "clock.badge.checkmark.fill").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.purple).frame(width: 34, height: 34).background(Color.purple.opacity(0.13), in: .rect(cornerRadius: 9)); VStack(alignment: .leading, spacing: 2) { Text("Ca làm cá nhân").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink); Text("Giờ bắt đầu / kết thúc của từng nhân viên cho chế độ Ca cá nhân trong Điều hành trong ca.").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }; Spacer(); Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.inkSoft) } }
+                    Panel(padding: 12) { HStack(spacing: 10) { Image(systemName: "clock.badge.checkmark.fill").mtFont(.body).foregroundStyle(Color.mtRolePurpleInk).frame(width: 44, height: 44).background(Color.mtRolePurpleInk.opacity(0.13), in: .rect(cornerRadius: MT.rCell)); VStack(alignment: .leading, spacing: 2) { Text("Ca làm cá nhân").mtFont(.body).foregroundStyle(Color.ink); Text("Giờ bắt đầu / kết thúc của từng nhân viên cho chế độ Ca cá nhân trong Điều hành trong ca.").mtFont(.caption).foregroundStyle(Color.inkSoft) }; Spacer(); Image(systemName: "chevron.right").mtFont(.caption).foregroundStyle(Color.inkSoft) } }
                 }.buttonStyle(.plain)
             }.padding(16)
         }

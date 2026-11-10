@@ -18,43 +18,46 @@ struct RawOrdersView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 PageTitle(title: "Đơn nguồn Pancake POS", subtitle: "Minh bạch dữ liệu gốc. Vững vàng vận hành.", trailing: AnyView(Image(systemName: "info.circle").font(.system(size: 16)).foregroundStyle(Color.inkSoft)))
+                MTMetricHeroCard(label: "Tổng đơn trong phạm vi", value: "—",
+                    scope: period.label + " · " + (pos.isEmpty ? "Tất cả POS" : (PosBreakdown.short[pos] ?? pos)),
+                    info: InfoText(title: "Tổng đơn trong phạm vi", body: "Máy chủ chưa trả tổng toàn bộ các trang và phân bổ theo POS. Số bên dưới là số đơn đã tải."))
                 HStack(spacing: 10) {
-                    Image(systemName: "cylinder.split.1x2.fill").font(.system(size: 16, weight: .semibold)).foregroundStyle(Color.good).frame(width: 36, height: 36).background(Color.good.opacity(0.15), in: .rect(cornerRadius: 10))
-                    Text("Đây là dữ liệu đơn hàng nguồn được đồng bộ trực tiếp từ Pancake POS. Phục vụ đối soát, CSKH và vận hành nội bộ.").font(.system(size: 11)).foregroundStyle(Color.ink)
+                    Image(systemName: "cylinder.split.1x2.fill").mtFont(.cardHeader).foregroundStyle(Color.good).frame(width: 36, height: 36).background(Color.good.opacity(0.15), in: .rect(cornerRadius: MT.rCell))
+                    Text("Đây là dữ liệu đơn hàng nguồn được đồng bộ trực tiếp từ Pancake POS. Phục vụ đối soát, CSKH và vận hành nội bộ.").mtFont(.caption).foregroundStyle(Color.ink)
                 }.padding(12).background(Color.brandSoft, in: .rect(cornerRadius: 12))
                 HStack(spacing: 10) {
-                    VStack(alignment: .leading, spacing: 4) { Text("POS").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                    VStack(alignment: .leading, spacing: 4) { Text("POS").mtFont(.caption).foregroundStyle(Color.inkSoft)
                         Menu { Button("Tất cả POS") { pos = "" }; ForEach(PosBreakdown.order, id: \.self) { id in Button(PosBreakdown.names[id] ?? id) { pos = id } } } label: { SelectBox(text: pos.isEmpty ? "Tất cả POS" : (PosBreakdown.short[pos] ?? pos)) } }
-                    VStack(alignment: .leading, spacing: 4) { Text("Khoảng thời gian").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                    VStack(alignment: .leading, spacing: 4) { Text("Khoảng thời gian").mtFont(.caption).foregroundStyle(Color.inkSoft)
                         PeriodMenu(period: $period, options: [.today, .yesterday, .week, .month, .last, .d90]) }
                 }
                 HStack(spacing: 10) {
-                    VStack(alignment: .leading, spacing: 4) { Text("Trạng thái đơn").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                    VStack(alignment: .leading, spacing: 4) { Text("Trạng thái đơn").mtFont(.caption).foregroundStyle(Color.inkSoft)
                         Menu { ForEach(Self.groups, id: \.0) { k, l in Button(l) { group = k } } } label: { SelectBox(text: Self.groups.first { $0.0 == group }?.1 ?? "Tất cả") } }
-                    VStack(alignment: .leading, spacing: 4) { Text(" ").font(.system(size: 10))
-                        HStack(spacing: 6) { Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(Color.inkSoft); TextField("Tìm theo mã đơn, SĐT…", text: $q).font(.system(size: 12)).onSubmit { Task { await load(next: false) } } }.padding(.horizontal, 10).padding(.vertical, 9).background(Color.card, in: .rect(cornerRadius: 9)).overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.black.opacity(0.1))) }
+                    VStack(alignment: .leading, spacing: 4) { Text(" ").mtFont(.caption)
+                        HStack(spacing: 6) { Image(systemName: "magnifyingglass").mtFont(.caption).foregroundStyle(Color.inkSoft); TextField("Tìm theo mã đơn, SĐT…", text: $q).mtFont(.body).onSubmit { Task { await load(next: false) } } }.padding(.horizontal, 10).padding(.vertical, 9).background(Color.card, in: .rect(cornerRadius: MT.rCell)).overlay(RoundedRectangle(cornerRadius: MT.rCell).stroke(Color.mtCardBorder)) }
                 }
-                HStack { Text("\(rows.count)\(hasMore ? "+" : "") đơn").font(.system(size: 12, weight: .bold)).foregroundStyle(Color.ink); Hint(text: period.label); Spacer(); VStack(alignment: .trailing, spacing: 1) { Text("Cập nhật gần nhất").font(.system(size: 9)).foregroundStyle(Color.inkSoft); HStack(spacing: 4) { Circle().fill(sync.tone == .lime ? Color.good : sync.tone).frame(width: 6, height: 6); Text(sync.subtitle).font(.system(size: 10, weight: .semibold)).foregroundStyle(Color.ink) } } }
+                HStack { Text("\(rows.count)\(hasMore ? "+" : "") đơn").mtFont(.body).foregroundStyle(Color.ink); Hint(text: period.label); Spacer(); VStack(alignment: .trailing, spacing: 1) { Text("Cập nhật gần nhất").mtFont(.caption).foregroundStyle(Color.inkSoft); HStack(spacing: 4) { Circle().fill(sync.tone == .lime ? Color.good : sync.tone).frame(width: 6, height: 6); Text(sync.subtitle).mtFont(.caption).foregroundStyle(Color.ink) } } }
                 if loading && rows.isEmpty { Skeleton(height: 90); Skeleton(height: 90) }
                 VStack(spacing: 10) {
                     ForEach(rows) { o in
                         NavigationLink(value: Route.order(o.id)) {
                             Panel(padding: 12) {
-                                HStack { Text("#\(o.orderId)").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink); Tag(text: o.statusName, tone: tone(o.statusCode)); Spacer(); Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.inkSoft) }
-                                Text(Fmt.dateTime(o.createdAt)).font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                                HStack { Text("#\(o.orderId)").mtFont(.body).foregroundStyle(Color.ink); Tag(text: o.statusName, tone: tone(o.statusCode)); Spacer(); Image(systemName: "chevron.right").mtFont(.caption).foregroundStyle(Color.inkSoft) }
+                                Text(Fmt.dateTime(o.createdAt)).mtFont(.caption).foregroundStyle(Color.inkSoft)
                                 HStack(spacing: 14) {
-                                    HStack(spacing: 4) { Image(systemName: "person").font(.system(size: 9)); Text(o.customer ?? o.phone ?? "Khách lẻ").lineLimit(1) }
+                                    HStack(spacing: 4) { Image(systemName: "person").mtFont(.caption); Text(o.customer ?? o.phone ?? "Khách lẻ").lineLimit(1) }
                                     PosLabel(id: o.posId, name: o.posName)
                                     Spacer()
-                                    HStack(spacing: 4) { Image(systemName: "banknote").font(.system(size: 9)); Text(Fmt.vnd(o.net ?? o.currentTotal ?? 0)).font(.system(size: 11, weight: .bold)).foregroundStyle(Color.ink) }
-                                }.font(.system(size: 10)).foregroundStyle(Color.inkSoft).padding(.top, 4)
+                                    HStack(spacing: 4) { Image(systemName: "banknote").mtFont(.caption); Text(Fmt.vnd(o.net ?? o.currentTotal ?? 0)).mtFont(.caption).foregroundStyle(Color.ink) }
+                                }.mtFont(.caption).foregroundStyle(Color.inkSoft).padding(.top, 4)
                             }
                         }.buttonStyle(.plain)
                     }
-                    if hasMore { Button { Task { await load(next: true) } } label: { Text("Tải thêm").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.brand).frame(maxWidth: .infinity).padding(10) } }
-                    if rows.isEmpty && !loading { Panel { Text("Không có đơn khớp bộ lọc.").font(.system(size: 12)).foregroundStyle(Color.inkSoft) } }
+                    if hasMore { Button { Task { await load(next: true) } } label: { Text("Tải thêm").mtFont(.body).foregroundStyle(Color.brand).frame(maxWidth: .infinity).padding(10) } }
+                    if rows.isEmpty && !loading { Panel { Text("Không có đơn khớp bộ lọc.").mtFont(.body).foregroundStyle(Color.inkSoft) } }
                 }
-                HStack(spacing: 8) { Image(systemName: "cylinder.split.1x2").foregroundStyle(Color.good); Text("Trường dữ liệu hiển thị theo cấu trúc gốc Pancake POS (Mã đơn, thời gian, POS, khách hàng, sản phẩm, giá trị…).").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }.padding(12).background(Color.brandSoft.opacity(0.6), in: .rect(cornerRadius: 12))
+                HStack(spacing: 8) { Image(systemName: "cylinder.split.1x2").foregroundStyle(Color.good); Text("Trường dữ liệu hiển thị theo cấu trúc gốc Pancake POS (Mã đơn, thời gian, POS, khách hàng, sản phẩm, giá trị…).").mtFont(.caption).foregroundStyle(Color.inkSoft) }.padding(12).background(Color.brandSoft.opacity(0.6), in: .rect(cornerRadius: 12))
             }.padding(16)
         }
         .navigationTitle("Đơn nguồn Pancake POS").navigationBarTitleDisplayMode(.inline).brandNav()
@@ -70,8 +73,8 @@ struct RawOrdersView: View {
 struct SelectBox: View {
     let text: String; var icon: String? = nil
     var body: some View {
-        HStack(spacing: 6) { if let icon { Image(systemName: icon).font(.system(size: 11)).foregroundStyle(Color.inkSoft) }; Text(text).font(.system(size: 12, weight: .medium)).foregroundStyle(Color.ink).lineLimit(1); Spacer(); Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(Color.inkSoft) }
-            .padding(.horizontal, 10).padding(.vertical, 9).background(Color.card, in: .rect(cornerRadius: 9)).overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.black.opacity(0.1)))
+        HStack(spacing: 6) { if let icon { Image(systemName: icon).mtFont(.caption).foregroundStyle(Color.inkSoft) }; Text(text).mtFont(.body).foregroundStyle(Color.ink).lineLimit(1); Spacer(); Image(systemName: "chevron.down").mtFont(.caption).foregroundStyle(Color.inkSoft) }
+            .padding(.horizontal, 10).padding(.vertical, 9).background(Color.card, in: .rect(cornerRadius: MT.rCell)).overlay(RoundedRectangle(cornerRadius: MT.rCell).stroke(Color.mtCardBorder))
     }
 }
 
@@ -94,36 +97,42 @@ struct MonthlyView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
-                    Button { offset += 1 } label: { Image(systemName: "chevron.left").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink).frame(width: 40, height: 40).background(Color.card, in: .rect(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.black.opacity(0.1))) }
-                    HStack { Image(systemName: "calendar").foregroundStyle(Color.inkSoft); Text(month.2).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink).rolling(month.2); Spacer(); Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(Color.inkSoft) }.padding(.horizontal, 12).frame(height: 40).background(Color.card, in: .rect(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.black.opacity(0.1)))
-                    Button { offset = max(0, offset - 1) } label: { Image(systemName: "chevron.right").font(.system(size: 13, weight: .bold)).foregroundStyle(offset == 0 ? Color.inkSoft : Color.ink).frame(width: 40, height: 40).background(Color.card, in: .rect(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.black.opacity(0.1))) }.disabled(offset == 0)
+                    Button { offset += 1 } label: { Image(systemName: "chevron.left").mtFont(.body).foregroundStyle(Color.ink).frame(width: 44, height: 44).background(Color.card, in: .rect(cornerRadius: MT.rCell)).overlay(RoundedRectangle(cornerRadius: MT.rCell).stroke(Color.mtCardBorder)) }
+                    HStack { Image(systemName: "calendar").foregroundStyle(Color.inkSoft); Text(month.2).mtFont(.body).foregroundStyle(Color.ink).rolling(month.2); Spacer(); Image(systemName: "chevron.down").mtFont(.caption).foregroundStyle(Color.inkSoft) }.padding(.horizontal, 12).frame(height: 40).background(Color.card, in: .rect(cornerRadius: MT.rCell)).overlay(RoundedRectangle(cornerRadius: MT.rCell).stroke(Color.mtCardBorder))
+                    Button { offset = max(0, offset - 1) } label: { Image(systemName: "chevron.right").mtFont(.body).foregroundStyle(offset == 0 ? Color.inkSoft : Color.ink).frame(width: 44, height: 44).background(Color.card, in: .rect(cornerRadius: MT.rCell)).overlay(RoundedRectangle(cornerRadius: MT.rCell).stroke(Color.mtCardBorder)) }.disabled(offset == 0)
                 }
                 if let error, data == nil { Label(error, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad).font(.subheadline) }
                 if let t = data?.current.total {
                     let p = data?.compare?.total
                     let q = { (g: String, b: String, ti: String) in Route.orders(OrderQuery(start: month.0, end: month.1, group: g, basis: b, title: ti)) }
-                    HStack(spacing: 10) {
-                        NavigationLink(value: q("closed", "confirmed", "Đơn chốt")) { KpiCard(icon: "ic_m_revenue", tint: .good, label: "Tổng doanh thu", value: Fmt.vnd(t.closedNet), delta: Fmt.delta(t.closedNet, p?.closedNet).map { "\($0) so với tháng trước" }) }
-                        NavigationLink(value: q("", "created", "Đơn tạo")) { KpiCard(icon: "ic_m_orders", tint: .good, label: "Tổng đơn hàng", value: Fmt.int(t.orders), delta: Fmt.delta(t.orders, p?.orders).map { "\($0) so với tháng trước" }) }
-                    }.buttonStyle(.plain)
+                    NavigationLink(value: q("closed", "confirmed", "Đơn chốt")) {
+                        MTMetricHeroCard(label: "Tổng doanh thu", value: Fmt.shortMoney(t.closedNet),
+                            scope: month.2 + " · Mọi POS · Mọi team",
+                            comparison: Fmt.delta(t.closedNet, p?.closedNet))
+                    }.buttonStyle(MTPressStyle())
+                    NavigationLink(value: q("", "created", "Đơn tạo")) {
+                        MTStatCell(label: "Tổng đơn hàng", value: Fmt.int(t.orders), note: Fmt.delta(t.orders, p?.orders).map { "\($0) so với tháng trước" })
+                    }.buttonStyle(MTPressStyle())
                     let dl = t.groups["delivered"]?.orders ?? 0, pr = (t.groups["confirmed"]?.orders ?? 0) + (t.groups["shipping"]?.orders ?? 0) + (t.groups["new"]?.orders ?? 0), cn = (t.groups["cancelled"]?.orders ?? 0)
-                    HStack(spacing: 8) {
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: MT.cellGap) {
                         NavigationLink(value: q("delivered", "created", "Đơn đã giao")) { SmallStat(icon: "truck.box.fill", tint: .good, label: "Đơn đã giao", value: Fmt.int(dl), pct: t.orders > 0 ? dl / t.orders * 100 : nil) }
                         NavigationLink(value: q("confirmed", "created", "Đơn đang xử lý")) { SmallStat(icon: "clock.fill", tint: .warn, label: "Đơn đang xử lý", value: Fmt.int(pr), pct: t.orders > 0 ? pr / t.orders * 100 : nil) }
                         NavigationLink(value: q("cancelled", "created", "Đơn hủy")) { SmallStat(icon: "ic_m_cancelled", tint: .bad, label: "Đơn hủy", value: Fmt.int(cn), pct: t.cancelRatio ?? (t.orders > 0 ? cn / t.orders * 100 : nil)) }
                     }.buttonStyle(.plain)
                     Panel {
-                        HStack { Text("Xu hướng doanh thu").font(.system(size: 15, weight: .bold)); Spacer(); HStack(spacing: 10) { HStack(spacing: 3) { Circle().fill(Color.good.opacity(0.35)).frame(width: 7, height: 7); Text(month.3) }; HStack(spacing: 3) { Circle().fill(Color.good).frame(width: 7, height: 7); Text(month.2) } }.font(.system(size: 9)).foregroundStyle(Color.inkSoft) }
-                        DualLine(a: cumulative(data?.compare?.series ?? []), b: cumulative(data?.current.series ?? []))
+                        HStack { Text("Xu hướng doanh thu").mtFont(.cardHeader); Spacer(); HStack(spacing: 10) { HStack(spacing: 3) { Circle().fill(Color.good.opacity(0.35)).frame(width: 7, height: 7); Text(month.3) }; HStack(spacing: 3) { Circle().fill(Color.good).frame(width: 7, height: 7); Text(month.2) } }.mtFont(.caption).foregroundStyle(Color.inkSoft) }
+                        MTTrendChart(points: cumulative(data?.current.series ?? []),
+                            previous: (data?.compare?.series).map { cumulative($0) },
+                            value: Fmt.shortMoney, scope: month.2 + " · Mọi POS · Doanh thu lũy kế")
                     }
                     HStack(spacing: 8) {
-                        VStack(alignment: .leading, spacing: 2) { Text(Fmt.vnd(p?.closedNet ?? 0)).font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink).minimumScaleFactor(0.7).lineLimit(1); Text(month.3).font(.system(size: 9)).foregroundStyle(Color.inkSoft); Text("Doanh thu chốt").font(.system(size: 8)).foregroundStyle(Color.inkSoft) }.frame(maxWidth: .infinity, alignment: .leading).padding(10).background(Color.card, in: .rect(cornerRadius: 10)).cardShadow()
-                        VStack(alignment: .leading, spacing: 2) { Text(Fmt.vnd(t.closedNet)).font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink).minimumScaleFactor(0.7).lineLimit(1); Text(month.2).font(.system(size: 9)).foregroundStyle(Color.inkSoft); Text("Doanh thu chốt").font(.system(size: 8)).foregroundStyle(Color.inkSoft) }.frame(maxWidth: .infinity, alignment: .leading).padding(10).background(Color.card, in: .rect(cornerRadius: 10)).cardShadow()
-                        VStack(alignment: .leading, spacing: 2) { Text(Fmt.delta(t.closedNet, p?.closedNet) ?? "—").font(.system(size: 13, weight: .bold)).foregroundStyle((Fmt.delta(t.closedNet, p?.closedNet) ?? "").hasPrefix("-") ? Color.bad : Color.good); Text("Tăng trưởng").font(.system(size: 9)).foregroundStyle(Color.inkSoft); Text("Doanh thu chốt").font(.system(size: 8)).foregroundStyle(Color.inkSoft) }.frame(maxWidth: .infinity, alignment: .leading).padding(10).background(Color.brandSoft, in: .rect(cornerRadius: 10))
+                        VStack(alignment: .leading, spacing: 2) { Text(Fmt.vnd(p?.closedNet ?? 0)).mtFont(.body).foregroundStyle(Color.ink).minimumScaleFactor(0.7).lineLimit(1); Text(month.3).mtFont(.caption).foregroundStyle(Color.inkSoft); Text("Doanh thu chốt").mtFont(.caption).foregroundStyle(Color.inkSoft) }.frame(maxWidth: .infinity, alignment: .leading).padding(10).background(Color.card, in: .rect(cornerRadius: MT.rCell)).cardShadow()
+                        VStack(alignment: .leading, spacing: 2) { Text(Fmt.vnd(t.closedNet)).mtFont(.body).foregroundStyle(Color.ink).minimumScaleFactor(0.7).lineLimit(1); Text(month.2).mtFont(.caption).foregroundStyle(Color.inkSoft); Text("Doanh thu chốt").mtFont(.caption).foregroundStyle(Color.inkSoft) }.frame(maxWidth: .infinity, alignment: .leading).padding(10).background(Color.card, in: .rect(cornerRadius: MT.rCell)).cardShadow()
+                        VStack(alignment: .leading, spacing: 2) { Text(Fmt.delta(t.closedNet, p?.closedNet) ?? "—").mtFont(.body).foregroundStyle((Fmt.delta(t.closedNet, p?.closedNet) ?? "").hasPrefix("-") ? Color.bad : Color.good); Text("Tăng trưởng").mtFont(.caption).foregroundStyle(Color.inkSoft); Text("Doanh thu chốt").mtFont(.caption).foregroundStyle(Color.inkSoft) }.frame(maxWidth: .infinity, alignment: .leading).padding(10).background(Color.brandSoft, in: .rect(cornerRadius: MT.rCell))
                     }
                     PosBreakdown(rows: data?.current.byPos ?? [], total: t.closedNet, prev: data?.compare?.byPos ?? [])
                     PrimaryButton(title: "Xuất báo cáo", icon: "square.and.arrow.down") { share = true; API.logExport(view: "monthly", file: "Báo cáo \(month.2) (chữ)", rows: (data?.current.byPos ?? []).count) }
-                    HStack(alignment: .top, spacing: 8) { Image(systemName: "info.circle.fill").foregroundStyle(Color.blue); VStack(alignment: .leading, spacing: 3) { Text("Ghi chú & Định nghĩa số liệu").font(.system(size: 12, weight: .bold)).foregroundStyle(Color.ink); Text("Doanh thu: tổng tiền hàng sau chiết khấu, chưa gồm phí vận chuyển. Đơn chốt tính theo giờ xác nhận lần đầu (như Pancake); đơn đã giao, đang xử lý, hủy tính theo ngày tạo đơn trong tháng.").font(.system(size: 10)).foregroundStyle(Color.inkSoft) } }.padding(12).background(Color.blue.opacity(0.08), in: .rect(cornerRadius: 12))
+                    HStack(alignment: .top, spacing: 8) { Image(systemName: "info.circle.fill").foregroundStyle(Color.mtBrandPrimary); VStack(alignment: .leading, spacing: 3) { Text("Ghi chú & Định nghĩa số liệu").mtFont(.body).foregroundStyle(Color.ink); Text("Doanh thu: tổng tiền hàng sau chiết khấu, chưa gồm phí vận chuyển. Đơn chốt tính theo giờ xác nhận lần đầu (như Pancake); đơn đã giao, đang xử lý, hủy tính theo ngày tạo đơn trong tháng.").mtFont(.caption).foregroundStyle(Color.inkSoft) } }.padding(12).background(Color.mtBrandPrimary.opacity(0.08), in: .rect(cornerRadius: 12))
                     if let synced = data?.syncedAt { Text("Đồng bộ Pancake lúc \(Fmt.dateTime(synced))").font(.caption).foregroundStyle(Color.inkSoft) }
                 } else { SkeletonGrid(tiles: 2); Skeleton(height: 200) }
             }.padding(16)
@@ -157,8 +166,9 @@ struct SmallStat: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             MetricIcon(icon, size: 12).foregroundStyle(tint).frame(width: 26, height: 26).background(tint.opacity(0.13), in: .rect(cornerRadius: 7))
-            Text(label).font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1)
-            HStack(alignment: .firstTextBaseline, spacing: 3) { Text(value).font(.system(size: 15, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).rolling(value); if let pct { Text("(\(Fmt.pct0(pct)))").font(.system(size: 9)).foregroundStyle(Color.inkSoft) } }
+            Text(label).mtFont(.caption).foregroundStyle(Color.inkSoft).lineLimit(1)
+            Text(value).mtFont(.cardMetric).foregroundStyle(Color.ink).lineLimit(1).minimumScaleFactor(0.6).rolling(value)
+            if let pct { Text("(\(Fmt.pct0(pct)))").mtFont(.caption).foregroundStyle(Color.inkSoft) }
         }.frame(maxWidth: .infinity, alignment: .leading).padding(10).background(Color.card, in: .rect(cornerRadius: 12)).cardShadow()
     }
 }
@@ -183,7 +193,7 @@ struct DualLine: View {
                 ZStack(alignment: .topLeading) {
                     ForEach(0..<5, id: \.self) { i in
                         let y = 4 + h * CGFloat(i) / 4
-                        Path { p in p.move(to: CGPoint(x: 30, y: y)); p.addLine(to: CGPoint(x: 30 + w, y: y)) }.stroke(Color.black.opacity(0.05), lineWidth: 1)
+                        Path { p in p.move(to: CGPoint(x: 30, y: y)); p.addLine(to: CGPoint(x: 30 + w, y: y)) }.stroke(Color.mtSurfaceCell, lineWidth: 1)
                         Text(Fmt.short(maxV * Double(4 - i) / 4)).font(.system(size: 7)).foregroundStyle(Color.inkSoft).position(x: 14, y: y)
                     }
                     let pa = pts(a), pb = pts(b)
@@ -193,12 +203,12 @@ struct DualLine: View {
                         Path { p in p.move(to: pb[0]); for q in pb.dropFirst() { p.addLine(to: q) } }.trim(from: 0, to: shown ? 1 : 0).stroke(Color.good, style: StrokeStyle(lineWidth: 2.4, lineCap: .round))
                         if let last = pb.last, let v = b.last?.1 {
                             Circle().fill(Color.good).frame(width: 7, height: 7).position(last).opacity(shown ? 1 : 0)
-                            Text(Fmt.vnd(v)).font(.system(size: 9, weight: .bold)).foregroundStyle(.white).padding(.horizontal, 6).padding(.vertical, 3).background(Color.brandDeep, in: .rect(cornerRadius: 5)).position(x: min(last.x, 30 + w - 40), y: max(10, last.y - 16)).opacity(shown ? 1 : 0)
+                            Text(Fmt.vnd(v)).mtFont(.caption).foregroundStyle(.white).padding(.horizontal, 6).padding(.vertical, 3).background(Color.brandDeep, in: .rect(cornerRadius: 5)).position(x: min(last.x, 30 + w - 40), y: max(10, last.y - 16)).opacity(shown ? 1 : 0)
                         }
                     }
                 }
             }.frame(height: 150)
-            HStack { ForEach(Array(b.enumerated()), id: \.offset) { i, p in if b.count <= 8 || i % max(1, b.count / 6) == 0 { Text(p.0).font(.system(size: 8)).foregroundStyle(Color.inkSoft).frame(maxWidth: .infinity) } } }.padding(.leading, 30)
+            HStack { ForEach(Array(b.enumerated()), id: \.offset) { i, p in if b.count <= 8 || i % max(1, b.count / 6) == 0 { Text(p.0).mtFont(.caption).foregroundStyle(Color.inkSoft).frame(maxWidth: .infinity) } } }.padding(.leading, 30)
         }
         .onAppear { withAnimation(.easeOut(duration: 0.9)) { shown = true } }
     }
@@ -231,12 +241,12 @@ struct CustomReportView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                PageTitle(title: "Báo cáo tùy chỉnh", subtitle: "Tự chọn chỉ số, cách nhóm và kiểu hiển thị", trailing: AnyView(Button { metrics = [.closedNet, .closedOrders]; groupBy = "day"; dim = "time"; chart = "bar"; period = .month; pos = nil } label: { HStack(spacing: 4) { Image(systemName: "arrow.counterclockwise"); Text("Đặt lại") }.font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink) }))
+                PageTitle(title: "Báo cáo tùy chỉnh", subtitle: "Tự chọn chỉ số, cách nhóm và kiểu hiển thị", trailing: AnyView(Button { metrics = [.closedNet, .closedOrders]; groupBy = "day"; dim = "time"; chart = "bar"; period = .month; pos = nil } label: { HStack(spacing: 4) { Image(systemName: "arrow.counterclockwise"); Text("Đặt lại") }.mtFont(.caption).foregroundStyle(Color.ink) }))
                 Panel {
                     StepTitle(n: 1, text: "Chọn chỉ số (Tối đa 3 chỉ số)")
                     FlowChips {
-                        ForEach(metrics) { m in Button { metrics.removeAll { $0 == m } } label: { HStack(spacing: 4) { Text(m.rawValue); Image(systemName: "xmark").font(.system(size: 8, weight: .bold)) }.font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.good).padding(.horizontal, 10).padding(.vertical, 6).background(Color.brandSoft, in: .capsule) }.buttonStyle(.plain) }
-                        if metrics.count < 3 { Menu { ForEach(SeriesMetric.allCases.filter { !metrics.contains($0) }) { m in Button(m.rawValue) { metrics.append(m) } } } label: { HStack(spacing: 4) { Image(systemName: "plus"); Text("Thêm chỉ số") }.font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink).padding(.horizontal, 10).padding(.vertical, 6).overlay(Capsule().stroke(Color.black.opacity(0.15))) } }
+                        ForEach(metrics) { m in Button { metrics.removeAll { $0 == m } } label: { HStack(spacing: 4) { Text(m.rawValue); Image(systemName: "xmark").mtFont(.caption) }.mtFont(.caption).foregroundStyle(Color.good).padding(.horizontal, 10).padding(.vertical, 6).background(Color.brandSoft, in: .capsule) }.buttonStyle(.plain) }
+                        if metrics.count < 3 { Menu { ForEach(SeriesMetric.allCases.filter { !metrics.contains($0) }) { m in Button(m.rawValue) { metrics.append(m) } } } label: { HStack(spacing: 4) { Image(systemName: "plus"); Text("Thêm chỉ số") }.mtFont(.caption).foregroundStyle(Color.ink).padding(.horizontal, 10).padding(.vertical, 6).overlay(Capsule().stroke(Color.mtCardBorder)) } }
                     }
                 }
                 Panel {
@@ -262,23 +272,25 @@ struct CustomReportView: View {
                         ChartTypeTile(icon: "tablecells.fill", label: "Bảng tổng hợp", on: chart == "table") { chart = "table" }
                     }
                 }
-                HStack { Text("Xem trước báo cáo").font(.system(size: 14, weight: .bold)); Spacer(); Menu { ForEach(metrics) { m in Button(m.rawValue) { metrics.removeAll { $0 == m }; metrics.insert(m, at: 0) } } } label: { SelectBox(text: "\(main.rawValue) theo \(dimLabel)").frame(width: 190) } }
+                HStack { Text("Xem trước báo cáo").mtFont(.body); Spacer(); Menu { ForEach(metrics) { m in Button(m.rawValue) { metrics.removeAll { $0 == m }; metrics.insert(m, at: 0) } } } label: { SelectBox(text: "\(main.rawValue) theo \(dimLabel)").frame(width: 190) } }
                 if let d = data {
                     let pts = points(d)
+                    MTMetricHeroCard(label: main.rawValue, value: fmt(main.total(d.current.total)),
+                        scope: period.label + " · " + (pos.map { PosBreakdown.short[$0] ?? $0 } ?? "Tất cả POS") + " · " + dimLabel)
                     Panel {
                         if chart == "table" || pts.isEmpty {
-                            ForEach(Array(pts.enumerated()), id: \.offset) { _, p in HStack { Text(p.0).font(.system(size: 12)).foregroundStyle(Color.ink).lineLimit(1); Spacer(); Text(fmt(p.1)).font(.system(size: 12, weight: .bold)).monospacedDigit() }.padding(.vertical, 5); Divider() }
-                            if pts.isEmpty { Text("Chưa có dữ liệu trong kỳ.").font(.system(size: 12)).foregroundStyle(Color.inkSoft) }
+                            ForEach(Array(pts.enumerated()), id: \.offset) { _, p in HStack { Text(p.0).mtFont(.body).foregroundStyle(Color.ink).lineLimit(1); Spacer(); Text(fmt(p.1)).mtFont(.body).monospacedDigit() }.padding(.vertical, 5); Divider() }
+                            if pts.isEmpty { Text("Chưa có dữ liệu trong kỳ.").mtFont(.body).foregroundStyle(Color.inkSoft) }
                         } else if chart == "line" { LineChart(points: pts.map { (String($0.0.prefix(6)), $0.1) }, tint: .good) }
                         else if chart == "pie" { PieChart(points: pts) }
                         else { BarChart(points: pts, money: main == .closedNet) { label in route(for: label) } }
-                        HStack { HStack(spacing: 4) { RoundedRectangle(cornerRadius: 2).fill(Color.good).frame(width: 10, height: 10); Text(main.rawValue).font(.system(size: 9)).foregroundStyle(Color.inkSoft) }; Spacer(); Hint(text: "Tổng \(fmt(main.total(d.current.total)))") }
+                        HStack { HStack(spacing: 4) { RoundedRectangle(cornerRadius: 2).fill(Color.good).frame(width: 10, height: 10); Text(main.rawValue).mtFont(.caption).foregroundStyle(Color.inkSoft) }; Spacer(); Hint(text: "Tổng \(fmt(main.total(d.current.total)))") }
                     }
                 } else { Skeleton(height: 220) }
                 PrimaryButton(title: saved ? "Đã lưu báo cáo tùy chỉnh" : "Lưu báo cáo tùy chỉnh", icon: saved ? "checkmark" : "bookmark.fill") {
                     UserDefaults.standard.set(["metrics": metrics.map(\.rawValue), "groupBy": groupBy, "dim": dim, "chart": chart, "period": period.key, "pos": pos ?? ""], forKey: "thp_custom_report"); withAnimation { saved = true }
                 }
-                HStack(alignment: .top, spacing: 8) { Image(systemName: "lightbulb.fill").foregroundStyle(Color.warn); Text("Báo cáo tùy chỉnh sẽ được lưu trên máy này và mở lại đúng bộ lọc lần sau. Chạm một cột để xem đơn cấu thành.").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }.padding(12).background(Color.warn.opacity(0.1), in: .rect(cornerRadius: 12))
+                HStack(alignment: .top, spacing: 8) { Image(systemName: "lightbulb.fill").foregroundStyle(Color.warn); Text("Báo cáo tùy chỉnh sẽ được lưu trên máy này và mở lại đúng bộ lọc lần sau. Chạm một cột để xem đơn cấu thành.").mtFont(.caption).foregroundStyle(Color.inkSoft) }.padding(12).background(Color.warn.opacity(0.1), in: .rect(cornerRadius: 12))
             }.padding(16)
         }
         .navigationTitle("Báo cáo tùy chỉnh").navigationBarTitleDisplayMode(.inline).brandNav()
@@ -316,10 +328,10 @@ struct CustomReportView: View {
     @MainActor private func load() async { data = try? await API.overview(start: period.range.0, end: period.range.1, posIds: pos.map { [$0] } ?? [], groupBy: groupBy, compare: "none") }
 }
 
-struct StepTitle: View { let n: Int; let text: String; var body: some View { HStack(spacing: 8) { Text("\(n)").font(.system(size: 10, weight: .bold)).foregroundStyle(.white).frame(width: 18, height: 18).background(Color.brandDeep, in: .circle); Text(text).font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink) } } }
+struct StepTitle: View { let n: Int; let text: String; var body: some View { HStack(spacing: 8) { Text("\(n)").mtFont(.caption).foregroundStyle(.white).frame(width: 18, height: 18).background(Color.brandDeep, in: .circle); Text(text).mtFont(.body).foregroundStyle(Color.ink) } } }
 struct ChartTypeTile: View {
     let icon: String; let label: String; let on: Bool; let tap: () -> Void
-    var body: some View { Button(action: tap) { VStack(spacing: 4) { Image(systemName: icon).font(.system(size: 16, weight: .semibold)); Text(label).font(.system(size: 8, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7) }.foregroundStyle(on ? .white : Color.ink).frame(maxWidth: .infinity).padding(.vertical, 10).background(on ? Color.brandDeep : Color.card, in: .rect(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).stroke(on ? .clear : Color.black.opacity(0.12))) }.buttonStyle(.plain) }
+    var body: some View { Button(action: tap) { VStack(spacing: 4) { Image(systemName: icon).mtFont(.cardHeader); Text(label).mtFont(.caption).lineLimit(1).minimumScaleFactor(0.7) }.foregroundStyle(on ? .white : Color.ink).frame(maxWidth: .infinity).padding(.vertical, 10).background(on ? Color.brandDeep : Color.card, in: .rect(cornerRadius: MT.rCell)).overlay(RoundedRectangle(cornerRadius: MT.rCell).stroke(on ? .clear : Color.mtCardBorder)) }.buttonStyle(.plain) }
 }
 /// Xếp chip xuống dòng.
 struct FlowChips<Content: View>: View { @ViewBuilder let content: Content; var body: some View { ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 8) { content } } } }
@@ -333,9 +345,9 @@ struct BarChart: View {
                 HStack(alignment: .bottom, spacing: 6) {
                     ForEach(Array(points.enumerated()), id: \.offset) { _, p in
                         let bar = VStack(spacing: 3) {
-                            Text(money ? Fmt.short(p.1) : Fmt.int(p.1)).font(.system(size: 8, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1)
+                            Text(money ? Fmt.short(p.1) : Fmt.int(p.1)).mtFont(.caption).foregroundStyle(Color.ink).lineLimit(1)
                             GrowBar(height: max(3, 120 * p.1 / maxV), color: .good).frame(width: max(18, 300 / CGFloat(max(1, min(points.count, 14)))))
-                            Text(p.0).font(.system(size: 8)).foregroundStyle(Color.inkSoft).lineLimit(1).frame(width: 40)
+                            Text(p.0).mtFont(.caption).foregroundStyle(Color.inkSoft).lineLimit(1).frame(width: 40)
                         }.frame(height: 160, alignment: .bottom)
                         if let r = route(p.0) { NavigationLink(value: r) { bar }.buttonStyle(.plain) } else { bar }
                     }
@@ -356,7 +368,7 @@ struct PieChart: View {
                     Circle().trim(from: start, to: start + p.1 / total).stroke(Self.colors[i % Self.colors.count], lineWidth: 22).rotationEffect(.degrees(-90))
                 }
             }.frame(width: 120, height: 120)
-            VStack(alignment: .leading, spacing: 5) { ForEach(Array(points.prefix(7).enumerated()), id: \.offset) { i, p in HStack(spacing: 6) { Circle().fill(Self.colors[i % Self.colors.count]).frame(width: 8, height: 8); Text(p.0).font(.system(size: 10)).lineLimit(1); Spacer(); Text(Fmt.pct0(p.1 / total * 100)).font(.system(size: 10, weight: .bold)) } } }
+            VStack(alignment: .leading, spacing: 5) { ForEach(Array(points.prefix(7).enumerated()), id: \.offset) { i, p in HStack(spacing: 6) { Circle().fill(Self.colors[i % Self.colors.count]).frame(width: 8, height: 8); Text(p.0).mtFont(.caption).lineLimit(1); Spacer(); Text(Fmt.pct0(p.1 / total * 100)).mtFont(.caption) } } }
         }.padding(.vertical, 8)
     }
 }
@@ -374,6 +386,10 @@ struct AuditView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 PageTitle(title: "Nhật ký hoạt động", subtitle: "Minh bạch – An toàn – Trách nhiệm")
+                if let d = data {
+                    MTMetricHeroCard(label: "Nhật ký hoạt động", value: Fmt.int(d.total) + " sự kiện",
+                        scope: day.label + " · " + (group.isEmpty ? "Tất cả" : group))
+                }
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         FilterChip(label: "Tất cả", on: group.isEmpty) { group = "" }
@@ -381,28 +397,28 @@ struct AuditView: View {
                     }
                 }
                 PeriodMenu(period: $day, options: [.today, .yesterday, .week, .month, .d90])
-                HStack(spacing: 6) { Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(Color.inkSoft); TextField("Tìm theo nội dung, người dùng…", text: $q).font(.system(size: 12)).onSubmit { Task { await load(next: false) } } }.padding(.horizontal, 10).padding(.vertical, 9).background(Color.card, in: .rect(cornerRadius: 9)).overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.black.opacity(0.1)))
+                HStack(spacing: 6) { Image(systemName: "magnifyingglass").mtFont(.caption).foregroundStyle(Color.inkSoft); TextField("Tìm theo nội dung, người dùng…", text: $q).mtFont(.body).onSubmit { Task { await load(next: false) } } }.padding(.horizontal, 10).padding(.vertical, 9).background(Color.card, in: .rect(cornerRadius: MT.rCell)).overlay(RoundedRectangle(cornerRadius: MT.rCell).stroke(Color.mtCardBorder))
                 if let error, items.isEmpty { Label(error, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad) }
                 Panel(padding: 12) {
-                    if items.isEmpty { Text(data == nil ? "Đang tải…" : "Không có sự kiện.").font(.system(size: 12)).foregroundStyle(Color.inkSoft) }
+                    if items.isEmpty { Text(data == nil ? "Đang tải…" : "Không có sự kiện.").mtFont(.body).foregroundStyle(Color.inkSoft) }
                     ForEach(Array(items.enumerated()), id: \.element.id) { i, a in
                         HStack(alignment: .top, spacing: 10) {
                             VStack(spacing: 0) {
-                                Image(systemName: icon(a.action)).font(.system(size: 11, weight: .bold)).foregroundStyle(.white).frame(width: 26, height: 26).background(tint(a.action, a.status), in: .circle)
-                                if i < items.count - 1 { Rectangle().fill(Color.black.opacity(0.08)).frame(width: 2).frame(maxHeight: .infinity) }
+                                Image(systemName: icon(a.action)).mtFont(.caption).foregroundStyle(.white).frame(width: 26, height: 26).background(tint(a.action, a.status), in: .circle)
+                                if i < items.count - 1 { Rectangle().fill(Color.mtCardBorder).frame(width: 2).frame(maxHeight: .infinity) }
                             }
-                            Text(String(Fmt.dateTime(a.at).prefix(5))).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink).frame(width: 40, alignment: .leading).padding(.top, 5)
+                            Text(String(Fmt.dateTime(a.at).prefix(5))).mtFont(.caption).foregroundStyle(Color.ink).frame(width: 40, alignment: .leading).padding(.top, 5)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(a.name ?? a.email ?? "Hệ thống").font(.system(size: 12, weight: .bold)).foregroundStyle(Color.ink)
-                                Text(data?.labels?[a.action] ?? a.action).font(.system(size: 11)).foregroundStyle(Color.ink)
-                                Text([a.detail, a.target].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")).font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(2)
-                                Text("\(a.ip.map { "IP: \($0)" } ?? "")\(a.device.map { " · \($0)" } ?? "") · \(Fmt.day(a.at))").font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1)
+                                Text(a.name ?? a.email ?? "Hệ thống").mtFont(.body).foregroundStyle(Color.ink)
+                                Text(data?.labels?[a.action] ?? a.action).mtFont(.caption).foregroundStyle(Color.ink)
+                                Text([a.detail, a.target].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")).mtFont(.caption).foregroundStyle(Color.inkSoft).lineLimit(2)
+                                Text("\(a.ip.map { "IP: \($0)" } ?? "")\(a.device.map { " · \($0)" } ?? "") · \(Fmt.day(a.at))").mtFont(.caption).foregroundStyle(Color.inkSoft).lineLimit(1)
                                 if let s = a.status, s >= 400 { Tag(text: "Lỗi \(s)", tone: .red) }
                             }.padding(.top, 4)
-                            Spacer(); Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.inkSoft).padding(.top, 8)
+                            Spacer(); Image(systemName: "chevron.right").mtFont(.caption).foregroundStyle(Color.inkSoft).padding(.top, 8)
                         }.padding(.bottom, 10)
                     }
-                    if let d = data, Double(items.count) < d.total { Button { Task { await load(next: true) } } label: { Text("Tải thêm").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.brand).frame(maxWidth: .infinity) } }
+                    if let d = data, Double(items.count) < d.total { Button { Task { await load(next: true) } } label: { Text("Tải thêm").mtFont(.body).foregroundStyle(Color.brand).frame(maxWidth: .infinity) } }
                 }
                 if let d = data { Text("\(Fmt.int(d.total)) sự kiện").font(.caption).foregroundStyle(Color.inkSoft) }
             }.padding(16)
@@ -414,6 +430,139 @@ struct AuditView: View {
     private func tint(_ a: String, _ s: Int?) -> Color { if let s, s >= 400 { return .bad }; return a.hasPrefix("login") ? .good : a == "logout" ? .inkSoft : a == "export" ? .blue : a.hasPrefix("password") || a.hasPrefix("totp") || a.hasPrefix("passkey") || a.hasPrefix("device") ? .purple : a == "view" ? .gray : .warn }
     @MainActor private func load(next: Bool) async {
         do { let r = try await API.audit(q: q, page: next ? (data?.page ?? 0) + 1 : 1, group: group, from: day.range.0, to: day.range.1); items = next ? items + r.items : r.items; data = r; error = nil } catch { self.error = error.localizedDescription }
+    }
+}
+
+/// Chỉ tiêu đã giao trên web. Không suy ra tỷ lệ hay số thực đạt từ chỉ tiêu.
+struct SaleKpiReadView: View {
+    @Environment(AuthModel.self) private var auth
+    @State private var month = String(VNDate.string(.now).prefix(7))
+    @State private var monthInput = String(VNDate.string(.now).prefix(7))
+    @State private var data: API.Kpi2Report?
+    @State private var overview: API.Overview?
+    @State private var targets: API.Targets?
+    @State private var actualError: String?
+    @State private var error: String?
+    @State private var missing = false
+    private struct Row: Identifiable { let id: String; let goal: API.Kpi2Goal }
+    private enum Column: String, CaseIterable, Identifiable {
+        case assigned = "Số nhận", closed = "Số chốt", orders = "Số đơn", upsell = "Tỷ lệ tự upsell"
+        var id: String { rawValue }
+    }
+    private enum ActualColumn: String, CaseIterable, Identifiable {
+        case net = "Đã đạt (₫)", goal = "KPI doanh số (₫)", rate = "Tỷ lệ chốt Sale"
+        var id: String { rawValue }
+    }
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: MT.cardGap) {
+                PageTitle(title: "KPI Sale & Team", subtitle: "Chỉ tiêu tháng · Chỉ xem")
+                HStack {
+                    Text("Tháng").mtFont(.body)
+                    TextField("YYYY-MM", text: $monthInput).mtFont(.body).multilineTextAlignment(.trailing)
+                        .onSubmit {
+                            guard monthInput.range(of: #"^\d{4}-(0[1-9]|1[0-2])$"#, options: .regularExpression) != nil else { return }
+                            month = monthInput
+                            Task { await loadActual(); await load() }
+                        }
+                }.padding(MT.cardPad).tileSurface()
+                Panel {
+                    Text("Ngưỡng tỷ lệ chốt Sale toàn phòng: ≥ 42%").mtFont(.cardHeader)
+                    Text("Tỷ lệ chốt thực đạt").mtFont(.caption)
+                    MTRateBadge(rate: overview?.current.total.shownRate, kind: .saleClose)
+                    Text("Chỉ tiêu không phải số thực đạt. Chia và sửa KPI trên web.").mtFont(.caption).foregroundStyle(Color.mtTextSecondary)
+                }
+                if let overview {
+                    NavigationLink(value: orderRoute()) {
+                        MTMetricHeroCard(label: "Doanh thu Sale", value: Fmt.shortMoney(overview.current.total.closedNet),
+                            scope: month + " · Mọi POS · Sale")
+                    }.buttonStyle(MTPressStyle())
+                    let rows = overview.current.byEmployee ?? []
+                    Panel {
+                        Text("KPI doanh số theo người").mtFont(.cardHeader)
+                        MTStickyColumnTable(rows: rows, total: nil, columns: ActualColumn.allCases,
+                            title: { $0.rawValue }, sort: { _ in }, scope: month + " · Mọi POS · Sale",
+                            name: { row in Text(row.name ?? "Nhân viên").mtFont(.body) },
+                            cell: { row, col in
+                                switch col {
+                                case .net: NavigationLink(value: orderRoute(row.sellerId)) { Text(Fmt.money(row.closedNet)) }.buttonStyle(MTPressStyle())
+                                case .goal: Text(targets?.items.first { $0.scope == "employee" && $0.refId == row.sellerId }.map { Fmt.money($0.revenue) } ?? "—")
+                                case .rate: MTRateBadge(rate: row.shownRate, kind: .saleClose)
+                                }
+                            })
+                    }
+                }
+                if let actualError { StateView(error: actualError) { await loadActual() } }
+                if missing { StateView(empty: "Chưa có trên máy chủ") }
+                else if let error { StateView(error: error) { await load() } }
+                else if let data {
+                    if data.items.isEmpty { StateView(empty: "Chưa có chỉ tiêu trong tháng này") }
+                    else {
+                        let rows = data.items.keys.sorted().map { Row(id: $0, goal: data.items[$0]!) }
+                        Panel {
+                            Text("Chỉ tiêu team / tài khoản POS").mtFont(.cardHeader)
+                            Text("Tháng \(data.month) · Phạm vi được cấp").mtFont(.caption).foregroundStyle(Color.mtTextSecondary)
+                            MTStickyColumnTable(rows: rows, total: nil, columns: Column.allCases,
+                                title: { $0.rawValue }, sort: { _ in }, firstTitle: "Đối tượng", scope: data.month,
+                                name: { row in Text(row.id).mtFont(.body) },
+                                cell: { row, col in
+                                    Text(value(row.goal, col)).monospacedDigit()
+                                })
+                            ForEach(rows.filter { !($0.goal.products ?? [:]).isEmpty }) { row in
+                                VStack(alignment: .leading, spacing: MT.cellGap) {
+                                    Text(row.id).mtFont(.cardHeader)
+                                    ForEach((row.goal.products ?? [:]).keys.sorted(), id: \.self) { key in
+                                        HStack { Text(key); Spacer(); Text((row.goal.products?[key]).map(Fmt.int) ?? "—") }
+                                            .mtFont(.body).accessibilityElement(children: .combine)
+                                    }
+                                }.padding(MT.cellGap).tileSurface()
+                            }
+                        }
+                    }
+                } else { StateView(loading: "Đang tải chỉ tiêu…") }
+            }.padding(MT.gutter)
+        }
+        .navigationTitle("KPI Sale & Team").navigationBarTitleDisplayMode(.inline).brandNav()
+        .task { await loadActual(); await load() }.refreshable { await loadActual(); await load() }
+    }
+    private func orderRoute(_ seller: String = "") -> Route {
+        .orders(OrderQuery(start: month + "-01", end: VNDate.monthEnd(month), group: "closed", sellerId: seller,
+            basis: "confirmed", title: "Đơn chốt Sale", team: "sale"))
+    }
+    @MainActor private func loadActual() async {
+        guard auth.me?.canView("sale-kpi") == true else { return }
+        overview = nil; targets = nil; actualError = nil
+        let selected = month
+        do {
+            async let report = API.overview(start: selected + "-01", end: VNDate.monthEnd(selected), team: "sale")
+            async let goals = API.targets(month: selected)
+            let result = try await (report, goals)
+            guard selected == month, !Task.isCancelled else { return }
+            overview = result.0; targets = result.1
+        } catch { if !Task.isCancelled && selected == month { actualError = LoadError.text(error) } }
+    }
+    private func value(_ goal: API.Kpi2Goal, _ column: Column) -> String {
+        switch column {
+        case .assigned: return goal.assigned.map(Fmt.int) ?? "—"
+        case .closed: return goal.closed.map(Fmt.int) ?? "—"
+        case .orders: return goal.orders.map(Fmt.int) ?? "—"
+        case .upsell: return goal.upsellRate.map { Fmt.pct($0) } ?? "—"
+        }
+    }
+    @MainActor private func load() async {
+        guard auth.me?.canView("sale-kpi") == true else { return }
+        data = nil; error = nil; missing = false
+        let selected = month
+        do {
+            let result = try await API.kpi2(month: selected)
+            guard selected == month, !Task.isCancelled else { return }
+            data = result
+        }
+        catch {
+            guard !Task.isCancelled, selected == month else { return }
+            missing = (error as? API.APIError)?.status == 404
+            if !missing { self.error = LoadError.text(error) }
+        }
     }
 }
 

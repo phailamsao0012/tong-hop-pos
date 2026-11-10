@@ -138,66 +138,66 @@ struct SecurityView: View {
             VStack(alignment: .leading, spacing: 12) {
                 PageTitle(title: "Bảo mật tài khoản", subtitle: "Tài khoản an toàn – Công việc luôn thông suốt")
                 if let error { Label(error, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad) }
-                if let notice { Label(notice, systemImage: "checkmark.circle.fill").foregroundStyle(Color.good).font(.system(size: 12, weight: .semibold)).padding(10).background(Color.brandSoft, in: .rect(cornerRadius: 10)) }
+                if let notice { Label(notice, systemImage: "checkmark.circle.fill").foregroundStyle(Color.good).mtFont(.body).padding(10).background(Color.brandSoft, in: .rect(cornerRadius: 10)) }
                 ScanLoginRow()
                 if let d {
                     let ok = d.mfaEnabled
                     HStack(alignment: .top, spacing: 10) {
                         Image(systemName: ok ? "checkmark.shield.fill" : "exclamationmark.shield.fill").font(.system(size: 18, weight: .bold)).foregroundStyle(.white).frame(width: 40, height: 40).background(ok ? Color.good : Color.warn, in: .circle)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(ok ? "Tài khoản của bạn đang được bảo vệ tốt" : d.mfaRequired ? "Vai trò của bạn bắt buộc bật xác thực 2 bước" : "Tài khoản chưa bật xác thực 2 bước").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink)
-                            Text(ok ? "Tiếp tục duy trì các cài đặt bảo mật để giữ an toàn dữ liệu của doanh nghiệp." : "Bật mã ứng dụng bên dưới; mỗi lần đăng nhập máy mới cần thêm mã 6 số.").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                            Text(ok ? "Tài khoản của bạn đang được bảo vệ tốt" : d.mfaRequired ? "Vai trò của bạn bắt buộc bật xác thực 2 bước" : "Tài khoản chưa bật xác thực 2 bước").mtFont(.body).foregroundStyle(Color.ink)
+                            Text(ok ? "Tiếp tục duy trì các cài đặt bảo mật để giữ an toàn dữ liệu của doanh nghiệp." : "Bật mã ứng dụng bên dưới; mỗi lần đăng nhập máy mới cần thêm mã 6 số.").mtFont(.caption).foregroundStyle(Color.inkSoft)
                         }
                     }.padding(12).background((ok ? Color.good : Color.warn).opacity(0.1), in: .rect(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke((ok ? Color.good : Color.warn).opacity(0.25)))
 
-                    Text("Bảo vệ trên máy này").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink)
+                    Text("Bảo vệ trên máy này").mtFont(.body).foregroundStyle(Color.ink)
                     // Khoá app luôn bật (09/10/2026): không còn công tắc tắt hay chọn thời gian chờ.
                     Panel(padding: 12) {
                         HStack(spacing: 10) {
-                            Image(systemName: Biometric.icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.blue).frame(width: 34, height: 34).background(Color.blue.opacity(0.12), in: .rect(cornerRadius: 9))
-                            VStack(alignment: .leading, spacing: 2) { Text("Khoá app bằng \(AppLock.biometryName)").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink); Text("Mở app và mỗi lần quay lại app đều phải \(AppLock.biometryName), mật mã iPhone hoặc mật khẩu MEGATECH; màn đa nhiệm luôn che số liệu").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }
+                            Image(systemName: Biometric.icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.blue).frame(width: 44, height: 44).background(Color.blue.opacity(0.12), in: .rect(cornerRadius: MT.rCell))
+                            VStack(alignment: .leading, spacing: 2) { Text("Khoá app bằng \(AppLock.biometryName)").mtFont(.body).foregroundStyle(Color.ink); Text("Mở app và mỗi lần quay lại app đều phải \(AppLock.biometryName), mật mã iPhone hoặc mật khẩu MEGATECH; màn đa nhiệm luôn che số liệu").mtFont(.caption).foregroundStyle(Color.inkSoft) }
                             Spacer()
-                            Text("Luôn bật").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.good).padding(.horizontal, 8).padding(.vertical, 4).background(Color.good.opacity(0.12), in: .capsule)
+                            Text("Luôn bật").mtFont(.caption).foregroundStyle(Color.good).padding(.horizontal, 8).padding(.vertical, 4).background(Color.good.opacity(0.12), in: .capsule)
                         }
                     }
 
-                    Text("Phương thức đăng nhập").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink)
+                    Text("Phương thức đăng nhập").mtFont(.body).foregroundStyle(Color.ink)
                     VStack(spacing: 0) {
                         MethodRow(icon: "faceid", tint: .blue, title: "Passkey (Face ID)", sub: d.passkeys.isEmpty ? "Chưa có passkey nào" : "\(d.passkeys.count) passkey · gỡ ở mục dưới", on: !d.passkeys.isEmpty)
                         Divider().padding(.leading, 56)
                         Button { sheet = d.totpEnabled ? .totpDisable : .totpSetup } label: { MethodRow(icon: "lock.fill", tint: .good, title: "Xác thực 2 bước (2FA)", sub: d.totpEnabled ? "Mã ứng dụng đang bật · chạm để tắt" : "Bảo vệ tài khoản bằng mã xác thực · chạm để bật", on: d.totpEnabled) }.buttonStyle(.plain)
-                    }.background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
+                    }.background(Color.mtSurfaceCard, in: .rect(cornerRadius: MT.rCard)).overlay(RoundedRectangle(cornerRadius: MT.rCard).stroke(Color.mtCardBorder)).cardShadow()
                     if !d.passkeys.isEmpty {
                         Panel(padding: 12) {
-                            Text("Passkey đã đăng ký").font(.system(size: 12, weight: .bold)).foregroundStyle(Color.ink)
-                            ForEach(d.passkeys) { k in HStack { VStack(alignment: .leading, spacing: 1) { Text(k.name ?? "Passkey").font(.system(size: 12)); Text("Tạo \(Fmt.dateTime(k.created_at))").font(.system(size: 9)).foregroundStyle(Color.inkSoft) }; Spacer(); Button(role: .destructive) { Task { try? await API.removePasskey(id: k.id); await load() } } label: { Image(systemName: "trash").font(.system(size: 12)).foregroundStyle(Color.bad) } }.padding(.vertical, 4) }
-                            Text("Tạo passkey mới trong app cần tài khoản Apple Developer (liên kết tên miền).").font(.system(size: 9)).foregroundStyle(Color.inkSoft)
+                            Text("Passkey đã đăng ký").mtFont(.body).foregroundStyle(Color.ink)
+                            ForEach(d.passkeys) { k in HStack { VStack(alignment: .leading, spacing: 1) { Text(k.name ?? "Passkey").mtFont(.body); Text("Tạo \(Fmt.dateTime(k.created_at))").mtFont(.caption).foregroundStyle(Color.inkSoft) }; Spacer(); Button(role: .destructive) { Task { try? await API.removePasskey(id: k.id); await load() } } label: { Image(systemName: "trash").mtFont(.body).foregroundStyle(Color.bad) } }.padding(.vertical, 4) }
+                            Text("Tạo passkey mới trong app cần tài khoản Apple Developer (liên kết tên miền).").mtFont(.caption).foregroundStyle(Color.inkSoft)
                         }
                     }
 
                     SessionsSection(isOwner: auth.me?.role == "owner", notice: $notice)
                     if !d.devices.isEmpty {
                         SectionHead(title: "Máy tin cậy", action: "\(d.devices.count) máy")
-                        Text("Máy đã qua bước hai: đăng nhập lại trên các máy này không hỏi mã email. Gỡ để bắt xác minh lại.").font(.system(size: 10)).foregroundStyle(Color.inkSoft).padding(.top, -6)
+                        Text("Máy đã qua bước hai: đăng nhập lại trên các máy này không hỏi mã email. Gỡ để bắt xác minh lại.").mtFont(.caption).foregroundStyle(Color.inkSoft).padding(.top, -6)
                         VStack(spacing: 0) {
                             ForEach(Array(d.devices.prefix(8).enumerated()), id: \.element.id) { i, dev in
                                 HStack(spacing: 10) {
-                                    Image(systemName: devIcon(dev.user_agent)).font(.system(size: 14)).foregroundStyle(Color.ink).frame(width: 32, height: 32).background(Color.black.opacity(0.05), in: .rect(cornerRadius: 9))
+                                    Image(systemName: devIcon(dev.user_agent)).mtFont(.body).foregroundStyle(Color.ink).frame(width: 32, height: 32).background(Color.mtSurfaceCell, in: .rect(cornerRadius: MT.rCell))
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(short(dev.user_agent) + (dev.current ? " (máy này)" : "")).font(.system(size: 12, weight: dev.current ? .bold : .semibold)).foregroundStyle(Color.ink).lineLimit(1)
-                                        Text("Dùng gần nhất \(Fmt.ago(dev.last_used_at)) · hết hạn \(Fmt.day(dev.expires_at))").font(.system(size: 9)).foregroundStyle(Color.inkSoft)
+                                        Text("Dùng gần nhất \(Fmt.ago(dev.last_used_at)) · hết hạn \(Fmt.day(dev.expires_at))").mtFont(.caption).foregroundStyle(Color.inkSoft)
                                     }
                                     Spacer()
                                     Button { Task { try? await API.removeDevice(id: dev.id); await load() } } label: { Image(systemName: "xmark.circle.fill").font(.system(size: 16)).foregroundStyle(Color.inkSoft) }.buttonStyle(.plain)
                                 }.padding(10)
                                 if i < min(8, d.devices.count) - 1 { Divider().padding(.leading, 52) }
                             }
-                        }.background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
+                        }.background(Color.mtSurfaceCard, in: .rect(cornerRadius: MT.rCard)).overlay(RoundedRectangle(cornerRadius: MT.rCard).stroke(Color.mtCardBorder)).cardShadow()
                     }
                     VStack(spacing: 0) {
-                        Button { sheet = .password } label: { HStack(spacing: 10) { Image(systemName: "key.fill").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink).frame(width: 26); Text("Đổi mật khẩu").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink); Spacer(); Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.inkSoft) }.padding(12).contentShape(.rect) }.buttonStyle(.plain)
-                    }.background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
-                    HStack(alignment: .top, spacing: 10) { Image(systemName: "checkmark.shield.fill").font(.system(size: 16)).foregroundStyle(Color.good); VStack(alignment: .leading, spacing: 2) { Text("Dữ liệu của bạn được mã hóa và bảo vệ theo tiêu chuẩn quốc tế.").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink); Text("MEGATECH – An tâm để phát triển bền vững.").font(.system(size: 10)).foregroundStyle(Color.inkSoft) } }.padding(12).background(Color.brandSoft, in: .rect(cornerRadius: 12))
+                        Button { sheet = .password } label: { HStack(spacing: 10) { Image(systemName: "key.fill").mtFont(.body).foregroundStyle(Color.ink).frame(width: 26); Text("Đổi mật khẩu").mtFont(.body).foregroundStyle(Color.ink); Spacer(); Image(systemName: "chevron.right").mtFont(.caption).foregroundStyle(Color.inkSoft) }.padding(12).contentShape(.rect) }.buttonStyle(.plain)
+                    }.background(Color.mtSurfaceCard, in: .rect(cornerRadius: MT.rCard)).overlay(RoundedRectangle(cornerRadius: MT.rCard).stroke(Color.mtCardBorder)).cardShadow()
+                    HStack(alignment: .top, spacing: 10) { Image(systemName: "checkmark.shield.fill").font(.system(size: 16)).foregroundStyle(Color.good); VStack(alignment: .leading, spacing: 2) { Text("Dữ liệu của bạn được mã hóa và bảo vệ theo tiêu chuẩn quốc tế.").mtFont(.caption).foregroundStyle(Color.ink); Text("MEGATECH – An tâm để phát triển bền vững.").mtFont(.caption).foregroundStyle(Color.inkSoft) } }.padding(12).background(Color.brandSoft, in: .rect(cornerRadius: 12))
                 } else if error == nil { Skeleton(height: 70); Skeleton(height: 120); Skeleton(height: 200) }
             }.padding(16)
         }
@@ -230,9 +230,9 @@ struct MethodRow: View {
     let icon: String; let tint: Color; let title: String; let sub: String; let on: Bool
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(tint).frame(width: 34, height: 34).background(tint.opacity(0.12), in: .rect(cornerRadius: 9))
-            VStack(alignment: .leading, spacing: 2) { Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink); Text(sub).font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1) }
-            Spacer(); Tag(text: on ? "Đã bật" : "Chưa bật", tone: on ? .green : .gray); Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.inkSoft)
+            Image(systemName: icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(tint).frame(width: 44, height: 44).background(tint.opacity(0.12), in: .rect(cornerRadius: MT.rCell))
+            VStack(alignment: .leading, spacing: 2) { Text(title).mtFont(.body).foregroundStyle(Color.ink); Text(sub).mtFont(.caption).foregroundStyle(Color.inkSoft).lineLimit(1) }
+            Spacer(); Tag(text: on ? "Đã bật" : "Chưa bật", tone: on ? .green : .gray); Image(systemName: "chevron.right").mtFont(.caption).foregroundStyle(Color.inkSoft)
         }.padding(12).contentShape(.rect)
     }
 }
@@ -335,20 +335,20 @@ struct SessionsSection: View {
     var body: some View {
         HStack {
             Text("Thiết bị đang đăng nhập").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink)
-            if let rows { Text("\(rows.count)").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.inkSoft).padding(.horizontal, 6).padding(.vertical, 2).background(Color.black.opacity(0.06), in: .capsule) }
+            if let rows { Text("\(rows.count)").mtFont(.caption).foregroundStyle(Color.inkSoft).padding(.horizontal, 6).padding(.vertical, 2).background(Color.black.opacity(0.06), in: .capsule) }
             Spacer()
-            if isOwner { Toggle(isOn: $all) { Text("Mọi tài khoản").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.inkSoft) }.toggleStyle(.switch).tint(.good).fixedSize() }
+            if isOwner { Toggle(isOn: $all) { Text("Mọi tài khoản").mtFont(.caption).foregroundStyle(Color.inkSoft) }.toggleStyle(.switch).tint(.good).fixedSize() }
         }
-        if let error { Label(error, systemImage: "wifi.exclamationmark").font(.system(size: 12)).foregroundStyle(Color.bad) }
+        if let error { Label(error, systemImage: "wifi.exclamationmark").mtFont(.body).foregroundStyle(Color.bad) }
         if let rows {
             if all {
                 let groups = Dictionary(grouping: rows, by: \.userId).map { ($0.key, $0.value) }.sorted { ($0.1.first?.name ?? "") < ($1.1.first?.name ?? "") }
                 ForEach(groups, id: \.0) { _, list in
                     HStack(spacing: 8) {
                         Avatar(name: list.first?.name ?? "?", size: 24)
-                        Text(list.first?.name ?? list.first?.email ?? "Người dùng").font(.system(size: 12, weight: .bold)).foregroundStyle(Color.ink)
-                        Text(list.first?.email ?? "").font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1)
-                        Spacer(); Text("\(list.count) máy").font(.system(size: 10, weight: .semibold)).foregroundStyle(Color.inkSoft)
+                        Text(list.first?.name ?? list.first?.email ?? "Người dùng").mtFont(.body).foregroundStyle(Color.ink)
+                        Text(list.first?.email ?? "").mtFont(.caption).foregroundStyle(Color.inkSoft).lineLimit(1)
+                        Spacer(); Text("\(list.count) máy").mtFont(.caption).foregroundStyle(Color.inkSoft)
                     }.padding(.top, 4)
                     card(list)
                 }
@@ -357,7 +357,7 @@ struct SessionsSection: View {
                 if rows.contains(where: { !$0.current }) {
                     Button { confirmOthers = true } label: {
                         HStack(spacing: 8) { Image(systemName: "rectangle.portrait.and.arrow.right"); Text("Đăng xuất mọi máy khác") }
-                            .font(.system(size: 13, weight: .bold)).foregroundStyle(Color.bad).frame(maxWidth: .infinity).padding(.vertical, 11)
+                            .mtFont(.body).foregroundStyle(Color.bad).frame(maxWidth: .infinity).padding(.vertical, 11)
                             .background(Color.card, in: .rect(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bad.opacity(0.35)))
                     }.buttonStyle(.plain)
                 }
@@ -380,21 +380,21 @@ struct SessionsSection: View {
                         .background((s.current ? Color.good : Color.black).opacity(s.current ? 0.12 : 0.05), in: .rect(cornerRadius: 10))
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 6) {
-                            Text(s.device).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1)
+                            Text(s.device).mtFont(.body).foregroundStyle(Color.ink).lineLimit(1)
                             if s.current { Tag(text: "Máy này", tone: .green) }
                         }
                         if let m = s.methodLabel { Tag(text: m, tone: .gray) }
-                        Text([s.place, s.ip, "lần cuối " + (Ago.text(s.lastSeenAt) ?? "—")].compactMap { $0 }.joined(separator: " · ")).font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(2)
+                        Text([s.place, s.ip, "lần cuối " + (Ago.text(s.lastSeenAt) ?? "—")].compactMap { $0 }.joined(separator: " · ")).mtFont(.caption).foregroundStyle(Color.inkSoft).lineLimit(2)
                     }
                     Spacer(minLength: 4)
                     if !s.current {
-                        Button { revoking = s } label: { Text("Đăng xuất").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.bad).padding(.horizontal, 9).padding(.vertical, 6).background(Color.bad.opacity(0.08), in: .capsule) }.buttonStyle(.plain)
+                        Button { revoking = s } label: { Text("Đăng xuất").mtFont(.caption).foregroundStyle(Color.bad).padding(.horizontal, 9).padding(.vertical, 6).background(Color.bad.opacity(0.08), in: .capsule) }.buttonStyle(.plain)
                     }
                 }.padding(12)
                 if i < list.count - 1 { Divider().padding(.leading, 58) }
             }
-            if list.isEmpty { Text("Không có phiên nào.").font(.system(size: 12)).foregroundStyle(Color.inkSoft).padding(12) }
-        }.background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
+            if list.isEmpty { Text("Không có phiên nào.").mtFont(.body).foregroundStyle(Color.inkSoft).padding(12) }
+        }.background(Color.mtSurfaceCard, in: .rect(cornerRadius: MT.rCard)).overlay(RoundedRectangle(cornerRadius: MT.rCard).stroke(Color.mtCardBorder)).cardShadow()
     }
     private func icon(_ s: API.LoginSession) -> String {
         switch s.client {

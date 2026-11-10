@@ -1,6 +1,37 @@
 import Foundation
 
 extension API {
+    /// Hợp đồng riêng cho 17C: giữ nguyên decoder và hàm hồ sơ của các màn cũ.
+    struct HRProfileAchievements: Decodable {
+        struct Best: Decodable { let month: ProfileMonth?; let rateMonth: ProfileMonth? }
+        let profile: StaffProfileReport
+        let best: Best?
+        let topMonths: [ProfileMonth]?
+        private enum CodingKeys: String, CodingKey { case best, topMonths }
+        init(from decoder: Decoder) throws {
+            profile = try StaffProfileReport(from: decoder)
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            best = try values.decodeIfPresent(Best.self, forKey: .best)
+            topMonths = try values.decodeIfPresent([ProfileMonth].self, forKey: .topMonths)
+        }
+    }
+    static func hrProfileAchievements(id: String) async throws -> HRProfileAchievements {
+        try await request("/api/reports/staff-profile?id=\(queryValue(id))&pos=")
+    }
+    struct Kpi2Goal: Decodable {
+        let assigned: Double?
+        let closed: Double?
+        let orders: Double?
+        let upsellRate: Double?
+        let products: [String: Double]?
+    }
+    struct Kpi2Report: Decodable {
+        let month: String
+        let items: [String: Kpi2Goal]
+    }
+    static func kpi2(month: String) async throws -> Kpi2Report {
+        try await request("/api/kpi2?month=\(queryValue(month))")
+    }
     struct ProfileTenure: Decodable {
         let joined: String
         let source: String
