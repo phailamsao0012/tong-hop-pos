@@ -2,6 +2,9 @@
 
 Claude Code và Codex cùng đọc file này. `CLAUDE.md` chỉ trỏ về đây, nên chỉ sửa luật ở file này.
 
+## Bộ luật vận hành (anh Vũ duyệt 10/11/2026)
+- Gặp việc gì thì tra `docs/bo-luat/README.md` trước. Bộ luật có câu trả lời thì làm theo, không hỏi lại anh. Chỉ hỏi anh việc ở chương 14 hoặc việc bộ luật chưa nói tới, rồi ghi câu trả lời vào bộ luật.
+
 ## Ai làm gì
 - **Claude là kỹ sư.** Viết plan vào `docs/plans/`, chia việc thành các bước nhỏ. Mỗi bước có tiêu chí xong và cách kiểm. Claude giao việc cho Codex, sau đó kiểm bài và mở PR.
 - **Codex là thợ.** Làm đúng một bước trong plan được giao. Không làm thêm. Plan và code thật khác nhau thì dừng lại và ghi câu hỏi, không tự đoán.
@@ -31,6 +34,24 @@ Claude Code và Codex cùng đọc file này. `CLAUDE.md` chỉ trỏ về đây
 - Đổi số liệu, cách tính, tên nghiệp vụ hay quyền xem khi plan không ghi rõ.
 - Đưa vào code, commit, ảnh hay plan: số thật, tên khách, email, số điện thoại, khoá bí mật. **Repo này công khai.**
 - Tạo chỉ mục rộng trên `raw_pos_orders`, hoặc chạy thử tải trên web thật.
+
+## Khoá bí mật (anh Vũ 10/11/2026)
+- Tạo hay đặt khoá mới (`AUTH_SECRET`, khoá Pancake, Telegram, Zalo, Brevo...) thì phải cất bản sao ngay lúc đó, ở 2 chỗ:
+  - file trong `C:\thp\bi-mat\` trên PC;
+  - bản sao lưu mã hoá trên Google Drive, cùng chỗ sao lưu đêm.
+- Ghi nơi cất (không ghi giá trị) vào tài liệu vận hành. Báo anh Vũ nơi cất trong cùng lượt báo cáo.
+- Khoá đặt lên Cloudflare (`wrangler secret put`) không đọc lại được. Không có bản sao thì coi như mất.
+  Bài học 10/11/2026: mất `AUTH_SECRET` gốc, 11 tài khoản phải đặt lại mật khẩu.
+- Không bao giờ in giá trị khoá ra chat, log, commit hay ảnh.
+
+## Chi phí Cloudflare (anh Vũ 10/11/2026)
+- Phần có sẵn của gói mỗi kỳ: D1 đọc 25 tỷ dòng, ghi 50 triệu dòng, dung lượng 5 GB. Số đo nằm ở `cf_usage` trong `app_settings` và `wrangler d1 info`.
+- Mức dùng vượt (hoặc ước tính sẽ vượt) phần có sẵn thì gửi anh Vũ **một tin riêng**, ghi rõ:
+  - số tiền (USD và VNĐ);
+  - cái gì gây tốn;
+  - cách chặn.
+- Không để lẫn trong báo cáo dài.
+- Việc làm tăng đọc/ghi D1 (bảng mới, trigger, điền lịch sử, export) phải ước chi phí trong plan trước khi làm. Chỉ chạy điền lịch sử ban đêm (sau 22h VN).
 
 ## Quy tắc gọi tên số
 - Vận đơn: không gọi là bán hàng, chốt hay doanh thu. Dùng "Đơn chuyển đi", "Doanh số chuyển đi", "Đơn vào Chờ xác nhận", "Người lên đơn".
