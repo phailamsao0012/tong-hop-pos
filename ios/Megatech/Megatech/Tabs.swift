@@ -193,62 +193,74 @@ struct AlertsPage: View {
         if pos.lastError != nil { return "exclamationmark.triangle.fill" }
         return sync.age(pos) > 15 ? "clock.badge.exclamationmark" : "checkmark.circle.fill"
     }
+    @ViewBuilder private var pendingSection: some View {
+        PageTitle(title: "Thông báo", subtitle: alerts.updatedAt.map { "Cập nhật lúc \(Fmt.hm($0))" } ?? "Đang kiểm tra…")
+        let items = alerts.items(sync: sync)
+        SectionHead(title: "Cần xử lý", count: items.isEmpty ? nil : items.count)
+        if !alerts.loaded && items.isEmpty { StateView(loading: "Đang kiểm tra…") }
+        else if items.isEmpty { AlertsEmpty(failed: alerts.failed, text: alerts.failText) { await alerts.refresh(maxAge: 0, me: auth.me) } }
+        ForEach(items) { AlertLink(item: $0) }
+    }
+
+    @ViewBuilder private var shiftSection: some View {
+        let canShift = auth.me.map { $0.canView("shift") || $0.canView("center") } ?? false
+        SectionHead(title: "Trong ca", action: canShift ? "Xem ca" : nil, route: canShift ? .page("shift") : nil, count: alerts.highShiftAlerts > 0 ? alerts.highShiftAlerts : nil).padding(.top, 6)
+        Panel {
+            if let s = alerts.shift {
+                if s.alerts.isEmpty { Label("Không có cảnh báo trong ca.", systemImage: "checkmark.circle.fill").font(.system(size: 12)).foregroundStyle(Color.good) }
+                ForEach(Array(s.alerts.enumerated()), id: \.offset) { _, a in
+                    HStack(alignment: .top, spacing: MT.cellGap) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(a.level == "high" ? Color.bad : Color.warn)
+                            .frame(width: 44, height: 44)
+                            .background((a.level == "high" ? Color.badSoft : Color.warnSoft), in: .circle)
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(a.title).mtFont(.cardHeader).foregroundStyle(Color.ink)
+                            Text(a.detail).mtFont(.caption).foregroundStyle(Color.inkSoft)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(MT.cellGap).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Palette.mtSurfaceCell, in: .rect(cornerRadius: MT.rCell))
+                    .accessibilityElement(children: .combine)
+                }
+            } else if alerts.loaded {
+                Text("Chưa đọc được số trong ca.").font(.system(size: 12)).foregroundStyle(Color.inkSoft)
+            } else { Skeleton(height: 60) }
+        }
+    }
+
+    @ViewBuilder private var syncSection: some View {
+        SectionHead(title: "Đồng bộ Pancake").padding(.top, 6).id(Self.syncAnchor)
+        Panel {
+            ForEach(PosBreakdown.order, id: \.self) { id in
+                let p = sync.pos.first { $0.posId == id }
+                let tone: Color = syncTone(p)
+                HStack(spacing: 8) {
+                    PosBadge(id: id, size: 20)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(PosBreakdown.names[id] ?? id).mtFont(.cardHeader).foregroundStyle(Color.ink)
+                        Text(p?.lastError ?? "đồng bộ lúc \(Fmt.dateTime(p?.lastSyncAt))").mtFont(.caption).foregroundStyle(p?.lastError != nil ? Color.bad : Color.inkSoft).fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                    Image(systemName: syncSymbol(p))
+                        .foregroundStyle(tone).accessibilityHidden(true)
+                    Text(syncAge(p)).mtFont(.caption).foregroundStyle(tone)
+                }
+                .padding(.vertical, 2)
+            }
+        }
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: MT.cardGap) {
-                    PageTitle(title: "Thông báo", subtitle: alerts.updatedAt.map { "Cập nhật lúc \(Fmt.hm($0))" } ?? "Đang kiểm tra…")
-                    let items = alerts.items(sync: sync)
-                    SectionHead(title: "Cần xử lý", count: items.isEmpty ? nil : items.count)
-                    if !alerts.loaded && items.isEmpty { StateView(loading: "Đang kiểm tra…") }
-                    else if items.isEmpty { AlertsEmpty(failed: alerts.failed, text: alerts.failText) { await alerts.refresh(maxAge: 0, me: auth.me) } }
-                    ForEach(items) { AlertLink(item: $0) }
-                    let canShift = auth.me.map { $0.canView("shift") || $0.canView("center") } ?? false
-                    SectionHead(title: "Trong ca", action: canShift ? "Xem ca" : nil, route: canShift ? .page("shift") : nil, count: alerts.highShiftAlerts > 0 ? alerts.highShiftAlerts : nil).padding(.top, 6)
-                    Panel {
-                        if let s = alerts.shift {
-                            if s.alerts.isEmpty { Label("Không có cảnh báo trong ca.", systemImage: "checkmark.circle.fill").font(.system(size: 12)).foregroundStyle(Color.good) }
-                            ForEach(Array(s.alerts.enumerated()), id: \.offset) { _, a in
-                                HStack(alignment: .top, spacing: MT.cellGap) {
-                                    Image(systemName: "exclamationmark.triangle.fill")
-                                        .foregroundStyle(a.level == "high" ? Color.bad : Color.warn)
-                                        .frame(width: 44, height: 44)
-                                        .background((a.level == "high" ? Color.badSoft : Color.warnSoft), in: .circle)
-                                        .accessibilityHidden(true)
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(a.title).mtFont(.cardHeader).foregroundStyle(Color.ink)
-                                        Text(a.detail).mtFont(.caption).foregroundStyle(Color.inkSoft)
-                                            .fixedSize(horizontal: false, vertical: true)
-                                    }
-                                    Spacer(minLength: 0)
-                                }
-                                .padding(MT.cellGap).frame(maxWidth: .infinity, alignment: .leading)
-                                .background(Palette.mtSurfaceCell, in: .rect(cornerRadius: MT.rCell))
-                                .accessibilityElement(children: .combine)
-                            }
-                        } else if alerts.loaded {
-                            Text("Chưa đọc được số trong ca.").font(.system(size: 12)).foregroundStyle(Color.inkSoft)
-                        } else { Skeleton(height: 60) }
-                    }
-                    SectionHead(title: "Đồng bộ Pancake").padding(.top, 6).id(Self.syncAnchor)
-                    Panel {
-                        ForEach(PosBreakdown.order, id: \.self) { id in
-                            let p = sync.pos.first { $0.posId == id }
-                            let tone: Color = syncTone(p)
-                            HStack(spacing: 8) {
-                                PosBadge(id: id, size: 20)
-                                VStack(alignment: .leading, spacing: 0) {
-                                    Text(PosBreakdown.names[id] ?? id).mtFont(.cardHeader).foregroundStyle(Color.ink)
-                                    Text(p?.lastError ?? "đồng bộ lúc \(Fmt.dateTime(p?.lastSyncAt))").mtFont(.caption).foregroundStyle(p?.lastError != nil ? Color.bad : Color.inkSoft).fixedSize(horizontal: false, vertical: true)
-                                }
-                                Spacer()
-                                Image(systemName: syncSymbol(p))
-                                    .foregroundStyle(tone).accessibilityHidden(true)
-                                Text(syncAge(p)).mtFont(.caption).foregroundStyle(tone)
-                            }
-                            .padding(.vertical, 2)
-                        }
-                    }
+                    pendingSection
+                    shiftSection
+                    syncSection
                 }.padding(16).padding(.bottom, 24)
             }
             .task {
