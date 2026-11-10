@@ -152,6 +152,7 @@ struct PosMiniChip: View {
 
 /// Thẻ một POS: dải màu nhạt mép trên, badge + tên + % so kỳ trước, doanh thu to, 3 ô nhỏ, thanh tỷ trọng, sparkline 7 ngày.
 struct PosTile: View {
+    @AppStorage("thp_hide_money") private var hideMoney = false
     @Environment(\.thinking) private var thinking
     let id: String
     let row: API.PosRow?
@@ -176,7 +177,10 @@ struct PosTile: View {
                 }
             }
             if let row {
-                OverviewMoney(money: row.closedNet, size: 40).loadingPlaceholder(thinking)
+                Group {
+                    if hideMoney { Text("••• tr ₫").mtFont(.heroNumber) }
+                    else { OverviewMoney(money: row.closedNet, size: 30) }
+                }.loadingPlaceholder(thinking)
                 if spark.count > 1 { PosSpark(points: spark, tint: c).frame(height: 48) }
                 HStack(spacing: 4) {
                     mini("Đơn chốt", Fmt.int(row.closedOrders))
@@ -203,6 +207,6 @@ struct PosTile: View {
 struct PosSpark: View {
     let points: [Double]; let tint: Color
     var body: some View {
-        LineChart(points: points.enumerated().map { (Fmt.int(Double($0.offset + 1)), $0.element) }, tint: tint, height: 48)
+        MTTrendChart(points: points.enumerated().map { (Fmt.int(Double($0.offset + 1)), $0.element) }, tint: tint, height: 48, scope: "Doanh thu đơn chốt theo POS trong kỳ")
     }
 }

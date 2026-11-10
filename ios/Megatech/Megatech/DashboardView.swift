@@ -91,12 +91,16 @@ struct PosBreakdown: View {
     static let order = ["sieu-vo-gao", "mgt-apex", "thuy-san", "bio-nano", "megaroot", "oxytetra"]
     static let short = ["sieu-vo-gao": "Siêu Vô Gạo", "mgt-apex": "MGT APEX", "thuy-san": "Thủy sản", "bio-nano": "BIO NANO", "megaroot": "MEGAROOT", "oxytetra": "Oxytetra"]
     var prev: [API.PosRow] = []
+    var series: [API.SeriesRow] = []
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack { Text("Theo POS").font(.title3.weight(.bold)).foregroundStyle(Palette.ink); Spacer(); Text("chạm để chỉ xem POS đó").font(.footnote).foregroundStyle(Palette.muted) }
             VStack(spacing: 12) {
                 ForEach(rows.sorted { $0.closedNet > $1.closedNet }, id: \.posId) { r in
-                    Button { pick(r.posId) } label: { PosTile(id: r.posId, row: r, prev: prev.first { $0.posId == r.posId }, total: total) }.buttonStyle(.plain)
+                    Button { pick(r.posId) } label: {
+                        PosTile(id: r.posId, row: r, prev: prev.first { $0.posId == r.posId }, total: total,
+                                spark: series.filter { $0.posId == r.posId }.sorted { $0.bucket < $1.bucket }.map(\.closedNet))
+                    }.buttonStyle(.plain)
                 }
             }
         }

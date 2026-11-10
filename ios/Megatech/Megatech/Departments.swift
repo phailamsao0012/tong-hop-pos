@@ -232,6 +232,7 @@ struct DeptBoards: View {
 
 /// Khung một bảng như web: vạch màu mép trên, icon trong ô màu, tên + chú thích, số chính bên phải, các ô chi tiết bên dưới.
 struct DeptBoard<Tiles: View>: View {
+    @AppStorage("thp_hide_money") private var hideMoney = false
     let dept: CompanyDept
     let heroLabel: String; let hero: String; let heroNote: String
     /// Chú thích thay cho dept.caption (vd Vận đơn tính theo ngày gửi hàng).
@@ -258,8 +259,9 @@ struct DeptBoard<Tiles: View>: View {
                 Text(heroLabel).font(.footnote).foregroundStyle(Palette.muted)
                 // Đang tải lại: số thành khung xám (redacted) tới khi số mới về.
                 Group {
-                    if let heroMoney { OverviewMoney(money: heroMoney, size: 40) }
-                    else { Text(hero).font(.system(size: 40, weight: .heavy, design: .rounded)).monospacedDigit().foregroundStyle(Palette.ink) }
+                    if hideMoney, heroMoney != nil { Text("••• tr ₫").mtFont(.heroNumber) }
+                    else if let heroMoney { OverviewMoney(money: heroMoney, size: 30) }
+                    else { Text(hero).mtFont(.heroNumber).monospacedDigit().foregroundStyle(Palette.ink) }
                 }
                 .lineLimit(1).minimumScaleFactor(0.6).rolling(hero)
                 .loadingPlaceholder(thinking)
@@ -292,7 +294,7 @@ struct DeptTile: View {
                 Text(label).lineLimit(1).minimumScaleFactor(0.75)
             }
             .font(.footnote.weight(.medium)).foregroundStyle(Color.inkSoft)
-            Text(value).font(.system(size: 26, weight: .heavy, design: .rounded)).monospacedDigit().foregroundStyle(Color.ink)
+            Text(value).mtFont(.cardMetric).monospacedDigit().foregroundStyle(Color.ink)
                 .lineLimit(1).minimumScaleFactor(0.55).rolling(value)
                 .loadingPlaceholder(thinking)
             if let note { Text(note).font(.caption).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.75).loadingPlaceholder(thinking) }
@@ -312,10 +314,14 @@ struct SaleBoard: View {
             Grid(horizontalSpacing: 8, verticalSpacing: 8) {
                 GridRow {
                 DeptTile(icon: "checkmark.circle.fill", label: "Đơn chốt", value: Fmt.int(s.orders), note: "chờ XN + đã XN", tint: t)
-                DeptTile(icon: "target", label: "Tỷ lệ chốt", value: Fmt.pct(s.rate), note: "\(Fmt.int(s.closedNow)) ÷ \(Fmt.int(s.created)) đơn lên", bar: s.rate, tint: t)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Tỷ lệ chốt").mtFont(.caption).foregroundStyle(Palette.muted)
+                    MTRateBadge(rate: s.rate, kind: .saleClose)
+                    Text("\(Fmt.int(s.closedNow)) ÷ \(Fmt.int(s.created)) đơn lên").mtFont(.caption).foregroundStyle(Palette.muted)
+                }.frame(maxWidth: .infinity, alignment: .leading).tileSurface()
                 }
                 GridRow {
-                DeptTile(icon: "creditcard.fill", label: "AOV", value: Fmt.shortVnd(s.orders > 0 ? s.net / s.orders : nil), note: "doanh thu ÷ đơn", tint: t)
+                DeptTile(icon: "creditcard.fill", label: "AOV", value: "—", note: "Chưa có số từ máy chủ", tint: t)
                 Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
                 }
             }
@@ -328,16 +334,12 @@ struct CskhBoard: View {
     var definition: String? = nil
     var body: some View {
         let t = CompanyDept.cskh.tint
-        let selfShare: Double? = c.orders > 0 ? c.own.orders / c.orders * 100 : nil
         DeptBoard(dept: .cskh, heroLabel: "Doanh thu", hero: Fmt.vnd(c.net), heroNote: "\(Fmt.int(c.orders)) đơn chốt", heroMoney: c.net, definition: definition) {
             VStack(alignment: .leading, spacing: 12) {
                 DeptTile(icon: "creditcard.fill", label: "AOV", value: Fmt.shortVnd(c.aov), note: "doanh thu ÷ đơn", tint: t)
-                if c.own.orders + c.fromMkt.orders == c.orders {
-                    SplitBar(parts: [("Tự upsell", c.own.orders, "\(Fmt.int(c.own.orders)) · \(Fmt.shortVnd(c.own.net)) · \(Fmt.pct0(selfShare))", Palette.cskh),
-                                     ("Từ MKT", c.fromMkt.orders, "\(Fmt.int(c.fromMkt.orders)) · \(Fmt.shortVnd(c.fromMkt.net)) · \(Fmt.pct0(selfShare.map { 100 - $0 }))", Palette.mkt)])
-                } else {
-                    StatCell(label: "Tự upsell", value: Fmt.int(c.own.orders), note: Fmt.shortVnd(c.own.net))
-                    StatCell(label: "Từ MKT", value: Fmt.int(c.fromMkt.orders), note: Fmt.shortVnd(c.fromMkt.net))
+                HStack(spacing: MT.cellGap) {
+                    MTStatCell(label: "Tự upsell", value: Fmt.int(c.own.orders), note: Fmt.shortVnd(c.own.net) + " · Tỷ trọng —")
+                    MTStatCell(label: "Từ MKT", value: Fmt.int(c.fromMkt.orders), note: Fmt.shortVnd(c.fromMkt.net) + " · Tỷ trọng —")
                 }
             }
         }
@@ -465,9 +467,9 @@ struct ShipTable: View {
                                     Text(Fmt.shortVnd(r.returnedNet)).font(.caption2).foregroundStyle(Color.inkSoft)
                                 }
                                 HStack(spacing: 4) {
-                                    Text(Fmt.pct(r.rateOrders)).foregroundStyle(returnTone(r.rateOrders))
+                                    MTRateBadge(rate: r.rateOrders, kind: .refund)
                                     Text("·").foregroundStyle(Color.inkSoft)
-                                    Text(Fmt.pct(r.rateNet)).foregroundStyle(returnTone(r.rateNet))
+                                    MTRateBadge(rate: r.rateNet, kind: .refund)
                                 }
                                 .font(.footnote.weight(.semibold)).monospacedDigit()
                             }.frame(height: 56)

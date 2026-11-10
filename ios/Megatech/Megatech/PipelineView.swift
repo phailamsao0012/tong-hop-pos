@@ -62,17 +62,22 @@ struct PipelineView: View {
             if let d = data {
                 let T = d.total
                 let unconfirmed = basis == "created" ? n(T, "unconfirmed") : 0
-                HStack(spacing: 4) {
-                    ForEach(Array(Self.stages.enumerated()), id: \.element.key) { i, st in
+                Panel {
+                Text("Đơn theo bước").mtFont(.cardHeader)
+                HStack(alignment: .bottom, spacing: MT.cellGap) {
+                    ForEach(Self.stages, id: \.key) { st in
                         NavigationLink(value: Route.orders(q(st.group, st.label))) {
                             VStack(spacing: 4) {
                                 MetricIcon(st.icon, size: 13).foregroundStyle(st.color).frame(width: 28, height: 28).background(st.color.opacity(0.14), in: .rect(cornerRadius: 8))
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(Palette.mtBrandPrimary)
+                                    .frame(height: max(4, 72 * (st.key == "unconfirmed" ? unconfirmed : n(T, st.key)) / max(1, Self.stages.map { $0.key == "unconfirmed" ? unconfirmed : n(T, $0.key) }.max() ?? 1)))
                                 Text(st.label).font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1).minimumScaleFactor(0.7)
                                 Text(Fmt.int(st.key == "unconfirmed" ? unconfirmed : n(T, st.key))).font(.system(size: 15, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).rolling(Fmt.int(n(T, st.key)))
                             }.frame(maxWidth: .infinity).padding(.vertical, 10).background(st.color.opacity(0.08), in: .rect(cornerRadius: 10))
                         }.buttonStyle(.plain)
-                        if i < Self.stages.count - 1 { Image(systemName: "arrow.right").font(.system(size: 8, weight: .bold)).foregroundStyle(Color.inkSoft) }
                     }
+                }
                 }
                 let shipped = n(T, "shipped")
                 HStack(spacing: 10) {
@@ -86,14 +91,12 @@ struct PipelineView: View {
                     AttentionRow(icon: "ic_m_returned", tone: .orange, title: "Hoàn / trả hàng", n: n(T, "returned"), route: .orders(q("returned", "Hoàn")))
                     AttentionRow(icon: "ic_m_cancelled", tone: .red, title: "Hủy sau khi chốt", n: n(T, "cancelled"), route: .orders(q("cancelled", "Hủy sau chốt")))
                 }.overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.bad.opacity(0.2)))
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
+                FilterBar {
                         Menu { Button("Tất cả POS") { setPos("") }; ForEach(PosBreakdown.order, id: \.self) { id in Button(PosBreakdown.names[id] ?? id) { setPos(id) } } } label: { FilterChip(label: pos.isEmpty ? "Tất cả POS" : (PosBreakdown.short[pos] ?? pos), on: true, chevron: true) {} }
                         FilterChip(label: "Mới", on: status == "unconfirmed") { status = status == "unconfirmed" ? "" : "unconfirmed" }
                         FilterChip(label: "Xác nhận", on: status == "processing") { status = status == "processing" ? "" : "processing" }
                         FilterChip(label: "Giao vận", on: status == "shipping") { status = status == "shipping" ? "" : "shipping" }
                         FilterChip(label: "Đã giao", on: status == "delivered") { status = status == "delivered" ? "" : "delivered" }
-                    }
                 }
                 SectionHead(title: "Danh sách đơn hàng", action: "Mới nhất", route: .orders(q(status, "Đơn hàng")))
                 VStack(spacing: 10) {
@@ -127,9 +130,7 @@ struct PipelineView: View {
     private func orderLink(_ o: API.OrderRow) -> some View {
         NavigationLink(value: Route.order(o.id)) {
             Panel(padding: 12) {
-                HStack { Text("#\(o.orderId)").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink); Spacer(); Tag(text: o.statusName, tone: tone(o.statusCode)) }
-                HStack(spacing: 4) { PosLabel(id: o.posId, name: o.posName).font(.system(size: 10)).foregroundStyle(Color.inkSoft); Text("· \(o.customer ?? "") · \(o.phone ?? "")").font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1); Spacer(); Text(Fmt.time(o.firstConfirmedAt ?? o.createdAt)).font(.system(size: 10)).foregroundStyle(Color.inkSoft) }
-                HStack { Text(o.sellerName ?? "—").font(.system(size: 10)).foregroundStyle(Color.inkSoft); Spacer(); Text(Fmt.vnd(o.net ?? 0)).font(.system(size: 12, weight: .bold)).foregroundStyle(Color.ink) }
+                OrderRowView(o: o)
             }
         }.buttonStyle(.plain)
     }

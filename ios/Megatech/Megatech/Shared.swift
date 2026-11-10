@@ -152,6 +152,8 @@ struct OrderListView: View {
         }
         .overlay { if loading && rows.isEmpty { ThinkingLoader() } }
         .navigationTitle(active.title)
+        .scrollContentBackground(.hidden)
+        .background(Palette.mtBackground)
         .navigationBarTitleDisplayMode(.inline).brandNav()
         .toolbar { if filterable { ToolbarItem(placement: .primaryAction) { Button { showFilter = true } label: { Label("Lọc", systemImage: "line.3.horizontal.decrease.circle") } } } }
         .sheet(isPresented: $showFilter) { MTFilterSheet(title: "Lọc đơn", existingNavigation: true) { OrderFilterSheet(query: active) { edited = $0 } } }
@@ -207,7 +209,7 @@ struct OrderRowView: View {
                 Text("#\(o.orderId)").font(.subheadline.weight(.semibold)).monospacedDigit()
                 StatusChip(name: o.statusName, code: o.statusCode)
                 Spacer()
-                Text(Fmt.money(o.net ?? o.currentTotal ?? 0)).font(.subheadline.weight(.semibold)).monospacedDigit()
+                Text(Fmt.shortMoney(o.net ?? o.currentTotal ?? 0)).mtFont(.cardMetric).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
             }
             Text([o.customer, o.phone].compactMap { $0 }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             HStack(spacing: 6) {
@@ -217,7 +219,9 @@ struct OrderRowView: View {
                 Text(Fmt.time(o.firstConfirmedAt ?? o.createdAt)).monospacedDigit()
             }.font(.caption2).foregroundStyle(.tertiary)
         }
-        .padding(.vertical, 2)
+        .padding(MT.cellGap)
+        .background(Palette.mtSurfaceCell, in: .rect(cornerRadius: MT.rCell))
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -318,6 +322,7 @@ extension View {
 // MARK: Hồ sơ đơn
 
 struct OrderDetailView: View {
+    @AppStorage("thp_hide_money") private var hideMoney = false
     let id: String
     @State private var d: API.OrderDetail?
     @State private var error: String?
@@ -329,7 +334,7 @@ struct OrderDetailView: View {
                 Section {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("#\(d.orderId)").font(.title3.weight(.bold)).monospacedDigit()
+                            Text("#\(d.orderId)").font(MT.screenTitle).monospacedDigit()
                             PosLabel(id: d.posId, name: d.posName, size: 18, short: false).font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
@@ -349,6 +354,7 @@ struct OrderDetailView: View {
                     }
                 }
                 Section("Tiền") {
+                    MTMetricHeroCard(label: "Doanh thu", value: d.net.map(Fmt.shortMoney) ?? "—", scope: d.posName, isPrivacyMasked: hideMoney)
                     row("Doanh số", Fmt.money(d.gross ?? 0))
                     row("Giảm giá / quà", "−" + Fmt.money(d.discount ?? 0))
                     row("Doanh thu", Fmt.money(d.net ?? 0), bold: true)
@@ -405,6 +411,9 @@ struct OrderDetailView: View {
             } else if error == nil { ThinkingLoader().listRowBackground(Color.clear) }
         }
         .navigationTitle("Đơn hàng")
+        .scrollContentBackground(.hidden)
+        .background(Palette.mtBackground)
+        .listRowBackground(Palette.mtSurfaceCard)
         .navigationBarTitleDisplayMode(.inline).brandNav()
         .task { do { d = try await API.orderDetail(id: id) } catch { self.error = error.localizedDescription } }
     }
@@ -416,6 +425,7 @@ struct OrderDetailView: View {
 // MARK: Hồ sơ khách (ảnh 5.1)
 
 struct CustomerDetailView: View {
+    @AppStorage("thp_hide_money") private var hideMoney = false
     let posId: String; let phone: String
     @State private var d: API.CustomerDetail?
     @State private var error: String?
@@ -426,6 +436,10 @@ struct CustomerDetailView: View {
                 if let error { Label(error, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad) }
                 if let d {
                     let name = d.stats?.name ?? d.orders.first.map { _ in "Khách" } ?? "Khách"
+                    if let stats = d.stats {
+                        MTMetricHeroCard(label: name + " · Tổng chi tiêu", value: Fmt.shortMoney(stats.successNet),
+                                         scope: "\(PosBreakdown.names[posId] ?? posId) · Toàn bộ lịch sử · \(Fmt.int(stats.successOrders)) lần mua", isPrivacyMasked: hideMoney)
+                    }
                     Panel {
                         HStack(alignment: .top, spacing: 12) {
                             Avatar(name: name, size: 56)
@@ -483,6 +497,7 @@ struct CustomerDetailView: View {
             }.padding(16)
         }
         .navigationTitle("Hồ sơ khách hàng").navigationBarTitleDisplayMode(.inline).brandNav()
+        .background(Palette.mtBackground)
         .task { do { d = try await API.customer(posId: posId, phone: phone) } catch { self.error = error.localizedDescription } }
     }
 }

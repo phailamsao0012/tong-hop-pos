@@ -6,6 +6,8 @@ import SwiftUI
 struct HomeView: View {
     @Environment(AppNav.self) private var nav
     @Environment(AuthModel.self) private var auth
+    @SceneStorage("thp_overview_seg") private var overviewSegment = "departments"
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Kỳ, POS, nhóm đơn chung (AppNav, kế hoạch 1.4): nhớ giữa các lần mở app; bảng nào chạm vào cũng mở trang con đúng bộ lọc này.
     private var period: Period { nav.period }
     private var pos: String { nav.pos }
@@ -49,6 +51,8 @@ struct HomeView: View {
                                 HrTeamChip()
                             }
                             ScopeLine(period: period, pos: pos)
+                            MTSegmentedControl(selection: $overviewSegment, options: [("departments", "Bốn bộ phận"), ("metrics", "Số liệu"), ("pos", "Theo POS")])
+                            VStack(alignment: .leading, spacing: MT.cardGap) {
                             if let error, sections == nil {
                                 StateView(error: error) { await load(force: true) }
                             }
@@ -58,12 +62,28 @@ struct HomeView: View {
                                        period: period, pos: pos, product: product, me: auth.me, failed: error != nil)
                                 .environment(\.thinking, loading && sections != nil)
                             if nav.hrUnit != nil { Text("4 bảng bộ phận chưa lọc theo team.").font(.caption).foregroundStyle(Color.inkSoft) }
-                            CenterBlocks(period: period, team: "all", pos: pos, product: product)
+                            }
+                            .frame(height: overviewSegment == "departments" ? nil : 0, alignment: .top)
+                            .clipped().opacity(overviewSegment == "departments" ? 1 : 0)
+                            .allowsHitTesting(overviewSegment == "departments")
+                            .accessibilityHidden(overviewSegment != "departments")
+                            CenterBlocks(period: period, team: "all", pos: pos, product: product, overviewSegment: overviewSegment)
+                                .frame(height: overviewSegment == "departments" ? 0 : nil, alignment: .top)
+                                .clipped().opacity(overviewSegment == "departments" ? 0 : 1)
+                                .allowsHitTesting(overviewSegment != "departments")
+                                .accessibilityHidden(overviewSegment == "departments")
                         }
-                        .onChange(of: nav.overviewScroll) { _, id in
+                        .onChange(of: nav.overviewScroll, initial: true) { _, id in
                             guard let id else { return }
-                            withAnimation(.easeInOut(duration: 0.7)) { proxy.scrollTo(id, anchor: .top) }
-                            nav.overviewScroll = nil
+                            overviewSegment = ["sale", "cskh", "mkt", "vandon"].contains(id) ? "departments" : "metrics"
+                            Task { @MainActor in
+                                // Đợi SwiftUI cập nhật kích thước khung trước khi tìm neo.
+                                await Task.yield()
+                                try? await Task.sleep(for: .milliseconds(100))
+                                guard nav.overviewScroll == id else { return }
+                                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.7)) { proxy.scrollTo(id, anchor: .top) }
+                                nav.overviewScroll = nil
+                            }
                         }
                     }
                 }
@@ -313,6 +333,7 @@ struct CenterBlocks: View {
     /// Kỳ của trang chứa khối (Tổng quan: kỳ chung, chọn ở dải chip đầu trang; khối không có bộ chọn kỳ riêng).
     let period: Period
     var team = "all"; var pos = ""; var product = "all"
+    var overviewSegment = "metrics"
     private var posIds: [String] { pos.isEmpty ? [] : [pos] }
     @State private var report: API.Overview?
     @State private var trend: API.Overview?
@@ -384,8 +405,31 @@ struct CenterBlocks: View {
     #endif
     private func q(_ group: String, _ basis: String, _ title: String, posIds: [String]? = nil) -> Route { .orders(OrderQuery(start: r.0, end: r.1, posIds: posIds ?? self.posIds, group: group, basis: basis, title: title, team: team, product: product)) }
     @State private var staffGroup = "top"
+    @AppStorage("thp_hide_money") private var hideMoney = false
 
     var body: some View {
+        VStack(alignment: .leading, spacing: MT.cardGap) {
+        if overviewSegment == "pos" {
+            GroupTitle(title: "Theo POS", subtitle: ScopeText.text(period: period, pos: nil) + filterSuffix)
+            if let report {
+                NavigationLink(value: q("closed", "confirmed", "Đơn chốt")) {
+                    MTMetricHeroCard(label: "Doanh thu theo POS", value: Fmt.shortMoney(report.current.total.closedNet),
+                                     scope: ScopeText.text(period: period, pos: nil) + filterSuffix, isPrivacyMasked: hideMoney)
+                }.buttonStyle(.plain)
+                PosBreakdown(rows: report.current.byPos, total: report.current.total.closedNet,
+                             pick: { nav?.pos = $0 }, prev: report.compare?.byPos ?? [], series: report.current.series ?? [])
+                if let series = report.current.series, !series.isEmpty {
+                    Panel {
+                        Text("Trong kỳ").mtFont(.cardHeader)
+                        MTTrendChart(points: byDay(series), scope: ScopeText.text(period: period, pos: nil) + filterSuffix)
+                    }
+                }
+                if applied != nil { Text("Số theo team đang chọn.").font(.caption).foregroundStyle(Palette.muted) }
+            } else if let failText {
+                StateView(error: failText) { await load(force: true) }
+            } else { StateView(loading: "Đang tải số theo POS…") }
+        }
+        VStack(alignment: .leading, spacing: MT.cardGap) {
         HrTeamNotice(applies: applied != nil, deptLabel: departmentLabel)
         // Kỳ: cùng kỳ chọn ở đầu trang (kế hoạch 1.4 bỏ nút chọn kỳ thứ hai ở đây).
         GroupTitle(title: "Số liệu theo kỳ", subtitle: "\(ScopeText.text(period: period, pos: nil)) · so với kỳ liền trước\(filterSuffix)")
@@ -397,11 +441,15 @@ struct CenterBlocks: View {
         if let t = report?.current.total {
             let p = report?.compare?.total
             NavigationLink(value: q("closed", "confirmed", "Đơn chốt")) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Doanh thu đơn chốt").font(.headline)
-                    OverviewMoney(money: t.closedNet, onHero: true).loadingPlaceholder(loading)
-                    if let delta = Fmt.delta(t.closedNet, p?.closedNet) { DeltaPill(delta, onHero: true) }
-                }.frame(maxWidth: .infinity, alignment: .leading).heroSurface()
+                VStack(alignment: .leading, spacing: MT.cardGap) {
+                    MTMetricHeroCard(label: "Doanh thu đơn chốt", value: Fmt.shortMoney(t.closedNet),
+                                     scope: ScopeText.text(period: period, pos: pos) + filterSuffix,
+                                     comparison: Fmt.delta(t.closedNet, p?.closedNet), isPrivacyMasked: hideMoney)
+                        .loadingPlaceholder(loading)
+                    if let series = report?.current.series, !series.isEmpty {
+                        MTTrendChart(points: byDay(series), scope: ScopeText.text(period: period, pos: nil) + filterSuffix)
+                    }
+                }.frame(maxWidth: .infinity, alignment: .leading)
             }.buttonStyle(.plain)
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                 NavigationLink(value: q("", "created", "Đơn tạo mới")) { KpiCard(icon: "ic_m_orders", tint: .blue, label: "Đơn tạo mới", value: Fmt.int(t.orders), delta: Fmt.delta(t.orders, p?.orders), note: "\(Fmt.int(t.customers ?? 0)) khách") }
@@ -446,7 +494,7 @@ struct CenterBlocks: View {
                 .fixedSize(horizontal: false, vertical: true)
             if let s = trend?.current.series, !s.isEmpty {
                 let pts = byDay(s)
-                LineChart(points: pts.map { (String(Fmt.day($0.0).prefix(5)), $0.1) }, tint: .brand, height: 120)
+                MTTrendChart(points: pts.map { (String(Fmt.day($0.0).prefix(5)), $0.1) }, tint: .brand, height: 180, scope: "Doanh thu đơn chốt · 30 ngày gần nhất" + filterSuffix)
                 HStack(spacing: 12) { HStack(spacing: 4) { Circle().fill(Color.brand).frame(width: 7, height: 7); Text("Doanh thu đơn chốt") }; Text("Đơn chốt 30 ngày: \(Fmt.int(byDayOrders(s).reduce(0) { $0 + $1.1 }))") }.font(.caption).foregroundStyle(Color.inkSoft)
             } else if trend != nil {
                 Text("Chưa có đơn chốt trong 30 ngày qua.").font(.caption).foregroundStyle(Color.inkSoft)
@@ -567,6 +615,12 @@ struct CenterBlocks: View {
                     }.buttonStyle(.plain)
                 }
             }
+        }
+        }
+        .frame(height: overviewSegment == "pos" ? 0 : nil, alignment: .top)
+        .clipped().opacity(overviewSegment == "pos" ? 0 : 1)
+        .allowsHitTesting(overviewSegment != "pos")
+        .accessibilityHidden(overviewSegment == "pos")
         }
         Color.clear.frame(height: 0)
             .task(id: key) { await load() }
