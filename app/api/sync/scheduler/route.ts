@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
-import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
-import { isOwner } from '@/lib/access';
+import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { isOwner } from '@/lib/auth/access';
 
 const stub = () => env.SYNC_SCHEDULER.get(env.SYNC_SCHEDULER.idFromName('main'));
 

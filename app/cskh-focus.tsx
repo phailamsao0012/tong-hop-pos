@@ -6,9 +6,10 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Check, EyeOff, UserRound, X } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useStaffInPos } from './pos-store';
 
 type Focus = { id: string; name: string } | null;
-type StaffItem = { id: string; name: string; department: string | null; active: boolean };
+type StaffItem = { id: string; name: string; department: string | null; active: boolean; posIds?: string[] };
 let current: Focus = null;
 const listeners = new Set<() => void>();
 const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l); }; };
@@ -25,7 +26,8 @@ export function CskhFocusBar() {
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
   useEffect(() => { void loadStaff().then(setStaff); }, []);
-  const list = staff.filter((s) => s.name.toLowerCase().includes(q.trim().toLowerCase())).sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name, 'vi'));
+  const inPos = useStaffInPos(staff);
+  const list = inPos.filter((s) => s.name.toLowerCase().includes(q.trim().toLowerCase())).sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name, 'vi'));
   return (
     <div className={`flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 text-sm ${focus ? 'border-primary/40 bg-tint' : 'border-line bg-surface'}`}>
       <UserRound size={15} className="text-ink-3" aria-hidden="true" />

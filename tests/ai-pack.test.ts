@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { assertPackSize, packMetrics, validAiDate } from '../lib/ai-pack';
+import { assertPackSize, packMetrics, validAiDate } from '../lib/ai/ai-pack';
 import { demoAiPack } from '../lib/demo/ai-pack';
 void test('ai-pack: gói ảo không xuất SĐT, tên khách, ghi chú', () => {
  const pack = demoAiPack('2026-10-17');

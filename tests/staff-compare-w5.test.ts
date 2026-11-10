@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, mock, test } from 'node:test';
 import type { DatabaseSync } from 'node:sqlite';
 import { GET } from '../app/api/reports/staff-compare/route';
-import { buildCompareChart, type CompareChart, type CompareChartCell } from '../lib/compare-chart';
+import { buildCompareChart, type CompareChart, type CompareChartCell } from '../lib/reports/compare-chart';
 import { demoWorld } from './support/d1-sqlite';
 import { loginAs } from './support/session';
 

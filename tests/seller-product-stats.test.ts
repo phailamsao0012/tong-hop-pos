@@ -5,13 +5,13 @@ import { test } from 'node:test';
 import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { SHOPS, dayData, listUsers, toSourceOrder } from '../lib/demo/world';
-import { orderStatements } from '../lib/sync';
-import { PRODUCT_COLUMNS, buildSellerProductMonth, markDirtyOrder, rebuildStats, type DirtyBuckets } from '../lib/stats';
-import { segmentedStats, EMPTY_ORDER_FILTERS } from '../lib/order-segments';
-import { countedFilter, teamFilter, type Team } from '../lib/team';
-import { dayExpr, CLOSED } from '../lib/stats';
-import { productLine } from '../lib/trends';
-import { vnRangeUtc } from '../lib/report-time';
+import { orderStatements } from '../lib/pancake/sync';
+import { PRODUCT_COLUMNS, buildSellerProductMonth, markDirtyOrder, rebuildStats, type DirtyBuckets } from '../lib/reports/stats';
+import { segmentedStats, EMPTY_ORDER_FILTERS } from '../lib/pancake/order-segments';
+import { countedFilter, teamFilter, type Team } from '../lib/teams/team';
+import { dayExpr, CLOSED } from '../lib/reports/stats';
+import { productLine } from '../lib/reports/trends';
+import { vnRangeUtc } from '../lib/shared/report-time';
 
 type Args = (string | number | null)[];
 /** D1 tối giản trên node:sqlite (đủ cho prepare/bind/all/first/run/batch). */

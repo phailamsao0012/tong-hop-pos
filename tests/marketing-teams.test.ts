@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
-import { marketingTeamFilter, marketingTeamGroupSql, UNASSIGNED_TEAM, validateMarketingTeams } from '../lib/marketing-teams';
+import { marketingTeamFilter, marketingTeamGroupSql, UNASSIGNED_TEAM, validateMarketingTeams } from '../lib/teams/marketing-teams';
 
 const teams = [
   { id: 'mkt_11111111-1111-4111-8111-111111111111', name: 'Team A', memberIds: ['m1', 'm2'] },
@@ -42,4 +42,11 @@ void test('xếp hạng team cộng doanh thu và đếm SĐT duy nhất trong t
   assert.equal(rows.reduce((sum, row) => sum + row.net, 0), 1500);
   assert.equal(db.prepare('SELECT COUNT(DISTINCT phone) AS phones FROM orders').get()?.phones, 3);
   db.close();
+});
+
+void test('team MKT giữ Mentor / Leader để gắn Zalo', () => {
+  const id = 'mkt_' + '0'.repeat(8) + '-0000-0000-0000-' + '0'.repeat(12);
+  const out = validateMarketingTeams([{ id, name: 'MKT A', memberIds: ['m1'], mentorUserId: 'u1', leaderUserId: ' ' }]);
+  assert.equal(out.teams?.[0].mentorUserId, 'u1');
+  assert.equal(out.teams?.[0].leaderUserId, undefined);
 });

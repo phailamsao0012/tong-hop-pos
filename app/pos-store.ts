@@ -2,8 +2,10 @@
 
 // POS đang chọn, dùng chung cho mọi trang và nhớ qua lần mở sau (yêu cầu 29/09/2026: chọn POS nào thì sang trang khác vẫn giữ,
 // khỏi phải bỏ chọn lại từng trang). Lưu trong trình duyệt (localStorage); máy chủ vẫn lọc theo phạm vi POS của tài khoản.
-import { useSyncExternalStore } from 'react';
-import { POS } from '@/lib/report-model';
+import { useMemo, useSyncExternalStore } from 'react';
+import { useApi } from './use-api';
+import { POS } from '@/lib/shared/report-model';
+import { posStaffFilter, staffInPos } from '@/lib/teams/pos-staff';
 
 const KEY = 'thp.posIds';
 const ALL: string[] = POS.map((p) => p.id);
@@ -32,4 +34,19 @@ export function setPosIds(ids: string[]) {
 export function usePosIds(): [string[], (ids: string[]) => void] {
   const ids = useSyncExternalStore(subscribe, () => { load(); return current; }, () => ALL);
   return [ids, setPosIds];
+}
+
+/** Danh sách nhân viên chỉ còn người có tài khoản trên POS đang chọn (anh Vũ 31/10/2026). */
+export function useStaffInPos<T extends { posIds?: string[] | null }>(list: T[]): T[] {
+  const [ids] = usePosIds();
+  return useMemo(() => staffInPos(list, ids, ALL), [list, ids]);
+}
+
+// Danh sách tài khoản POS của mọi người (useApi giữ bộ nhớ đệm chung), để lọc các bảng không có sẵn posIds.
+type StaffPos = { id: string; posIds?: string[] };
+/** Hàm giữ người thuộc POS đang chọn, dùng ở mọi bảng có người (team, KPI, tăng trưởng…); null = đang chọn đủ POS, không lọc. */
+export function usePosStaffFilter(): ((id: string) => boolean) | null {
+  const [ids] = usePosIds();
+  const list = useApi<StaffPos[]>('/api/employees').data;
+  return useMemo(() => list ? posStaffFilter(list, ids, ALL) : null, [list, ids]);
 }

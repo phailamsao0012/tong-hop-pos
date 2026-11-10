@@ -10,10 +10,10 @@ import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'rec
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import { buildPivot, pivotBucket, type PivotEntry } from '@/lib/pivot';
+import { buildPivot, pivotBucket, type PivotEntry } from '@/lib/reports/pivot';
 import { AiPackButton } from './ai-pack';
 import { useMetricSettings } from './metric-settings';
-import { closeRateOf, returnRateOf, cancelRateOf, METRIC_DEFS } from '@/lib/metrics';
+import { closeRateOf, returnRateOf, cancelRateOf, METRIC_DEFS } from '@/lib/reports/metrics';
 import { PeriodToolbar, PosChips, type OverviewReport } from './overview-view';
 import { useTeam } from './team-store';
 import { useApi } from './use-api';
@@ -157,7 +157,7 @@ export function CustomReportView() {
             <div>
               <p className="m-0 mb-1.5 text-[11.5px] font-semibold uppercase tracking-wide text-ink-3">Chỉ số</p>
               <div className="grid gap-1">{(Object.keys(METRICS) as MetricKey[]).map((k) => (
-                <label key={k} className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 hover:bg-surface-2"><input id={`cm-${k}`} type={display === 'pivot' ? 'radio' : 'checkbox'} name="cr-metric" checked={display === 'pivot' ? pivotMetric === k : metrics.includes(k)} onChange={() => display === 'pivot' ? setMetrics([k]) : toggle(k)} />{METRICS[k].label}</label>
+                <label key={k} className="tap flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 hover:bg-surface-2"><input id={`cm-${k}`} type={display === 'pivot' ? 'radio' : 'checkbox'} name="cr-metric" checked={display === 'pivot' ? pivotMetric === k : metrics.includes(k)} onChange={() => display === 'pivot' ? setMetrics([k]) : toggle(k)} />{METRICS[k].label}</label>
               ))}</div>
             </div>
             <div><p className="m-0 mb-1.5 text-[11.5px] font-semibold uppercase tracking-wide text-ink-3">Hiện dạng</p>
@@ -173,9 +173,9 @@ export function CustomReportView() {
           </div>
         </ChartCard>
         <ChartCard icon={display === 'table' || display === 'pivot' ? Table2 : BarChart3} title={display === 'pivot' ? `Bảng xoay · ${pivotMetric ? METRICS[pivotMetric].label : ''}` : `Theo ${dimLabel.toLowerCase()} · ${vi.format(sorted.length)} dòng`} subtitle={display === 'pivot' ? 'Tổng tính từ số gốc; ô thiếu dữ liệu hiện —. Khách duy nhất không cộng giữa các nhóm.' : dim === 'employee' || dim === 'pos' ? 'Bấm tiêu đề cột để sắp xếp' : 'Theo thứ tự thời gian'}>
-          {error && !r ? <ErrorBox error={error} onRetry={reload} /> : !r ? <SkeletonTable rows={6} cols={1 + metrics.length} /> : !metrics.length ? <EmptyState text="Chọn ít nhất một chỉ số." /> : display === 'pivot' ? (pivotUnsupported ? <EmptyState text="Báo cáo hiện tại chưa có dữ liệu Nhân viên × tháng. Hãy chọn cột POS." /> : !pivot.rows.length ? <EmptyState text="Không có số trong kỳ." /> : <TableWrap minWidth={240 + pivot.columns.length * 120} maxHeight="40rem" stickyFirst><table className={`tbl ${loading ? 'opacity-70' : ''}`}><thead><tr>{pivotColumns.map((label, i) => <th key={i} scope="col">{label}</th>)}</tr></thead><tbody>{pivot.rows.map((row) => <tr key={row.key}><th scope="row" className="text-left">{row.label}</th>{[...row.values, row.total].map((v, i) => <td key={i} className="n">{METRICS[pivotMetric].fmt(v)}</td>)}</tr>)}</tbody><tfoot><tr><th scope="row" className="text-left">Tổng</th>{[...pivot.totals, pivot.total].map((v, i) => <td key={i} className="n font-semibold">{METRICS[pivotMetric].fmt(v)}</td>)}</tr></tfoot></table></TableWrap>) : !sorted.length ? <EmptyState text="Không có số trong kỳ." /> : display === 'table' ? (
+          {error && !r ? <ErrorBox error={error} onRetry={reload} /> : !r ? <SkeletonTable rows={6} cols={1 + metrics.length} /> : !metrics.length ? <EmptyState text="Chọn ít nhất một chỉ số." /> : display === 'pivot' ? (pivotUnsupported ? <EmptyState text="Báo cáo hiện tại chưa có dữ liệu Nhân viên × tháng. Hãy chọn cột POS." /> : !pivot.rows.length ? <EmptyState text="Không có số trong kỳ." /> : <TableWrap minWidth={240 + pivot.columns.length * 120} maxHeight="40rem" stickyFirst><table className="tbl"><thead><tr>{pivotColumns.map((label, i) => <th key={i} scope="col">{label}</th>)}</tr></thead><tbody>{pivot.rows.map((row) => <tr key={row.key}><th scope="row" className="text-left">{row.label}</th>{[...row.values, row.total].map((v, i) => <td key={i} className="n">{METRICS[pivotMetric].fmt(v)}</td>)}</tr>)}</tbody><tfoot><tr><th scope="row" className="text-left">Tổng</th>{[...pivot.totals, pivot.total].map((v, i) => <td key={i} className="n font-semibold">{METRICS[pivotMetric].fmt(v)}</td>)}</tr></tfoot></table></TableWrap>) : !sorted.length ? <EmptyState text="Không có số trong kỳ." /> : display === 'table' ? (
             <TableWrap minWidth={320 + metrics.length * 120} maxHeight="40rem" stickyFirst>
-              <table className={`tbl ${loading ? 'opacity-70' : ''}`}>
+              <table className="tbl">
                 <thead><tr><th className="text-left">{dimLabel}</th>{metrics.map((k) => dim === 'employee' || dim === 'pos' ? <SortTh key={k} k={k} label={METRICS[k].label} sort={sort} /> : <th key={k}>{METRICS[k].label}</th>)}</tr></thead>
                 <tbody>{sorted.map((x) => (
                   <tr key={x.key}><td className="text-left font-medium text-ink">{x.label}</td>{metrics.map((k) => <td key={k} className="n">{METRICS[k].fmt(METRICS[k].value(x.m))}</td>)}</tr>

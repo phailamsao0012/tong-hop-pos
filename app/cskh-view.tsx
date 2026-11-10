@@ -3,7 +3,8 @@
 // Nhóm trang CSKH: Hồ sơ khách hàng (ProfilesView), Khách lâu chưa mua (DormantView), Mua lại & Upsell (RepurchaseView), Data được cấp (BatchesView).
 // Giao diện v2: bảng .tbl sắp xếp ở tiêu đề (đồng bộ với tham số sort của API), dòng bấm được bằng bàn phím, tooltip cách tính trên thẻ KPI,
 // tìm chờ 300 ms + huỷ request cũ, hộp thoại hồ sơ khách có trạng thái tải / lỗi và không còn bị ép 24rem, xương khi tải, màu theo token (sáng / tối).
-import { usePosIds } from './pos-store';
+import { customerDetailQuery, customerKeyOf } from './customer-ref';
+import { usePosIds, useStaffInPos } from './pos-store';
 import { ICON } from './icons';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
@@ -18,15 +19,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useTip } from './ui/tooltip';
-import { POS } from '@/lib/report-model';
-import { addDays, todayVn } from '@/lib/report-time';
+import { POS } from '@/lib/shared/report-model';
+import { addDays, todayVn } from '@/lib/shared/report-time';
 import { PeriodFields, PosChips } from './overview-view';
 import { usePeriod } from './period-store';
-import { ORDER_ORIGINS } from '@/lib/order-segments';
+import { ORDER_ORIGINS } from '@/lib/pancake/order-segments';
 import { OrderOriginFilter, useOrderOrigin } from './order-origin-filter';
 import { useTeam } from './team-store';
 import { GroupOptions } from './product-group-blocks';
-import type { GroupBasis, GroupDim } from '@/lib/product-groups';
+import type { GroupBasis, GroupDim } from '@/lib/reports/product-groups';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import {
@@ -91,7 +92,7 @@ type Detail = {
   stats: { name: string; sellerName: string | null; orders: number; closedOrders: number; successOrders: number; successNet: number; successQuantity: number; averageOrder: number | null; returnedOrders: number; cancelledOrders: number; firstOrderAt: string | null; lastOrderAt: string | null; firstSuccessAt: string | null; lastSuccessAt: string | null; productKinds: number; products: { name: string; quantity: number; total: number; orders: number }[] } | null;
   orders: { id: string; sourceOrderId: string; createdAt: string; statusName: string; sellerName: string | null; closerName: string | null; confirmedAt: string | null; deliveredAt: string | null; gross: number; discount: number; net: number; note: string | null; tags: { name: string }[]; successRank: number | null; items: { name: string; quantity: number; price: number; total: number }[] }[];
 };
-type Employee = { id: string; name: string; department: string | null };
+type Employee = { id: string; name: string; department: string | null; posIds?: string[] };
 const GROUP_LABELS: Record<string, string> = { all: 'Tất cả', active: 'Mua trong 30 ngày', '30-45': '30–45 ngày', '46-60': '46–60 ngày', '61-90': '61–90 ngày', '90+': 'Trên 90 ngày', never: 'Chưa từng mua' };
 const DORMANT_KEYS = ['30-45', '46-60', '61-90', '90+'] as const;
 // Màu nhóm lâu chưa mua theo token (cùng tông với thẻ KPI: teal → lime → orange → red), đổi theo chủ đề sáng / tối.
@@ -118,7 +119,7 @@ function useEmployees() {
   const team = useTeam();
   const [employees, setEmployees] = useState<Employee[]>([]);
   useEffect(() => { void fetchReport<Employee[]>(`/api/employees?team=${team}`).then((r) => { if (r.data) setEmployees(r.data); }); }, [team]);
-  return employees;
+  return useStaffInPos(employees);
 }
 
 function EmployeeSelect({ value, onChange, employees }: { value: string; onChange: (v: string) => void; employees: Employee[] }) {
@@ -211,13 +212,13 @@ const useDetail = () => {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const last = useRef<{ posId: string; phone: string } | null>(null);
+  const last = useRef<{ posId: string; phone: string; phoneRef?: string } | null>(null);
   const ctrl = useRef<AbortController | null>(null);
-  const open = async (c: { posId: string; phone: string }) => {
+  const open = async (c: { posId: string; phone: string; phoneRef?: string }) => {
     ctrl.current?.abort();
     const ac = new AbortController(); ctrl.current = ac; last.current = c;
     setDetail(null); setError(null); setLoading(true);
-    const r = await fetchReport<Detail>(`/api/reports/customers/detail?posId=${c.posId}&phone=${encodeURIComponent(c.phone)}`, ac.signal);
+    const r = await fetchReport<Detail>(`/api/reports/customers/detail?${customerDetailQuery(c)}`, ac.signal);
     if (ac.signal.aborted) return;
     setLoading(false);
     if (r.data) setDetail(r.data); else setError(r.error);
@@ -229,8 +230,8 @@ const useDetail = () => {
 };
 
 // ---------- Hồ sơ khách hàng ----------
-export function CustomersView({ mode, initialQ = '' }: { Surface?: SurfaceComponent; mode: 'profiles' | 'dormant'; initialQ?: string }) {
-  if (mode === 'dormant') return <DormantView />;
+export function CustomersView({ mode, initialQ = '', canExport = false }: { Surface?: SurfaceComponent; mode: 'profiles' | 'dormant'; initialQ?: string; canExport?: boolean }) {
+  if (mode === 'dormant') return <DormantView canExport={canExport} />;
   return <ProfilesView initialQ={initialQ} />;
 }
 
@@ -333,7 +334,7 @@ function ProfilesView({ initialQ }: { initialQ: string }) {
       {error && <ErrorBox error={error} onRetry={() => void load()} />}
       {loading && !data && <ChartCard icon={Users} title="Danh sách khách" subtitle="Đang tải…"><SkeletonTable rows={8} cols={8} /></ChartCard>}
       {data && (
-        <ChartCard icon={Users} title={title} subtitle={`${data.definitions.success} Bấm tiêu đề cột để sắp xếp.`} bodyClassName={loading ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}
+        <ChartCard icon={Users} title={title} subtitle={`${data.definitions.success} Bấm tiêu đề cột để sắp xếp.`} bodyClassName="transition-opacity duration-[var(--dur)]"
           action={<div className="flex items-center gap-2"><Pager page={page} hasMore={data.hasMore} disabled={loading} onPage={setPage} /></div>}>
           {data.period && (
             <p className="mb-3 text-[13px] text-ink-2">Trong kỳ: <span className="num text-ink">{vi.format(data.period.orders)}</span> đơn thành công · <span className="num text-ink">{money(data.period.net)}</span> · <span className="num">{vi.format(data.total)}</span> khách</p>
@@ -356,7 +357,7 @@ function ProfilesView({ initialQ }: { initialQ: string }) {
                 </tr></thead>
                 <tbody>
                   {data.customers.map((c, i) => (
-                    <tr key={`${c.posId}:${c.phone}`} tabIndex={0} onClick={() => void open(c)} onKeyDown={rowKeys(() => void open(c))} className={rowCls()}>
+                    <tr key={customerKeyOf(c)} tabIndex={0} onClick={() => void open(c)} onKeyDown={rowKeys(() => void open(c))} className={rowCls()}>
                       <td className="num text-[11px] text-ink-4">{(page - 1) * 50 + i + 1}</td>
                       <td><div className="flex items-center gap-2"><div className="min-w-0"><div className="max-w-[14rem] truncate font-medium text-ink" title={c.name}>{c.name || 'Khách chưa có tên'}</div><div className="num text-[11px] text-ink-3">{c.phone}</div></div><HoverReveal><span className="btn sm">Hồ sơ<ChevronRight size={12} /></span></HoverReveal></div></td>
                       <td className="text-xs"><PosBadge posId={c.posId} size={16} className="mr-1.5" />{c.posName}</td>
@@ -386,7 +387,7 @@ function ProfilesView({ initialQ }: { initialQ: string }) {
 }
 
 // ---------- Khách lâu chưa mua ----------
-function DormantView() {
+function DormantView({ canExport }: { canExport: boolean }) {
   const [posIds, setPosIds] = usePosIds();
   const [q, setQ] = useState('');
   const [group, setGroup] = useState('30-45');
@@ -419,7 +420,7 @@ function DormantView() {
   return (
     <div className="space-y-5">
       <PageHeader eyebrow="Số liệu Pancake POS tại thời điểm đồng bộ" title="Khách lâu chưa mua" subtitle="Theo số ngày từ lần mua thành công gần nhất"
-        actions={<><StaleChip stale={stale} at={at} loading={loading} error={data ? error : null} onRetry={reload} /><Button variant="outline" disabled={!data || exporting} onClick={async () => {
+        actions={<><StaleChip stale={stale} at={at} loading={loading} error={data ? error : null} onRetry={reload} />{canExport && <Button variant="outline" disabled={!data || exporting} onClick={async () => {
           if (!data) return;
           setExporting(true);
           // Xuất toàn bộ nhóm đang chọn theo bộ lọc (tối đa 20.000 khách).
@@ -429,7 +430,7 @@ function DormantView() {
           title: 'Khách lâu chưa mua', rows: [['POS', 'SĐT', 'Tên', 'Phụ trách', 'Mua TC', 'Tổng tiền mua', 'Mua gần nhất', 'Ngày chưa mua', 'Sản phẩm hay mua', 'Ưu tiên'],
             ...rows.map((c) => [c.posName, c.phone, c.name, c.sellerName, c.successOrders, c.successNet, dt(c.lastSuccessAt), c.daysSinceSuccess, c.products[0]?.name ?? '', priority(c).label])],
         }]); } finally { setExporting(false); }
-        }}>{exporting ? 'Đang xuất…' : 'Xuất Excel toàn bộ'}</Button></>} />
+        }}>{exporting ? 'Đang xuất…' : 'Xuất Excel toàn bộ'}</Button>}</>} />
       {!data && !error && <SkeletonKpis count={6} className="xl:grid-cols-6" />}
       {g && nets && (
         <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-6">
@@ -458,8 +459,8 @@ function DormantView() {
                       className="ctx-row grid w-full grid-cols-[28px_minmax(0,1fr)_auto_auto] items-center gap-x-3 rounded-lg px-2 py-2 text-left transition-colors duration-[var(--dur)] hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
                       <span className={`num grid size-7 place-items-center rounded-full text-xs ${i === 0 ? 'bg-t-orange-bg text-t-orange' : i === 1 ? 'bg-warn-bg text-warn' : 'bg-tint text-primary'}`}>{i + 1}</span>
                       <span className="min-w-0"><span className="block truncate text-[13px] font-medium text-ink">{c.name || 'Khách chưa có tên'} <span className="num text-xs text-ink-3">{c.phone}</span></span><span className="block truncate text-xs text-ink-3">{c.posName} · {c.sellerName}</span></span>
-                      <span className="text-right"><span className="num block text-[13px] text-bad">{c.daysSinceSuccess ?? '—'} ngày</span><span className="block text-[10px] text-ink-3">chưa mua</span></span>
-                      <span className="text-right"><span className="num block text-[13px] text-ink">{money(c.successNet)}</span><span className="block text-[10px] text-ink-3">giá trị đã mua</span></span>
+                      <span className="text-right"><span className="num block text-[13px] text-bad">{c.daysSinceSuccess ?? '—'} ngày</span><span className="block text-[11px] text-ink-3">chưa mua</span></span>
+                      <span className="text-right"><span className="num block text-[13px] text-ink">{money(c.successNet)}</span><span className="block text-[11px] text-ink-3">giá trị đã mua</span></span>
                       <ContextLine className="col-span-full" indent={40}>Mua gần nhất {dt(c.lastSuccessAt)} · {vi.format(c.successOrders)} đơn thành công{c.products[0] ? ` · hay mua ${c.products[0].name}` : ''} · {priority(c).label}</ContextLine>
                     </button>
                   </li>
@@ -488,7 +489,7 @@ function DormantView() {
       {error && !data && <ErrorBox error={error} onRetry={reload} />}
       {loading && !data && <ChartCard icon={Users} title="Danh sách khách" subtitle="Đang tải…"><SkeletonTable rows={8} cols={8} /></ChartCard>}
       {data && (
-        <ChartCard icon={Users} title={`Danh sách ${GROUP_LABELS[group].toLowerCase()} · ${vi.format(data.total)} khách`} subtitle={`${data.definitions.dormant} Bấm tiêu đề cột để sắp xếp.`} bodyClassName={loading ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}
+        <ChartCard icon={Users} title={`Danh sách ${GROUP_LABELS[group].toLowerCase()} · ${vi.format(data.total)} khách`} subtitle={`${data.definitions.dormant} Bấm tiêu đề cột để sắp xếp.`} bodyClassName="transition-opacity duration-[var(--dur)]"
           action={<div className="flex items-center gap-2">{!viewAll && <Pager page={page} hasMore={data.hasMore} disabled={loading} onPage={setPage} />}<Button size="sm" variant={viewAll ? 'default' : 'outline'} aria-pressed={viewAll} onClick={() => { setViewAll(!viewAll); setPage(1); }} title="Tải một lượt tới 5.000 khách theo bộ lọc hiện tại">{viewAll ? 'Theo trang' : 'Xem toàn bộ'}</Button></div>}>
           {data.customers.length ? (
             <TableWrap minWidth={1040} stickyFirst>
@@ -507,7 +508,7 @@ function DormantView() {
                   {data.customers.map((c, i) => {
                     const p = priority(c);
                     return (
-                      <tr key={`${c.posId}:${c.phone}`} tabIndex={0} onClick={() => void open(c)} onKeyDown={rowKeys(() => void open(c))} className={rowCls()}>
+                      <tr key={customerKeyOf(c)} tabIndex={0} onClick={() => void open(c)} onKeyDown={rowKeys(() => void open(c))} className={rowCls()}>
                         <td className="num text-[11px] text-ink-4">{(page - 1) * 50 + i + 1}</td>
                         <td className="font-medium text-ink"><span className="inline-flex items-center gap-2">{c.name || 'Khách chưa có tên'}<HoverReveal><span className="btn sm">Hồ sơ<ChevronRight size={12} /></span></HoverReveal></span></td>
                         <td className="num text-xs">{c.phone}</td>
@@ -641,7 +642,7 @@ export function RepurchaseView() {
       )}
       {data && (
         <>
-          <div className={`grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-5 ${loading ? 'opacity-70' : ''}`} aria-busy={loading}>
+          <div className="grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-5" aria-busy={loading}>
             <KpiCard icon={Users} tone="green" label={sellerName ? 'Khách NV đã bán thành công' : 'Khách đã mua (trọn đời)'} value={vi.format(data.funnel.once)} countUp rawValue={data.funnel.once}
               note={sellerName ? `Đơn đã nhận do ${sellerName} đứng tên bán${tag ? ` · thẻ ${tag}` : ''}` : `Đã mua thành công ≥ 1 lần${scopeLabel ? ` · ${scopeLabel}` : ''}`}
               tooltip={tip(sellerName ? 'Khách NV đã bán thành công' : 'Khách đã mua (trọn đời)', [['Số khách', `${vi.format(data.funnel.once)} khách`]],
@@ -764,7 +765,7 @@ export function RepurchaseView() {
               <TableWrap maxHeight="24rem" minWidth={900} stickyFirst>
                 <table className="tbl">
                   <thead><tr><SortTh k="time" label="Ngày tạo" sort={recSort} align="left" /><th>POS</th><th>SĐT</th><SortTh k="prior" label="Lần" sort={recSort} align="left" /><th>Người bán</th><th>Bắt đầu bằng</th><th>Thẻ</th><SortTh k="net" label="Doanh thu" sort={recSort} /></tr></thead>
-                  <tbody>{recRows.map((r, i) => <tr key={i} tabIndex={0} onClick={() => void open({ posId: r.posId, phone: r.phone })} onKeyDown={rowKeys(() => void open({ posId: r.posId, phone: r.phone }))} className={rowCls()}><td className="num"><span className="inline-flex items-center gap-2">{dt(r.createdAt, true)}<HoverReveal><span className="btn sm font-medium tracking-normal">Hồ sơ<ChevronRight size={12} /></span></HoverReveal></span></td><td className="text-xs"><PosBadge posId={r.posId} size={16} className="mr-1.5" />{r.posName}</td><td className="num">{r.phone}</td><td><StatusChip tone={r.prior >= 3 ? 'purple' : r.prior === 2 ? 'teal' : 'green'}>Upsell {r.prior}</StatusChip></td><td className="text-xs">{r.sellerName}</td><td className="text-xs font-medium text-ink">{(r.startGroups ?? []).join(', ') || '—'}</td><td><div className="flex flex-wrap gap-1">{(r.tags ?? []).map((t) => <span key={t} className={`rounded-[4px] border px-1.5 py-0.5 text-[10px] uppercase ${t === tag ? 'border-primary/40 bg-tint text-primary' : 'border-line-2 bg-surface-2 text-ink-2'}`}>{t}</span>)}</div></td><td className="n">{money(r.net)}</td></tr>)}</tbody>
+                  <tbody>{recRows.map((r, i) => <tr key={i} tabIndex={0} onClick={() => void open({ posId: r.posId, phone: r.phone, phoneRef: (r as { phoneRef?: string }).phoneRef })} onKeyDown={rowKeys(() => void open({ posId: r.posId, phone: r.phone, phoneRef: (r as { phoneRef?: string }).phoneRef }))} className={rowCls()}><td className="num"><span className="inline-flex items-center gap-2">{dt(r.createdAt, true)}<HoverReveal><span className="btn sm font-medium tracking-normal">Hồ sơ<ChevronRight size={12} /></span></HoverReveal></span></td><td className="text-xs"><PosBadge posId={r.posId} size={16} className="mr-1.5" />{r.posName}</td><td className="num">{r.phone}</td><td><StatusChip tone={r.prior >= 3 ? 'purple' : r.prior === 2 ? 'teal' : 'green'}>Upsell {r.prior}</StatusChip></td><td className="text-xs">{r.sellerName}</td><td className="text-xs font-medium text-ink">{(r.startGroups ?? []).join(', ') || '—'}</td><td><div className="flex flex-wrap gap-1">{(r.tags ?? []).map((t) => <span key={t} className={`rounded-[4px] border px-1.5 py-0.5 text-[10px] uppercase ${t === tag ? 'border-primary/40 bg-tint text-primary' : 'border-line-2 bg-surface-2 text-ink-2'}`}>{t}</span>)}</div></td><td className="n">{money(r.net)}</td></tr>)}</tbody>
                 </table>
               </TableWrap>
             ) : <EmptyState text="Không có đơn khớp bộ lọc." />}
@@ -869,7 +870,7 @@ export function BatchesView() {
       )}
       {data && (
         <>
-          <div className={`grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-5 ${loading ? 'opacity-70' : ''}`} aria-busy={loading}>
+          <div className="grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-5" aria-busy={loading}>
             <KpiCard icon={Database} tone="green" label="Tổng số được cấp" value={vi.format(totals.received)} countUp rawValue={totals.received} note={`Trung bình ${vi.format(Math.round(totals.received / days))}/ngày`}
               tooltip={{ period: periodLabel, current: `${vi.format(totals.received)} số · ${vi.format(Math.round(totals.received / days))}/ngày`, definition: data.definitions.batch }} />
             <KpiCard icon={Users} tone="blue" label="Số nhân viên nhận data" value={vi.format(totals.sellers.size)} countUp rawValue={totals.sellers.size} note={`Thuộc ${new Set(data.batches.map((b) => b.posId)).size} POS`}
@@ -989,7 +990,7 @@ function StartFlowCard({ flow, dim, basis, onDim, onBasis }: { flow: Repurchase[
           </div>
           <div className="flex items-center gap-2 text-xs"><b className="text-ink-2">Ô hiện:</b>
             {([['customers', 'Số khách'], ['orders', 'Số đơn'], ['net', 'Doanh thu']] as const).map(([k, l]) => (
-              <button key={k} type="button" onClick={() => setMetric(k)} className={`rounded-md px-2.5 py-1 font-semibold ${metric === k ? 'bg-primary text-[var(--primary-ink)]' : 'text-ink-2 hover:bg-surface-2'}`}>{l}</button>
+              <button key={k} type="button" onClick={() => setMetric(k)} className={`tap rounded-md px-2.5 py-1 font-semibold ${metric === k ? 'bg-primary text-[var(--primary-ink)]' : 'text-ink-2 hover:bg-surface-2'}`}>{l}</button>
             ))}
           </div>
           <TableWrap minWidth={320 + flow.nows.length * 110} stickyFirst>

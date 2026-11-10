@@ -1,7 +1,7 @@
-import { getSessionUser, unauthorized, forbidden } from '@/lib/auth';
-import { isOwner } from '@/lib/access';
-import { parseMetricSettings, RATE_BASES, RATE_THRESHOLDS, RETURN_BASES, SUCCESS_BASES } from '@/lib/metrics';
-import { clearUserMetrics, companyMetrics, saveCompanyMetrics, saveUserMetrics, userMetrics } from '@/lib/metric-prefs';
+import { getSessionUser, unauthorized, forbidden } from '@/lib/auth/auth';
+import { isOwner } from '@/lib/auth/access';
+import { parseMetricSettings, RATE_BASES, RATE_THRESHOLDS, RETURN_BASES, SUCCESS_BASES } from '@/lib/reports/metrics';
+import { clearUserMetrics, companyMetrics, saveCompanyMetrics, saveUserMetrics, userMetrics } from '@/lib/reports/metric-prefs';
 
 // GET: cách tính đang dùng của tài khoản (+ mặc định công ty, nhãn để app hiển thị).
 // PUT {rateBase, returnBase, success, scope?: 'me' | 'company' | 'reset'}.

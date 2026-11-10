@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compareText, presetRange } from '../lib/periods';
-import { compareWindow, comparePeriod, shiftPeriod } from '../lib/report-time';
+import { compareText, presetRange } from '../lib/shared/periods';
+import { compareWindow, comparePeriod, shiftPeriod } from '../lib/shared/report-time';
 
 // 30/09/2026 là thứ Tư; 16:21 giờ Việt Nam = 09:21 UTC.
 const TODAY = '2026-09-30';

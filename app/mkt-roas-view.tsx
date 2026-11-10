@@ -3,22 +3,23 @@
 // Chi phí & ROAS (giai đoạn 3c · 26/09/2026): marketer / trưởng team nhập chi phí quảng cáo theo ngày (tay hoặc file Excel theo mẫu),
 // web ghép với số và đơn chốt của từng marketer để ra ROAS, chi phí / số, chi phí / đơn chốt.
 import { useTeam } from './team-store';
-import { usePosIds } from './pos-store';
+import { usePosIds, usePosStaffFilter } from './pos-store';
 import { usePeriod } from './period-store';
 import { AiPackButton } from './ai-pack';
 import { useMemo, useRef, useState } from 'react';
 import { FileDown, FileUp, Plus, Trash2, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { POS } from '@/lib/report-model';
-import { addDays, todayVn } from '@/lib/report-time';
-import type { roasReport } from '@/lib/ad-costs';
+import { POS } from '@/lib/shared/report-model';
+import { addDays, todayVn } from '@/lib/shared/report-time';
+import type { roasReport } from '@/lib/ops/ad-costs';
 import { ICON } from './icons';
 import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';
 import { SheetCostLink } from './sheet-cost-link';
 import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, dmy, money, pct, shortMoney, toast, useSort, vi } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
+import { SegmentHintNote } from './segment-hint-note';
 
 type Roas = Awaited<ReturnType<typeof roasReport>>;
 type Draft = { day: string; marketerId: string; amount: number; campaign?: string; note?: string };
@@ -50,7 +51,9 @@ export function MktRoasView({ owner = false }: { owner?: boolean }) {
   const fileRef = useRef<HTMLInputElement>(null);
   type K = 'newNet' | 'cskhNet' | 'newOrders' | 'costShare' | 'cost' | 'net' | 'roas' | 'phones' | 'costPerLead' | 'closed' | 'costPerClosed' | 'closeRate' | 'returnRate';
   const sort = useSort<K>('net');
-  const rows = useMemo(() => sort.apply(r?.rows ?? [], (x, k) => x[k]), [r, sort]);
+  // Chọn POS nào chỉ hiện người có tài khoản trên POS đó (anh Vũ 04/11/2026); tổng giữ nguyên.
+  const onPos = usePosStaffFilter();
+  const rows = useMemo(() => sort.apply((r?.rows ?? []).filter((x) => !onPos || onPos(x.marketerId)), (x, k) => x[k]), [r, sort, onPos]);
   const dailyMax = Math.max(1, ...(r?.daily ?? []).map((d) => d.amount));
   // Đủ mọi ngày trong kỳ (ngày chưa nhập = 0) để thanh không bị kéo giãn khi mới có vài ngày.
   const days = useMemo(() => { const out: { day: string; amount: number }[] = []; const m = new Map((r?.daily ?? []).map((d) => [d.day, d.amount]));
@@ -122,12 +125,13 @@ export function MktRoasView({ owner = false }: { owner?: boolean }) {
         onPreset={setPreset}
         onStart={setStart} onEnd={setEnd} />
       <PosChips posIds={posIds} onChange={setPosIds} />
+      <SegmentHintNote />
       {error && !r && <ErrorBox error={error} onRetry={reload} />}
       {posIds.length < POS.length && <p className="notice warn m-0 text-[12.5px]">Chi phí được nhập theo marketer cho mọi POS, còn doanh thu đang lọc {posIds.length}/{POS.length} POS, nên ROAS lúc này thấp hơn thực tế. Chọn "Tất cả" POS để xem ROAS đúng.</p>}
       {!r && !error && <><SkeletonKpis count={5} /><SkeletonTable rows={5} cols={6} /></>}
       {r && (
         <>
-          <div className={`grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5 ${loading ? 'opacity-70' : ''}`}>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
             <KpiCard icon={Wallet} tone="orange" label="Chi phí đã nhập" value={shortMoney(r.total.cost)} note={`${vi.format(r.entries.length)} dòng trong kỳ`} tooltip={{ period: periodLabel, current: money(r.total.cost), definition: r.definitions.cost }} />
             <KpiCard icon={ICON.revenue} tone="teal" label="Doanh thu MKT" value={shortMoney(r.total.net)} note={`${vi.format(r.total.closed)} đơn chốt`} tooltip={{ period: periodLabel, current: money(r.total.net), definition: r.definitions.roas }} />
             <KpiCard icon={ICON.rate} tone="green" label="ROAS" value={roasText(r.total.roas)} note={team === 'cskh' ? 'Chi phí QC tính cho đơn New, xem nút Sale' : r.total.covered.marketers ? `Trên ${r.total.covered.marketers} marketer đã nhập chi phí` : 'Chưa nhập chi phí'} tooltip={{ period: periodLabel, current: roasText(r.total.roas), definition: r.definitions.roas }} />
@@ -228,7 +232,7 @@ export function MktRoasView({ owner = false }: { owner?: boolean }) {
                       <td className="text-left">{e.marketerName}</td>
                       <td className="n">{money(e.amount)}</td>
                       <td className="text-left text-ink-2">{[e.campaign, e.note].filter(Boolean).join(' · ') || '—'}</td>
-                      <td><button type="button" aria-label="Xóa dòng" className="grid size-7 place-items-center rounded-md text-ink-3 hover:bg-bad-bg hover:text-bad" onClick={() => void remove(e.id)}><Trash2 size={14} /></button></td>
+                      <td><button type="button" aria-label="Xóa dòng" className="grid size-7 place-items-center rounded-md text-ink-3 hover:bg-bad-bg tap hover:text-bad" onClick={() => void remove(e.id)}><Trash2 size={14} /></button></td>
                     </tr>
                   ))}</tbody>
                 </table>

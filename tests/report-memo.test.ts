@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { reportMemoKey } from '../lib/report-memo';
+import { reportMemoKey } from '../lib/reports/report-memo';
 
 const url = 'https://example.com/api/reports/product-groups?team=sale';
 

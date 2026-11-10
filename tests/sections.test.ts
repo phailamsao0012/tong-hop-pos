@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildSections } from '../lib/sections';
+import { buildSections } from '../lib/reports/sections';
 
 test('tổng quan 4 mục: Sale, CSKH tách tự upsell / từ MKT, MKT theo Marketer, vận đơn tỷ lệ hoàn', () => {
   const s = buildSections([

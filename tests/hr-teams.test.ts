@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { groupTeams, NO_TEAM, type DeptRow, type TeamRow } from '../lib/hr-teams';
+import { groupTeams, NO_TEAM, type DeptRow, type TeamRow } from '../lib/teams/hr-teams';
 
 const depts: DeptRow[] = [
   { id: 'kd', name: 'Phòng Kinh doanh', parent_id: null, kind: 'department', office_id: null },

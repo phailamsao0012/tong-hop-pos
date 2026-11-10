@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { forecastTargetAllowed, forecastMonth, monthForecast } from '../lib/forecast';
+import { forecastTargetAllowed, forecastMonth, monthForecast } from '../lib/kpi/forecast';
 
 void test('forecast: ngày 1 và ngày cuối tháng', () => {
   assert.equal(forecastMonth({ actual: 100, dayOfMonth: 1, daysInMonth: 31 }), 3100);

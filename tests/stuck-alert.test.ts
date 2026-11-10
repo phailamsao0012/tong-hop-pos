@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { env } from 'cloudflare:workers';
-import { STUCK_DEFAULTS, buildStuckMessage, parseStuckConfig, readStuckConfig, runStuckAlert, shouldSendStuck } from '../lib/stuck-alert';
+import { STUCK_DEFAULTS, buildStuckMessage, parseStuckConfig, readStuckConfig, runStuckAlert, shouldSendStuck } from '../lib/bot/stuck-alert';
 import { GET, PUT, POST } from '../app/api/stuck-alert/route';
 import { emptyDb } from './support/d1-sqlite';
 import { loginAs, logout } from './support/session';

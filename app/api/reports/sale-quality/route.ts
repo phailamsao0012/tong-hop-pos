@@ -1,7 +1,7 @@
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { monthRange, saleQuality } from '@/lib/sale-quality';
-import { POS } from '@/lib/report-model';
-import { DATE_RE } from '@/lib/report-time';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { monthRange, saleQuality } from '@/lib/reports/sale-quality';
+import { POS } from '@/lib/shared/report-model';
+import { DATE_RE } from '@/lib/shared/report-time';
 
 // Chất lượng khách của Sale theo kỳ ?start=&end= (bộ lọc ngày chung, không giới hạn độ dài; ?month=YYYY-MM vẫn nhận);
 // ?staffId= để xem từng khách của một Sale.

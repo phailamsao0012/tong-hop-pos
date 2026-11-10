@@ -2,8 +2,8 @@
 
 // Phạm vi được xem của tài khoản đang đăng nhập (POS, nhóm) dùng chung cho mọi trang; do Dashboard đặt lúc mở.
 import { useSyncExternalStore } from 'react';
-import { POS } from '@/lib/report-model';
-import type { Team } from '@/lib/team';
+import { POS } from '@/lib/shared/report-model';
+import type { Team } from '@/lib/teams/team';
 
 type Scope = { posIds: string[] | null; team: Team };
 let current: Scope = { posIds: null, team: 'all' };

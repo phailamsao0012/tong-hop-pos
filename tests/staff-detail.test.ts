@@ -4,13 +4,13 @@ import { demoWorld } from './support/d1-sqlite';
 import { loginAs, logout } from './support/session';
 import { GET } from '../app/api/reports/staff-detail/route';
 import { GET as overview } from '../app/api/reports/overview/route';
-import { aggregateReasons, noteBatches, reasonOf } from '../lib/staff-detail';
-import { closeRateBase, closeRateTop } from '../lib/metrics';
-import { scopeApi } from '../lib/access';
-import type { OverviewReport, Metrics } from '../lib/overview-report';
-import { maskPhone } from '../lib/bot-guard-core';
-import { POS } from '../lib/report-model';
-import { vnRangeUtc } from '../lib/report-time';
+import { aggregateReasons, noteBatches, reasonOf } from '../lib/reports/staff-detail';
+import { closeRateBase, closeRateTop } from '../lib/reports/metrics';
+import { scopeApi } from '../lib/auth/access';
+import type { OverviewReport, Metrics } from '../lib/reports/overview-report';
+import { maskPhone } from '../lib/bot/bot-guard-core';
+import { POS } from '../lib/shared/report-model';
+import { vnRangeUtc } from '../lib/shared/report-time';
 
 void test('W1: lý do, thẻ hỏng, thẻ trùng, gom nhóm và lô tối đa 90 tham số', () => {
   assert.equal(reasonOf('[{"name":" Không nghe máy "},{"name":"Hẹn gọi lại"}]',null).reason,'Không nghe máy');

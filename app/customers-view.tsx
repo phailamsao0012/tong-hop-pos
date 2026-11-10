@@ -4,17 +4,18 @@
 // (thông tin Pancake, chỉ số RFM, hành trình mua, sản phẩm yêu thích, ghi chú trên đơn).
 // Giao diện v2: tìm chờ 300 ms + huỷ request cũ; đổi khách thì xoá panel ngay và bỏ qua response của khách trước;
 // lỗi hồ sơ có nút thử lại; không tự cuộn xuống panel trên điện thoại; tab hồ sơ là SegmentedControl cuộn ngang được.
+import { customerDetailQuery, customerKeyOf, phoneMasked } from './customer-ref';
 import { SearchBar, GroupedRows, searchParams } from './search-bar';
 import { CustomerDetail } from './customer-detail';
-import { usePosIds } from './pos-store';
+import { usePosIds, useStaffInPos } from './pos-store';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { PosBadge } from './pos-badge';
 import { AlertTriangle, Award, Calendar, Cake, ChevronLeft, ChevronRight, Clock, Copy, Gift, Globe, Heart, Mail, MapPin, Phone, ShoppingBag, Sparkles, Star, Tag, User, UserCheck, Users, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { POS } from '@/lib/report-model';
-import { addDays, todayVn } from '@/lib/report-time';
+import { POS } from '@/lib/shared/report-model';
+import { addDays, todayVn } from '@/lib/shared/report-time';
 import { useTeam } from './team-store';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
@@ -25,6 +26,7 @@ import {
 import { saveXlsx } from '@/app/save-xlsx';
 
 type Customer = {
+  phoneRef?: string;
   posId: string; posName: string; phone: string; name: string; sellerId: string | null; sellerName: string; firstOrderAt: string | null; lastOrderAt: string | null;
   orders: number; closedOrders: number; successOrders: number; successNet: number; successQuantity: number; averageOrder: number | null;
   lifetimeOrders: number; lifetimeNet: number; returnedOrders: number; cancelledOrders: number; firstSuccessAt: string | null; lastSuccessAt: string | null; daysSinceSuccess: number | null;
@@ -41,7 +43,7 @@ type Detail = {
   stats: { name: string; sellerName: string | null; orders: number; closedOrders: number; successOrders: number; successNet: number; successQuantity: number; averageOrder: number | null; returnedOrders: number; cancelledOrders: number; firstOrderAt: string | null; lastOrderAt: string | null; firstSuccessAt: string | null; lastSuccessAt: string | null; productKinds: number; products: { name: string; quantity: number; total: number; orders: number }[] } | null;
   orders: { id: string; sourceOrderId: string; createdAt: string; statusCode: number; statusName: string; sellerName: string | null; closerName: string | null; confirmedAt: string | null; deliveredAt: string | null; gross: number; discount: number; net: number; note: string | null; tags: { name: string }[]; successRank: number | null; sourceName: string | null; returnedReason: string | null; orderLink: string | null; items: { name: string; quantity: number; price: number; total: number }[] }[];
 };
-type Employee = { id: string; name: string; department: string | null };
+type Employee = { id: string; name: string; department: string | null; posIds?: string[] };
 type DetailTab = 'overview' | 'journey' | 'products' | 'notes';
 const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
 const SEGMENTS: Record<string, { label: string; tone: Tone; hint: string }> = {
@@ -105,7 +107,9 @@ const MAX_ROWS = 20000;
 const PAGE_SIZES = { '20': '20 / trang', '50': '50 / trang', '100': '100 / trang', '1000': '1.000 / trang', all: 'Tất cả' };
 type PageSize = keyof typeof PAGE_SIZES;
 
-export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
+export function CustomersPage({ initialQ = '', canExport = false }: { initialQ?: string; canExport?: boolean }) {
+  // Xuất Excel và "Tất cả" (tới 20.000 khách) chỉ chủ hệ thống; máy chủ cũng chặn (app/api/reports/customers, app/api/activity).
+  const pageSizes = canExport ? PAGE_SIZES : Object.fromEntries(Object.entries(PAGE_SIZES).filter(([k]) => k !== 'all'));
   const today = todayVn();
   const team = useTeam();
   const [posIds, setPosIds] = usePosIds();
@@ -125,8 +129,9 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
   const size = viewAll ? MAX_ROWS : Number(pageSize);
   const [exporting, setExporting] = useState(false);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const posEmployees = useStaffInPos(employees);
   const [selected, setSelected] = useState<Customer | null>(null);
-  const [timelineCustomer, setTimelineCustomer] = useState<{ phone: string; posIds: string[] } | null>(null);
+  const [timelineCustomer, setTimelineCustomer] = useState<{ phone: string; posIds: string[]; ref?: string } | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [detailState, setDetailState] = useState<'idle' | 'loading' | 'error'>('idle');
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -153,12 +158,12 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
   const open = async (c: Customer, opts: { scroll?: boolean } = {}) => {
     detailCtrl.current?.abort();
     const ac = new AbortController(); detailCtrl.current = ac;
-    const same = selected?.posId === c.posId && selected?.phone === c.phone;
+    const same = !!selected && customerKeyOf(selected) === customerKeyOf(c);
     setSelected(c); if (!same) setTab('overview');
     setDetail(null); setDetailError(null); setDetailState('loading');
     if (opts.scroll !== false && window.innerWidth < 1280) setTimeout(() => scrollToEl(document.getElementById('customer-detail')), 50);
     try {
-      const r = await fetch(`/api/reports/customers/detail?posId=${c.posId}&phone=${encodeURIComponent(c.phone)}`, { cache: 'no-store', signal: ac.signal });
+      const r = await fetch(`/api/reports/customers/detail?${customerDetailQuery(c)}`, { cache: 'no-store', signal: ac.signal });
       const body = await r.json().catch(() => ({})) as Detail & { error?: string };
       if (ac.signal.aborted) return;
       if (!r.ok) throw new Error(body.error ?? `Máy chủ trả lỗi ${r.status}.`);
@@ -206,7 +211,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
     <div className="space-y-5">
       <CustomerDetail key={timelineCustomer ? timelineCustomer.phone + timelineCustomer.posIds.join() : "closed"} customer={timelineCustomer} onClose={() => setTimelineCustomer(null)} />
       <PageHeader eyebrow="Số liệu Pancake POS tại thời điểm đồng bộ" title="Hồ sơ khách hàng" subtitle="Mỗi khách = một SĐT trong một POS"
-        actions={<><StaleChip stale={stale} at={at} loading={loading} error={data ? error : null} onRetry={reload} /><Button variant="outline" disabled={!data || exporting} onClick={async () => {
+        actions={<><StaleChip stale={stale} at={at} loading={loading} error={data ? error : null} onRetry={reload} />{canExport && <Button variant="outline" disabled={!data || exporting} onClick={async () => {
           if (!data) return;
           setExporting(true);
           try {
@@ -220,7 +225,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
           ]), 'Khách hàng');
           saveXlsx(XLSX, wb, `khach-hang_${segment || 'tat-ca'}_${viewAll ? 'tat-ca-dong' : `trang-${page}-${pageSize}-dong`}.xlsx`);
           } finally { setExporting(false); }
-        }} title="Xuất đúng những khách đang mở trong danh sách bên dưới">{exporting ? 'Đang xuất…' : `Xuất Excel ${vi.format(data?.customers.length ?? 0)} khách đang mở`}</Button></>} />
+        }} title="Xuất đúng những khách đang mở trong danh sách bên dưới">{exporting ? 'Đang xuất…' : `Xuất Excel ${vi.format(data?.customers.length ?? 0)} khách đang mở`}</Button>}</>} />
       {!data && !error && <SkeletonKpis count={5} className="xl:grid-cols-5" />}
       {seg && (
         <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
@@ -256,7 +261,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
       <SearchBar onGroupChange={setGroupBy} pageKey="customers" placeholder="Tìm theo SĐT hoặc tên khách" value={{ text: q, filters: { sellerId, segment, posIds: posIds.join(',') }, groupBy }}
         groups={[{ value: 'seller', label: 'Người phụ trách' }, { value: 'pos', label: 'POS' }]}
         filters={[
-          { key: 'sellerId', label: 'Người phụ trách', options: employees.map(e => ({ value: e.id, label: e.name })) },
+          { key: 'sellerId', label: 'Người phụ trách', options: posEmployees.map(e => ({ value: e.id, label: e.name })) },
           { key: 'segment', label: 'Phân khúc', options: Object.entries(SEGMENTS).filter(([key]) => key).map(([value, s]) => ({ value, label: s.label })) },
           { key: 'posIds', label: 'POS', multiple: true, options: POS.map(p => ({ value: p.id, label: p.name })) },
         ]}
@@ -264,10 +269,10 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
       {error && !data && <ErrorBox error={error} onRetry={reload} />}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <ChartCard icon={Users} title={`Danh sách khách hàng (${vi.format(data?.total ?? 0)})`} subtitle={periodMode && data?.period ? `Top khách trong kỳ ${data.period.start} → ${data.period.end}: ${vi.format(data.period.orders)} đơn thành công · ${money(data.period.net)}` : segment ? `${SEGMENTS[segment].label} · ${SEGMENTS[segment].hint}` : data?.definitions.success}
-          bodyClassName={loading && data ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}
-          action={<div className="flex items-center gap-2 text-sm">{!viewAll && <><Button size="sm" variant="outline" aria-label="Trang trước" disabled={page <= 1 || loading} onClick={() => setPage(page - 1)}><ChevronLeft size={14} /></Button><span className="num text-xs text-ink-2">Trang {page}</span><Button size="sm" variant="outline" aria-label="Trang sau" disabled={!data?.hasMore || loading} onClick={() => setPage(page + 1)}><ChevronRight size={14} /></Button></>}<Select value={pageSize} onValueChange={(v) => { setPageSize(v as PageSize); setPage(1); }} items={PAGE_SIZES}>
+          bodyClassName="transition-opacity duration-[var(--dur)]"
+          action={<div className="flex items-center gap-2 text-sm">{!viewAll && <><Button size="sm" variant="outline" aria-label="Trang trước" disabled={page <= 1 || loading} onClick={() => setPage(page - 1)}><ChevronLeft size={14} /></Button><span className="num text-xs text-ink-2">Trang {page}</span><Button size="sm" variant="outline" aria-label="Trang sau" disabled={!data?.hasMore || loading} onClick={() => setPage(page + 1)}><ChevronRight size={14} /></Button></>}<Select value={pageSize} onValueChange={(v) => { setPageSize(v as PageSize); setPage(1); }} items={pageSizes}>
             <SelectTrigger size="sm" className="min-w-28" aria-label="Số khách mỗi trang"><SelectValue /></SelectTrigger>
-            <SelectContent>{Object.entries(PAGE_SIZES).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
+            <SelectContent>{Object.entries(pageSizes).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
           </Select>{viewAll && data?.hasMore && <span className="text-xs text-ink-3" title="Mỗi lần mở tối đa 20.000 khách; lọc thêm để thu hẹp">{vi.format(MAX_ROWS)} khách đầu</span>}</div>}>
           {!data && !error && <SkeletonTable rows={8} cols={6} />}
           {data && !data.customers.length && <EmptyState text={query ? `Không có khách nào khớp "${query}".` : 'Không có khách phù hợp bộ lọc.'} />}
@@ -278,10 +283,10 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
                 <tbody>
                   {<GroupedRows rows={data.customers} columns={7} keyOf={groupBy ? c => groupBy === 'pos' ? c.posName : c.sellerName : undefined} summary={rows => <>{vi.format(rows.length)} khách · {money(rows.reduce((sum, c) => sum + c.successNet, 0))}</>}>{(c) => {
                     const s = SEGMENTS[segmentOf(c, today)];
-                    const on = selected?.posId === c.posId && selected?.phone === c.phone;
+                    const on = !!selected && customerKeyOf(selected) === customerKeyOf(c);
                     return (
-                      <tr key={`${c.posId}:${c.phone}`} tabIndex={0} aria-selected={on} onClick={() => void open(c)} onKeyDown={rowKeys(() => void open(c))} className={`cursor-pointer focus-visible:-outline-offset-2 ${on ? '[&>td]:bg-tint-2' : ''}`}>
-                        <td><div className="flex items-center gap-2"><Avatar name={c.name || c.phone} size="sm" /><div className="min-w-0"><button type="button" className="max-w-[14rem] truncate text-left font-medium text-ink underline decoration-line underline-offset-4" title={c.name} onClick={(e) => { e.stopPropagation(); setTimelineCustomer({ phone: c.phone, posIds: [c.posId] }); }}>{c.name || 'Khách chưa có tên'}</button><div className="num text-[11px] text-ink-3">{c.phone}</div></div><HoverReveal><span className="btn sm">Hồ sơ<ChevronRight size={12} /></span></HoverReveal></div></td>
+                      <tr key={customerKeyOf(c)} tabIndex={0} aria-selected={on} onClick={() => void open(c)} onKeyDown={rowKeys(() => void open(c))} className={`cursor-pointer focus-visible:-outline-offset-2 ${on ? '[&>td]:bg-tint-2' : ''}`}>
+                        <td><div className="flex items-center gap-2"><Avatar name={c.name || c.phone} size="sm" /><div className="min-w-0"><button type="button" className="max-w-[14rem] truncate text-left font-medium text-ink underline tap decoration-line underline-offset-4" title={c.name} onClick={(e) => { e.stopPropagation(); setTimelineCustomer({ phone: c.phone, posIds: [c.posId], ref: c.phoneRef }); }}>{c.name || 'Khách chưa có tên'}</button><div className="num text-[11px] text-ink-3">{c.phone}</div></div><HoverReveal><span className="btn sm">Hồ sơ<ChevronRight size={12} /></span></HoverReveal></div></td>
                         <td className="text-xs"><PosBadge posId={c.posId} size={16} className="mr-1.5" />{c.posName}</td>
                         <td className="text-xs"><span className="num">{dt(c.lastSuccessAt)}</span>{c.daysSinceSuccess !== null ? <div className="text-ink-3"><span className="num">{c.daysSinceSuccess}</span> ngày trước</div> : null}</td>
                         <td className="n">{vi.format(c.successOrders)}<span className="text-xs text-ink-3"> / {vi.format(c.orders)}</span></td>
@@ -316,11 +321,11 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
                       </div>
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  {!phoneMasked(selected.phone) && <div className="flex flex-wrap gap-2">
                     <a href={`tel:${selected.phone}`} className="btn sm"><Phone size={13} aria-hidden="true" />Gọi điện</a>
                     <a href={`https://zalo.me/${selected.phone}`} target="_blank" rel="noreferrer" className="btn sm"><Globe size={13} aria-hidden="true" />Gửi Zalo</a>
                     <button type="button" className="btn sm" onClick={() => void copyPhone(selected.phone)}><Copy size={13} aria-hidden="true" />Sao chép SĐT</button>
-                  </div>
+                  </div>}
                 </div>
                 {detail?.profile?.tags.length ? <div className="mt-3 flex flex-wrap gap-1.5">{detail.profile.tags.map((t) => <StatusChip key={t} tone="gray"><Tag size={11} aria-hidden="true" />{t}</StatusChip>)}</div> : null}
                 <div className="mt-4 grid grid-cols-2 gap-2">

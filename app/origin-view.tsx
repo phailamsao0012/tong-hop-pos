@@ -10,12 +10,12 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { ExternalLink, FileDown, UserCheck, Users, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { POS } from '@/lib/report-model';
+import { POS } from '@/lib/shared/report-model';
 import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';
 import { StatusFilter } from './status-filter';
 import { StaffPicker } from './staff-picker';
-import { parseStatus } from '@/lib/order-status';
+import { parseStatus } from '@/lib/pancake/order-status';
 import { StaleChip } from './stale-chip';
 import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, dmy, dt, money, pct, scrollToEl, shortMoney, vi, type SortState } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
@@ -35,9 +35,9 @@ const rowKeys = (fn: () => void) => (e: KeyboardEvent<HTMLElement>) => { if (e.t
 export function OriginView() {
   const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
-  const [status, setStatus] = useState('created');
-  const [basis, setBasis] = useState<Basis>('created');
-  const [by, setBy] = useState<'care' | 'seller'>('care');
+  const [status, setStatus] = useState('closed');
+  const [basis, setBasis] = useState<Basis>('confirmed');
+  const [by, setBy] = useState<'care' | 'seller'>('seller'); // mặc định = doanh số CSKH: đơn chốt do NV CSKH lên (anh Vũ 21/10/2026)
   const [department, setDepartment] = useState('all');
   const [pickedLocal, setPicked] = useState<string[]>([]);
   const focus = useCskhFocus();
@@ -78,7 +78,7 @@ export function OriginView() {
   const maxTotal = Math.max(1, ...rows.map((s) => s.total));
   const sortState: SortState = { key: sort, desc, toggle: (k: string) => { if (k === sort) setDesc((d) => !d); else { setSort(k as SortKey); setDesc(k !== 'name'); } }, mark: () => '' };
   const periodLabel = `${dmy(start)} – ${dmy(end)}`;
-  const statusLabel = parseStatus(status, 'created').label;
+  const statusLabel = parseStatus(status, 'closed').label;
 
   const exportExcel = async () => {
     const XLSX = await import('xlsx');
@@ -102,7 +102,7 @@ export function OriginView() {
     const on = pick?.sellerId === s.sellerId && pick.group === label;
     return (
       <button type="button" onClick={(e) => { e.stopPropagation(); void openList({ sellerId: s.sellerId, name: s.name, origin: 'all', group: label }); }} disabled={!n}
-        className={`num rounded-md px-1.5 py-0.5 text-right hover:bg-tint-2 disabled:cursor-default disabled:hover:bg-transparent ${on ? 'bg-tint-2 font-semibold' : ''}`} title={n ? `Xem các đơn ${label}` : undefined}>
+        className={`num tap rounded-md px-1.5 py-0.5 text-right hover:bg-tint-2 disabled:cursor-default disabled:hover:bg-transparent ${on ? 'bg-tint-2 font-semibold' : ''}`} title={n ? `Xem các đơn ${label}` : undefined}>
         <span className="block text-ink">{n ? vi.format(n) : <span className="text-ink-4">0</span>}</span>
         {n > 0 && <span className="block text-[11px] text-ink-3">{pct(s.total ? n / s.total * 100 : null, 0)}</span>}
       </button>
@@ -112,7 +112,7 @@ export function OriginView() {
     const on = pick?.sellerId === s.sellerId && pick.origin === origin && !pick.group;
     return (
       <button type="button" onClick={(e) => { e.stopPropagation(); void openList({ sellerId: s.sellerId, name: s.name, origin }); }} disabled={!n}
-        className={`num rounded-md px-1.5 py-0.5 text-right hover:bg-tint-2 disabled:cursor-default disabled:hover:bg-transparent ${on ? 'bg-tint-2 font-semibold' : ''}`} title={n ? 'Xem các đơn này' : undefined}>
+        className={`num tap rounded-md px-1.5 py-0.5 text-right hover:bg-tint-2 disabled:cursor-default disabled:hover:bg-transparent ${on ? 'bg-tint-2 font-semibold' : ''}`} title={n ? 'Xem các đơn này' : undefined}>
         <span className="block text-ink">{n ? vi.format(n) : <span className="text-ink-4">0</span>}</span>
         {n > 0 && <span className="block text-[11px] text-ink-3">{shortMoney(net)}</span>}
       </button>
@@ -129,7 +129,7 @@ export function OriginView() {
         onStart={setStart} onEnd={setEnd} loading={loading} onReload={reload}
         extra={
           <>
-            <StatusFilter value={status} onChange={setStatus} defaultValue="created" presets={['created', 'valid', 'closed', 'processing', 'shipped', 'delivered', 'returned', 'new', 'cancelled']} />
+            <StatusFilter value={status} onChange={setStatus} defaultValue="closed" presets={['created', 'valid', 'closed', 'processing', 'shipped', 'delivered', 'returned', 'new', 'cancelled']} />
             <Select value={basis} items={BASES} onValueChange={(v) => setBasis(v as Basis)}>
               <SelectTrigger className="min-w-40" aria-label="Tính theo ngày"><SelectValue /></SelectTrigger>
               <SelectContent>{(Object.keys(BASES) as Basis[]).map((k) => <SelectItem key={k} value={k}>{BASES[k]}</SelectItem>)}</SelectContent>
@@ -157,7 +157,7 @@ export function OriginView() {
       )}
       {report && (
         <>
-          <div className={`grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-4 ${loading ? 'opacity-70' : ''}`} aria-busy={loading}>
+          <div className="grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-4" aria-busy={loading}>
             <KpiCard icon={UserCheck} tone="green" label="Đơn tự ups" value={vi.format(tot.self)} countUp rawValue={tot.self} note={`${shortMoney(tot.selfNet)} · ${pct(all ? tot.self / all * 100 : null, 0)} tổng`}
               tooltip={{ period: periodLabel, current: `${vi.format(tot.self)} đơn · ${money(tot.selfNet)}`, definition: report.definitions.origin }} />
             <KpiCard icon={ICON.marketing} tone="blue" label="Đơn từ MKT" value={vi.format(tot.mkt)} countUp rawValue={tot.mkt} note={`${shortMoney(tot.mktNet)} · ${pct(all ? tot.mkt / all * 100 : null, 0)} tổng`}

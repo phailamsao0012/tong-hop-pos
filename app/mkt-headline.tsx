@@ -7,12 +7,15 @@
 // (người / team dùng chung bộ lọc với bảng marketer bên dưới; sản phẩm sheet chỉ lọc khối này).
 // Theo bộ lọc kỳ + POS chung của web. Số liệu: lib/mkt-analytics.ts.
 import { useMemo, useState } from 'react';
-import { ArrowRight, BadgeDollarSign, CalendarDays, Check, CheckCircle2, Coins, Megaphone, Package, Phone, TrendingUp, UsersRound, UserRound, Wallet, X } from 'lucide-react';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { usePosStaffFilter } from './pos-store';
+import { ProfileLink, useProfileEnabled } from './staff-profile-link';
+import { ArrowRight, BadgeDollarSign, CalendarDays, Check, Filter, CheckCircle2, Coins, Megaphone, Package, Percent, Phone, TrendingUp, UsersRound, UserRound, Wallet, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Area, Bar, BarChart, CartesianGrid, ComposedChart, LabelList, XAxis, YAxis } from 'recharts';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip } from '@/components/ui/chart';
 import { CountUp } from './ui/count-up';
-import { DeltaPill, EmptyState, SegmentedControl, SortTh, TableWrap, delta, dmy, money, short, shortMoney, useSort, vi } from './ui-kit';
+import { DeltaPill, EmptyState, StatusChip, orderStatusTone, SegmentedControl, SortTh, TableWrap, delta, dmy, money, short, shortMoney, useSort, vi } from './ui-kit';
 import { useApi } from './use-api';
 import { useMotionOK } from './ui/motion';
 import { setTeam, useTeam, type Team as Seg } from './team-store';
@@ -22,6 +25,7 @@ type Person = Metrics & { id: string; name: string; teamId: string; picked: bool
 type Team = Metrics & { id: string; name: string; people: number; prevNet: number; prevCost: number };
 type ProductRow = Metrics & { product: string; matched: string[]; linked: boolean };
 type Split = Record<'sale' | 'cskh' | 'other', { net: number; closed: number }>;
+type NewSplit = { newOrders: number; newNet: number; cskhOrders: number; cskhNet: number };
 type Point = { costShare?: number | null; key: string; cost: number; net: number; closed: number; orders: number; phones: number; roas: number | null; costPerClosed: number | null; costPerLead: number | null };
 type Analytics = {
   period: { start: string; end: string }; previous: { start: string; end: string; cutoff: string | null; costUntil: string }; bucket: 'day' | 'week' | 'month';
@@ -32,41 +36,65 @@ type Analytics = {
 type Tab = 'people' | 'teams' | 'products' | 'time';
 type Row = { id: string; name: string; sub?: string; m: Metrics | Point; prevNet?: number; active: boolean; dim?: boolean; note?: string };
 
+const pctText = (n: number) => `${(n * 100).toFixed(1).replace('.', ',')}%`;
 const roasText = (n: number | null | undefined) => n === null || n === undefined ? '—' : `${n.toFixed(2).replace('.', ',')}×`;
 const range = (a: string, b: string) => a === b ? dmy(a) : `${dmy(a)}–${dmy(b)}`;
 const productName = (p: string) => p || 'Chưa ghi sản phẩm';
 const bucketLabel = (key: string, b: Analytics['bucket']) => b === 'month' ? `${key.slice(5, 7)}/${key.slice(0, 4)}` : b === 'week' ? `Tuần ${dmy(key)}` : dmy(key);
 
-function Giant({ icon: Icon, label, value, raw, format, unit, d, invert, prevText, note, tone, onClick }: {
+/** Cột nhỏ từng ngày / tuần: xanh khi tốt hơn cột trước, đỏ khi kém hơn (invert: chi phí tăng là đỏ). Chỉ một kỳ thì so kỳ trước với kỳ này.
+ * Anh Vũ 21/10/2026: "ô chi phí doanh thu làm to mà chẳng có biểu đồ gì cả... làm chữ số vừa phải, có biểu đồ lên xuống đỏ xanh". */
+function Spark({ values, prev, invert, labels, fmt }: { values: (number | null)[]; prev: number | null; invert?: boolean; labels: string[]; fmt: (n: number) => string }) {
+  const one = values.length <= 1;
+  const xs = one ? [prev, values[0] ?? null] : values;
+  const names = one ? ['Kỳ trước', 'Kỳ này'] : labels;
+  const max = Math.max(1e-9, ...xs.map((v) => v ?? 0));
+  const n = xs.length, gap = n > 40 ? 0.6 : n > 14 ? 1.2 : 3, w = (200 - gap * (n - 1)) / n;
+  return <svg viewBox="0 0 200 44" preserveAspectRatio="none" className="h-11 w-full" aria-hidden="true">
+    {xs.map((v, i) => {
+      const before = i ? xs[i - 1] : null;
+      const better = v === null || before === null ? null : invert ? v <= before : v >= before;
+      const h = v === null ? 0 : Math.max(1.5, v / max * 42);
+      return <rect key={i} x={i * (w + gap)} y={44 - h} width={w} height={h} rx={Math.min(2, w / 2)}
+        fill={one && i === 0 ? 'var(--ink-4)' : better === null ? 'var(--ink-4)' : better ? 'var(--good)' : 'var(--bad)'} opacity={one && i === 0 ? 0.45 : 1}>
+        <title>{`${names[i]}: ${v === null ? '—' : fmt(v)}`}</title>
+      </rect>;
+    })}
+  </svg>;
+}
+
+type SparkProps = { values: (number | null)[]; prev: number | null; labels: string[]; fmt: (n: number) => string };
+
+function Giant({ icon: Icon, label, value, raw, format, unit, d, invert, prevText, note, tone, spark, onClick }: {
   icon: LucideIcon; label: string; value: string; raw: number | null; format: (n: number) => string; unit?: string;
-  d: number | null; invert?: boolean; prevText: string; note?: string; tone: string; onClick: () => void;
+  d: number | null; invert?: boolean; prevText: string; note?: string; tone: string; spark: SparkProps; onClick: () => void;
 }) {
   return (
-    <button type="button" onClick={onClick}
-      className="group relative flex min-w-0 flex-col items-start gap-1.5 overflow-hidden rounded-2xl border border-line bg-surface p-5 text-left shadow-card transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-primary hover:shadow-lift focus-visible:outline-2 focus-visible:outline-primary max-sm:p-4">
-      <span aria-hidden="true" className="absolute inset-x-0 top-0 h-1" style={{ background: tone }} />
-      <span className="flex items-center gap-2 text-[13px] font-semibold text-ink-2"><span className="grid size-7 place-items-center rounded-lg" style={{ background: `color-mix(in oklab, ${tone} 14%, transparent)`, color: tone }}><Icon size={16} /></span>{label}</span>
-      <span className="num w-full truncate text-[clamp(2.25rem,4.6vw,3.75rem)] font-bold leading-[1.02] tracking-[-.035em] text-ink" title={value}>
-        {raw === null ? value : <CountUp value={raw} format={format} />}
-        {unit && raw !== null && <span className="ml-1.5 text-[.38em] font-semibold tracking-normal text-ink-3">{unit}</span>}
+    <button type="button" onClick={onClick} title={note}
+      className="group relative flex min-w-0 flex-col items-start gap-1.5 overflow-hidden rounded-xl border border-line bg-surface p-4 text-left transition-[box-shadow,border-color] duration-200 hover:border-primary hover:shadow-card focus-visible:outline-2 focus-visible:outline-primary">
+      <span className="flex items-center gap-1.5 text-[12.5px] font-semibold text-ink-2"><span className="grid size-6 place-items-center rounded-md" style={{ background: `color-mix(in oklab, ${tone} 14%, transparent)`, color: tone }}><Icon size={14} /></span>{label}</span>
+      <span className="flex w-full flex-wrap items-baseline gap-x-2.5 gap-y-1">
+        <span className="num truncate text-[1.75rem] font-bold leading-none tracking-[-.025em] text-ink" title={value}>
+          {raw === null ? value : <CountUp value={raw} format={format} />}
+          {unit && raw !== null && <span className="ml-1 text-[.5em] font-semibold tracking-normal text-ink-3">{unit}</span>}
+        </span>
+        <span className="flex flex-wrap items-center gap-x-1.5 text-[11.5px] text-ink-3">{d !== null && <DeltaPill value={d} invert={invert} variant="plain" />}<span className="num">{prevText}</span></span>
       </span>
-      <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px] text-ink-3">
-        {d !== null && <DeltaPill value={d} invert={invert} className="text-[12.5px]!" />}
-        <span className="num">{prevText}</span>
-      </span>
-      {note && <span className="text-[12px] leading-snug text-ink-3">{note}</span>}
-      <ArrowRight size={16} aria-hidden="true" className="absolute right-4 top-5 text-ink-4 opacity-0 transition-[opacity,transform] duration-200 group-hover:translate-x-0.5 group-hover:opacity-100 group-hover:text-primary" />
+      <span className="mt-1 block w-full"><Spark {...spark} invert={invert} /></span>
     </button>
   );
 }
 
-function Stat({ icon: Icon, label, value, d, invert, prevText, onClick }: { icon: LucideIcon; label: string; value: string; d: number | null; invert?: boolean; prevText: string; onClick: () => void }) {
+function Stat({ icon: Icon, label, value, d, invert, prevText, spark, onClick }: { icon: LucideIcon; label: string; value: string; d: number | null; invert?: boolean; prevText: string; spark: SparkProps; onClick: () => void }) {
   return (
     <button type="button" onClick={onClick}
-      className="flex min-w-0 flex-col items-start gap-1 rounded-xl border border-line bg-surface px-4 py-3 text-left transition-[border-color,box-shadow] duration-200 hover:border-primary hover:shadow-card focus-visible:outline-2 focus-visible:outline-primary">
+      className="flex min-w-0 flex-col items-start gap-1 rounded-xl border border-line bg-surface px-3.5 py-3 text-left transition-[border-color,box-shadow] duration-200 hover:border-primary hover:shadow-card focus-visible:outline-2 focus-visible:outline-primary">
       <span className="flex items-center gap-1.5 text-[12px] font-medium text-ink-3"><Icon size={14} />{label}</span>
-      <span className="num w-full truncate text-[clamp(1.5rem,2.4vw,2rem)] font-bold leading-tight tracking-[-.025em] text-ink" title={value}>{value}</span>
-      <span className="flex flex-wrap items-center gap-x-1.5 text-[11.5px] text-ink-3">{d !== null && <DeltaPill value={d} invert={invert} variant="plain" />}<span className="num">{prevText}</span></span>
+      <span className="flex w-full flex-wrap items-baseline gap-x-2 gap-y-0.5">
+        <span className="num truncate text-[1.35rem] font-bold leading-tight tracking-[-.02em] text-ink" title={value}>{value}</span>
+        <span className="flex flex-wrap items-center gap-x-1.5 text-[11px] text-ink-3">{d !== null && <DeltaPill value={d} invert={invert} variant="plain" />}<span className="num">{prevText}</span></span>
+      </span>
+      <span className="mt-0.5 block w-full"><Spark {...spark} invert={invert} /></span>
     </button>
   );
 }
@@ -96,31 +124,70 @@ const REV_WHO: Record<Seg, string> = { all: 'mọi người bán', sale: 'Sale c
 // Hằng số (không tạo mới mỗi lần vẽ) để biểu đồ không chạy lại hiệu ứng mỗi lần số đếm lên.
 const CHART_CONFIGS = Object.fromEntries((Object.keys(REV_LABEL) as Seg[]).map((k) => [k, { ...CHART_CONFIG, netM: { ...CHART_CONFIG.netM, label: REV_LABEL[k] } }])) as Record<Seg, typeof CHART_CONFIG>;
 
-/** Thanh ngang chi phí cạnh doanh thu cho từng người / team / sản phẩm (top theo doanh thu + chi phí); bấm thanh để lọc. */
+/** Cột đứng chi phí cạnh doanh thu cho từng người / team / sản phẩm (top theo doanh thu + chi phí); bấm cột để lọc.
+ * Anh Vũ 21/10/2026: "biểu đồ này cho cột chứ ngang này khó so sánh lắm". */
 function RankChart({ rows, onPick, motionOn, seg }: { rows: Row[]; onPick: (id: string) => void; motionOn: boolean; seg: Seg }) {
-  const data: ChartRow[] = rows.slice(0, 10).map((r) => ({ key: r.id, label: r.active ? `✓ ${r.name}` : r.name, cost: r.m.cost, net: r.m.net, costM: r.m.cost / 1e6, netM: r.m.net / 1e6, closed: r.m.closed, roas: r.m.roas }));
+  const data: ChartRow[] = rows.slice(0, 12).map((r) => { const name = r.name.replace(/[\s-]+mkt$/i, ''); return { key: r.id, label: r.active ? `✓ ${name}` : name, cost: r.m.cost, net: r.m.net, costM: r.m.cost / 1e6, netM: r.m.net / 1e6, closed: r.m.closed, roas: r.m.roas }; });
   if (!data.length) return null;
   const pick = (d: unknown) => { const key = (d as { payload?: { key?: string } } | null)?.payload?.key; if (key !== undefined) onPick(key); };
+  const many = data.length > 6;
   return (
-    <ChartContainer className="w-full aspect-auto cursor-pointer" style={{ height: 48 + data.length * 40 }} config={CHART_CONFIGS[seg]}>
-      <BarChart data={data} layout="vertical" margin={{ top: 4, right: 56, left: 0, bottom: 0 }} barGap={2} barCategoryGap={8}>
-        <CartesianGrid horizontal={false} stroke="var(--chart-grid)" />
-        <XAxis type="number" tickLine={false} axisLine={false} tickFormatter={(v: number) => vi.format(Math.round(v))} />
-        <YAxis type="category" dataKey="label" tickLine={false} axisLine={false} width={150} tick={{ fontSize: 12 }} tickFormatter={(v: string) => v.length > 22 ? `${v.slice(0, 21)}…` : v} />
+    <ChartContainer className="h-72 w-full aspect-auto cursor-pointer max-sm:h-64" config={CHART_CONFIGS[seg]}>
+      <BarChart data={data} margin={{ top: 22, right: 4, left: 0, bottom: many ? 28 : 4 }} barGap={2} barCategoryGap="22%">
+        <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
+        <XAxis dataKey="label" tickLine={false} axisLine={false} interval={0} tick={{ fontSize: 11.5 }} angle={many ? -28 : 0} textAnchor={many ? 'end' : 'middle'} height={many ? 46 : 24} tickFormatter={(v: string) => v.length > 14 ? `${v.slice(0, 13)}…` : v} />
+        <YAxis tickLine={false} axisLine={false} width={36} tickFormatter={(v: number) => vi.format(Math.round(v))} />
         <ChartTooltip cursor={{ fill: 'var(--tint-2)' }} content={<Tip rows={data} revLabel={REV_LABEL[seg]} />} />
-        <ChartLegend content={<ChartLegendContent />} />
-        <Bar dataKey="costM" fill="var(--color-costM)" radius={[0, 4, 4, 0]} maxBarSize={14} isAnimationActive={motionOn} onClick={pick} />
-        <Bar dataKey="netM" fill="var(--color-netM)" radius={[0, 4, 4, 0]} maxBarSize={14} isAnimationActive={motionOn} onClick={pick}>
-          <LabelList dataKey="roas" position="right" className="fill-ink-2 text-[11px] font-semibold" formatter={(v: unknown) => typeof v === 'number' ? roasText(v) : ''} />
+        <ChartLegend verticalAlign="top" content={<ChartLegendContent />} />
+        <Bar dataKey="costM" fill="var(--color-costM)" radius={[4, 4, 0, 0]} maxBarSize={22} isAnimationActive={motionOn} onClick={pick} />
+        <Bar dataKey="netM" fill="var(--color-netM)" radius={[4, 4, 0, 0]} maxBarSize={22} isAnimationActive={motionOn} onClick={pick}>
+          <LabelList dataKey="roas" position="top" className="fill-ink-2 text-[10.5px] font-semibold" formatter={(v: unknown) => typeof v === 'number' ? roasText(v) : ''} />
         </Bar>
       </BarChart>
     </ChartContainer>
   );
 }
 
-type SortKey = 'name' | 'cost' | 'net' | 'roas' | 'closed' | 'phones' | 'cpc' | 'cpl' | 'share';
+type SortKey = 'name' | 'cost' | 'net' | 'newNet' | 'cskhNet' | 'roas' | 'closed' | 'phones' | 'cpc' | 'cpl' | 'share';
 
-function BreakdownTable({ rows, first, onPick, totalCost: _totalCost, keepOrder }: { rows: Row[]; first: string; onPick?: (id: string) => void; totalCost: number; keepOrder?: boolean }) {
+type OrderKind = 'new' | 'cskh';
+type MktOrder = { id: string; orderId: string; posName: string; phone: string | null; confirmedAt: string; status: string; statusCode?: number; marketer: string | null; seller: string | null; net: number };
+/** Bấm "x đơn" ở cột DT New / DT CSKH: danh sách đơn tạo ra số đó, cùng kỳ và POS (anh Vũ 07/11/2026). */
+function OrdersSheet({ pick, start, end, posIds, team, onClose }: { pick: { row: Row; kind: OrderKind; team: boolean } | null; start: string; end: string; posIds: string[]; team: boolean; onClose: () => void }) {
+  const p = new URLSearchParams({ start, end, posIds: posIds.join(','), kind: pick?.kind ?? 'new' });
+  if (pick) p.set(pick.team || team ? 'teamId' : 'marketerId', pick.row.id);
+  const { data, error } = useApi<{ orders: MktOrder[]; more: boolean }>(pick ? `/api/marketing/orders?${p}` : null, { keep: false });
+  const sum = data?.orders.reduce((t, o) => t + o.net, 0) ?? 0;
+  return <Sheet open={!!pick} onOpenChange={(open) => { if (!open) onClose(); }}>
+    <SheetContent className="overflow-y-auto data-[side=right]:w-full data-[side=right]:max-w-full data-[side=right]:sm:max-w-5xl">
+      <SheetHeader className="pr-12">
+        <SheetTitle>{pick ? `${pick.kind === 'new' ? 'Đơn New' : 'Đơn CSKH'} · ${pick.row.name}` : ''}</SheetTitle>
+        <SheetDescription>{pick?.kind === 'new' ? 'Đơn MKT do Sale chốt' : 'Đơn MKT do CSKH chốt'}, theo ngày xác nhận lần đầu, {dmy(start)}–{dmy(end)}, POS đang chọn.</SheetDescription>
+      </SheetHeader>
+      <div className="px-4 pb-6">
+        {error && <p className="text-[13px] text-bad">Không tải được danh sách đơn.</p>}
+        {!data && !error && <p className="text-[13px] text-ink-3">Đang tải đơn…</p>}
+        {data && (data.orders.length ? <>
+          <p className="mb-2 text-[12.5px] text-ink-2">{vi.format(data.orders.length)}{data.more ? '+' : ''} đơn · {money(sum)}{data.more ? ' (hiện 500 đơn mới nhất)' : ''}</p>
+          <TableWrap><table className="tbl"><thead><tr><th>Mã đơn</th><th>POS</th><th>SĐT</th>{(pick?.team || team) && <th>Marketer</th>}<th>Người chốt</th><th>Trạng thái</th><th className="n">Doanh thu</th></tr></thead>
+            <tbody>{data.orders.map((o) => <tr key={o.id}>
+              <td className="font-medium">{o.orderId}<span className="block text-[11px] font-normal text-ink-3">{dmy(vnDay(o.confirmedAt))} {vnTime(o.confirmedAt)}</span></td>
+              <td>{o.posName}</td><td className="num">{o.phone ?? '—'}</td>{(pick?.team || team) && <td>{o.marketer ?? '—'}</td>}<td>{o.seller ?? '—'}</td><td><StatusChip tone={orderStatusTone(o.statusCode)}>{o.status}</StatusChip></td><td className="n">{money(o.net)}</td>
+            </tr>)}</tbody></table></TableWrap>
+        </> : <EmptyState text="Không có đơn." />)}
+      </div>
+    </SheetContent>
+  </Sheet>;
+}
+const vnDate = (iso: string) => new Date(new Date(iso.endsWith('Z') || iso.includes('+') ? iso : `${iso}Z`).getTime() + 7 * 3600e3).toISOString();
+const vnDay = (iso: string) => vnDate(iso).slice(0, 10);
+const vnTime = (iso: string) => vnDate(iso).slice(11, 16);
+
+// Doanh thu tách từng dòng (anh Vũ 28/10/2026: thấy doanh thu CSKH của từng marketer, không chỉ tổng). Dòng theo thời gian không có số tách.
+const splitOfRow = (m: Row['m']) => 'newNet' in m ? m as Metrics & NewSplit : null;
+/** profile: dòng là một marketer → bấm tên mở hồ sơ làm việc, nút phễu cạnh tên để lọc (anh Vũ 09/11/2026: bấm tên phải ra hồ sơ). */
+function BreakdownTable({ rows, first, onPick, onOrders, totalCost: _totalCost, keepOrder, showSplit = false, profile = false }: { rows: Row[]; first: string; onPick?: (id: string) => void; onOrders?: (row: Row, kind: OrderKind) => void; totalCost: number; keepOrder?: boolean; showSplit?: boolean; profile?: boolean }) {
+  const profileOn = useProfileEnabled();
   const sort = useSort<SortKey>('net');
   const shown = keepOrder && sort.key === 'net' && sort.desc ? rows : sort.apply(rows, (r, k) => {
     switch (k) {
@@ -128,6 +195,8 @@ function BreakdownTable({ rows, first, onPick, totalCost: _totalCost, keepOrder 
       case 'cost': return r.m.cost;
       case 'share': return r.m.costShare ?? null;
       case 'net': return r.m.net;
+      case 'newNet': return splitOfRow(r.m)?.newNet ?? null;
+      case 'cskhNet': return splitOfRow(r.m)?.cskhNet ?? null;
       case 'roas': return r.m.roas;
       case 'closed': return r.m.closed;
       case 'phones': return r.m.phones;
@@ -137,27 +206,39 @@ function BreakdownTable({ rows, first, onPick, totalCost: _totalCost, keepOrder 
     }
   });
   if (!rows.length) return <EmptyState text="Không có chi phí hoặc đơn Marketing trong phạm vi đang chọn." />;
+  const split = showSplit && rows.some((r) => splitOfRow(r.m));
   return (
-    <TableWrap stickyFirst><table className="tbl">
-      <thead><tr><SortTh k="name" label={first} sort={sort} align="left" /><SortTh k="cost" label="Chi phí QC" sort={sort} /><SortTh k="net" label="Doanh thu" sort={sort} /><SortTh k="roas" label="ROAS" sort={sort} /><SortTh k="closed" label="Đơn chốt" sort={sort} /><SortTh k="phones" label="Số" sort={sort} /><SortTh k="cpc" label="CP / đơn New" sort={sort} /><SortTh k="cpl" label="CP / số" sort={sort} /><SortTh k="share" label="% chi phí / DT New" sort={sort} /></tr></thead>
+    <TableWrap stickyFirst><table className="tbl [&_td]:px-2 [&_th]:px-2">
+      <thead><tr><SortTh k="name" label={first} sort={sort} align="left" /><SortTh k="cost" label="Chi phí" sort={sort} /><SortTh k="net" label="Doanh thu" sort={sort} />{split && <><SortTh k="newNet" label="DT New" sort={sort} /><SortTh k="cskhNet" label="DT CSKH" sort={sort} /></>}<SortTh k="roas" label="ROAS" sort={sort} /><SortTh k="closed" label="Đơn chốt" sort={sort} /><SortTh k="phones" label="Số" sort={sort} /><SortTh k="cpc" label="CP/đơn New" sort={sort} /><SortTh k="cpl" label="CP/số" sort={sort} /><SortTh k="share" label="% CP/DT New" sort={sort} /></tr></thead>
       <tbody>{shown.map((r) => {
         const share = r.m.costShare == null ? null : r.m.costShare * 100;
         return (
           <tr key={r.id} className={`${r.active ? 'bg-tint-2' : ''} ${r.dim ? 'opacity-55' : ''}`}>
             <td className="min-w-40">
-              {onPick ? <button type="button" onClick={() => onPick(r.id)} className="flex items-center gap-1.5 text-left font-semibold text-ink hover:text-primary" title={r.active ? 'Bỏ lọc' : 'Bấm để lọc cả khối theo dòng này'}>
+              {profile && profileOn && !r.id.startsWith('__') ? <span className="flex items-center gap-1.5">
+                {onPick && <button type="button" onClick={() => onPick(r.id)} aria-pressed={r.active} aria-label={r.active ? `Bỏ lọc ${r.name}` : `Lọc cả khối theo ${r.name}`} title={r.active ? 'Bỏ lọc' : 'Lọc cả khối theo người này'}
+                  className={`grid size-6 shrink-0 place-items-center rounded-md tap hover:bg-tint-2 hover:text-primary ${r.active ? 'text-primary' : 'text-ink-3'}`}>{r.active ? <Check size={14} /> : <Filter size={13} />}</button>}
+                <ProfileLink id={r.id} name={r.name} className="font-semibold text-ink" />
+              </span> : onPick ? <button type="button" onClick={() => onPick(r.id)} className="flex items-center gap-1.5 text-left font-semibold text-ink tap hover:text-primary" title={r.active ? 'Bỏ lọc' : 'Bấm để lọc cả khối theo dòng này'}>
                 {r.active && <Check size={14} className="shrink-0 text-primary" />}{r.name}
               </button> : <span className="font-semibold">{r.name}</span>}
               {(r.sub || r.note) && <span className="block max-w-72 whitespace-normal text-[11px] font-normal leading-snug text-ink-3">{[r.sub, r.note].filter(Boolean).join(' · ')}</span>}
             </td>
-            <td className="n">{money(r.m.cost)}</td>
-            <td className="n font-semibold">{money(r.m.net)}{r.prevNet !== undefined && (r.prevNet || r.m.net) > 0 && <span className="block"><DeltaPill value={delta(r.m.net, r.prevNet)} variant="plain" /></span>}</td>
+            <td className="n"><span title={money(r.m.cost)}>{shortMoney(r.m.cost)}</span></td>
+            <td className="n font-semibold"><span title={money(r.m.net)}>{shortMoney(r.m.net)}</span>{r.prevNet !== undefined && (r.prevNet || r.m.net) > 0 && <span className="block"><DeltaPill value={delta(r.m.net, r.prevNet)} variant="plain" /></span>}</td>
+            {split && (() => {
+              const x = splitOfRow(r.m);
+              const count = (n: number, kind: OrderKind) => onOrders && n > 0 && r.id !== '__unassigned'
+                ? <button type="button" onClick={() => onOrders(r, kind)} className="block w-full text-right text-[11px] text-primary underline decoration-dotted underline-offset-2 tap" title="Bấm xem danh sách đơn">{vi.format(n)} đơn</button>
+                : <span className="block text-[11px] text-ink-3">{vi.format(n)} đơn</span>;
+              return <><td className="n">{x ? shortMoney(x.newNet) : '—'}{x && count(x.newOrders, 'new')}</td><td className="n">{x ? shortMoney(x.cskhNet) : '—'}{x && count(x.cskhOrders, 'cskh')}</td></>;
+            })()}
             <td className="n font-semibold">{roasText(r.m.roas)}</td>
             <td className="n">{vi.format(r.m.closed)}</td>
             <td className="n">{vi.format(r.m.phones)}</td>
-            <td className="n">{r.m.costPerClosed === null ? '—' : money(r.m.costPerClosed)}</td>
-            <td className="n">{r.m.costPerLead === null ? '—' : money(r.m.costPerLead)}</td>
-            <td className="n" aria-label={`${(share ?? 0).toFixed(1)}% chi phí`}><span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="pbar block h-1.5 w-14"><i style={{ width: `${Math.min(100, share ?? 0)}%` }} /></span><span className="num w-11 text-right">{share === null ? '—' : `${share.toFixed(1).replace('.', ',')}%`}</span></span></td>
+            <td className="n">{r.m.costPerClosed === null ? '—' : shortMoney(r.m.costPerClosed)}</td>
+            <td className="n">{r.m.costPerLead === null ? '—' : shortMoney(r.m.costPerLead)}</td>
+            <td className="n" aria-label={`${(share ?? 0).toFixed(1)}% chi phí`}><span className="num">{share === null ? '—' : `${share.toFixed(1).replace('.', ',')}%`}</span></td>
           </tr>
         );
       })}</tbody>
@@ -199,8 +280,11 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
   onMarketer: (id: string | null) => void; onTeam: (id: string | null) => void; onOpen: () => void;
 }) {
   const [product, setProduct] = useState<string | null>(null);
+  const [orders, setOrders] = useState<{ row: Row; kind: OrderKind; team: boolean } | null>(null);
   const [tab, setTab] = useState<Tab>('people');
   const seg = useTeam();
+  // Chọn POS nào chỉ hiện người có tài khoản trên POS đó (anh Vũ 04/11/2026); tổng giữ nguyên.
+  const onPos = usePosStaffFilter();
   const url = useMemo(() => {
     const p = new URLSearchParams({ start, end, posIds: posIds.join(',') });
     if (seg !== 'all') p.set('team', seg);
@@ -216,7 +300,7 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
   if (!data) {
     return (
       <section className={`card p-5 ${loading ? 'is-loading is-thinking' : ''}`} aria-busy={loading}>
-        {error ? <p className="text-[13px] text-bad">Không tải được số chính Marketing. <button type="button" className="underline" onClick={reload}>Tải lại</button></p>
+        {error ? <p className="text-[13px] text-bad">Không tải được số chính Marketing. <button type="button" className="underline tap" onClick={reload}>Tải lại</button></p>
           : <div className="grid gap-3 md:grid-cols-3">{[0, 1, 2].map((i) => <div key={i} className="skel h-36 rounded-2xl" />)}</div>}
       </section>
     );
@@ -235,7 +319,7 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
   const pickProduct = (id: string) => setProduct(id === product ? null : id);
   const teamName = new Map(data.teams.map((t) => [t.id, t.name]));
 
-  const people: Row[] = data.people.filter((r) => !teamId || marketerId || r.picked)
+  const people: Row[] = data.people.filter((r) => (!teamId || marketerId || r.picked) && (!onPos || onPos(r.id)))
     .map((r) => ({ id: r.id, name: r.name, sub: teamName.get(r.teamId) ?? (r.teamId === '__unassigned' ? 'Chưa phân team' : undefined), m: r, prevNet: r.prevNet, active: r.id === marketerId, dim: !!marketerId && r.id !== marketerId }));
   const teams: Row[] = data.teams.map((t) => ({ id: t.id, name: t.name, sub: `${vi.format(t.people)} marketer`, m: t, prevNet: t.prevNet, active: t.id === teamId && !marketerId }));
   const products: Row[] = data.products.map((r) => ({ id: r.product, name: productName(r.product), m: r, active: r.product === product,
@@ -245,6 +329,8 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
   const onPick = tab === 'people' ? pickPerson : tab === 'teams' ? pickTeam : tab === 'products' ? pickProduct : undefined;
   const totalCost = tab === 'time' ? c.cost : tabRows.reduce((s, r) => s + r.m.cost, 0);
 
+  const tl = data.timeline, tlLabels = tl.map((r) => bucketLabel(r.key, data.bucket));
+  const spark = (pick: (m: Metrics | Point) => number | null, fmt: (n: number) => string): SparkProps => ({ values: tl.length > 1 ? tl.map(pick) : [pick(c)], prev: pick(p), labels: tlLabels, fmt });
   const chip = (icon: LucideIcon, text: string, clear: () => void) => {
     const Icon = icon;
     return <button type="button" onClick={clear} className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-tint-2 px-2.5 py-1 text-[12.5px] font-semibold text-primary hover:border-primary" title="Bỏ lọc">
@@ -256,41 +342,42 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
     <section className={`card flex flex-col gap-4 p-5 max-sm:gap-3 max-sm:rounded-xl max-sm:p-4 ${loading ? 'is-loading' : ''}`} aria-label="Số chính Marketing">
       <header className="flex flex-wrap items-end justify-between gap-2">
         <div className="min-w-0">
-          <h2 className="display text-lg font-semibold leading-tight tracking-[-.015em] text-ink">Số chính Marketing <span className="num font-medium text-ink-3">· {range(data.period.start, data.period.end)}</span></h2>
-          <p className="mt-0.5 text-[12px] text-ink-3">Chi phí QC từ Google Sheet CPQC Daily (và chi phí nhập tay) · doanh thu từ đơn Pancake có Marketer, {shown === 'all' ? 'mọi người bán chốt' : `chỉ đơn ${REV_WHO[shown]}`} (nút {shown === 'all' ? 'Sale / CSKH' : 'Tất cả'} đầu trang để đổi) · số về, đơn tạo, chi phí là của Marketing nên không đổi theo nút · so {prevLabel}.</p>
+          {/* Giải thích nguồn số chỉ hiện khi rê chuột vào tiêu đề (anh Vũ 21/10/2026: "phần thừa giải thích lan man"). */}
+          <h2 className="display text-lg font-semibold leading-tight tracking-[-.015em] text-ink" title={`Chi phí QC từ Google Sheet CPQC Daily (và chi phí nhập tay) · doanh thu từ đơn Pancake có Marketer, ${shown === 'all' ? 'mọi người bán chốt' : `chỉ đơn ${REV_WHO[shown]}`} (nút ${shown === 'all' ? 'Sale / CSKH' : 'Tất cả'} đầu trang để đổi) · số về, đơn tạo, chi phí là của Marketing nên không đổi theo nút · so ${prevLabel}.`}>Số chính Marketing <span className="num font-medium text-ink-3">· {range(data.period.start, data.period.end)}</span></h2>
         </div>
-        <button type="button" onClick={onOpen} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12.5px] font-medium text-primary hover:bg-tint-2">Trang Chi phí &amp; ROAS <ArrowRight size={14} /></button>
+        <button type="button" onClick={onOpen} className="tap inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12.5px] font-medium text-primary hover:bg-tint-2">Trang Chi phí &amp; ROAS <ArrowRight size={14} /></button>
       </header>
 
-      <div className="flex flex-wrap items-center gap-2">
+      {filtered && <div className="flex flex-wrap items-center gap-2">
         <span className="text-[12.5px] font-semibold text-ink-2">Đang xem:</span>
-        {!filtered && <span className="text-[12.5px] text-ink-3">Toàn bộ Marketing. Bấm một marketer, team hoặc sản phẩm ở bảng dưới để xem riêng.</span>}
         {f.marketerName && chip(UserRound, f.marketerName, () => onMarketer(null))}
         {!marketerId && f.teamName && chip(UsersRound, f.teamName, () => onTeam(null))}
         {product !== null && chip(Package, productName(product), () => setProduct(null))}
         {filtered && <button type="button" onClick={() => { onMarketer(null); onTeam(null); setProduct(null); }} className="text-[12px] text-ink-3 underline-offset-2 hover:text-primary hover:underline">Bỏ hết lọc</button>}
-      </div>
+      </div>}
 
       <div className="grid gap-3 md:grid-cols-3">
         <Giant icon={Wallet} tone="var(--t-orange)" label="Chi phí quảng cáo" value={shortMoney(c.cost)} raw={c.cost} format={short} unit="₫"
-          d={delta(c.cost, p.cost)} invert prevText={was(shortMoney(p.cost))}
+          d={delta(c.cost, p.cost)} invert prevText={was(shortMoney(p.cost))} spark={spark((m) => m.cost, shortMoney)}
           note={!c.cost ? 'Chưa có chi phí trong phạm vi này (sheet chưa gửi hoặc chưa nhập).' : `${vi.format(c.marketers)} marketer có chi phí`} onClick={onOpen} />
         <Giant icon={BadgeDollarSign} tone="var(--primary)" label={`${revLabel} (${REV_WHO[shown]})`} value={shortMoney(c.net)} raw={c.net} format={short} unit="₫"
-          d={delta(c.net, p.net)} prevText={was(shortMoney(p.net))}
+          d={delta(c.net, p.net)} prevText={was(shortMoney(p.net))} spark={spark((m) => m.net, shortMoney)}
           note={`${vi.format(c.closed)} đơn ${shown === 'all' ? 'trên data MKT · gồm New, CSKH và người bán chưa có hậu tố' : `${REV_WHO[shown]} trên data MKT`} · theo ngày xác nhận, sau giảm trừ`} onClick={onOpen} />
         <Giant icon={TrendingUp} tone="var(--t-purple)" label="ROAS · theo đơn New" value={roasText(c.roas)} raw={c.roas} format={(n) => roasText(n)}
-          d={roasD} prevText={was(roasText(p.roas))}
+          d={roasD} prevText={was(roasText(p.roas))} spark={spark((m) => m.roas, roasText)}
           note={shown === 'cskh' ? 'Chi phí QC tính cho đơn New, xem nút Sale' : c.roas === null ? 'Cần chi phí trong phạm vi này để tính ROAS.' : `1 ₫ quảng cáo mang về ${c.roas.toFixed(2).replace('.', ',')} ₫ doanh thu New${partial ? ` · chỉ tính ${shortMoney(c.coveredNet)} doanh thu của marketer có chi phí` : ''}`}
           onClick={onOpen} />
       </div>
 
       {split && shown === 'all' && <SplitStrip cur={split.current} prev={split.prev} total={c.net} />}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat icon={CheckCircle2} label="Đơn chốt" value={vi.format(c.closed)} d={delta(c.closed, p.closed)} prevText={`trước ${vi.format(p.closed)}`} onClick={onOpen} />
-        <Stat icon={Phone} label="Số (SĐT khác nhau)" value={vi.format(c.phones)} d={delta(c.phones, p.phones)} prevText={`trước ${vi.format(p.phones)} · ${vi.format(c.orders)} đơn tạo`} onClick={onOpen} />
-        <Stat icon={Coins} label="Chi phí / đơn New" value={c.costPerClosed === null ? '—' : shortMoney(c.costPerClosed)} d={c.costPerClosed !== null && p.costPerClosed !== null ? delta(c.costPerClosed, p.costPerClosed) : null} invert prevText={`trước ${p.costPerClosed === null ? '—' : shortMoney(p.costPerClosed)}`} onClick={onOpen} />
-        <Stat icon={Megaphone} label="Chi phí / số" value={c.costPerLead === null ? '—' : shortMoney(c.costPerLead)} d={c.costPerLead !== null && p.costPerLead !== null ? delta(c.costPerLead, p.costPerLead) : null} invert prevText={`trước ${p.costPerLead === null ? '—' : shortMoney(p.costPerLead)}`} onClick={onOpen} />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <Stat icon={CheckCircle2} label="Đơn chốt" value={vi.format(c.closed)} d={delta(c.closed, p.closed)} prevText={`trước ${vi.format(p.closed)}`} spark={spark((m) => m.closed, (n) => vi.format(n))} onClick={onOpen} />
+        <Stat icon={Phone} label="Số (SĐT khác nhau)" value={vi.format(c.phones)} d={delta(c.phones, p.phones)} prevText={`trước ${vi.format(p.phones)}`} spark={spark((m) => m.phones, (n) => vi.format(n))} onClick={onOpen} />
+        <Stat icon={Coins} label="Chi phí / đơn New" value={c.costPerClosed === null ? '—' : shortMoney(c.costPerClosed)} d={c.costPerClosed !== null && p.costPerClosed !== null ? delta(c.costPerClosed, p.costPerClosed) : null} invert prevText={`trước ${p.costPerClosed === null ? '—' : shortMoney(p.costPerClosed)}`} spark={spark((m) => m.costPerClosed, shortMoney)} onClick={onOpen} />
+        <Stat icon={Megaphone} label="Chi phí / số" value={c.costPerLead === null ? '—' : shortMoney(c.costPerLead)} d={c.costPerLead !== null && p.costPerLead !== null ? delta(c.costPerLead, p.costPerLead) : null} invert prevText={`trước ${p.costPerLead === null ? '—' : shortMoney(p.costPerLead)}`} spark={spark((m) => m.costPerLead, shortMoney)} onClick={onOpen} />
+        {/* % chi phí / DT New lên ô riêng cho dễ thấy (anh Vũ 07/11/2026: "phần trăm chi phí trên doanh thu đâu"). */}
+        <Stat icon={Percent} label="% chi phí / DT New" value={c.costShare == null ? '—' : pctText(c.costShare)} d={c.costShare != null && p.costShare != null ? delta(c.costShare, p.costShare) : null} invert prevText={`trước ${p.costShare == null ? '—' : pctText(p.costShare)}`} spark={spark((m) => m.costShare ?? null, pctText)} onClick={onOpen} />
       </div>
 
       {timeRows.length > 1 && (
@@ -322,7 +409,9 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
         {tab === 'teams' && !data.teams.some((t) => t.id !== '__unassigned') && <p className="text-[11.5px] text-ink-3">Chưa chia team Marketing. Chia ở nút <b>Quản lý team MKT</b> đầu trang.</p>}
         {tab !== 'time' && onPick && <RankChart seg={shown} rows={[...tabRows].sort((a, b) => (b.m.net + b.m.cost) - (a.m.net + a.m.cost))} onPick={onPick} motionOn={motionOn} />}
         <BreakdownTable rows={tabRows} first={tab === 'people' ? 'Marketer' : tab === 'teams' ? 'Team' : tab === 'products' ? 'Sản phẩm' : data.bucket === 'day' ? 'Ngày' : data.bucket === 'week' ? 'Tuần' : 'Tháng'}
-          onPick={onPick} totalCost={totalCost} keepOrder={tab === 'time'} />
+          onPick={onPick} totalCost={totalCost} keepOrder={tab === 'time'} showSplit={shown === 'all'} profile={tab === 'people'}
+          onOrders={product === null && (tab === 'people' || tab === 'teams') ? (row, kind) => setOrders({ row, kind, team: tab === 'teams' }) : undefined} />
+        <OrdersSheet pick={orders} start={start} end={end} posIds={posIds} team={false} onClose={() => setOrders(null)} />
       </div>
     </section>
   );

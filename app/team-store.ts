@@ -5,9 +5,9 @@
 // Thêm 10/10/2026: chọn riêng một team bên web nhân sự (vd "Sale Gentadox HN"). Chọn team thì nhóm tự theo bộ phận của team;
 // đổi sang nhóm khác bộ phận thì bỏ chọn team. Cũng không nhớ qua lần mở sau.
 import { useSyncExternalStore } from 'react';
-import type { HrUnit, Team } from '@/lib/team';
-export type { HrUnit, Team } from '@/lib/team';
-export { TEAM_LABELS } from '@/lib/team';
+import type { HrUnit, Team } from '@/lib/teams/team';
+export type { HrUnit, Team } from '@/lib/teams/team';
+export { TEAM_LABELS } from '@/lib/teams/team';
 
 type MktTeam = { id: string; name: string };
 type State = { team: Team; unit: HrUnit | null; branch: string | null; mktTeam: MktTeam | null };
@@ -51,7 +51,37 @@ export function setBranch(branch: string | null) {
 export function useBranch(): string | null {
   return useSyncExternalStore(subscribe, () => current.branch, () => null);
 }
+// Trang đang mở thuộc bộ phận nào (Sale / CSKH, null = trang chung). Trang Sale mà thanh trên chọn CSKH (hoặc ngược lại): gắn ?seg=<bộ phận
+// đang chọn> vào API, máy chủ chỉ tính người thuộc cả hai bộ phận (lib/team.ts), không ai thì số tự ra 0 (anh Vũ 21/10/2026).
+let pageDept: Exclude<Team, 'all'> | null = null;
+let seg: Exclude<Team, 'all'> | null = null;
+const recalc = (notify = true) => {
+  const next = pageDept && current.team !== 'all' && current.team !== pageDept ? current.team : null;
+  if (next !== seg) { seg = next; if (notify) for (const l of listeners) l(); }
+};
+listeners.add(recalc);
+/** Gọi ngay khi vẽ khung trang (trước các trang con) nên không báo lại: trang con mới mở đọc đúng cờ từ lần tải đầu. */
+export function setPageDept(dept: Exclude<Team, 'all'> | null) {
+  if (dept === pageDept) return;
+  pageDept = dept; recalc(false);
+  // useTeam đổi theo trang: báo sau lượt vẽ cho các khối không vẽ lại (thanh trên cùng) đọc lại.
+  queueMicrotask(() => { for (const l of listeners) l(); });
+}
+export const segLensNow = () => seg;
+export function useSegLens(): Exclude<Team, 'all'> | null {
+  return useSyncExternalStore(subscribe, () => seg, () => null);
+}
+/** Thêm ?seg= khi trang bộ phận này đang chọn bộ phận kia. */
+export const withSeg = (url: string | null, lens: Exclude<Team, 'all'> | null) => url && lens && !/[?&]seg=/.test(url) ? `${url}${url.includes('?') ? '&' : '?'}seg=${lens}` : url;
+/**
+ * Nhóm dùng để lọc số. Trang thuộc Sale hoặc CSKH mà thanh trên để "Tất cả" thì chỉ tính người của bộ phận trang đó (anh Vũ 28/10/2026:
+ * "đã tích riêng rồi thì đừng lôi chung các nhóm khác vào nữa"). Nút Tất cả / Sale / CSKH đọc lựa chọn gốc bằng useTeamChoice.
+ */
 export function useTeam(): Team {
+  return useSyncExternalStore(subscribe, () => current.team === 'all' && pageDept ? pageDept : current.team, () => 'all');
+}
+/** Lựa chọn gốc trên thanh trên cùng (Tất cả / Sale / CSKH), không đổi theo trang. */
+export function useTeamChoice(): Team {
   return useSyncExternalStore(subscribe, () => current.team, () => 'all');
 }
 export function useHrUnit(): HrUnit | null {

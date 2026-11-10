@@ -4,7 +4,7 @@
 // Mọi khoản trong thác nước tính theo ngày TẠO đơn (trạng thái lúc đồng bộ) nên cộng dồn khớp nhau.
 import { usePosIds } from './pos-store';
 import { ICON } from './icons';
-import { METRIC_DEFS, RETURN_BASES, cancelRateOf, closeRateOf, returnRateOf } from '@/lib/metrics';
+import { METRIC_DEFS, RETURN_BASES, cancelRateOf, closeRateOf, rateTextClass, returnRateOf } from '@/lib/reports/metrics';
 import { useMetricSettings } from './metric-settings';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PosBadge } from './pos-badge';
@@ -13,8 +13,8 @@ import { BarChart3, CheckCircle2, ClipboardCheck, Coins, PackageCheck, RotateCcw
 import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Input } from '@/components/ui/input';
-import { POS } from '@/lib/report-model';
-import { addDays, todayVn } from '@/lib/report-time';
+import { POS } from '@/lib/shared/report-model';
+import { addDays, todayVn } from '@/lib/shared/report-time';
 import { GoalCell, PosChips, type OverviewReport } from './overview-view';
 import {
   ChartCard, DeltaPill, ErrorBox, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SortTh, STATUS_VARS, StatusChip, TableWrap, Toolbar,
@@ -333,7 +333,7 @@ export function MonthlyView({ onNavigate }: { /** Mở trang khác (bấm cột 
                 <tbody>
                   {byPos.map(({ id, row, prev: p }, i) => (
                     <tr key={id}>
-                      <td className="font-medium"><span className="num mr-2 text-[11px] text-ink-4">{i + 1}</span><PosBadge posId={id} size={16} className="mr-2 align-middle" />{posName(id)}</td>
+                      <td className="font-medium"><span className="num mr-2 inline-block w-4 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span><PosBadge posId={id} size={16} className="mr-2 align-middle" />{posName(id)}</td>
                       <td className="n">{vi.format(row!.orders)}</td>
                       <td className="n">{vi.format(row!.closedOrders)}</td>
                       <td className="n">{money(row!.closedNet)}</td>
@@ -371,8 +371,8 @@ export function MonthlyView({ onNavigate }: { /** Mở trang khác (bấm cột 
                     const t = targets[`employee:${r.sellerId}`];
                     return (
                       <tr key={r.sellerId || 'none'}>
-                        <td className="font-medium"><span className="num mr-2 text-[11px] text-ink-4">{i + 1}</span>{r.name}</td><td className="mut text-xs">{r.department ?? '—'}</td>
-                        {team !== 'cskh' && <><td className="n">{vi.format(r.assignedOrders)}</td><td className="n">{vi.format(r.closedOrders)}</td><td className="n">{pct(closeRateOf(r, ms.rateBase), 2)}</td></>}
+                        <td className="font-medium"><span className="num mr-2 inline-block w-4 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span>{r.name}</td><td className="mut text-xs">{r.department ?? '—'}</td>
+                        {team !== 'cskh' && <><td className="n">{vi.format(r.assignedOrders)}</td><td className="n">{vi.format(r.closedOrders)}</td><td className={`n ${rateTextClass(closeRateOf(r, ms.rateBase))}`}>{pct(closeRateOf(r, ms.rateBase), 2)}</td></>}
                         <td className="n">{money(r.closedNet)}</td><td className="n">{r.averageOrder ? money(r.averageOrder) : '—'}</td><td className="n">{vi.format(r.groups.delivered.orders)}</td><td className="n">{money(r.groups.delivered.net)}</td>
                         <td className="n">{vi.format(r.groups.returned.orders)} / {vi.format(r.groups.cancelled.orders)}</td>
                         <td>{!t?.revenue && !t?.closedOrders ? <span className="text-xs text-ink-4">—</span> : t.revenue

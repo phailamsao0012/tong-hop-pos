@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
-import { HR_SECRET_HEADER, secretMatches } from '@/lib/hr-link';
-import { recruitChatIds } from '@/lib/recruit';
-import { sendTelegram } from '@/lib/telegram';
+import { HR_SECRET_HEADER, secretMatches } from '@/lib/teams/hr-link';
+import { recruitChatIds } from '@/lib/teams/recruit';
+import { sendTelegram } from '@/lib/bot/telegram';
 
 const escape = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 

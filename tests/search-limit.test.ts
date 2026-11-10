@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, beforeEach, test } from 'node:test';
 import type { DatabaseSync } from 'node:sqlite';
 import { env } from 'cloudflare:workers';
-import { checkSearchLimit } from '../lib/search-limit';
+import { checkSearchLimit } from '../lib/shared/search-limit';
 import { GET as orders } from '../app/api/raw/orders/route';
 import { GET as customers } from '../app/api/reports/customers/route';
 import { emptyDb } from './support/d1-sqlite';

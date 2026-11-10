@@ -1,14 +1,13 @@
-import { env } from 'cloudflare:workers';
-import { hashPassword, loginBlocked, normalizeEmail, passwordProblem, recordLoginFailure } from '@/lib/auth';
-import { startSession } from '@/lib/login-session';
-import { OTP_MINUTES, bumpChallenge, createChallenge, dropChallenge, loadChallenge, maskEmail, mfaState, otpCode, sha256b64 } from '@/lib/mfa';
-import { mailConfigured, resetMail, sendMail } from '@/lib/mail';
-import { audit } from '@/lib/audit';
+import { setPasswordDropSessions, userByEmail, userById } from '@/lib/auth/auth-db';
+import { LOCKED_MESSAGE, hashPassword, loginBlocked, normalizeEmail, passwordProblem, recordLoginFailure } from '@/lib/auth/auth';
+import { startSession } from '@/lib/auth/login-session';
+import { OTP_MINUTES, bumpChallenge, createChallenge, dropChallenge, loadChallenge, maskEmail, mfaState, otpCode, sha256b64 } from '@/lib/auth/mfa';
+import { mailConfigured, resetMail, sendMail } from '@/lib/ops/mail';
+import { audit } from '@/lib/ops/audit';
 
 // Quên mật khẩu: 'request' gửi mã 6 số về email (luôn trả lời như nhau để không lộ email nào có tài khoản),
 // 'confirm' kiểm tra mã rồi đặt mật khẩu mới, hủy mọi phiên cũ. Có mã ứng dụng thì phải đăng nhập lại
 // bằng mật khẩu mới + mã ứng dụng; không có thì vào web luôn và ghi nhớ thiết bị.
-type UserRow = { id: string; email: string; disabled: number };
 
 export async function POST(request: Request) {
   let body: { action?: unknown; email?: unknown; challengeId?: unknown; code?: unknown; password?: unknown };
@@ -22,7 +21,7 @@ export async function POST(request: Request) {
     if (loginBlocked(key)) return Response.json({ error: 'Yêu cầu quá nhiều lần. Thử lại sau 15 phút.' }, { status: 429 });
     recordLoginFailure(key);
     const reply = { step: 'code', to: maskEmail(email), minutes: OTP_MINUTES };
-    const user = await env.DB.prepare('SELECT id,email,disabled FROM users WHERE email=?').bind(email).first<UserRow>();
+    const user = await userByEmail(email);
     if (!user || user.disabled) return Response.json({ ...reply, challengeId: crypto.randomUUID() });
     await audit({ action: 'password.reset.request', userId: user.id, email: user.email, request, status: 200 });
     const code = otpCode();
@@ -39,15 +38,12 @@ export async function POST(request: Request) {
     const c = await loadChallenge(id, 'reset');
     if (!c) return Response.json({ error: 'Mã đã hết hạn hoặc nhập sai quá nhiều lần. Yêu cầu mã mới.' }, { status: 410 });
     if (code.length !== 6 || (await sha256b64(code)) !== c.secret) { await bumpChallenge(id); return Response.json({ error: 'Mã không đúng.' }, { status: 401 }); }
-    const user = await env.DB.prepare('SELECT id,email,disabled FROM users WHERE id=?').bind(c.user_id).first<UserRow>();
-    if (!user || user.disabled) return Response.json({ error: 'Tài khoản đã bị khóa.' }, { status: 403 });
+    const user = await userById(c.user_id);
+    if (!user || user.disabled) return Response.json({ error: LOCKED_MESSAGE }, { status: 503 });
     const problem = await passwordProblem(body.password, user.email);
     if (problem || typeof body.password !== 'string') return Response.json({ error: problem ?? 'Mật khẩu không hợp lệ.' }, { status: 400 });
     await dropChallenge(id);
-    await env.DB.batch([
-      env.DB.prepare('UPDATE users SET password_hash=? WHERE id=?').bind(await hashPassword(body.password), user.id),
-      env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(user.id),
-    ]);
+    await setPasswordDropSessions(user.id, await hashPassword(body.password));
     await audit({ action: 'password.reset', userId: user.id, email: user.email, request, status: 200 });
     const mfa = await mfaState(user.id);
     if (mfa.totpEnabled) return Response.json({ step: 'login' });

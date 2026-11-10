@@ -1,16 +1,12 @@
-import { env } from 'cloudflare:workers';
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { POS } from '@/lib/report-model';
-import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
-import { parseTeam, teamFilter } from '@/lib/team';
-import { MARKETING_TEAMS_KEY, parseMarketingTeams } from '@/lib/marketing-teams';
-import { itemNames, parseGroupOptions } from '@/lib/product-groups';
-import { NO_TEAM, OTHER_LINE, orderLines, shippingByLine, type LineDim } from '@/lib/shipping-lines';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { POS } from '@/lib/shared/report-model';
+import { DATE_RE } from '@/lib/shared/report-time';
+import { parseTeam } from '@/lib/teams/team';
+import { parseGroupOptions } from '@/lib/reports/product-groups';
+import type { LineDim } from '@/lib/reports/shipping-lines';
+import { shippingLinesReport } from '@/lib/reports/shipping-lines-report';
 
-// Vận đơn theo dòng sản phẩm và team MKT (08/10/2026). Đơn đã chốt (từ Chờ xác nhận) trong kỳ (theo giờ chốt, hoặc ngày tạo) và trạng thái hiện tại:
-// đi (đã giao ĐVVC) / hoàn / đã nhận / chưa gửi / hủy. Dòng sản phẩm theo nhãn đơn Pancake (mặc định), nhóm chính, hoặc từng sản phẩm.
-const NET = 'COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0))';
-
+// Vận đơn theo dòng sản phẩm và team MKT (lib/reports/shipping-lines-report.ts).
 export async function GET(request: Request) {
   if (!(await getSessionUser())) return unauthorized();
   const p = new URL(request.url).searchParams;
@@ -25,46 +21,5 @@ export async function GET(request: Request) {
   const parsed = parseGroupOptions(new URLSearchParams({ dim: p.get('dim') ?? 'tag', basis: p.get('groupBasis') ?? 'both' }));
   const dim: LineDim = (p.get('dim') ?? 'line') === 'line' ? 'line' : parsed.dim;
   const groupBasis = parsed.basis;
-  const { startUtc, endUtc } = vnRangeUtc(start, end);
-  const ph = posIds.map(() => '?').join(',');
-  const timeCol = basis === 'created' ? 'o.created_at' : 'o.first_closed_at';
-  // Chỉ đơn đã từng chốt (từ Chờ xác nhận); hủy sau khi chốt vẫn đếm vào cột Hủy.
-  const [rows, saved, names] = await env.DB.batch([
-    env.DB.prepare(`SELECT o.id, o.status_code, ${NET} AS net, o.tags_json, NULLIF(TRIM(o.marketer_id),'') AS marketer_id FROM raw_pos_orders o
-      WHERE o.pos_id IN (${ph}) AND ${timeCol}>=? AND ${timeCol}<? AND o.first_closed_at IS NOT NULL AND o.status_code NOT IN (0,7)${teamFilter('o.seller_id', team)}`)
-      .bind(...posIds, startUtc, endUtc),
-    env.DB.prepare('SELECT value FROM app_settings WHERE key=?').bind(MARKETING_TEAMS_KEY),
-    env.DB.prepare("SELECT user_id, MAX(name) AS name FROM pos_users WHERE name<>'' GROUP BY user_id"),
-  ]);
-  const list = rows.results as { id: string; status_code: number; net: number | null; tags_json: string | null; marketer_id: string | null }[];
-  const items = dim === 'tag' ? new Map<string, string[]>() : await itemNames(env.DB, list.map((r) => r.id));
-  const teams = parseMarketingTeams((saved.results[0] as { value?: string } | undefined)?.value);
-  const teamByMember = new Map(teams.flatMap((t) => t.memberIds.map((id) => [id, t.id] as const)));
-  const teamNames = new Map(teams.map((t) => [t.id, t.name]));
-  const report = shippingByLine(
-    list.map((r) => ({ id: r.id, status: Number(r.status_code), net: Number(r.net ?? 0), tagsJson: r.tags_json, marketerId: r.marketer_id, items: items.get(r.id) ?? [] })),
-    { dim, basis: groupBasis, teamOf: (id) => (id && teamByMember.get(id)) || NO_TEAM, teamNames },
-  );
-  // Sản phẩm rơi vào "Khác" (để soát quy tắc nhận loại đơn): tên sản phẩm và số đơn, nhiều nhất trước.
-  const otherCounts = new Map<string, number>();
-  if (dim === 'line') for (const r of list) {
-    const its = items.get(r.id) ?? [];
-    if (orderLines(its, r.tags_json)[0] !== OTHER_LINE) continue;
-    for (const n of new Set(its.length ? its : ['(đơn chưa có sản phẩm)'])) otherCounts.set(n, (otherCounts.get(n) ?? 0) + 1);
-  }
-  const nameMap = new Map((names.results as { user_id: string; name: string }[]).map((r) => [r.user_id, r.name]));
-  return Response.json({
-    period: { start, end }, basis, dim, groupBasis, ...report,
-    otherProducts: [...otherCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15).map(([name, orders]) => ({ name, orders })),
-    teamMembers: Object.fromEntries(teams.map((t) => [t.id, t.memberIds.map((id) => nameMap.get(id) ?? id)])),
-    definitions: {
-      'Đơn vào Chờ xác nhận': 'Đơn Sale, CSKH đưa sang Vận đơn (từ Chờ xác nhận trở đi) trong kỳ, theo giờ vào Chờ xác nhận hoặc ngày tạo đơn; không tính đơn mới, xóa. Chờ xác nhận và chưa gửi nằm ở cột Chưa gửi.',
-      'Đơn chuyển đi': 'Đơn đã giao cho đơn vị vận chuyển: đã gửi hàng, đã nhận, đã thu tiền, đang hoàn, hoàn một phần, đã hoàn.',
-      'Đơn hoàn': 'Đang hoàn, hoàn một phần, đã hoàn.',
-      'Tỷ lệ hoàn': 'Theo đơn: đơn hoàn ÷ đơn chuyển đi. Theo giá trị: giá trị hoàn ÷ doanh số chuyển đi.',
-      'Doanh số chuyển đi': 'Tiền hàng của đơn chuyển đi, sau giảm giá / quà tặng, chưa gồm phí vận chuyển; tính riêng cho Vận đơn, không cộng vào tổng tiền của công ty.',
-      'Loại đơn': 'Theo combo sản phẩm trong đơn: Oxy (kèm Bổ đậm đặc), SK + GK, Gentadox, và hai sản phẩm thủy sản lẻ Vita Plus, Mega Green (mỗi con một dòng); đơn chưa có sản phẩm khớp thì xét nhãn đơn; không khớp gì là Khác. Một đơn nhiều loại tính ở mỗi loại; dòng Tổng đếm mỗi đơn một lần. Có thể đổi sang chia theo nhãn đơn hoặc từng sản phẩm.',
-      'Team MKT': 'Theo người Marketer trên đơn và team Marketing ở Cấu hình. Đơn không có Marketer hoặc Marketer chưa vào team nằm ở nhóm cuối.',
-    },
-  });
+  return Response.json(await shippingLinesReport(posIds, start, end, basis, team, dim, groupBasis));
 }

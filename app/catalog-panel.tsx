@@ -6,7 +6,7 @@ import { Database, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { POS } from '@/lib/report-model';
+import { POS } from '@/lib/shared/report-model';
 import { ChartCard, ErrorBox, SkeletonTable, StatusChip, TableWrap, dt, toast, vi, type Tone } from './ui-kit';
 
 type Result = { key: string; label: string; group: string; path: string; have: 'yes' | 'part' | 'no'; note?: string; status: 'available' | 'empty' | 'forbidden' | 'missing' | 'error'; httpStatus: number | null; count: number | null; fields: string[]; message: string | null; ms: number };
@@ -70,7 +70,7 @@ export function CatalogPanel() {
       {!catalog && !error && !loading && <p className="text-[13px] text-ink-3">Chọn POS rồi bấm Khảo sát. Mất khoảng 10–20 giây.</p>}
       {!catalog && loading && <SkeletonTable rows={8} cols={6} />}
       {catalog && (
-        <div className={`space-y-3 transition-opacity duration-[var(--dur)] ${loading ? 'opacity-70' : ''}`} aria-busy={loading || undefined}>
+        <div className="space-y-3 transition-opacity duration-[var(--dur)]" aria-busy={loading || undefined}>
           <p className="text-[13px] text-ink-2">Kiểm tra lúc <span className="num">{dt(catalog.checkedAt.slice(0, 19), true)}</span> · shop <span className="num">{catalog.shopId}</span> · <strong className="num text-ink">{available.length}</strong> nhóm lấy được, trong đó <strong className="num text-ink">{newAvailable.length}</strong> nhóm web chưa kéo về{newAvailable.length ? `: ${newAvailable.map((r) => r.label).join(', ')}` : ''}.</p>
           <TableWrap minWidth={880}>
             <table className="tbl">
@@ -82,7 +82,7 @@ export function CatalogPanel() {
                     {catalog.results.filter((r) => r.group === g).map((r) => (
                       <tr key={r.key} className="align-top">
                         <td><div className="font-medium">{r.label}</div><div className="text-[10.5px] text-ink-3">{r.path}</div></td>
-                        <td><StatusChip tone={STATUS[r.status].tone}>{STATUS[r.status].label}</StatusChip>{r.httpStatus ? <span className="num ml-1 text-[10px] font-semibold text-ink-3">HTTP {r.httpStatus} · {r.ms} ms</span> : null}</td>
+                        <td><StatusChip tone={STATUS[r.status].tone}>{STATUS[r.status].label}</StatusChip>{r.httpStatus ? <span className="num ml-1 text-[11px] font-semibold text-ink-3">HTTP {r.httpStatus} · {r.ms} ms</span> : null}</td>
                         <td className="n">{r.count === null ? '—' : vi.format(r.count)}</td>
                         <td><StatusChip tone={HAVE[r.have].tone}>{HAVE[r.have].label}</StatusChip></td>
                         <td className="whitespace-normal text-xs text-ink-2"><span className="line-clamp-2" title={r.fields.join(', ')}>{r.fields.join(', ') || '—'}</span></td>

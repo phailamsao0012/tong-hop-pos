@@ -5,7 +5,7 @@ import { demoWorld, emptyDb } from './support/d1-sqlite';
 import { loginAs } from './support/session';
 import { GET } from '../app/api/reports/product-groups/route';
 import { GET as vanDon } from '../app/api/reports/van-don/route';
-import { POS } from '../lib/report-model';
+import { POS } from '../lib/shared/report-model';
 
 const fields = [
   'whConfirmed',

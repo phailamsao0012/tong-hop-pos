@@ -4,9 +4,11 @@
 // tiến độ doanh thu cộng dồn so mục tiêu + dự báo cuối tháng, ba bộ phận so cùng kỳ tháng trước, và việc cần xử lý kèm tóm tắt tự động.
 import { useMemo, useState } from 'react';
 import { AlertTriangle, ArrowRight, Sparkles, Target, UsersRound } from 'lucide-react';
+import { AiBot } from './ai-bot';
 import { Area, CartesianGrid, ComposedChart, Line, ReferenceLine, XAxis, YAxis } from 'recharts';
 import { ChartContainer, ChartTooltip } from '@/components/ui/chart';
 import { useApi } from './use-api';
+import { todayVn } from '@/lib/shared/report-time';
 import { ChartCard, DeltaPill, ErrorBox, SkeletonTable, ThinkingLine, delta, money, pct, shortMoney, useMotionOK } from './ui-kit';
 
 export type Exec = {
@@ -22,8 +24,13 @@ export type AttentionItem = { level: 'high' | 'medium' | 'info'; text: string; v
 const TEAM_COLORS: Record<string, string> = { sale: 'var(--series-1)', cskh: 'var(--series-2)', mkt: 'var(--series-3)' };
 const tr = (n: number) => Math.round(n / 1e4) / 100; // triệu, 2 số lẻ
 
-export function useExec(posIds: string[]) {
-  return useApi<Exec>(useMemo(() => `/api/reports/exec?${new URLSearchParams({ posIds: posIds.join(',') })}`, [posIds]), { refreshMs: 5 * 60000 });
+/** month: tháng của kỳ đang chọn (YYYY-MM); bỏ trống = tháng này. */
+export function useExec(posIds: string[], month?: string) {
+  const api = useApi<Exec>(useMemo(() => `/api/reports/exec?${new URLSearchParams({ posIds: posIds.join(','), ...(month ? { month } : {}) })}`, [posIds, month]), { refreshMs: 5 * 60000 });
+  // Đổi sang tháng trước: không giữ số tháng cũ trong lúc chờ, kẻo vẫn thấy tháng này kèm dự báo (anh Vũ 07/11/2026).
+  const now = todayVn().slice(0, 7);
+  const want = month && month < now ? month : now;
+  return api.data && api.data.month !== want ? { ...api, data: null } : api;
 }
 
 /** Tiến độ tháng: cộng dồn thực tế, đường mục tiêu (0 → mục tiêu), nét đứt dự báo tới cuối tháng. */
@@ -81,7 +88,7 @@ export function MonthPace({ exec, goal, onOpen }: { exec: ReturnType<typeof useE
           </ChartContainer>
           <dl className="m-0 grid grid-cols-2 gap-3 text-[12.5px] lg:grid-cols-1">
             <div><dt className="text-ink-3">Đã đạt</dt><dd className="m-0"><b className="num text-lg text-ink">{shortMoney(calc.done)}</b>{goal > 0 && <span className="ml-1 text-ink-2">{pct(calc.done / goal * 100, 0)} mục tiêu</span>}</dd></div>
-            <div><dt className="text-ink-3">Dự báo cuối tháng</dt><dd className="m-0"><b className="num text-lg text-ink">{shortMoney(calc.forecast)}</b>{goal > 0 && <span className={`ml-1 ${calc.forecast >= goal ? 'text-good' : 'text-bad'}`}>{pct(calc.forecast / goal * 100, 0)}</span>}</dd></div>
+            {calc.left > 0 && <div><dt className="text-ink-3">Dự báo cuối tháng</dt><dd className="m-0"><b className="num text-lg text-ink">{shortMoney(calc.forecast)}</b>{goal > 0 && <span className={`ml-1 ${calc.forecast >= goal ? 'text-good' : 'text-bad'}`}>{pct(calc.forecast / goal * 100, 0)}</span>}</dd></div>}
             <div><dt className="text-ink-3">{calc.need !== null ? `Cần mỗi ngày (${calc.left} ngày còn lại)` : 'Trung bình mỗi ngày'}</dt><dd className="m-0"><b className="num text-ink">{shortMoney(calc.need ?? calc.perDay)}</b>{calc.need !== null && <span className="ml-1 text-ink-3">đang {shortMoney(calc.perDay)}/ngày</span>}</dd></div>
             <div><dt className="text-ink-3">So cùng kỳ tháng trước</dt><dd className="m-0 flex items-center gap-1.5"><span className="num text-ink">{shortMoney(d.prevTotal.net)}</span><DeltaPill value={delta(d.total.net, d.prevTotal.net)} /></dd></div>
             {!goal && <p className="col-span-full m-0 text-[11.5px] text-ink-3">Chưa đặt mục tiêu tháng cho các POS này (Cấu hình → Mục tiêu tháng) nên chưa vẽ đường mục tiêu.</p>}
@@ -133,16 +140,16 @@ export function Attention({ items, summary, onNavigate, ai, onRegenerate }: { it
         <div className="grid gap-3 self-start">
         {ai?.status === 'done' && ai.text && (
           <div className="rounded-xl border border-[var(--ring)] bg-tint p-3 text-[12.5px] leading-relaxed text-ink">
-            <p className="m-0 mb-1 flex items-center gap-1.5 font-semibold text-primary"><Sparkles size={13} />AI tóm tắt sáng {ai.date.slice(8, 10)}/{ai.date.slice(5, 7)}
+            <p className="m-0 mb-1 flex items-center gap-1.5 font-semibold text-primary"><AiBot size={20} mood="happy" />AI tóm tắt sáng {ai.date.slice(8, 10)}/{ai.date.slice(5, 7)}
               {onRegenerate && <button type="button" className="ml-auto text-[11px] font-medium text-ink-3 hover:text-primary" onClick={onRegenerate}>Tạo lại</button>}</p>
             <div className="whitespace-pre-line">{ai.text}</div>
             <p className="m-0 mt-1.5 text-[10.5px] text-ink-4">Cloudflare Workers AI viết từ số tổng hợp hôm qua và từ đầu tháng. Nên đối chiếu số trước khi quyết định.</p>
           </div>
         )}
         {ai && ai.status !== 'done' && onRegenerate && (
-          <p className="m-0 flex items-center gap-2 text-[12px] text-ink-3"><Sparkles size={13} />{ai.status === 'running' ? 'AI đang viết tóm tắt sáng nay…' : `Tóm tắt AI lỗi: ${ai.error ?? ''}`}<button type="button" className="font-medium text-primary hover:underline" onClick={onRegenerate}>Tạo lại</button></p>
+          <p className="m-0 flex items-center gap-2 text-[12px] text-ink-3"><AiBot size={20} mood={ai.status === 'running' ? 'thinking' : 'idle'} />{ai.status === 'running' ? 'AI đang viết tóm tắt sáng nay…' : `Tóm tắt AI lỗi: ${ai.error ?? ''}`}<button type="button" className="font-medium text-primary hover:underline" onClick={onRegenerate}>Tạo lại</button></p>
         )}
-        {!ai && onRegenerate && <p className="m-0 flex items-center gap-2 text-[12px] text-ink-3"><Sparkles size={13} />Chưa có tóm tắt AI (tự tạo sau 7h30 mỗi sáng).<button type="button" className="font-medium text-primary hover:underline" onClick={onRegenerate}>Tạo ngay</button></p>}
+        {!ai && onRegenerate && <p className="m-0 flex items-center gap-2 text-[12px] text-ink-3"><AiBot size={20} />Chưa có tóm tắt AI (tự tạo sau 7h30 mỗi sáng).<button type="button" className="font-medium text-primary hover:underline" onClick={onRegenerate}>Tạo ngay</button></p>}
         {summary.length > 0 && (
           <div className="self-start rounded-xl bg-[linear-gradient(135deg,var(--sb),var(--sb-accent))] p-3 text-[12.5px] leading-relaxed text-white">
             <p className="m-0 mb-1 flex items-center gap-1.5 font-semibold text-[var(--lime)]"><Sparkles size={13} />Tóm tắt tự động</p>
@@ -156,14 +163,14 @@ export function Attention({ items, summary, onNavigate, ai, onRegenerate }: { it
             {shown.map((it) => (
               <li key={it.text}>
                 <button type="button" disabled={!it.view} onClick={() => it.view && onNavigate(it.view)}
-                  className="flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-[12.5px] hover:bg-tint-2 disabled:hover:bg-transparent">
+                  className="tap flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-[12.5px] hover:bg-tint-2 disabled:hover:bg-transparent">
                   <i className={`mt-1.5 size-2 shrink-0 rounded-full ${it.level === 'high' ? 'bg-[var(--bad)]' : it.level === 'medium' ? 'bg-[var(--warn)]' : 'bg-[var(--ink-4)]'}`} />
                   <span className="min-w-0 flex-1 text-ink">{it.text}</span>
                   {it.view && <ArrowRight size={13} className="mt-0.5 shrink-0 text-ink-4" />}
                 </button>
               </li>
             ))}
-            {sorted.length > 8 && <li><button type="button" onClick={() => setAll(!all)} className="px-2 py-1 text-[12px] font-medium text-primary hover:underline">{all ? 'Thu gọn' : `Xem thêm ${sorted.length - 8} việc`}</button></li>}
+            {sorted.length > 8 && <li><button type="button" onClick={() => setAll(!all)} className="tap px-2 py-1 text-[12px] font-medium text-primary hover:underline">{all ? 'Thu gọn' : `Xem thêm ${sorted.length - 8} việc`}</button></li>}
           </ul>
         ) : <p className="m-0 text-[12.5px] text-ink-3">Không có việc gì cần xử lý ngay.</p>}
       </div>

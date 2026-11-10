@@ -7,9 +7,9 @@ import { AiPackButton } from './ai-pack';
 import { useMemo, useState } from 'react';
 import { CalendarClock, FileDown, Hourglass, PhoneCall, Repeat, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { POS } from '@/lib/report-model';
-import { todayVn } from '@/lib/report-time';
-import type { Customer360 } from '@/lib/customer360';
+import { POS } from '@/lib/shared/report-model';
+import { todayVn } from '@/lib/shared/report-time';
+import type { Customer360 } from '@/lib/reports/customer360';
 import { ICON } from './icons';
 import { PosChips } from './overview-view';
 import { useApi } from './use-api';
@@ -20,9 +20,9 @@ const STAGE_COLORS: Record<string, string> = { new: 'var(--ai-3)', repeat: 'var(
 
 export function Customer360View() {
   const [posIds, setPosIds] = usePosIds();
-  const [customer, setCustomer] = useState<{ phone: string; posIds: string[] } | null>(null);
+  const [customer, setCustomer] = useState<{ phone: string; posIds: string[]; ref?: string } | null>(null);
   const url = useMemo(() => `/api/reports/customer360?${new URLSearchParams({ posIds: posIds.join(',') })}`, [posIds]);
-  const { data: r, loading, error, reload } = useApi<Customer360>(url);
+  const { data: r, error, reload } = useApi<Customer360>(url);
   type K = 'net' | 'orders' | 'since' | 'overdue';
   const sort = useSort<K>('net');
   const due = useMemo(() => sort.apply(r?.due ?? [], (x, k) => x[k]), [r, sort]);
@@ -58,7 +58,7 @@ export function Customer360View() {
       {!r && !error && <><SkeletonKpis count={4} className="xl:grid-cols-4" /><ChartCard title="Vòng đời khách" subtitle="Đang tải…"><ThinkingLine lines={['Đang gộp khách trên 6 POS…', 'Đang tính khoảng cách mua lại…']} /><SkeletonTable rows={4} cols={4} /></ChartCard></>}
       {r && (
         <>
-          <div className={`grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4 ${loading ? 'opacity-70' : ''}`}>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
             <KpiCard icon={Users} tone="blue" label="Khách (không trùng)" value={vi.format(r.total.unique)} note={`Đếm riêng từng POS là ${vi.format(r.total.perPosRows)}, trùng ${vi.format(r.total.perPosRows - r.total.unique)}`}
               tooltip={{ current: `${vi.format(r.total.unique)} SĐT`, definition: r.definitions.merge }} />
             <KpiCard icon={ICON.closed} tone="green" label="Đã mua thành công" value={vi.format(buyers)} note={`${pct(r.total.unique ? buyers / r.total.unique * 100 : null, 0)} khách · ${shortMoney(r.total.net)}`}
@@ -113,8 +113,8 @@ export function Customer360View() {
                       <th className="text-left">Người bán</th>
                     </tr></thead>
                     <tbody>{due.map((c) => (
-                      <tr key={c.phone}>
-                        <td className="text-left font-medium text-ink"><button type="button" className="text-left underline decoration-line underline-offset-4" onClick={() => setCustomer({ phone: c.phone, posIds })}>{c.name}</button><span className="block text-[11px] font-normal text-ink-3">{c.phone}</span></td>
+                      <tr key={(c as { phoneRef?: string }).phoneRef ?? c.phone}>
+                        <td className="text-left font-medium text-ink"><button type="button" className="text-left underline decoration-line underline-offset-4 tap" onClick={() => setCustomer({ phone: c.phone, posIds, ref: (c as { phoneRef?: string }).phoneRef })}>{c.name}</button><span className="block text-[11px] font-normal text-ink-3">{c.phone}</span></td>
                         <td className="text-left text-[12px] text-ink-2">{c.posNames.join(', ')}</td>
                         <td className="n">{vi.format(c.orders)}</td>
                         <td className="n">{shortMoney(c.net)}</td>

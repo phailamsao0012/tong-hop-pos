@@ -2,12 +2,13 @@ declare namespace Cloudflare {
   interface Env {
     DB: D1Database;
     SEARCH_LIMIT?: RateLimit;
-    SYNC_SCHEDULER: DurableObjectNamespace<import('../lib/scheduler').SyncScheduler>;
+    SYNC_SCHEDULER: DurableObjectNamespace<import('../lib/ops/scheduler').SyncScheduler>;
     PANCAKE_POS_API_KEY?: string;
     // Bí mật ký phiên đăng nhập và băm mật khẩu (wrangler secret put AUTH_SECRET).
     AUTH_SECRET?: string;
     // Bí mật cho Telegram bot (bước sau).
     TELEGRAM_BOT_TOKEN?: string;
+    ZALO_BOT_TOKEN?: string;
     // Bí mật xác thực webhook Telegram (header X-Telegram-Bot-Api-Secret-Token).
     TELEGRAM_WEBHOOK_SECRET?: string;
     /** Khóa API Brevo để gửi mã OTP; MAIL_FROM là địa chỉ gửi đã xác minh trên Brevo. */
@@ -26,10 +27,14 @@ declare namespace Cloudflare {
     LOCAL_DEV?: string;
     /** Cloudflare Workers AI (tóm tắt sáng, giai đoạn 6b). */
     AI?: Ai;
+    /** Khoá Claude API (biến bí mật, đặt trên trang Cloudflare). Không bao giờ ghi ra log hay trả về trình duyệt. */
+    ANTHROPIC_API_KEY?: string;
     /** "1" ở Worker bản demo (tong-hop-pos-demo): Pancake và web nhân sự giả, tài khoản demo, xem lib/demo/mode.ts. */
     DEMO_MODE?: string;
     /** "1": sau đồng bộ trả ngay bản báo cáo gần nhất, tính lại ngầm một lượt (worker.ts cachedReport). Hiện chỉ bật ở bản demo. */
     THP_SWR?: string;
+    /** "1" chỉ ở bản PC chạy song song (lib/ops/read-only.ts): chặn mọi lệnh sửa, không nhắn tin ra ngoài. Cloudflare không đặt. */
+    THP_READ_ONLY?: string;
     /** OAuth client ID (loại Web) trên Google Cloud cho nút Đăng nhập bằng Google; trống thì ẩn nút. Không phải bí mật. */
     GOOGLE_CLIENT_ID?: string;
     /** Kho R2 riêng tư cho sao lưu đêm (lib/backup.ts). Hiện chỉ bản demo có; web thật chưa gắn thì sao lưu ghi "chưa cấu hình". */

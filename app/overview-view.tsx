@@ -1,4 +1,5 @@
 'use client';
+import { ProfileLink } from './staff-profile-link';
 import { AdvisorPanel } from './advisor-panel';
 
 import { usePosIds } from './pos-store';
@@ -8,20 +9,20 @@ import { PancakeReference } from './pancake-reference';
 import { OverviewSections, SectionsGrid, type SectionsReport } from './overview-sections';
 import { StatusPanel, TrendNotes, TrendPanel, usePref, useStatusStyle, useTrends } from './overview-trends';
 import { PosCombined, PosMultiples } from './pos-multiples';
-import { focusAfterNav } from './nav-focus';
+import { focusAfterNav, setNavHint } from './nav-focus';
+import { segmentDrillHint } from '@/lib/shared/drill-hint';
 import { UncountedStaff } from './uncounted-staff';
-import { RATE_BASES, closeRateBase, closeRateOf, closeRateTop, rateLevel } from '@/lib/metrics';
+import { RATE_BASES, closeRateBase, closeRateOf, closeRateTop, rateLevel, rateTextClass } from '@/lib/reports/metrics';
 import { useMetricSettings } from './metric-settings';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
-import { ArrowRight, BarChart3, CalendarDays, ChevronDown, CheckCircle2, ClipboardList, Eye, FileCheck2, PackageCheck, RotateCcw, ShoppingCart } from 'lucide-react';
+import { ArrowRight, BarChart3, CalendarDays, CheckCircle2, ClipboardList, Eye, FileCheck2, PackageCheck, RotateCcw, ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Input } from '@/components/ui/input';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { POS } from '@/lib/report-model';
-import { addDays, comparePeriod, todayVn } from '@/lib/report-time';
+import { POS } from '@/lib/shared/report-model';
+import { addDays, comparePeriod, todayVn } from '@/lib/shared/report-time';
 import {
   ChartCard, Definitions, DeltaPill, Donut, ErrorBox, HoverReveal, KpiCard, MiniStat, PageHeader, ProgressBar, SegmentedControl, SortTh, Sparkline,
   STATUS_COLORS, STATUS_LABELS, STATUS_VARS, TableWrap, Toolbar, Tooltip,
@@ -32,11 +33,12 @@ import { unitFor, useHrUnit, useTeam, withUnit, useMktTeam } from './team-store'
 import { scopedPos, useScope } from './access-store';
 import { downloadDeck, pctText, trieu, vnMoney, vnNum, SLIDE_COLORS, type Deck } from './slide-export';
 import { useApi } from './use-api';
+import { LazyBlock } from './lazy-block';
 import { StaleChip } from './stale-chip';
 import { ReconcileLine } from './reconcile-line';
 import { PosBadge, PosTile } from './pos-badge';
 
-import { PRODUCT_SEGMENTS, ORDER_ORIGINS, type ProductSegment, type OrderFilters } from '@/lib/order-segments';
+import { PRODUCT_SEGMENTS, ORDER_ORIGINS, segmentsFor, type ProductSegment, type OrderFilters } from '@/lib/pancake/order-segments';
 import { OrderOriginFilter, useOrderOrigin, setOrderOrigin } from './order-origin-filter';
 
 type Metrics = {
@@ -66,7 +68,7 @@ export type OverviewReport = {
 
 const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
 // Bộ lọc kỳ dùng chung cho toàn web (yêu cầu 30/09/2026): cùng một danh sách kỳ, chọn ở trang nào thì sang trang khác vẫn giữ.
-import { PRESETS, PRESET_SHORT, compareText, presetRange, type PresetKey } from '@/lib/periods';
+import { PRESETS, PRESET_SHORT, compareText, presetRange, type PresetKey } from '@/lib/shared/periods';
 import { saveXlsx } from '@/app/save-xlsx';
 export { PRESETS, presetRange };
 const PRESET_OPTIONS = (Object.keys(PRESETS) as PresetKey[]).map((k) => ({ value: k as string, label: PRESET_SHORT[k], title: PRESETS[k], icon: k === 'custom' ? CalendarDays : undefined }));
@@ -106,12 +108,14 @@ export function PeriodFields(props: { preset: string; start: string; end: string
         <SelectTrigger className="min-w-32 xl:hidden" aria-label="Kỳ báo cáo"><SelectValue /></SelectTrigger>
         <SelectContent>{Object.entries(PRESETS).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
       </Select>
+      {/* Ô ngày chỉ hiện khi chọn "Tùy chọn"; kỳ có sẵn chỉ ghi khoảng ngày cho gọn một dòng (anh Vũ 21/10/2026). */}
+      {props.preset !== 'custom' && <span className="num whitespace-nowrap px-1 text-[12px] text-ink-3">{dmy(props.start)}{props.end !== props.start ? ` – ${dmy(props.end)}` : ''}</span>}
       {/* Cặp ngày đi chung một nhóm để mũi tên không bao giờ rớt thành dòng lẻ trên điện thoại. */}
-      <div className="flex min-w-0 basis-full items-center gap-2 sm:basis-auto">
+      {props.preset === 'custom' && <div className="flex min-w-0 basis-full items-center gap-2 sm:basis-auto">
         <Input aria-label="Từ ngày" type="date" className="w-auto" value={props.start} max={props.end} onChange={(e) => props.onStart(e.target.value)} />
         <ArrowRight size={14} className="shrink-0 text-ink-4" aria-hidden="true" />
         <Input aria-label="Đến ngày" type="date" className="w-auto" value={props.end} min={props.start} max={today} onChange={(e) => props.onEnd(e.target.value)} />
-      </div>
+      </div>}
     </>
   );
 }
@@ -161,60 +165,46 @@ export function PeriodToolbar(props: {
   );
 }
 
+// Hàng nút bấm từng POS, xổ sẵn để chọn nhanh (anh Vũ 21/10/2026 bỏ ô thả xuống "Tất cả n POS" vì khó dùng).
 export function PosChips({ posIds, onChange, info }: { posIds: string[]; onChange: (v: string[]) => void; info?: OverviewReport['pos'] }) {
   const scope = useScope();
   const visible = scopedPos(scope);
   if (visible.length <= 1) return null;
-  const selected = visible.filter((p) => posIds.includes(p.id));
-  const label = selected.length === visible.length ? `Tất cả ${visible.length} POS`
-    : selected.length <= 2 ? selected.map((p) => p.name).join(', ') : `${selected.length}/${visible.length} POS`;
-  const description = `Chọn POS, đang mở: ${selected.map((p) => p.name).join(', ')}`;
-  const selectedInfo = info?.filter((p) => selected.some((x) => x.id === p.id));
-  const hasError = selectedInfo?.some((p) => p.lastError);
-  const hasHistory = selectedInfo?.some((p) => !p.backfillDone);
   return (
-    <div className="flex min-w-0 max-w-full items-center gap-2">
-      <span className="shrink-0 text-[12.5px] font-semibold text-ink-2">POS</span>
-      <Popover>
-        <PopoverTrigger render={<button type="button" className="pospick" />} aria-label={description} title={description}>
-          <span className="flex shrink-0 items-center" aria-hidden="true">
-            {selected.map((p, index) => <PosBadge key={p.id} posId={p.id} size={20} className={`pospick-badge ${index ? '-ml-1.5' : ''}`} />)}
-          </span>
-          <span className="min-w-0 max-w-[220px] truncate">{label}</span>
-          {hasError ? <span className="shrink-0 rounded-full bg-bad-bg px-1.5 text-[10.5px] font-bold text-bad">lỗi</span>
-            : hasHistory ? <span className="shrink-0 rounded-full bg-warn-bg px-1.5 text-[10.5px] font-bold text-warn">lịch sử…</span> : null}
-          <ChevronDown size={14} className="shrink-0" aria-hidden="true" />
-        </PopoverTrigger>
-        <PopoverContent align="start" className="w-80 max-w-[calc(100vw-32px)] p-1">
-          <div className="flex items-center justify-between px-2 py-1 text-[12px]">
-            <b>Chọn POS</b>
-            <button type="button" className="link" onClick={() => onChange(visible.map((p) => p.id))}>Tất cả</button>
-          </div>
-          {visible.map((p) => {
-            const on = posIds.includes(p.id);
-            const last = on && selected.length === 1;
-            const i = info?.find((x) => x.id === p.id);
-            const detail = i ? i.lastError ? 'Lỗi đồng bộ' : !i.backfillDone
-              ? i.backfillMonth ? `Đang lấy lịch sử tháng ${i.backfillMonth.slice(5)}/${i.backfillMonth.slice(0, 4)}` : 'Đang lấy lịch sử'
-              : `Đồng bộ ${dt(i.syncedAt, true)}` : null;
-            return (
-              <div key={p.id} className="pospick-item" style={{ '--c': posVar(p.id) } as React.CSSProperties}>
-                <button type="button" className="pospick-row" role="menuitemcheckbox" aria-checked={on} aria-disabled={last || undefined}
-                  title={last ? 'Cần ít nhất 1 POS' : i ? `${i.lastError || (i.status === 'connected' ? 'Đã kết nối' : i.status)} · Đồng bộ ${dt(i.syncedAt, true)} · ${i.backfillDone ? 'Đã lấy đủ lịch sử' : detail}` : undefined}
-                  onClick={() => { if (!last) onChange(on ? posIds.filter((id) => id !== p.id) : [...posIds, p.id]); }}>
-                  <PosBadge posId={p.id} size={22} muted={!on} className="shrink-0" />
-                  <span className="min-w-0 flex-1 pr-20">
-                    <span className={`block truncate text-[12.5px] ${on ? 'font-semibold' : ''}`}>{p.name}</span>
-                    {detail && <span className={`block text-[11px] ${i?.lastError ? 'text-bad' : 'text-ink-3'}`}>{detail}</span>}
-                  </span>
-                  <span className="pospick-check" data-checked={on} aria-hidden="true">{on && <svg viewBox="0 0 12 12" width="9" height="9" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m2.5 6.2 2.3 2.3 4.7-5" /></svg>}</span>
-                </button>
-                <button type="button" className="pospick-only" aria-label={`Chỉ POS ${p.name}`} onClick={(e) => { e.stopPropagation(); onChange([p.id]); }}>Chỉ POS này</button>
-              </div>
-            );
-          })}
-        </PopoverContent>
-      </Popover>
+    // Một dòng duy nhất (anh Vũ 21/10/2026 "đừng chia 2 dòng"): màn hẹp thì vuốt ngang.
+    <div className="flex min-w-0 flex-col gap-1">
+    <div className="posrow flex min-w-0 flex-nowrap items-center gap-1.5 overflow-x-auto">
+      <span className="shrink-0 text-[12.5px] font-semibold text-ink-2">POS:</span>
+      {visible.map((p) => {
+        const on = posIds.includes(p.id);
+        const i = info?.find((x) => x.id === p.id);
+        // Trạng thái kết nối / đồng bộ / lịch sử hiện trong tooltip (rê chuột, focus, chạm) thay vì title chỉ hiện khi rê chuột.
+        const tip = i ? (
+          <>
+            <b>{p.name}</b>
+            <span className="r"><span>Trạng thái</span><span>{i.lastError ? 'Lỗi đồng bộ' : i.status === 'connected' ? 'Đã kết nối' : i.status}</span></span>
+            <span className="r"><span>Đồng bộ</span><span className="num">{dt(i.syncedAt, true)}</span></span>
+            <span className="r"><span>Lịch sử</span><span>{i.backfillDone ? 'Đã lấy đủ' : i.backfillMonth ? `đang lấy tháng ${i.backfillMonth.slice(5)}/${i.backfillMonth.slice(0, 4)}` : 'chưa lấy'}</span></span>
+            {i.lastError && <span className="how block whitespace-normal">Lỗi: {i.lastError}</span>}
+          </>
+        ) : null;
+        return (
+          <Tooltip key={p.id} content={tip}>
+            <button type="button" aria-pressed={on}
+              onClick={() => onChange(on ? (posIds.length > 1 ? posIds.filter((id) => id !== p.id) : posIds) : [...posIds, p.id])}
+              className={`poschip ${on ? '' : 'is-off'}`} style={{ '--c': posVar(p.id) } as React.CSSProperties}>
+              <PosBadge posId={p.id} size={22} muted={!on} />
+              {p.name}
+              {i?.lastError ? <span className="rounded-full bg-bad-bg px-1.5 text-[10.5px] font-bold text-bad">lỗi</span> : i && !i.backfillDone && on ? <span className="rounded-full bg-warn-bg px-1.5 text-[10.5px] font-bold text-warn" title="Đang lấy lịch sử cũ">…</span> : null}
+              <span className="ck" aria-hidden="true"><svg viewBox="0 0 12 12" width="9" height="9" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m2.5 6.2 2.3 2.3 4.7-5" /></svg></span>
+            </button>
+          </Tooltip>
+        );
+      })}
+      <button type="button" className="link shrink-0 text-[12.5px]" onClick={() => onChange(visible.map((p) => p.id))}>Tất cả</button>
+    </div>
+      {/* Lựa chọn POS dùng chung mọi trang và nhớ qua lần mở sau (app/pos-store.ts). */}
+      {visible.some((p) => !posIds.includes(p.id)) && <span className="text-[11.5px] text-ink-3">Đang lọc {posIds.filter((id) => visible.some((p) => p.id === id)).length}/{visible.length} POS, giữ nguyên khi sang trang khác</span>}
     </div>
   );
 }
@@ -441,7 +431,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
             total: ['Tổng', vnNum(cur.orders), vnNum(cur.closedOrders), pctText(closeRateOf(cur, ms.rateBase)), vnMoney(cur.closedNet), cur.averageOrder ? vnMoney(cur.averageOrder) : '—', cur.closedCustomers === null ? '—' : vnNum(cur.closedCustomers), vnNum(cur.groups.delivered.orders), vnNum(cur.groups.returned.orders), vnNum(cur.groups.cancelled.orders), ''] },
         ] },
         { title: 'Tỷ lệ chốt theo nhân viên', subtitle: `${department === 'all' ? 'Tất cả bộ phận' : department} · ${team === 'cskh' ? 'CSKH: đơn chốt ÷ đơn tạo mới theo nguồn đang chọn' : 'Đơn chia = đơn được giao trong kỳ; đơn chốt theo giờ chốt; tỷ lệ = chốt ÷ chia'}`, blocks: [
-          { type: 'chart', height: Math.min(520, 40 + employees.slice(0, 20).length * 24), config: { type: 'bar', data: { labels: employees.slice(0, 20).map((e) => e.name), datasets: [{ label: 'Tỷ lệ chốt %', data: employees.slice(0, 20).map((e) => Number((closeRateOf(e, ms.rateBase) ?? 0).toFixed(1))), backgroundColor: employees.slice(0, 20).map((e) => (closeRateOf(e, ms.rateBase) ?? 0) >= 40 ? SLIDE_COLORS.green : (closeRateOf(e, ms.rateBase) ?? 0) >= 25 ? SLIDE_COLORS.amber : SLIDE_COLORS.red), borderRadius: 4, unit: '%' }] }, options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { min: 0, max: 100 } } } } },
+          { type: 'chart', height: Math.min(520, 40 + employees.slice(0, 20).length * 24), config: { type: 'bar', data: { labels: employees.slice(0, 20).map((e) => e.name), datasets: [{ label: 'Tỷ lệ chốt %', data: employees.slice(0, 20).map((e) => Number((closeRateOf(e, ms.rateBase) ?? 0).toFixed(1))), backgroundColor: employees.slice(0, 20).map((e) => rateLevel(closeRateOf(e, ms.rateBase)) === 'good' ? SLIDE_COLORS.green : SLIDE_COLORS.red), borderRadius: 4, unit: '%' }] }, options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { min: 0, max: 100 } } } } },
           { type: 'table', columns: [{ label: '#' }, { label: 'Nhân viên' }, { label: 'Bộ phận' }, { label: 'Đơn chia', align: 'right' }, { label: 'Đơn chốt', align: 'right' }, { label: 'Tỷ lệ chốt', align: 'right' }, { label: 'Doanh thu', align: 'right' }, { label: 'SL bán thực', align: 'right' }, { label: 'Giao TC', align: 'right' }, { label: 'Hoàn / Hủy', align: 'right' }],
             rows: employees.map((r, i) => [i + 1, splitPos ? `${r.name} · ${posName(r.posId)}` : r.name, r.department ?? '—', team === 'cskh' || r.assignedHidden ? '—' : vnNum(r.assignedOrders), vnNum(r.closedOrders), pctText(team === 'cskh' ? closeRateOf(r, ms.rateBase) : closeRateOf(r, ms.rateBase), 2), vnMoney(r.closedNet), vnNum(r.closedQuantity), vnNum(r.groups.delivered.orders), `${vnNum(r.groups.returned.orders)} / ${vnNum(r.groups.cancelled.orders)}`]),
             total: ['', 'Tổng', '', team === 'cskh' ? '—' : vnNum(empTotal.assignedOrders), vnNum(empTotal.closedOrders), team === 'cskh' ? (empTotal.rateOrders ? pctText(empTotal.createdClosed / empTotal.rateOrders * 100, 2) : '—') : (empTotal.rateAssigned ? pctText(empTotal.assignedClosed / empTotal.rateAssigned * 100, 2) : '—'), vnMoney(empTotal.closedNet), vnNum(empTotal.closedQuantity), '', ''] },
@@ -478,8 +468,8 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
         onGroupBy={setGroupBy} onCompare={setCompare} onCstart={setCstart} onCend={setCend} loading={loading} onReload={reload} />
       <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
       <div className="flex flex-wrap items-center gap-3"><span className="text-sm font-semibold text-ink-2">Nhóm đơn</span>
-        <SegmentedControl<ProductSegment> ariaLabel="Nhóm sản phẩm / nhãn đơn" value={productSegment} onChange={setProductSegment} options={Object.entries(PRODUCT_SEGMENTS).map(([value, label]) => ({ value: value as ProductSegment, label }))} />
-        <span className="text-xs text-ink-3">Gentadox theo sản phẩm bán · SK + GK theo nhãn đơn Pancake</span>
+        <SegmentedControl<ProductSegment> ariaLabel="Nhóm sản phẩm / nhãn đơn" value={productSegment} onChange={setProductSegment} options={(['all', ...segmentsFor(posIds)] as ProductSegment[]).map((value) => ({ value, label: PRODUCT_SEGMENTS[value] }))} />
+        <span className="text-xs text-ink-3">Kháng sinh: Gentadox, Detox (Siêu Vô Gạo thêm Oxy + Bổ huyết, Bio Nano Shield) · SK GK · Khác là loại còn lại · POS Oxytetra chỉ có Combo Oxytetra + Bổ đậm đặc</span>
       </div>
       <OrderOriginFilter team={team} marketers={report?.origins} />
       {report?.pos.some((p) => posIds.includes(p.id) && !p.backfillDone) && (
@@ -495,18 +485,20 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
         </>
       )}
 
+      {/* Doanh thu công ty lên đầu, trên 4 ô bộ phận (anh Vũ 21/10/2026 "cho cái này lên trên đi"). */}
+      {!mktLens && <OverviewSections part="split" start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} />}
       {!mktLens && <TrendNotes canRewrite={canRewriteAi} onOpen={onNavigate ? (d) => onNavigate(DEPT_VIEW[d]) : undefined} />}
-      {mktLens ? <LensSections start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} /> : <OverviewSections start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} />}
-      <UncountedStaff start={start} end={end} posIds={posIds} onOpen={onNavigate ? () => onNavigate('uncounted') : undefined} />
+      {mktLens ? <LensSections start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} /> : <LazyBlock className="h-72"><OverviewSections part="grid" start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} /></LazyBlock>}
+      <LazyBlock className="h-24"><UncountedStaff start={start} end={end} posIds={posIds} onOpen={onNavigate ? () => onNavigate('uncounted') : undefined} /></LazyBlock>
       <AdvisorPanel />
 
       {report && cur && (
         <>
           <ReconcileLine totals={{ ...cur, reconcile: report.current.reconcile }} />
           {/* Ô Doanh thu công ty ở đầu trang cuộn tới đây. */}
-          <div id="pancake-ref" className="scroll-mt-20"><PancakeReference posIds={posIds} start={start} end={end} /></div>
-          {team === 'sale' && !!report.productSegments?.length && <ChartCard title="Chốt Sale theo nhóm đơn" subtitle="Mỗi nhóm đếm đơn duy nhất; đơn có cả hai tiêu chí nằm trong cả hai nhóm, không cộng hai nhóm thành tổng.">
-            <div className="grid gap-3 sm:grid-cols-2">{report.productSegments.map(r => <button key={r.key} className={`rounded-xl border p-4 text-left transition-colors hover:bg-tint ${productSegment === r.key ? 'border-primary bg-tint' : 'border-line'}`} onClick={() => setProductSegment(r.key as ProductSegment)}>
+          <div id="pancake-ref" className="scroll-mt-20"><LazyBlock><PancakeReference posIds={posIds} start={start} end={end} /></LazyBlock></div>
+          {team === 'sale' && !!report.productSegments?.length && <ChartCard title="Chốt Sale theo nhóm đơn" subtitle="Mỗi đơn chỉ thuộc một nhóm: đơn POS Oxytetra là Combo Oxytetra + Bổ đậm đặc; các POS khác có Gentadox / Detox là kháng sinh, có SK / GK là SK GK, còn lại là Khác.">
+            <div className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))]">{report.productSegments.map(r => <button key={r.key} className={`rounded-xl border p-4 text-left transition-colors hover:bg-tint ${productSegment === r.key ? 'border-primary bg-tint' : 'border-line'}`} onClick={() => setProductSegment(r.key as ProductSegment)}>
               <div className="flex justify-between gap-3"><strong>{PRODUCT_SEGMENTS[r.key as ProductSegment]}</strong><span className="text-xs text-ink-3">Xem nhóm →</span></div>
               <div className="mt-3 flex items-baseline gap-3"><strong className="num text-3xl">{vi.format(r.closedOrders)}</strong><span className="text-ink-3">đơn chốt</span><strong className="num ml-auto text-xl text-primary">{pct(closeRateOf(r, ms.rateBase))}</strong></div>
               <p className="mt-2 text-xs text-ink-3">{vi.format(r.orders)} đơn tạo mới · Doanh thu cả đơn {money(r.closedNet)}</p>
@@ -591,13 +583,13 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
                   {posRows.map(({ id, row, prev: p }, i) => row ? (
                     <tr key={id}>
                       <td className="font-medium">
-                        <span className="flex items-center gap-2 whitespace-nowrap"><span className="num text-[11px] text-ink-4">{i + 1}</span><PosBadge posId={id} size={16} className="shrink-0" /><span className="truncate" title={posName(id)}>{posName(id)}</span>
+                        <span className="flex items-center gap-2 whitespace-nowrap"><span className="num inline-block w-4 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span><PosBadge posId={id} size={16} className="shrink-0" /><span className="truncate" title={posName(id)}>{posName(id)}</span>
                           {splitPos && <HoverReveal from="left" className={`ml-auto ${revealOnPhone}`}><button type="button" className="btn sm" title="Chỉ xem POS này" aria-label={`Chỉ xem ${posName(id)}`} onClick={() => setPosIds([id])}><Eye size={12} aria-hidden="true" />Xem</button></HoverReveal>}
                         </span>
                       </td>
                       <td className="n">{vi.format(row.orders)}</td>
                       <td className="n">{vi.format(row.closedOrders)}</td>
-                      <td className="n">{pct(closeRateOf(row, ms.rateBase))}</td>
+                      <td className={`n ${rateTextClass(closeRateOf(row, ms.rateBase))}`}>{pct(closeRateOf(row, ms.rateBase))}</td>
                       <td className="n">{money(row.closedNet)}</td>
                       <td className="n">{row.averageOrder ? money(row.averageOrder) : '—'}</td>
                       <td className="n">{row.closedCustomers === null ? '—' : vi.format(row.closedCustomers)}</td>
@@ -608,14 +600,14 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
                       <td className="n"><DeltaPill value={delta(row.closedNet, p?.closedNet)} /></td>
                     </tr>
                   ) : (
-                    <tr key={id} className="text-ink-3"><td><span className="num mr-2 text-[11px] text-ink-4">{i + 1}</span><PosBadge posId={id} size={16} className="mr-2 align-middle" />{posName(id)}</td><td colSpan={targetMonth ? 11 : 10} className="text-xs">Không có đơn trong kỳ</td></tr>
+                    <tr key={id} className="text-ink-3"><td><span className="num mr-2 inline-block w-4 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span><PosBadge posId={id} size={16} className="mr-2 align-middle" />{posName(id)}</td><td colSpan={targetMonth ? 11 : 10} className="text-xs">Không có đơn trong kỳ</td></tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr>
                     <td className="bg-surface-2">Tổng</td>
                     <td className="n">{vi.format(cur.orders)}</td><td className="n">{vi.format(cur.closedOrders)}</td>
-                    <td className="n">{pct(closeRateOf(cur, ms.rateBase))}</td><td className="n">{money(cur.closedNet)}</td>
+                    <td className={`n ${rateTextClass(closeRateOf(cur, ms.rateBase))}`}>{pct(closeRateOf(cur, ms.rateBase))}</td><td className="n">{money(cur.closedNet)}</td>
                     <td className="n">{cur.averageOrder ? money(cur.averageOrder) : '—'}</td>
                     <td className="n">{cur.closedCustomers === null ? '—' : vi.format(cur.closedCustomers)}</td>
                     <td className="n">{vi.format(cur.groups.delivered.orders)}</td>
@@ -645,11 +637,11 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
               </Select>
               <Button size="sm" variant="ghost" onClick={() => setEmpDesc((d) => !d)} title="Đảo chiều sắp xếp" aria-label={`Đang xếp ${empDesc ? 'cao → thấp' : 'thấp → cao'}, bấm để đảo chiều`}>{empDesc ? 'Cao → thấp' : 'Thấp → cao'}</Button>
             </div>}>
-            <TableWrap minWidth={splitPos ? 900 : 780} maxHeight="32rem" stickyFirst>
+            <TableWrap minWidth={700} maxHeight="32rem" stickyFirst>
               <table className="tbl">
                 <thead>
                   <tr>
-                    <th>Nhân viên</th>{splitPos && <th>POS</th>}<th className="hidden sm:table-cell">Bộ phận</th>
+                    <th>Nhân viên{splitPos ? ' · POS' : ''}</th>
                     {team === 'cskh' && <><SortTh k="closedOrders" label="Đơn chốt" sort={empSortState} /><SortTh k="closeRate" label="Tỷ lệ chốt" sort={empSortState} /></>}
                     {team !== 'cskh' && <><SortTh k="assignedOrders" label="Đơn chia" sort={empSortState} /><SortTh k="closedOrders" label="Đơn chốt" sort={empSortState} /><SortTh k="closeRate" label="Tỷ lệ chốt" sort={empSortState} /></>}
                     <SortTh k="closedNet" label="Doanh thu" sort={empSortState} /><SortTh k="averageOrder" label="AOV" sort={empSortState} /><SortTh k="closedQuantity" label="SL bán" sort={empSortState} /><SortTh k="delivered" label="Giao TC" sort={empSortState} /><SortTh k="returned" label="Hoàn / Hủy" sort={empSortState} />
@@ -661,17 +653,16 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
                     const rate = closeRateOf(r, ms.rateBase);
                     return (
                       <tr key={`${r.posId}:${r.sellerId || 'none'}`}>
-                        <td className="font-medium"><span className="num mr-2 text-[11px] text-ink-4">{i + 1}</span>{r.name}<span className="ml-1.5 text-[10px] font-normal text-ink-3 sm:hidden">{deptShort(r.department)}</span></td>
-                        {splitPos && <td className="text-xs"><PosBadge posId={r.posId} size={16} className="mr-1 align-middle" />{posName(r.posId)}</td>}
-                        <td className="mut hidden text-xs sm:table-cell" title={r.department ?? ''}>{deptShort(r.department)}</td>
+                        {/* Gộp POS và bộ phận xuống dòng dưới tên để bảng vừa màn hình, không kéo ngang (anh Vũ 07/11/2026). */}
+                        <td className="max-w-60 whitespace-normal font-medium"><span className="flex items-start gap-2"><span className="num mt-0.5 w-4 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span><span className="min-w-0"><ProfileLink id={r.sellerId} name={r.name} /><span className="block text-[11px] font-normal text-ink-3" title={r.department ?? ''}>{splitPos && <><PosBadge posId={r.posId} size={12} className="mr-1 align-[-2px]" />{posName(r.posId)} · </>}{deptShort(r.department)}</span></span></span></td>
                         {team === 'cskh' && <><td className="n">{vi.format(r.closedOrders)}</td><td className="n">{pct(closeRateOf(r, ms.rateBase))}</td></>}
                         {team !== 'cskh' && <><td className="n">{r.assignedHidden ? '—' : vi.format(r.assignedOrders)}</td>
                         <td className="n">{vi.format(r.closedOrders)}</td>
-                        <td className="n">{r.assignedHidden ? '—' : <><ProgressBar value={rate ?? 0} max={100} width={56} size="sm" color={rateColor(rate)} className="mr-2" />{pct(rate, 2)}</>}</td></>}
-                        <td className="n">{money(r.closedNet)} <DeltaPill value={delta(r.closedNet, p?.closedNet)} /></td>
+                        <td className="n">{r.assignedHidden ? '—' : <><span className="inline-flex items-center gap-1.5"><ProgressBar value={rate ?? 0} max={100} width={36} size="sm" color={rateColor(rate)} />{pct(rate, 1)}</span></>}</td></>}
+                        <td className="n whitespace-nowrap">{money(r.closedNet)}<span className="mt-0.5 block"><DeltaPill value={delta(r.closedNet, p?.closedNet)} /></span></td>
                         <td className="n">{r.averageOrder ? money(r.averageOrder) : '—'}</td>
                         <td className="n">{vi.format(r.closedQuantity)}</td>
-                        <td className="n">{vi.format(r.groups.delivered.orders)} <span className="text-[11px] text-ink-3">· {short(r.groups.delivered.net)}</span></td>
+                        <td className="n">{vi.format(r.groups.delivered.orders)}<span className="block text-[11px] text-ink-3">{short(r.groups.delivered.net)}</span></td>
                         <td className="n">{vi.format(r.groups.returned.orders)} / {vi.format(r.groups.cancelled.orders)}</td>
                       </tr>
                     );
@@ -679,11 +670,11 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
                 </tbody>
                 <tfoot>
                   <tr>
-                    <td className="bg-surface-2">Tổng</td>{splitPos && <td />}<td className="hidden sm:table-cell" />
+                    <td className="bg-surface-2">Tổng</td>
                     {team === 'cskh' && <><td className="n">{vi.format(empTotal.closedOrders)}</td><td className="n">{pct(empTotal.rateOrders ? empTotal.createdClosed / empTotal.rateOrders * 100 : null)}</td></>}
                     {team !== 'cskh' && <><td className="n">{vi.format(empTotal.assignedOrders)}</td>
                     <td className="n">{vi.format(empTotal.closedOrders)}</td>
-                    <td className="n">{empTotal.rateAssigned ? pct(empTotal.assignedClosed / empTotal.rateAssigned * 100, 2) : '—'}</td></>}
+                    <td className="n">{empTotal.rateAssigned ? pct(empTotal.assignedClosed / empTotal.rateAssigned * 100, 1) : '—'}</td></>}
                     <td className="n">{money(empTotal.closedNet)}</td>
                     <td className="n">{empTotal.closedOrders ? money(empTotal.closedNet / empTotal.closedOrders) : '—'}</td>
                     <td className="n">{vi.format(empTotal.closedQuantity)}</td><td /><td />
@@ -712,7 +703,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
                     const max = arr[0]?.closedTotal || 1;
                     return (
                       <tr key={`${r.posId}:${r.productId}`}>
-                        <td className="font-medium"><span className="flex items-start gap-2"><span className="num mt-px text-[11px] text-ink-4">{i + 1}</span><span className="line-clamp-2 max-w-[26rem] max-sm:max-w-[9rem]" title={r.name}>{r.name}</span></span></td>
+                        <td className="font-medium"><span className="flex items-start gap-2"><span className="num mt-px inline-block w-4 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span><span className="line-clamp-2 max-w-[26rem] max-sm:max-w-[9rem]" title={r.name}>{r.name}</span></span></td>
                         <td className="mut text-xs">{mergePos && r.posCount > 1 ? `${r.posCount} POS` : posName(r.posId)}</td>
                         <td className="n">{vi.format(r.orders)}</td>
                         <td className="n">{vi.format(r.closedQuantity)}</td>
@@ -742,5 +733,10 @@ function LensSections({ start, end, posIds, productSegment, onNavigate }: { star
   const api = useApi<SectionsReport>('/api/reports/sections?'+params, { keep: false });
   if (api.error) return <ErrorBox error={api.error} onRetry={api.reload} />;
   if (!api.data) return null;
-  return <SectionsGrid data={api.data} packedParams={params} onDrill={onNavigate ? (key) => onNavigate(key.startsWith('sale.') ? 'sale-overview' : key.startsWith('cskh.') ? 'cskh-overview' : key.startsWith('mkt.') ? 'marketing' : 'van-don') : undefined} />;
+  const drill = onNavigate ? (key: string) => {
+    const seg = segmentDrillHint(productSegment);
+    if (seg) setNavHint(seg);
+    onNavigate(key.startsWith('sale.') ? 'sale-overview' : key.startsWith('cskh.') ? 'cskh-overview' : key.startsWith('mkt.') ? 'marketing' : 'van-don');
+  } : undefined;
+  return <SectionsGrid data={api.data} packedParams={params} onDrill={drill} />;
 }

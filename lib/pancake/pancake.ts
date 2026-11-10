@@ -1,0 +1,228 @@
+// Pancake POS Open API client (https://docs.pancake.biz/pos/api/). Chỉ dùng phía server.
+
+export const PANCAKE_BASE = 'https://pos.pages.fm/api/v1';
+
+export type SourceOrder = {
+  id?: number | string;
+  bill_full_name?: string | null;
+  bill_phone_number?: string | null;
+  inserted_at?: string | null;
+  updated_at?: string | null;
+  status?: number | null;
+  sub_status?: number | null;
+  assigning_seller?: { id?: string; name?: string } | null;
+  time_assign_seller?: string | null;
+  assigning_care?: { id?: string } | null;
+  assigning_care_id?: string | null;
+  time_assign_care?: string | null;
+  marketer?: { id?: string } | null;
+  creator_id?: string | null;
+  creator?: { id?: string } | null;
+  last_editor_id?: string | null;
+  last_editor?: { id?: string } | null;
+  customer?: { id?: string; customer_id?: string; name?: string; notes?: SourceNote[] | null } | null;
+  total_price?: number | null;
+  total_discount?: number | null;
+  total_price_after_sub_discount?: number | null;
+  shipping_fee?: number | null;
+  cod?: number | null;
+  money_to_collect?: number | null;
+  total_quantity?: number | null;
+  order_sources?: string | null;
+  warehouse_id?: string | null;
+  note?: string | null;
+  tags?: { id?: number; name?: string }[] | null;
+  status_history?: {
+    old_status?: number;
+    status?: number;
+    editor_id?: string;
+    updated_at?: string;
+  }[];
+  histories?: Record<string, unknown>[];
+  items?: SourceItem[];
+};
+export type SourceItem = {
+  product_id?: string;
+  variation_id?: string;
+  quantity?: number;
+  returned_count?: number;
+  discount_each_product?: number;
+  is_discount_percent?: boolean;
+  assigning_seller_id?: string | null;
+  is_bonus_product?: boolean;
+  is_composite?: boolean;
+  one_time_product?: boolean;
+  variation_info?: {
+    name?: string;
+    retail_price?: number;
+    product_id?: string;
+    display_id?: string;
+    product_display_id?: string;
+    fields?: { name?: string; value?: string }[];
+  };
+};
+export type SourcePage = {
+  success?: boolean;
+  data?: SourceOrder[];
+  total_entries?: number;
+  page_size?: number;
+  page_number?: number;
+};
+export type SourceUser = {
+  user_id?: string;
+  role?: number;
+  is_active?: boolean;
+  /** Ngày tạo tài khoản nhân viên trên shop (tài liệu không ghi, Pancake có thể trả dưới một trong các tên này). */
+  inserted_at?: string | number | null;
+  created_at?: string | number | null;
+  user?: { id?: string; name?: string; email?: string; phone_number?: string; inserted_at?: string | number | null };
+  department?: { id?: number; name?: string } | null;
+  sale_group?: { id?: number; name?: string } | null;
+};
+export type SourceVariation = {
+  id?: string;
+  product_id?: string;
+  retail_price?: number;
+  display_id?: string;
+  is_hidden?: boolean;
+  fields?: { name?: string; value?: string }[];
+  product?: { id?: string; name?: string; display_id?: string; is_hidden?: boolean; categories?: { id?: number; name?: string }[] };
+  name?: string;
+  is_removed?: boolean;
+};
+
+/** Đường gọi Pancake. Bản demo thay bằng Pancake giả (lib/demo/mode.ts → setPancakeTransport); web thật dùng fetch. */
+type Transport = (url: URL, init: RequestInit) => Promise<Response>;
+let transport: Transport = (url, init) => fetch(url, init);
+export const setPancakeTransport = (t: Transport) => { transport = t; };
+export const pancakeFetch: Transport = (url, init) => transport(url, init);
+
+export class PancakeError extends Error {
+  constructor(message: string, readonly status?: number) {
+    super(message);
+  }
+}
+
+export function sourceUrl(path: string, apiKey: string, params: Record<string, string> = {}) {
+  const url = new URL(`${PANCAKE_BASE}${path}`);
+  url.searchParams.set('api_key', apiKey);
+  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
+  return url;
+}
+
+/** Gọi Pancake, tự thử lại khi lỗi mạng / 5xx / 429 (tối đa 3 lần). */
+export async function pancakeGet<T>(path: string, apiKey: string, params: Record<string, string> = {}, timeoutMs = 20000, deadline = Infinity): Promise<T> {
+  let lastError: unknown = null;
+  const pause = (ms: number) => sleep(Math.max(0, Math.min(ms, deadline - Date.now())));
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw new PancakeError('Đã hết quỹ thời gian lấy ghi chú.');
+    try {
+      const response = await pancakeFetch(sourceUrl(path, apiKey, params), {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(Math.max(1, Math.floor(Math.min(timeoutMs, remaining)))),
+        cache: 'no-store',
+      });
+      if (response.ok) return await response.json() as T;
+      if (response.status < 500 && response.status !== 429)
+        throw new PancakeError(`Pancake POS trả về HTTP ${response.status}.`, response.status);
+      lastError = new PancakeError(`Pancake POS trả về HTTP ${response.status}.`, response.status);
+      if (response.status === 429) {
+        const retryAfter = Number(response.headers.get('retry-after') ?? 0);
+        await pause(Math.min(5000, Math.max(1000, retryAfter * 1000)));
+        continue;
+      }
+    } catch (error) {
+      if (error instanceof PancakeError && error.status && error.status < 500 && error.status !== 429) throw error;
+      lastError = error;
+    }
+    await pause(300 * (attempt + 1));
+  }
+  throw lastError instanceof Error ? lastError : new PancakeError('Không gọi được Pancake POS.');
+}
+
+/**
+ * Ghi lên Pancake (PUT/POST, JSON). Chỉ thử một lần: lệnh ghi không được lặp lại mù quáng.
+ * Hiện chỉ dùng cho Chia số thử nghiệm (lib/dispatch.ts).
+ */
+export async function pancakeSend<T>(method: 'PUT' | 'POST', path: string, apiKey: string, body: unknown, timeoutMs = 15000): Promise<T> {
+  const response = await pancakeFetch(sourceUrl(path, apiKey), {
+    method, headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs), cache: 'no-store',
+  });
+  const text = await response.text();
+  if (!response.ok) throw new PancakeError(`Pancake POS trả về HTTP ${response.status}${text ? `: ${text.slice(0, 200)}` : ''}.`, response.status);
+  try { return JSON.parse(text) as T; } catch { return {} as T; }
+}
+
+/** Một đơn theo mã (đọc lại sau khi ghi để kiểm tra). */
+export async function getOrder(shopId: string, orderId: string, apiKey: string) {
+  const result = await pancakeGet<{ success?: boolean; data?: SourceOrder } & SourceOrder>(`/shops/${shopId}/orders/${encodeURIComponent(orderId)}`, apiKey, {}, 15000);
+  return (result?.data ?? result) as SourceOrder;
+}
+
+export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export async function listShops(apiKey: string) {
+  const result = await pancakeGet<{ success?: boolean; shops?: { id?: number; name?: string }[] }>('/shops', apiKey, {}, 10000);
+  if (!result.success || !Array.isArray(result.shops)) throw new PancakeError('Pancake POS chưa trả về danh sách cửa hàng hợp lệ.');
+  return result.shops
+    .filter((s) => Number.isSafeInteger(s.id) && typeof s.name === 'string')
+    .map((s) => ({ id: String(s.id), name: s.name! }));
+}
+
+export type SourceNote = { id?: string; message?: string | null; created_at?: number | string | null; updated_at?: number | string | null; removed_at?: number | string | null; order_id?: string | null; created_by?: { id?: string; uid?: string; fb_name?: string; name?: string } | null };
+export type SourceCustomer = {
+  id?: string; customer_id?: string; name?: string | null; phone_numbers?: string[] | null; assigned_user_id?: string | null; level?: string | number | null; level_id?: string | number | null;
+  order_count?: number | null; succeed_order_count?: number | null; purchased_amount?: number | null; last_order_at?: string | null; inserted_at?: string | null; updated_at?: string | null;
+  tags?: unknown[] | null; notes?: SourceNote[] | null;
+};
+/** Danh sách khách hàng (mục Khách hàng), có lọc theo thời gian cập nhật (unix giây). */
+export async function listCustomersPage(shopId: string, apiKey: string, params: Record<string, string>) {
+  const result = await pancakeGet<{ success?: boolean; data?: SourceCustomer[]; page_number?: number; page_size?: number; total_entries?: number }>(`/shops/${shopId}/customers`, apiKey, params, 30000);
+  if (!Array.isArray(result?.data)) throw new PancakeError('Pancake POS không trả danh sách khách hàng.');
+  return result;
+}
+
+/**
+ * Toàn bộ ghi chú của một khách (endpoint load_customer_notes). Danh sách khách có thể chỉ kèm vài ghi chú gần nhất,
+ * nên khi thấy khách có ghi chú mới thì lấy đủ bằng endpoint này. Tài liệu ghi `{customer_notes:[{notes:[…]}]}`;
+ * chấp nhận thêm `{notes:[…]}` / `{data:[…]}` phòng khi Pancake trả dạng khác.
+ */
+export async function loadCustomerNotes(shopId: string, customerId: string, apiKey: string, deadline = Infinity): Promise<SourceNote[]> {
+  const result = await pancakeGet<{ customer_notes?: { notes?: SourceNote[] | null }[] | null; notes?: SourceNote[] | null; data?: SourceNote[] | null }>(
+    `/shops/${shopId}/customers/${encodeURIComponent(customerId)}/load_customer_notes`, apiKey, {}, 15000, deadline,
+  );
+  if (Array.isArray(result?.customer_notes)) return result.customer_notes.flatMap((c) => Array.isArray(c?.notes) ? c.notes : []);
+  if (Array.isArray(result?.notes)) return result.notes;
+  if (Array.isArray(result?.data)) return result.data;
+  throw new PancakeError('Pancake POS không trả danh sách ghi chú của khách.');
+}
+
+export async function listUsers(shopId: string, apiKey: string) {
+  const result = await pancakeGet<{ success?: boolean; data?: SourceUser[] }>(`/shops/${shopId}/users`, apiKey, {}, 12000);
+  if (!result.success || !Array.isArray(result.data)) throw new PancakeError('Pancake POS chưa trả về danh sách nhân viên.');
+  return result.data;
+}
+
+export async function listVariationsPage(shopId: string, apiKey: string, page: number, pageSize = 100) {
+  const result = await pancakeGet<{ success?: boolean; data?: SourceVariation[]; total_entries?: number; page_size?: number }>(
+    `/shops/${shopId}/products/variations`, apiKey, { page_number: String(page), page_size: String(pageSize) }, 20000,
+  );
+  if (!result.success || !Array.isArray(result.data)) throw new PancakeError('Pancake POS chưa trả về danh sách sản phẩm.');
+  return result;
+}
+
+export function listOrdersPage(shopId: string, apiKey: string, params: Record<string, string>) {
+  return pancakeGet<SourcePage>(`/shops/${shopId}/orders`, apiKey, params);
+}
+
+/** Mã trạng thái đơn Pancake → nhãn tiếng Việt. */
+export const ORDER_STATUS: Record<number, string> = {
+  0: 'Mới', 17: 'Chờ xác nhận', 11: 'Chờ hàng', 12: 'Chờ in', 13: 'Đã in', 20: 'Đã đặt hàng',
+  1: 'Đã xác nhận', 8: 'Đang đóng hàng', 9: 'Chờ chuyển hàng', 2: 'Đã gửi hàng', 3: 'Đã nhận',
+  16: 'Đã thu tiền', 4: 'Đang hoàn', 15: 'Hoàn một phần', 5: 'Đã hoàn', 6: 'Đã hủy', 7: 'Đã xóa',
+};
+export const DELIVERED_STATUSES = [3, 16];
+export const RETURNED_STATUSES = [4, 5, 15];
+export const CANCELLED_STATUSES = [6, 7];

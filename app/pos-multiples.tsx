@@ -40,17 +40,18 @@ function PosMini({ posId, rows, isMoney, groupBy, total, before, shared, onShare
         <span className="num text-[17px] font-semibold text-ink"><CountUp value={hover ? vals[hover.i] : total} format={(v) => isMoney ? money(v) : vi.format(Math.round(v))} /></span>
         {hover ? <span className="text-[11px] text-ink-3">{label(rows[hover.i].bucket, groupBy)}</span> : <DeltaPill value={delta(total, before)} label="so kỳ trước" variant="plain" />}
       </p>
-      <div ref={box} className="relative mt-1 w-full" onPointerLeave={() => setHover(null)}>
-        {W > 0 && N > 0 && (
+      {/* Một ngày chỉ có một điểm, không vẽ được đường: bỏ khung biểu đồ, không chừa khoảng trắng (anh Vũ 21/10/2026). */}
+      {N > 1 && <div ref={box} className="relative mt-1 w-full" onPointerLeave={() => setHover(null)}>
+        {W > 0 && (
           <svg width={W} height={H} className="block overflow-visible" aria-label={`${posName(posId)} theo ${groupBy === 'day' ? 'ngày' : groupBy === 'week' ? 'tuần' : 'tháng'}`}>
             <line x1={L} x2={W - R} y1={y(max)} y2={y(max)} stroke="var(--chart-grid)" />
-            <text x={L} y={y(max) - 4} className="fill-ink-3 text-[10px]">{isMoney ? short(max) : vi.format(max)}</text>
+            <text x={L} y={y(max) - 4} className="fill-ink-3 text-[11px]">{isMoney ? short(max) : vi.format(max)}</text>
             <line x1={L} x2={W - R} y1={y(0)} y2={y(0)} stroke="var(--chart-grid)" />
             <path d={`${d} L${x(N - 1)},${y(0)} L${x(0)},${y(0)} Z`} fill={color} fillOpacity={0.12} className={seen ? 'chart-fade' : 'opacity-0'} style={{ animationDelay: '.6s' }} />
             <path d={d} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" {...drawIn(seen)} />
             {hover && gx !== null && <g pointerEvents="none"><line x1={gx} x2={gx} y1={T} y2={H - B} stroke="var(--ink-3)" /><circle cx={gx} cy={y(tv[hover.i])} r={4} fill={color} stroke="var(--surface)" strokeWidth={2} /></g>}
-            <text x={L} y={H - 4} className="fill-ink-3 text-[10px]">{label(rows[0].bucket, groupBy)}</text>
-            {N > 1 && <text x={W - R} y={H - 4} textAnchor="end" className="fill-ink-3 text-[10px]">{label(rows[N - 1].bucket, groupBy)}</text>}
+            <text x={L} y={H - 4} className="fill-ink-3 text-[11px]">{label(rows[0].bucket, groupBy)}</text>
+            {N > 1 && <text x={W - R} y={H - 4} textAnchor="end" className="fill-ink-3 text-[11px]">{label(rows[N - 1].bucket, groupBy)}</text>}
             <rect x={0} y={0} width={W} height={H} fill="transparent" onPointerMove={(e) => {
               const r = e.currentTarget.getBoundingClientRect();
               const i = N <= 1 ? 0 : Math.max(0, Math.min(N - 1, Math.round((e.clientX - r.left - L) / ((W - L - R) / (N - 1)))));
@@ -59,7 +60,7 @@ function PosMini({ posId, rows, isMoney, groupBy, total, before, shared, onShare
           </svg>
         )}
         <FloatTip at={own && gx !== null ? { x: gx, y: own.y, w: W } : null}>{hover && <><b>{label(rows[hover.i].bucket, groupBy)}</b><br />{fmt(vals[hover.i])}</>}</FloatTip>
-      </div>
+      </div>}
     </div>
   );
 }

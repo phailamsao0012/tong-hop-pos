@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { demoWorld } from './support/d1-sqlite';
-import { overviewReport } from '../lib/overview-report';
+import { overviewReport } from '../lib/reports/overview-report';
 import type { DatabaseSync } from 'node:sqlite';
 
 const DAYS = ['2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01'];

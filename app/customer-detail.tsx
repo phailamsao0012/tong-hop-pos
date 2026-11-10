@@ -2,15 +2,15 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import type { CustomerTimelineDetail } from '@/lib/customer-timeline';
+import type { CustomerTimelineDetail } from '@/lib/reports/customer-timeline';
 import { dt, money, vi } from './ui-kit';
 
-export function CustomerDetail({ customer, onClose }: { customer: { phone: string; posIds: string[] } | { customerId: string } | null; onClose: () => void }) {
+export function CustomerDetail({ customer, onClose }: { customer: { phone: string; posIds: string[]; ref?: string } | { customerId: string } | null; onClose: () => void }) {
   const [data, setData] = useState<CustomerTimelineDetail | null>(null);
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
   const history = useRef<HTMLHeadingElement>(null);
-  const query = customer ? new URLSearchParams('customerId' in customer ? { customerId: customer.customerId } : { phone: customer.phone, posIds: customer.posIds.join(',') }).toString() : '';
+  const query = customer ? new URLSearchParams('customerId' in customer ? { customerId: customer.customerId } : customer.ref ? { ref: customer.ref } : { phone: customer.phone, posIds: customer.posIds.join(',') }).toString() : '';
   useEffect(() => {
     setData(null); setError('');
     if (!query) return;

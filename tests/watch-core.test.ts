@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import {
   DEFAULT_CONFIG, advance, backupProblems, markSent, outbox, parseChats, parseUtc, schedStep, schedulerProblems, scrub, sizeProblems,
   syncProblems, validateChats, type Incident, type Problem, type Streak,
-} from '../lib/watch-core';
+} from '../lib/bot/watch-core';
 
 // 02:00 và 07:05 giờ VN (UTC+7).
 const NIGHT = new Date('2026-10-10T19:00:00Z');
@@ -150,13 +150,13 @@ void test('lượt bộ hẹn giờ: lỗi cần 3 lượt, khoá ghi 🔴, gầ
 void test('dung lượng D1: 7 GB 🟠, 8,5 GB 🔴, tăng hơn 150 MB/ngày 🟠', () => {
   const at = DAY.getTime();
   const sev = (bytes: number, sizes: { at: number; bytes: number }[] = []) => sizeProblems(bytes, sizes, DAY, DEFAULT_CONFIG).problems.map((x) => `${x.key}:${x.severity}`);
-  assert.deepEqual(sev(6.9e9), []);
-  assert.deepEqual(sev(7.2e9), ['d1_size:medium']);
-  assert.deepEqual(sev(8.6e9), ['d1_size:high']);
-  assert.deepEqual(sev(5.8e9, [{ at: at - 24 * 3600000, bytes: 5.6e9 }]), ['d1_growth:medium']);
-  assert.deepEqual(sev(5.65e9, [{ at: at - 24 * 3600000, bytes: 5.6e9 }]), []);
+  assert.deepEqual(sev(4.4e9), []);
+  assert.deepEqual(sev(4.6e9), ['d1_size:medium']);
+  assert.deepEqual(sev(4.95e9), ['d1_size:high']);
+  assert.deepEqual(sev(4.3e9, [{ at: at - 24 * 3600000, bytes: 4.1e9 }]), ['d1_growth:medium']);
+  assert.deepEqual(sev(4.15e9, [{ at: at - 24 * 3600000, bytes: 4.1e9 }]), []);
   // Mẫu quá cũ (> 28 giờ) không dùng để tính tăng, và bị bỏ khỏi danh sách mẫu.
-  const r = sizeProblems(5.9e9, [{ at: at - 40 * 3600000, bytes: 5e9 }], DAY, DEFAULT_CONFIG);
+  const r = sizeProblems(4.4e9, [{ at: at - 40 * 3600000, bytes: 5e9 }], DAY, DEFAULT_CONFIG);
   assert.deepEqual(r.problems, []);
   assert.equal(r.sizes.length, 1);
 });

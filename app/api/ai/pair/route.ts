@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser, forbidden, unauthorized } from '@/lib/auth';
-import { listPairs, requestPair, changePair } from '@/lib/device-pair';
+import { getSessionUser, forbidden, unauthorized } from '@/lib/auth/auth';
+import { listPairs, requestPair, changePair } from '@/lib/auth/device-pair';
 async function owner() { const user = await getSessionUser(); return !user ? unauthorized() : user.role !== 'owner' ? forbidden('Chỉ chủ hệ thống duyệt máy.') : null; }
 export async function GET() {
   const blocked = await owner(); if (blocked) return blocked;

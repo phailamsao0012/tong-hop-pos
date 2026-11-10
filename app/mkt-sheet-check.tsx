@@ -4,6 +4,7 @@
 // Sheet: cột SĐT, Đơn, DT marketer tự ghi (lib/sheet-costs.ts lưu ở sheet_mkt_stats). POS: đơn Pancake có Marketer (lib/mkt-sheet-check.ts).
 // Chưa biết sheet ghi theo ngày tạo đơn hay ngày chốt, cả CSKH hay chỉ Sale: cho chọn mốc ngày và hiện POS tách New / CSKH, kèm gợi ý cột nào khớp nhất.
 import { useMemo, useState, type ReactNode } from 'react';
+import { usePosStaffFilter } from './pos-store';
 import { CalendarDays, Check, FileSpreadsheet, UserRound, X } from 'lucide-react';
 import { EmptyState, SegmentedControl, SortTh, StatusChip, TableWrap, dmy, money, shortMoney, useSort, vi } from './ui-kit';
 import type { Tone } from './ui-kit';
@@ -67,6 +68,8 @@ export function MktSheetCheck({ start, end, posIds }: { start: string; end: stri
   const [targetPick, setTarget] = useState<Target | null>(null);
   const [view, setView] = useState<View>('marketer');
   const [picked, setPicked] = useState<string | null>(null);
+  // Chọn POS nào chỉ hiện người có tài khoản trên POS đó (anh Vũ 04/11/2026); tổng giữ nguyên.
+  const onPos = usePosStaffFilter();
   const url = useMemo(() => `/api/marketing/sheet-check?${new URLSearchParams({ start, end, posIds: posIds.join(',') })}`, [start, end, posIds]);
   const { data, loading, error, reload } = useApi<Data>(url, { keep: true });
   const sort = useSort<SortKey>('sRev');
@@ -74,7 +77,7 @@ export function MktSheetCheck({ start, end, posIds }: { start: string; end: stri
   if (!data) {
     return (
       <section className={`card p-5 ${loading ? 'is-loading' : ''}`} aria-busy={loading}>
-        {error ? <p className="text-[13px] text-bad">Không tải được bảng đối chiếu sheet. <button type="button" className="underline" onClick={reload}>Tải lại</button></p>
+        {error ? <p className="text-[13px] text-bad">Không tải được bảng đối chiếu sheet. <button type="button" className="underline tap" onClick={reload}>Tải lại</button></p>
           : <div className="skel h-40 rounded-2xl" />}
       </section>
     );
@@ -112,7 +115,7 @@ export function MktSheetCheck({ start, end, posIds }: { start: string; end: stri
     }
     return [...byDay.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([day, x]) => ({ ...x, id: day, name: dmy(day) }));
   };
-  const lines: Line[] = view === 'marketer' ? data.marketers.map((m) => ({ id: m.id, name: m.name, counted: m.counted, ...(byMarketer.get(m.id) ?? zeroRow()) })) : dayLines();
+  const lines: Line[] = view === 'marketer' ? data.marketers.filter((m) => !onPos || onPos(m.id)).map((m) => ({ id: m.id, name: m.name, counted: m.counted, ...(byMarketer.get(m.id) ?? zeroRow()) })) : dayLines();
   const val = (r: Line, k: SortKey) => {
     const p = r[basis], q = pick(p, target);
     switch (k) {
@@ -188,12 +191,13 @@ export function MktSheetCheck({ start, end, posIds }: { start: string; end: stri
               const p = r[basis], q = pick(p, target), g = gapOf(r.sheet.revenue, q.net), v = verdict(g.pct);
               const unmatched = view === 'marketer' && r.id.startsWith('sheet:');
               const notCounted = view === 'marketer' ? !unmatched && r.counted === false : pickedOff;
-              const noSheet = view === 'day' && r.id > cutoff;
+              // Bảng theo Marketer: người chưa ghi gì lên sheet trong kỳ thì báo "sheet chưa ghi", không coi là lệch −100% (anh Vũ 06/11/2026).
+              const noSheet = view === 'day' ? r.id > cutoff : !hasSheet(r);
               return (
                 <tr key={r.id} className={picked === r.id ? 'bg-tint-2' : ''}>
-                  <td className="min-w-40">
+                  <td className="min-w-32 max-w-56 whitespace-normal">
                     {view === 'marketer'
-                      ? <button type="button" onClick={() => { setPicked(r.id === picked ? null : r.id); if (r.id !== picked) setView('day'); }} className="flex items-center gap-1.5 text-left font-semibold text-ink hover:text-primary" title="Bấm để xem từng ngày của người này">
+                      ? <button type="button" onClick={() => { setPicked(r.id === picked ? null : r.id); if (r.id !== picked) setView('day'); }} className="flex items-center gap-1.5 text-left font-semibold text-ink tap hover:text-primary" title="Bấm để xem từng ngày của người này">
                           {picked === r.id && <Check size={14} className="shrink-0 text-primary" />}{r.name}
                         </button>
                       : <span className="num font-semibold">{r.name}</span>}

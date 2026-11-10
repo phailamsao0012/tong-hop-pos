@@ -1,8 +1,11 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { MENTOR_SQL, groupTeams, mentorMap, type DeptRow, type TeamRow } from '@/lib/hr-teams';
-import { mktTeams } from '@/lib/mkt-teams-source';
-import { todayVn } from '@/lib/report-time';
+import { staffNames, teamSources } from '@/lib/teams/teams-api';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { groupTeams, mentorMap, type DeptRow, type TeamRow } from '@/lib/teams/hr-teams';
+import { mktTeams } from '@/lib/teams/mkt-teams-source';
+import { todayVn } from '@/lib/shared/report-time';
+import { WEB_TEAMS_KEY, WEB_TEAM_ID, overlayWebTeams, parseWebTeams } from '@/lib/teams/web-teams';
+import type { HrTeamGroup } from '@/lib/teams/hr-teams';
 
 // Team Sale / CSKH theo web nhân sự: ?team=sale|cskh → các team, Leader, Mentor, Trưởng phòng và tài khoản POS của từng người (người đã nghỉ không tính).
 // ?list=1: chỉ danh sách team của cả Sale và CSKH (mã, tên, chi nhánh, bộ phận, số người) cho ô chọn team trên thanh lọc; tài khoản bị giới hạn
@@ -12,25 +15,43 @@ export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const asked = params.get('team');
   const day = todayVn();
-  const [rows, depts, offices, mentors] = await env.DB.batch([
-    env.DB.prepare(`SELECT t.pos_user_id,t.employee_id,t.employee_name,t.team,t.department,t.department_id,t.level,t.title,t.leader_employee_id,t.leader_name,t.head_name,t.status,e.joined_on
-      FROM hr_pos_team t LEFT JOIN hr_employees e ON e.id=t.employee_id WHERE t.status<>'da_nghi'`),
-    env.DB.prepare('SELECT id,name,parent_id,kind,office_id FROM hr_departments WHERE active=1'),
-    env.DB.prepare('SELECT id,name FROM hr_offices'),
-    env.DB.prepare(MENTOR_SQL).bind(day, day),
-  ]);
+  const [rows, depts, offices, mentors, settings] = await teamSources(day);
   const officeMap = new Map((offices.results as { id: string; name: string }[]).map((o) => [o.id, o.name]));
   const mentorOf = mentorMap(mentors.results as { team_id: string; name: string }[]);
-  const group = (team: 'sale' | 'cskh') => groupTeams(rows.results as TeamRow[], depts.results as DeptRow[], officeMap, team, mentorOf);
+  // Team chia trên web tổng (lib/web-teams.ts) ghép đè lên team web nhân sự, trừ khi nguồn team đặt là web nhân sự.
+  const values = new Map((settings.results as { key: string; value: string }[]).map((r) => [r.key, r.value]));
+  const saved = values.get('team_source') === 'hr' ? [] : parseWebTeams(values.get(WEB_TEAMS_KEY));
+  const nameOf = saved.length || asked !== 'sale' && asked !== 'cskh' ? await staffNames() : new Map<string, string>();
+  const member = (id: string) => ({ posUserId: id, name: nameOf.get(id) ?? id, level: null, title: null, isLeader: false, active: true, joinedOn: null });
+  const overlay = (team: 'sale' | 'cskh') => overlayWebTeams(
+    groupTeams(rows.results as TeamRow[], depts.results as DeptRow[], officeMap, team, mentorOf),
+    saved.filter((t) => t.dept === team).map((t): HrTeamGroup => ({ id: t.id, name: t.name, parent: null, office: t.office, leader: null, head: null, mentor: null, members: t.memberIds.map(member).sort((a, b) => a.name.localeCompare(b.name, 'vi')) })),
+  );
+  const group = (team: 'sale' | 'cskh') => overlay(team).teams;
   if (params.get('list') === '1') {
     const depts: ('sale' | 'cskh')[] = asked === 'sale' || asked === 'cskh' ? [asked] : ['sale', 'cskh'];
-    const teams: { id: string; name: string; office: string | null; dept: 'sale' | 'cskh' | 'mkt'; people: number; mentor: string | null }[] = depts.flatMap((dept) => group(dept).filter((t) => t.id !== 'none').map((t) => ({ id: t.id, name: t.name, office: t.office, dept, people: t.members.length, mentor: t.mentor ?? null })));
+    // Đã chia team ở Cài đặt → Chia team thì ô Team chỉ hiện đúng các team đó (anh Vũ 03/11/2026: "toàn tên lạ"), không kèm team cũ của web nhân sự.
+    const teams: ListTeam[] = depts.flatMap((dept) => { const o = saved.some((t) => t.dept === dept) ? onlyWeb(overlay(dept)) : overlay(dept); return o.teams.filter((t) => t.id !== 'none').map((t) => listTeam(t.id, t.name, t.office, dept, t.mentor ?? null, t.members.map((m) => ({ id: m.posUserId, name: m.name })), o.parent.get(t.id) ?? null)); });
     if (asked !== 'sale' && asked !== 'cskh') {
       const mkt = await mktTeams(env.DB);
-      teams.push(...mkt.teams.map((t) => ({ id: t.id, name: t.name, office: t.office ?? null, dept: 'mkt' as const, people: t.memberIds.length, mentor: t.mentor ?? null })));
+      teams.push(...mkt.teams.map((t) => listTeam(t.id, t.name, t.office ?? null, 'mkt', t.mentor ?? null, t.memberNames ? t.memberNames.map((name) => ({ id: '', name })) : t.memberIds.map((id) => ({ id, name: nameOf.get(id) ?? id })))));
     }
     return Response.json({ teams }, { headers: { 'Cache-Control': 'private, max-age=60' } });
   }
   const team = asked === 'cskh' ? 'cskh' : 'sale';
-  return Response.json({ team, teams: group(team), linked: rows.results.length > 0 }, { headers: { 'Cache-Control': 'private, max-age=60' } });
+  return Response.json({ team, teams: group(team), linked: rows.results.length > 0 || saved.length > 0 }, { headers: { 'Cache-Control': 'private, max-age=60' } });
+}
+
+type ListTeam = { id: string; name: string; office: string | null; dept: 'sale' | 'cskh' | 'mkt'; people: number; mentor: string | null; members: string[]; memberRefs: { id: string; name: string }[]; group: string | null };
+/** Một dòng trong ô chọn team; members là tên thành viên để xổ ra xem (anh Vũ 22/10/2026). Một người có tài khoản ở nhiều POS chỉ tính một lần. */
+/** group: thư mục mẹ ở ô Team (team web tổng nằm dưới team web nhân sự chứa họ).
+ *  memberRefs: mã tài khoản kèm tên, để ô Team chỉ hiện người của POS đang chọn (anh Vũ 02/11/2026). */
+function listTeam(id: string, name: string, office: string | null, dept: ListTeam['dept'], mentor: string | null, refs: { id: string; name: string }[], group: string | null = null): ListTeam {
+  const members = [...new Set(refs.map((r) => r.name).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi'));
+  return { id, name, office, dept, people: members.length, mentor, members, memberRefs: refs.filter((r) => r.name), group };
+}
+
+/** Chỉ giữ team chia trên web tổng (mã wt_), bỏ thư mục mẹ theo team web nhân sự. */
+function onlyWeb<G extends { id: string }>(o: { teams: G[]; parent: Map<string, string> }) {
+  return { teams: o.teams.filter((t) => WEB_TEAM_ID.test(t.id)), parent: new Map<string, string>() };
 }

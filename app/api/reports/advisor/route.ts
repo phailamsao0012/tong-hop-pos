@@ -1,12 +1,12 @@
 ﻿import { env } from 'cloudflare:workers';
-import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
-import { canView, scopeApi } from '@/lib/access';
-import { advisorReport } from '@/lib/advisor';
-import { POS } from '@/lib/report-model';
-import { DATE_RE, todayVn } from '@/lib/report-time';
-import { parseTeam } from '@/lib/team';
-import { resolveBranchUnit, resolveMktLens, lensDatabase } from '@/lib/scope-filter';
-import { TREND_DEPTS } from '@/lib/trend-period';
+import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { canView, scopeApi } from '@/lib/auth/access';
+import { advisorReport } from '@/lib/bot/advisor';
+import { POS } from '@/lib/shared/report-model';
+import { DATE_RE, todayVn } from '@/lib/shared/report-time';
+import { parseTeam } from '@/lib/teams/team';
+import { resolveBranchUnit, resolveMktLens, lensDatabase } from '@/lib/shared/scope-filter';
+import { TREND_DEPTS } from '@/lib/reports/trend-period';
 const VIEWS = { sale: 'sale-overview', cskh: 'cskh-overview', mkt: 'marketing', vandon: 'van-don' } as const;
 export async function GET(request: Request) {
   const user = await getSessionUser();

@@ -1,5 +1,5 @@
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { addCosts, deleteCost, validCost, type CostInput } from '@/lib/ad-costs';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { addCosts, deleteCost, validCost, type CostInput } from '@/lib/ops/ad-costs';
 
 // Nhập chi phí quảng cáo: POST {rows:[{day, marketerId, amount, campaign?, note?}]} (tối đa 2.000 dòng / lần, dùng cho cả file Excel).
 // DELETE ?id= xóa một dòng. Quyền: ai xem được trang Chi phí & ROAS (chặn ở worker theo VIEW_GATES).

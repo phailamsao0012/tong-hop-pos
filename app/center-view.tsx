@@ -4,15 +4,18 @@
 // Hai kiểu hiển thị: cuộn dọc (mặc định) và màn hình TV (lớp phủ toàn màn hình, vừa khít một màn hình, không cuộn; Esc để thoát).
 // Tải dữ liệu: 8 request song song, mỗi khối một useApi (số "lần cuối" của khối hiện ngay từ trình duyệt, máy chủ trả số mới thì thay;
 // đổi kỳ / POS / nhóm huỷ request cũ nên số liệu kỳ trước không đè lên kỳ mới); khối nào lỗi thì giữ số cũ và báo riêng trong khối đó thay vì xoá cả trang.
+import { ProfileLink } from './staff-profile-link';
+import { focusAfterNav } from './nav-focus';
+import { ForecastCard, ForecastReview } from './forecast-card';
 import { usePosIds } from './pos-store';
-import { compareText } from '@/lib/periods';
+import { compareText } from '@/lib/shared/periods';
 import { usePeriod } from './period-store';
 import { AiPackButton } from './ai-pack';
 import { ICON } from './icons';
 import { PancakeReference } from './pancake-reference';
 import { Attention, MonthPace, TeamsCompare, useExec, type AiSummaryView, type AttentionItem } from './exec-blocks';
-import { RATE_THRESHOLDS } from '@/lib/metrics';
-import { cancelRateOf, closeRateBase, closeRateOf, closeRateTop, returnRateOf } from '@/lib/metrics';
+import { RATE_THRESHOLDS, rateTextClass } from '@/lib/reports/metrics';
+import { cancelRateOf, closeRateBase, closeRateOf, closeRateTop, returnRateOf } from '@/lib/reports/metrics';
 import { useMetricSettings } from './metric-settings';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { PosBadge } from './pos-badge';
@@ -22,17 +25,18 @@ import type { LucideIcon } from 'lucide-react';
 import { AlertTriangle, ArrowRight, BarChart3, CheckCircle2, ClipboardList, Database, Flame, Monitor, PackageCheck, Repeat, RotateCw, Target, Truck, UserX, Users, Wifi, WifiOff, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip } from '@/components/ui/chart';
-import { POS } from '@/lib/report-model';
-import { addDays, comparePeriod, todayVn } from '@/lib/report-time';
+import { POS } from '@/lib/shared/report-model';
+import { addDays, comparePeriod, todayVn } from '@/lib/shared/report-time';
 import { PeriodToolbar, PosChips, type OverviewReport } from './overview-view';
 import { fetchTargets, type TargetItem } from './targets-panel';
 import { useMediaQuery } from './use-media';
-import { useApi } from './use-api';
+import { useApi, useLazySeen } from './use-api';
 import { StaleChip } from './stale-chip';
 import { ReconcileLine } from './reconcile-line';
 import { TEAM_LABELS, useTeam } from './team-store';
+import { deptOf } from '@/lib/teams/team-sheet';
 import {
-  ChartCard, ContextLine, DeltaPill, Donut, ErrorBox, HoverReveal, KpiCard, PageHeader, ProgressBar, STATUS_LABELS, STATUS_VARS, SkeletonKpis, StatusChip, TableWrap, TeamSwitch,
+  ChartCard, ContextLine, DeltaPill, Donut, ErrorBox, HoverReveal, KpiCard, PageHeader, STATUS_LABELS, STATUS_VARS, SkeletonKpis, StatusChip, TeamSwitch,
   delta, dmy, dt, money, pct, posName, posVar, short, shortMoney, timeOnly, toast, useMotionOK, vi, type TipRows, type Tone,
 } from './ui-kit';
 
@@ -56,7 +60,7 @@ type KpiDef = {
   delta?: number | null; deltaLabel?: string; note?: string; tip?: TipRows; progress?: { value: number; max: number }; view: string; tv?: boolean;
 };
 
-const SHIFT_LABELS: Record<string, string> = { morning: 'Ca sáng', afternoon: 'Ca chiều', evening: 'Ca tối', day: 'Cả ngày' };
+const SHIFT_LABELS: Record<string, string> = { night: 'Ca đêm', morning: 'Ca sáng', afternoon: 'Ca chiều', evening: 'Ca tối', day: 'Cả ngày' };
 const BLOCK_LABELS: Record<Block, string> = { overview: 'Tổng quan kỳ', trend: 'Xu hướng 30 ngày', shift: 'Ca hiện tại', pipeline: 'Vận hành đơn', customers: 'Khách hàng', repurchase: 'Mua lại', batches: 'Data được cấp', sync: 'Đồng bộ POS', targets: 'Mục tiêu tháng' };
 const STATUS_KEYS = Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[];
 const DORMANT_BUCKETS: { k: Bucket; label: string; fill: string }[] = [
@@ -79,7 +83,7 @@ const ROW_CLS = 'ctx-row grid w-full items-center gap-x-2.5 rounded-lg px-2 text
 /** Liên kết "Xem chi tiết" sang trang con — component cấp module để không bị gỡ / gắn lại mỗi lần trang cập nhật (mất focus). */
 function Link({ view, label = 'Xem chi tiết', onNavigate }: { view: string; label?: string; onNavigate: (view: string) => void }) {
   return (
-    <button type="button" onClick={() => onNavigate(view)} className="link group/lnk inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] px-1 py-0.5 text-xs font-medium hover:bg-tint-2">
+    <button type="button" onClick={() => onNavigate(view)} className="link group/lnk inline-flex items-center gap-1 whitespace-nowrap tap rounded-[5px] px-1 py-0.5 text-xs font-medium hover:bg-tint-2">
       {label}<ArrowRight size={12} className="transition-transform duration-[var(--dur)] ease-[var(--ease)] group-hover/lnk:-translate-y-px group-hover/lnk:translate-x-px" />
     </button>
   );
@@ -118,33 +122,44 @@ function TrendTip({ active, payload, label, rows }: { active?: boolean; payload?
 }
 
 /** Bảng nhân viên (Top / Cần hỗ trợ): dòng sáng lên khi rê chuột / focus, lộ thanh tiến độ chốt / chia; tên là nút mở So sánh nhân viên. */
-function EmpTable({ rows, tone, compact = false, onNavigate }: { rows: Employee[]; tone: 'green' | 'red'; compact?: boolean; onNavigate: (view: string) => void }) {
+function EmpTable({ rows, tone, compact = false, metric = 'rate', onNavigate: _onNavigate }: { rows: Employee[]; tone: 'green' | 'red'; compact?: boolean; metric?: 'rate' | 'aov'; onNavigate: (view: string) => void }) {
   const ms = useMetricSettings();
-  if (!rows.length) return <p className="empty px-2 py-4 text-[11.5px]">Chưa đủ dữ liệu (cần ≥ 10 đơn chia).</p>;
-  return (
-    <TableWrap><table className={`tbl w-full ${compact ? 'table-fixed [&_td]:px-1.5 [&_td]:py-1 [&_th]:px-1.5 [&_th]:py-1' : ''}`}>
-      <thead><tr><th className="w-6">#</th><th>Nhân viên</th><th className={`n ${compact ? 'w-16' : ''}`}>Tỷ lệ</th>{!compact && <th className="n">Chốt / chia</th>}</tr></thead>
+  if (!rows.length) return <p className="empty px-2 py-4 text-[11.5px]">{metric === 'aov' ? 'Chưa đủ dữ liệu (cần ≥ 10 đơn chốt).' : 'Chưa đủ dữ liệu (cần ≥ 10 đơn chia).'}</p>;
+  if (metric === 'aov') return (
+    <table className="tbl w-full table-fixed [&_td]:px-1.5 [&_th]:px-1.5">
+      <thead><tr><th className="w-6">#</th><th>Nhân viên</th><th className="n w-24">AOV</th>{!compact && <th className="n w-14">Đơn</th>}</tr></thead>
       <tbody>
         {rows.map((e, i) => (
           <tr key={e.sellerId}>
             <td className="num text-ink-3">{i + 1}</td>
-            <td className="min-w-28 max-w-0">
-              <button type="button" onClick={() => onNavigate('compare')} title={`${e.name} · mở So sánh nhân viên`} className="block w-full truncate rounded-[4px] text-left font-medium text-ink outline-none transition-colors duration-[var(--dur)] ease-[var(--ease)] hover:text-primary focus-visible:shadow-[0_0_0_2px_var(--ring)]">{e.name}</button>
-              {!compact && e.department && <span className="block truncate text-[10.5px] text-ink-3" title={e.department}>{e.department}</span>}
+            <td className="whitespace-normal"><ProfileLink id={e.sellerId} name={e.name} className="block w-full whitespace-normal rounded-[4px] font-medium leading-snug tap text-ink [overflow-wrap:anywhere]" /></td>
+            <td className={`n ${tone === 'green' ? 'text-good' : 'text-bad'}`}>{shortMoney(e.averageOrder ?? 0)}</td>
+            {!compact && <td className="n text-ink-2">{vi.format(e.closedOrders)}</td>}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+  return (
+    <table className={`tbl w-full table-fixed ${compact ? '[&_td]:px-1.5 [&_td]:py-1 [&_th]:px-1.5 [&_th]:py-1' : '[&_td]:px-1.5 [&_th]:px-1.5'}`}>
+      <thead><tr><th className="w-6">#</th><th>Nhân viên</th><th className="n w-16">Tỷ lệ</th>{!compact && <th className="n w-20">Chốt/chia</th>}</tr></thead>
+      <tbody>
+        {rows.map((e, i) => (
+          <tr key={e.sellerId}>
+            <td className="num text-ink-3">{i + 1}</td>
+            <td className="whitespace-normal">
+              <ProfileLink id={e.sellerId} name={e.name} className="block w-full whitespace-normal rounded-[4px] font-medium leading-snug tap text-ink [overflow-wrap:anywhere]" />
             </td>
-            <td className={`n ${tone === 'green' ? 'text-good' : 'text-bad'}`} title={compact ? `${vi.format(closeRateTop(e, ms.rateBase))} / ${vi.format(closeRateBase(e, ms.rateBase))} đơn đã chốt` : undefined}>{pct(closeRateOf(e, ms.rateBase))}</td>
+            <td className={`n ${rateTextClass(closeRateOf(e, ms.rateBase))}`} title={compact ? `${vi.format(closeRateTop(e, ms.rateBase))} / ${vi.format(closeRateBase(e, ms.rateBase))} đơn đã chốt` : undefined}>{pct(closeRateOf(e, ms.rateBase))}</td>
             {!compact && (
               <td className="n">
-                <span className="inline-flex items-center justify-end gap-2">
-                  <HoverReveal from="left"><ProgressBar value={closeRateTop(e, ms.rateBase)} max={closeRateBase(e, ms.rateBase)} size="sm" width={56} low={tone === 'red'} /></HoverReveal>
-                  <span className="text-ink-2">{vi.format(closeRateTop(e, ms.rateBase))}<span className="font-normal text-ink-3">/{vi.format(closeRateBase(e, ms.rateBase))}</span></span>
-                </span>
+                <span className="text-ink-2">{vi.format(closeRateTop(e, ms.rateBase))}<span className="font-normal text-ink-3">/{vi.format(closeRateBase(e, ms.rateBase))}</span></span>
               </td>
             )}
           </tr>
         ))}
       </tbody>
-    </table></TableWrap>
+    </table>
   );
 }
 
@@ -158,7 +173,7 @@ function TvCell({ title, className = '', children }: { title: ReactNode; classNa
   );
 }
 
-export function CenterView({ onNavigate, canRegenerateAi = false }: { onNavigate: (view: string) => void; canRegenerateAi?: boolean }) {
+export function CenterView({ onNavigate, canRegenerateAi = false, canForecast = false }: { onNavigate: (view: string) => void; canForecast?: boolean; canRegenerateAi?: boolean }) {
   const ms = useMetricSettings();
   const today = todayVn();
   const team = useTeam();
@@ -180,8 +195,11 @@ export function CenterView({ onNavigate, canRegenerateAi = false }: { onNavigate
   const shiftApi = useApi<Shift>(useMemo(() => `/api/reports/shift?${q({ date: today, shift: 'auto' })}`, [q, today]), { refreshMs: REFRESH });
   const pipelineApi = useApi<Pipeline>(useMemo(() => `/api/reports/pipeline?${q({ start, end, basis: 'confirmed' })}`, [q, start, end]), { refreshMs: REFRESH });
   const customersApi = useApi<Customers>(useMemo(() => `/api/reports/customers?${q({ group: 'all', page: '1', sort: 'spend' })}`, [q]), { refreshMs: REFRESH });
-  const repurchaseApi = useApi<Repurchase>(useMemo(() => `/api/reports/repurchase?${q({ start, end })}`, [q, start, end]), { refreshMs: REFRESH });
-  const batchesApi = useApi<Batches>(useMemo(() => `/api/reports/batches?${q({ start, end })}`, [q, start, end]), { refreshMs: REFRESH });
+  // Mua lại & data nằm dưới màn hình đầu: chỉ gọi khi hàng đó sắp lộ ra (màn TV thì gọi ngay).
+  const [lowRef, lowSeen] = useLazySeen();
+  const lowDefer = !lowSeen && !tv;
+  const repurchaseApi = useApi<Repurchase>(useMemo(() => `/api/reports/repurchase?${q({ start, end })}`, [q, start, end]), { refreshMs: REFRESH, defer: lowDefer });
+  const batchesApi = useApi<Batches>(useMemo(() => `/api/reports/batches?${q({ start, end })}`, [q, start, end]), { refreshMs: REFRESH, defer: lowDefer });
   const syncApi = useApi<SyncRow[]>('/api/sync/pos', { refreshMs: REFRESH });
   const targetMonth = end.slice(0, 7);
   useEffect(() => { void fetchTargets(targetMonth).then(setTargets); }, [targetMonth, targetsTick]);
@@ -190,7 +208,8 @@ export function CenterView({ onNavigate, canRegenerateAi = false }: { onNavigate
   const apis = [overviewApi, trendApi, shiftApi, pipelineApi, customersApi, repurchaseApi, batchesApi, syncApi];
   const loading = apis.some((x) => x.loading);
   const errors: Partial<Record<Block, string>> = {};
-  const errOf = (k: Block, x: { error: string | null }) => { if (x.error) errors[k] = x.error; };
+  // Khối người này không có quyền (403) thì bỏ qua, không báo đỏ "không tải được".
+  const errOf = (k: Block, x: { error: string | null; denied?: boolean }) => { if (x.error && !x.denied) errors[k] = x.error; };
   errOf('overview', overviewApi); errOf('trend', trendApi); errOf('shift', shiftApi); errOf('pipeline', pipelineApi); errOf('customers', customersApi); errOf('repurchase', repurchaseApi); errOf('batches', batchesApi); errOf('sync', syncApi);
   const updatedAt = overviewApi.at; // thời điểm lấy số tổng quan đang hiện
   const stale = overviewApi.stale || (!!overviewApi.error && !!report); // đang hiện số lưu / số cũ vì lần làm mới gần nhất lỗi
@@ -230,10 +249,13 @@ export function CenterView({ onNavigate, canRegenerateAi = false }: { onNavigate
   const byPos = report?.current.byPos, cmpByPos = report?.compare?.byPos, byEmployee = report?.current.byEmployee;
   const posRows = useMemo(() => (byPos ? posIds.map((id) => ({ id, row: byPos.find((r) => r.posId === id), prev: cmpByPos?.find((r) => r.posId === id) })).filter((x) => x.row).sort((a, b) => b.row!.closedNet - a.row!.closedNet) : []), [byPos, cmpByPos, posIds]);
   const posTotal = posRows.reduce((a, x) => a + x.row!.closedNet, 0);
-  // Xếp hạng chỉ xét Sale/CSKH (bỏ quản trị, MKT, trực page).
-  const employees = useMemo(() => (byEmployee ?? []).filter((e) => e.sellerId && e.assignedOrders >= 10 && (!e.department || /sale|bán hàng|cskh|chăm sóc/i.test(e.department))), [byEmployee]);
-  const topEmp = [...employees].sort((a, b) => (closeRateOf(b, ms.rateBase) ?? -1) - (closeRateOf(a, ms.rateBase) ?? -1)).slice(0, 5);
-  const lowEmp = [...employees].sort((a, b) => (closeRateOf(a, ms.rateBase) ?? 999) - (closeRateOf(b, ms.rateBase) ?? 999)).slice(0, 5);
+  // Tỷ lệ chốt chỉ đo Sale (từ 10 đơn chia); CSKH không đo tỷ lệ chốt mà đo AOV (từ 10 đơn chốt) — anh Vũ 07/11/2026.
+  const saleEmp = useMemo(() => (byEmployee ?? []).filter((e) => e.sellerId && e.assignedOrders >= 10 && deptOf(e.name, e.department ?? '') === 'sale'), [byEmployee]);
+  const cskhEmp = useMemo(() => (byEmployee ?? []).filter((e) => e.sellerId && e.closedOrders >= 10 && e.averageOrder && deptOf(e.name, e.department ?? '') === 'cskh'), [byEmployee]);
+  const topEmp = [...saleEmp].sort((a, b) => (closeRateOf(b, ms.rateBase) ?? -1) - (closeRateOf(a, ms.rateBase) ?? -1)).slice(0, 5);
+  const lowEmp = [...saleEmp].sort((a, b) => (closeRateOf(a, ms.rateBase) ?? 999) - (closeRateOf(b, ms.rateBase) ?? 999)).slice(0, 5);
+  const topAov = [...cskhEmp].sort((a, b) => (b.averageOrder ?? 0) - (a.averageOrder ?? 0)).slice(0, 5);
+  const lowAov = [...cskhEmp].sort((a, b) => (a.averageOrder ?? 0) - (b.averageOrder ?? 0)).slice(0, 5);
   const goal = posIds.reduce((a, id) => a + (targets[`pos:${id}`]?.revenue ?? 0), 0);
   const goalPct = cur && goal ? cur.closedNet / goal * 100 : null;
   const bt = (batches?.batches ?? []).reduce((a, x) => ({ received: a.received + x.received, buyers: a.buyers + x.buyers, net: a.net + x.net }), { received: 0, buyers: 0, net: 0 });
@@ -242,7 +264,7 @@ export function CenterView({ onNavigate, canRegenerateAi = false }: { onNavigate
   const syncBad = sync.filter((s) => posIds.includes(s.posId) && (s.lastError || !s.lastSyncAt || loadedAt - Date.parse(s.lastSyncAt) > 15 * 60000));
   const alerts = shift?.alerts ?? [];
   // Màn Điều hành (giai đoạn 2b): tiến độ tháng hiện tại + ba bộ phận + việc cần xử lý gom từ các khối đã tải.
-  const exec = useExec(posIds);
+  const exec = useExec(posIds, targetMonth);
   const aiApi = useApi<{ summary: AiSummaryView }>('/api/ai/summary', { refreshMs: 10 * 60000 });
   const regenerateAi = async () => { toast('AI đang viết tóm tắt…'); const res = await fetch('/api/ai/summary', { method: 'POST' }); if (!res.ok) toast('Không tạo được tóm tắt', { kind: 'error' }); aiApi.reload(); };
   const ex = exec.data;
@@ -355,7 +377,7 @@ export function CenterView({ onNavigate, canRegenerateAi = false }: { onNavigate
           <li key={id}>
             <button type="button" aria-label={`${i + 1}. ${posName(id)} · ${shortMoney(row!.closedNet)} · mở Tổng quan POS`} onClick={go}
               className={`${ROW_CLS} group grid-cols-[18px_minmax(0,1fr)_auto] ${compact ? 'py-[3px]' : 'py-2'}`}>
-            <span className="num text-[11px] text-ink-3">{i + 1}</span>
+            <span className="num inline-block w-4 shrink-0 text-right text-[11px] text-ink-3">{i + 1}</span>
             <span className="min-w-0">
               <span className="flex items-center gap-2"><PosBadge posId={id} size={16} className="shrink-0" /><span className="truncate font-medium text-ink">{posName(id)}</span>{goalDone !== null && !compact && <StatusChip tone={goalDone >= 100 ? 'green' : goalDone >= 60 ? 'lime' : 'orange'} className="shrink-0">mục tiêu <span className="num">{pct(goalDone, 0)}</span></StatusChip>}</span>
               <span className={`pbar block w-full ${compact ? 'mt-1 h-1' : 'mt-1.5 h-[5px]'}`}><i className="[transition:filter_var(--dur)_var(--ease),width_.9s_var(--ease)] group-hover:brightness-[1.12]" style={{ width: `${row!.closedNet / max * 100}%`, background: posVar(id) }} /></span>
@@ -413,7 +435,7 @@ export function CenterView({ onNavigate, canRegenerateAi = false }: { onNavigate
             <StaleChip stale={overviewApi.stale} at={overviewApi.at} loading={overviewApi.loading} error={report ? overviewApi.error : null} onRetry={reload} />
             <TeamSwitch size="sm" />
             <button type="button" className={`btn ${loading ? 'is-busy' : ''}`} onClick={reload} disabled={loading} aria-label="Tải lại số liệu"><RotateCw size={13} />{loading ? 'Đang tải…' : 'Tải lại'}</button>
-            <button type="button" className="btn" onClick={() => setTv(false)}><X size={14} />Thoát TV <kbd className="num rounded border border-line-2 px-1 text-[10px] text-ink-3">Esc</kbd></button>
+            <button type="button" className="btn" onClick={() => setTv(false)}><X size={14} />Thoát TV <kbd className="num rounded border border-line-2 px-1 text-[11px] text-ink-3">Esc</kbd></button>
           </div>
         </div>
         {topError}
@@ -424,7 +446,7 @@ export function CenterView({ onNavigate, canRegenerateAi = false }: { onNavigate
           <TvCell className="col-span-3 row-span-4" title="Trạng thái đơn"><BlockNote error={errors.overview} hasData={!!cur} onRetry={reload} />{donut(150, true)}</TvCell>
           <TvCell className="col-span-3 row-span-4" title="Vận hành đơn"><BlockNote error={errors.pipeline} hasData={!!pipeline} onRetry={reload} />{funnelBlock(true)}</TvCell>
           <TvCell className="col-span-4 row-span-4" title="Xếp hạng POS · doanh thu đơn chốt">{posBars(true)}</TvCell>
-          <TvCell className="col-span-4 row-span-4" title="Nhân viên · tỷ lệ chốt">
+          <TvCell className="col-span-4 row-span-4" title="Sale · tỷ lệ chốt">
             <div className="grid h-full grid-cols-2 gap-3">
               <div className="min-w-0 overflow-hidden"><div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[.07em] text-good">Top tỷ lệ chốt</div><EmpTable rows={topEmp} tone="green" compact onNavigate={onNavigate} /></div>
               <div className="min-w-0 overflow-hidden"><div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[.07em] text-bad">Cần hỗ trợ</div><EmpTable rows={lowEmp} tone="red" compact onNavigate={onNavigate} /></div>
@@ -454,7 +476,7 @@ export function CenterView({ onNavigate, canRegenerateAi = false }: { onNavigate
   return (
     <div className="space-y-5" aria-busy={loading && !!report}>
       <PageHeader eyebrow={`${periodLabel} · so với ${cmpLabel}`} title="Điều hành" subtitle={`Toàn cảnh ${POS.length} POS · cập nhật ${updatedAt ? timeOnly(updatedAt) : '…'}${stale ? ' · số liệu cũ' : ''}`}
-        actions={<><StaleChip stale={overviewApi.stale} at={overviewApi.at} loading={overviewApi.loading} error={report ? overviewApi.error : null} onRetry={reload} />
+        actions={<>{canRegenerateAi && <Button variant="outline" onClick={() => onNavigate('ai-ask')}>Hỏi AI</Button>}<StaleChip stale={overviewApi.stale} at={overviewApi.at} loading={overviewApi.loading} error={report ? overviewApi.error : null} onRetry={reload} />
           <AiPackButton disabled={!cur} pack={() => cur ? ({
             page: 'Điều hành', period: `${periodLabel} (so với ${cmpLabel})`, staffNames: (byEmployee ?? []).map((e) => e.name),
             facts: [['Đơn lên', cur.orders], ['Đơn chốt', cur.closedOrders], ['Tỷ lệ chốt', pct(closeRateOf(cur, ms.rateBase))], ['Doanh thu đơn chốt', Math.round(cur.closedNet)], ['Doanh thu kỳ trước', prev ? Math.round(prev.closedNet) : null], ['GTTB', cur.averageOrder === null ? null : Math.round(cur.averageOrder)],
@@ -483,6 +505,8 @@ export function CenterView({ onNavigate, canRegenerateAi = false }: { onNavigate
         <div className="min-w-0 lg:col-span-8"><MonthPace exec={exec} goal={monthGoal} onOpen={() => onNavigate('monthly')} /></div>
         <div className="min-w-0 lg:col-span-4"><TeamsCompare exec={exec} onOpen={(k) => onNavigate(k === 'sale' ? 'sale-overview' : k === 'cskh' ? 'cskh-overview' : 'marketing')} /></div>
       </div>
+      {canForecast && <ForecastCard onOpen={canRegenerateAi ? () => { onNavigate('ai-ask'); focusAfterNav('ai-yesterday', { 'ai-tab': 'day' }); } : undefined} />}
+      {canRegenerateAi && <ForecastReview onNavigate={onNavigate} />}
       <Attention items={attention} summary={summary} onNavigate={onNavigate} ai={aiApi.data?.summary ?? null} onRegenerate={canRegenerateAi ? () => void regenerateAi() : undefined} />
       <PancakeReference posIds={posIds} start={start} end={end} />
 
@@ -518,13 +542,19 @@ export function CenterView({ onNavigate, canRegenerateAi = false }: { onNavigate
         </ChartCard>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-        <ChartCard icon={Users} title="Nhân viên" subtitle="Tỷ lệ chốt · từ 10 đơn chia · Sale và CSKH" info={defs.rate} more={{ label: 'So sánh nhân viên', onClick: () => onNavigate('compare') }} className="min-w-0 lg:col-span-7" loading={firstLoad(!!cur, 'overview')}>
+      <div ref={lowRef} className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        <ChartCard icon={Users} title="Nhân viên" subtitle="Sale đo tỷ lệ chốt (từ 10 đơn chia) · CSKH đo AOV (từ 10 đơn chốt)" info={defs.rate} more={{ label: 'So sánh nhân viên', onClick: () => onNavigate('compare') }} className="min-w-0 lg:col-span-7" loading={firstLoad(!!cur, 'overview')}>
           <BlockNote error={errors.overview} hasData={!!cur} onRetry={reload} />
           {cur && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="min-w-0"><div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[.07em] text-good">Top 5</div><EmpTable rows={topEmp} tone="green" onNavigate={onNavigate} /></div>
-              <div className="min-w-0"><div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[.07em] text-bad">Cần hỗ trợ</div><EmpTable rows={lowEmp} tone="red" onNavigate={onNavigate} /></div>
+            <div className="space-y-4">
+              {team !== 'cskh' && <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                <div className="min-w-0"><div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[.07em] text-good">Sale · tỷ lệ chốt cao nhất</div><EmpTable rows={topEmp} tone="green" onNavigate={onNavigate} /></div>
+                <div className="min-w-0"><div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[.07em] text-bad">Sale · cần hỗ trợ</div><EmpTable rows={lowEmp} tone="red" onNavigate={onNavigate} /></div>
+              </div>}
+              {team !== 'sale' && <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                <div className="min-w-0"><div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[.07em] text-good">CSKH · AOV cao nhất</div><EmpTable rows={topAov} tone="green" metric="aov" onNavigate={onNavigate} /></div>
+                <div className="min-w-0"><div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[.07em] text-bad">CSKH · AOV thấp nhất</div><EmpTable rows={lowAov} tone="red" metric="aov" onNavigate={onNavigate} /></div>
+              </div>}
             </div>
           )}
         </ChartCard>

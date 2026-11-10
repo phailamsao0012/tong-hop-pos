@@ -1,9 +1,10 @@
-import { env } from 'cloudflare:workers';
-import { getSessionUser } from '@/lib/auth';
-import { allowedPos, isOwner } from '@/lib/access';
-import { teamSubquery } from '@/lib/team';
-import { ORDER_STATUS } from '@/lib/pancake';
-import { POS } from '@/lib/report-model';
+import { getSessionUser } from '@/lib/auth/auth';
+import { allowedPos, isOwner } from '@/lib/auth/access';
+import { privateJson } from '@/lib/auth/phone-privacy';
+import { teamSubquery } from '@/lib/teams/team';
+import { ORDER_STATUS } from '@/lib/pancake/pancake';
+import { POS } from '@/lib/shared/report-model';
+import { inTeam, rawOrderSources } from '@/lib/pancake/raw-order-detail';
 
 // Chi tiết một đơn nguồn: thông tin, sản phẩm, lịch sử trạng thái, các trường Pancake đáng chú ý và JSON gốc.
 // Bảo vệ dữ liệu cá nhân (10/10/2026): chỉ đơn thuộc POS và bộ phận tài khoản được cấp (ngoài phạm vi trả 404 như không có đơn);
@@ -13,18 +14,13 @@ export async function GET(request: Request) {
   if (!user) return Response.json({ error: 'Đăng nhập để xem đơn nguồn.' }, { status: 401 });
   const id = (new URL(request.url).searchParams.get('id') ?? '').slice(0, 120);
   if (!id) return Response.json({ error: 'Thiếu mã đơn.' }, { status: 400 });
-  const [order, items, names, shops] = await env.DB.batch([
-    env.DB.prepare('SELECT * FROM raw_pos_orders WHERE id=?').bind(id),
-    env.DB.prepare('SELECT name,quantity,retail_price,discount,line_total,returned_count,is_bonus,product_id,variation_id FROM raw_pos_order_items WHERE order_id=? ORDER BY id').bind(id),
-    env.DB.prepare("SELECT user_id, MAX(name) AS name FROM pos_users WHERE name<>'' GROUP BY user_id"),
-    env.DB.prepare('SELECT id, shop_id FROM pos_shops'),
-  ]);
+  const [order, items, names, shops] = await rawOrderSources(id);
   const o = order.results[0] as Record<string, string | number | null> | undefined;
   const notFound = () => Response.json({ error: 'Không tìm thấy đơn.' }, { status: 404 });
   if (!o || !allowedPos(user).includes(String(o.pos_id))) return notFound();
   const team = teamSubquery(user.team, false);
   if (team) {
-    const mine = await env.DB.prepare(`SELECT 1 AS x WHERE ? IN ${team} OR ? IN ${team}`).bind(o.seller_id ?? '', o.care_id ?? '').first();
+    const mine = await inTeam(team, o.seller_id, o.care_id);
     if (!mine) return notFound();
   }
   const nameMap = new Map((names.results as { user_id: string; name: string }[]).map((r) => [r.user_id, r.name]));
@@ -38,7 +34,7 @@ export async function GET(request: Request) {
   const checks = {
     created: !!o.created_at, assigned: !!o.seller_assigned_at, confirmed: !!o.first_confirmed_at, history: history.length > 0 && !o.history_limited, raw: !!raw,
   };
-  return Response.json({
+  return privateJson(user.role, {
     id: o.id, orderId: o.source_order_id, posId: o.pos_id, posName: POS.find((x) => x.id === o.pos_id)?.name ?? o.pos_id, shopId,
     pancakeUrl: shopId ? `https://pos.pancake.vn/shop/${shopId}/orders?order_id=${o.source_order_id}` : null,
     phone: o.phone, customer: o.customer_name, createdAt: o.created_at, updatedAt: o.updated_at, fetchedAt: o.fetched_at,

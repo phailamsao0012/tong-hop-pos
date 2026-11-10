@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compareTeams, computePosTeams, isSnapshot, primaryAssignment, teamFor, type HrDepartment, type HrSnapshot } from '../lib/hr-copy';
-import { COUNTED_STAFF, COUNTED_STAFF_KEY, LEFT_STAFF_SQL, setHrTeams, teamSubquery } from '../lib/team';
+import { compareTeams, computePosTeams, isSnapshot, primaryAssignment, teamFor, type HrDepartment, type HrSnapshot } from '../lib/teams/hr-copy';
+import { COUNTED_STAFF, COUNTED_STAFF_KEY, LEFT_STAFF_SQL, setHrTeams, teamSubquery } from '../lib/teams/team';
 
 const snap: HrSnapshot = {
   offices: [{ id: 'of_hn', name: 'Hà Nội' }],
@@ -134,4 +134,19 @@ test('chỉ tính doanh số người có hậu tố MKT / CSKH / SALE trong tê
   // Bảng Sale cũng chỉ còn người được tính.
   assert.deepEqual((db.prepare(teamSubquery('sale')!.slice(1, -1)).all() as { user_id: string }[]).map((r) => r.user_id).sort(), ['duyen', 'mo']);
   assert.ok(teamSubquery('sale', false)!.length < teamSubquery('sale')!.length);
+});
+
+test('lead, mentor không có hậu tố nhưng đã xếp vào team ở Chia team vẫn được tính doanh số và thuộc bộ phận team đó', async () => {
+  const { DatabaseSync } = await import('node:sqlite');
+  const db = new DatabaseSync(':memory:');
+  db.exec(`CREATE TABLE pos_users(user_id TEXT, name TEXT, department TEXT, is_active INTEGER);
+    INSERT INTO pos_users VALUES ('nv','A SALE','Sale',1),('lead','Lead demo','Quản trị viên',1),('mkt_lead','Lead MKT demo','Quản trị viên',1),('ngoai','Người ngoài','Quản trị viên',1);
+    CREATE TABLE hr_pos_team(pos_user_id TEXT PRIMARY KEY, team TEXT, status TEXT);
+    CREATE TABLE app_settings(key TEXT PRIMARY KEY, value TEXT, updated_at TEXT);`);
+  db.prepare("INSERT INTO app_settings VALUES ('web_teams_v1',?,'')").run(JSON.stringify([{ id: 'wt_1', name: 'Team demo', dept: 'sale', office: null, memberIds: ['nv', 'lead'] }]));
+  db.prepare("INSERT INTO app_settings VALUES ('marketing_teams_v1',?,'')").run(JSON.stringify([{ id: 'mkt_1', name: 'MKT demo', memberIds: ['mkt_lead'] }]));
+  const ids = (sql: string) => (db.prepare(sql).all() as { user_id: string }[]).map((r) => r.user_id).sort();
+  assert.deepEqual(ids(COUNTED_STAFF.slice(1, -1)), ['lead', 'mkt_lead', 'nv']);
+  assert.deepEqual(ids(teamSubquery('sale')!.slice(1, -1)), ['lead', 'nv']);
+  assert.deepEqual(ids(teamSubquery('cskh')!.slice(1, -1)), []);
 });

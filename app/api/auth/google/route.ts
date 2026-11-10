@@ -1,10 +1,11 @@
 import { env } from 'cloudflare:workers';
-import { normalizeEmail } from '@/lib/auth';
-import { googleAuthUrl, verifyGoogleIdToken } from '@/lib/google-id';
-import { startSession } from '@/lib/login-session';
-import { createChallenge, mfaState, randomToken } from '@/lib/mfa';
-import { safeNext } from '@/lib/hr-link';
-import { audit } from '@/lib/audit';
+import { userByEmail } from '@/lib/auth/auth-db';
+import { LOCKED_MESSAGE, normalizeEmail } from '@/lib/auth/auth';
+import { googleAuthUrl, verifyGoogleIdToken } from '@/lib/auth/google-id';
+import { startSession } from '@/lib/auth/login-session';
+import { createChallenge, mfaState, randomToken } from '@/lib/auth/mfa';
+import { safeNext } from '@/lib/teams/hr-link';
+import { audit } from '@/lib/ops/audit';
 
 // Đăng nhập bằng Google (06/10/2026). GET: phát nonce + state (cookie 10 phút) rồi chuyển sang trang chọn tài khoản Google.
 // POST: trang /login gửi lại ID token Google trả về; khớp email với tài khoản web tổng có sẵn (không tạo tài khoản mới,
@@ -36,9 +37,9 @@ export async function POST(request: Request) {
   const claims = await verifyGoogleIdToken(typeof body.credential === 'string' ? body.credential : '', clientId(), { nonce });
   if (!claims) { await audit({ action: 'login.fail', detail: 'Google: token không hợp lệ', request, status: 401 }); return fail('Google không xác nhận được tài khoản. Thử lại.', 401); }
   const email = normalizeEmail(claims.email);
-  const user = email ? await env.DB.prepare('SELECT id,email,name,disabled FROM users WHERE email=?').bind(email).first<{ id: string; email: string; name: string; disabled: number }>() : null;
+  const user = email ? await userByEmail(email) : null;
   if (!user) { await audit({ action: 'login.fail', email: email ?? undefined, detail: 'Google: email chưa có tài khoản', request, status: 403 }); return fail(`Tài khoản Google ${claims.email} chưa có trên web tổng. Nhờ chủ hệ thống tạo tài khoản đúng email này.`, 403); }
-  if (user.disabled) { await audit({ action: 'login.fail', userId: user.id, email: user.email, name: user.name, detail: 'Google: tài khoản đã khóa', request, status: 403 }); return fail('Tài khoản đã bị khóa.', 403); }
+  if (user.disabled) { await audit({ action: 'login.fail', userId: user.id, email: user.email, name: user.name, detail: 'Google: tài khoản đã khóa', request, status: 403 }); return fail(LOCKED_MESSAGE, 503); }
   const next = safeNext(decodeURIComponent(nextRaw));
   if ((await mfaState(user.id)).totpEnabled) {
     const challengeId = await createChallenge(user.id, 'totp', 'google');

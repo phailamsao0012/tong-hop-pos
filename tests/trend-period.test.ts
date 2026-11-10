@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { periodKind } from '../lib/period-kind';
-import { PRESETS, presetRange } from '../lib/periods';
-import { hourlyProfile, forecastFraction, periodCard, trendCards, trendQuery, trendOrderPage, type TrendOptions } from '../lib/trend-period';
-import { addDays } from '../lib/report-time';
+import { periodKind } from '../lib/shared/period-kind';
+import { PRESETS, presetRange } from '../lib/shared/periods';
+import { hourlyProfile, forecastFraction, periodCard, trendCards, trendQuery, trendOrderPage, type TrendOptions } from '../lib/reports/trend-period';
+import { addDays } from '../lib/shared/report-time';
 import { emptyDb } from './support/d1-sqlite';
 import { loginAs, logout } from './support/session';
-import { POS } from '../lib/report-model';
-import { SENT_AT_READY_KEY } from '../lib/stats';
-import { scopeApi } from '../lib/access';
+import { POS } from '../lib/shared/report-model';
+import { SENT_AT_READY_KEY } from '../lib/reports/stats';
+import { scopeApi } from '../lib/auth/access';
 
 const today = '2026-10-17', now = Date.parse('2026-10-17T07:00:00Z');
 const opts: TrendOptions = { start: today, end: today, preset: 'today', posIds: ['p'], team: 'all', unit: null };

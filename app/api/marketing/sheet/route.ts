@@ -1,5 +1,5 @@
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { newSheetKey, setSheetAlias, sheetStatus } from '@/lib/sheet-costs';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { newSheetKey, setSheetAlias, sheetStatus } from '@/lib/ops/sheet-costs';
 
 // Tình trạng nối Google Sheet chi phí MKT (GET), tạo mã nối mới (POST, chỉ chủ hệ thống; mã hiện đúng một lần)
 // và ghép tay tên trên sheet với nhân viên POS (PUT, chỉ chủ hệ thống).

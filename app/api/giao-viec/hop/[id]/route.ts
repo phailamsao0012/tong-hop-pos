@@ -1,0 +1,10 @@
+import { bossRoute } from '../../me/route';
+import { cancelMeeting, meetingNoById } from '@/lib/zalo/zalo-work';
+import { createZaloSender } from '@/lib/zalo/zalo';
+export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
+  return bossRoute(request, async (db, actor) => {
+    const meeting = await meetingNoById(db, (await context.params).id);
+    if (!meeting) throw new Error('Không tìm thấy họp.');
+    await cancelMeeting(db, actor, meeting.no, Date.now(), createZaloSender(db));
+  });
+}

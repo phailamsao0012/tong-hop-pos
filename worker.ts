@@ -1,32 +1,40 @@
+import { logReviewError, maybeReviewTick } from '@/lib/kpi/forecast-review';
 import handler from 'vinext/server/fetch-handler';
-import { deviceRoute } from '@/lib/device-pair';
-import { maybeDailySummary } from '@/lib/ai-summary';
-import { maybeDailyTrendNotes } from '@/lib/ai-trends';
-import { SyncScheduler } from '@/lib/scheduler';
-import { getSessionUserFromRequest } from '@/lib/auth';
-import { scopeApi } from '@/lib/access';
-import { AUDIT_HEADER, audit, classifyApi, scrubSearch, summarizeBody } from '@/lib/audit';
-import type { SessionUser } from '@/lib/auth';
-import { pullHr } from '@/lib/hr-sync';
-import { COUNTED_STAFF_KEY, usingHrTeams } from '@/lib/team';
-import { SENT_AT_READY_KEY } from '@/lib/stats';
-import { refreshTeamSource } from '@/lib/team-source';
-import { runDispatch } from '@/lib/dispatch';
-import { maybeNightlyBackup } from '@/lib/backup';
+import { deviceRoute } from '@/lib/auth/device-pair';
+import { maybeDailySummary } from '@/lib/ai/ai-summary';
+import { maybeForecastTick } from '@/lib/kpi/forecast-run';
+import { maybeDailyTrendNotes } from '@/lib/ai/ai-trends';
+import { SyncScheduler } from '@/lib/ops/scheduler';
+import { getSessionUserFromRequest } from '@/lib/auth/auth';
+import { cacheScopeFor, scopeApi } from '@/lib/auth/access';
+import { isCanonicalPath } from '@/lib/auth/path-guard';
+import { MFA_BLOCKED_ERROR, mfaBlocks } from '@/lib/auth/mfa-gate';
+import { AUDIT_HEADER, audit, classifyApi, scrubSearch, summarizeBody } from '@/lib/ops/audit';
+import type { SessionUser } from '@/lib/auth/auth';
+import { pullHr } from '@/lib/teams/hr-sync';
+import { COUNTED_STAFF_KEY, usingHrTeams } from '@/lib/teams/team';
+import { SENT_AT_READY_KEY } from '@/lib/reports/stats';
+import { refreshTeamSource } from '@/lib/teams/team-source';
+import { withSegLens } from '@/lib/shared/seg-lens';
+import { maybeNightlyBackup } from '@/lib/ops/backup';
 import { demoBlocked, installDemo, isDemo } from '@/lib/demo/mode';
-import { checkScheduler } from '@/lib/watch';
+import { isReadOnly, readOnlyBlocked } from '@/lib/ops/read-only';
+import { checkScheduler } from '@/lib/bot/watch';
+import { WARM_BUDGET_MS, WARM_PATHS, pickWarm, warmBody, type RecentReport } from '@/lib/reports/report-warm';
+import { readDataVersion } from '@/lib/ops/data-version';
 
 export { SyncScheduler };
 // Bản demo (Worker riêng, DEMO_MODE=1): nối Pancake POS giả (người và số ảo); ở web thật lệnh này không làm gì.
 installDemo();
 
 // Cache cho API báo cáo, hai tầng: bộ nhớ isolate (90 giây) và Cache API dùng chung mọi isolate cùng trạm Cloudflare (5 phút).
-// Khóa luôn kèm "phiên bản dữ liệu" (lần đồng bộ Pancake mới nhất, danh sách "Vẫn tính doanh số", ghi chú nguyên nhân):
-// đồng bộ xong là khóa đổi, người mở sau tính lại từ D1 nên số luôn mới bằng lần đồng bộ gần nhất (anh Vũ 10/10/2026: "tôi cần
+// Khóa luôn kèm "phiên bản dữ liệu" (lần đồng bộ Pancake có ghi dữ liệu mới nhất, danh sách "Vẫn tính doanh số", ghi chú nguyên nhân):
+// đồng bộ có dữ liệu mới là khóa đổi, người mở sau tính lại từ D1 nên số luôn mới bằng lần đồng bộ gần nhất (anh Vũ 10/10/2026: "tôi cần
 // dữ liệu realtime"). Mục đích: nhiều người/nhiều thẻ mở cùng một báo cáo không bắt D1 tính lại từng lần (D1 chạy tuần tự từng câu;
 // test tải 10/10/2026: quá ~10 lời gọi/giây là D1 báo "overloaded").
-const REPORT_CACHE_TTL_MS = 90000;
-const SHARED_CACHE_TTL_S = 300;
+// Vá nóng 09/11/2026 (D1 quá tải): khóa đã kèm phiên bản dữ liệu nên giữ lâu hơn không làm số cũ đi; đồng bộ có dữ liệu mới là khóa đổi.
+const REPORT_CACHE_TTL_MS = 15 * 60000;
+const SHARED_CACHE_TTL_S = 15 * 60;
 const REPORT_CACHE_MAX_BYTES = 3_000_000;
 const REPORT_CACHE_MAX_ENTRIES = 80;
 type CachedResponse = { at: number; status: number; headers: [string, string][]; body: ArrayBuffer };
@@ -46,13 +54,16 @@ const cacheable = (pathname: string) => pathname.startsWith('/api/reports/') || 
 // cache lúc D1 bận làm mọi lượt dồn hết vào D1, quá tải nặng thêm.
 const VERSION_MEMO_MS = 5000;
 const VERSION_FALLBACK_MS = 10 * 60000;
-let versionMemo: { at: number; value: Promise<string> } | null = null;
-let lastVersion: { at: number; value: string } | null = null;
+// Phiên bản chỉ đổi khi dữ liệu thật sự đổi (lib/ops/data-version.ts): lượt đồng bộ 5 phút không có gì mới thì cache báo cáo giữ nguyên
+// (trước 05/11/2026 khóa đổi mỗi lượt vì lấy theo giờ đồng bộ). Trang trạng thái đồng bộ (/api/sync/pos) vẫn đổi mỗi lượt (thêm `s`).
+type Version = { v: string; s: string };
+let versionMemo: { at: number; value: Promise<Version> } | null = null;
+let lastVersion: { at: number; value: Version } | null = null;
+const VERSION_SETTING_KEYS = [COUNTED_STAFF_KEY, 'uncounted_notes', SENT_AT_READY_KEY];
 function dataVersion(env: Cloudflare.Env, fresh = false) {
   if (!fresh && versionMemo && Date.now() - versionMemo.at < VERSION_MEMO_MS) return versionMemo.value;
-  const value = env.DB.prepare(`SELECT COALESCE(MAX(last_sync_at),'')||COALESCE(MAX(customers_synced_at),'')||COALESCE((SELECT MAX(updated_at) FROM app_settings WHERE key IN ('${COUNTED_STAFF_KEY}','uncounted_notes','${SENT_AT_READY_KEY}')),'') AS v FROM pos_shops`)
-    .first<{ v: string }>().then((row) => {
-      const v = row?.v ?? '';
+  const value = readDataVersion(env.DB, VERSION_SETTING_KEYS)
+    .then((v) => {
       lastVersion = { at: Date.now(), value: v };
       return v;
     }).catch((error) => {
@@ -120,7 +131,8 @@ async function staleFallback(origin: string, staleKey: string) {
 // sống 30 giây: khóa này theo trạm Cloudflare và không nguyên tử, nên chỉ bớt tính trùng chứ không chắc chắn một (QA 10/10/2026).
 // Lượt tính ngầm lỗi thì khóa tự hết hạn sau 30 giây, lượt đọc sau đó tính lại. Người vừa ghi (cookie thp_w) luôn tính thẳng.
 const SWR_LOCK_TTL_S = 30;
-const swrOn = (env: Cloudflare.Env) => env.THP_SWR === '1';
+// 09/11/2026 anh Vũ duyệt bật tạm trên web thật vì D1 quá tải (lỗi 500): bật mặc định, đặt THP_SWR="0" để tắt.
+const swrOn = (env: Cloudflare.Env) => env.THP_SWR !== '0';
 const revalidating = new Set<string>();
 async function takeLock(origin: string, key: string) {
   const cache = await caches.open('thp-reports');
@@ -130,18 +142,29 @@ async function takeLock(origin: string, key: string) {
   return true;
 }
 
-const CACHE_GEN = 'pii-3';
+// pii-4 (05/11/2026): che SĐT theo vai trò ở máy chủ, bản lưu trước đó không còn được trả.
+const CACHE_GEN = 'pii-4';
+// Khóa dùng chung cho lượt đọc và lượt làm nóng (warmRecentReports), để hai bên không bao giờ lệch nhau.
+// `scope`: phạm vi người xem (lib/auth/access.ts cacheScopeFor) cho báo cáo có nội dung theo trang được cấp của từng tài khoản.
+const cacheKeys = (role: string, version: string, url: string, scope = '') => {
+  const source = usingHrTeams() ? 'hr' : 'pc';
+  const who = scope ? `${role}~${scope}` : role;
+  return { key: `${CACHE_GEN}|${who}|${source}|${version}|${url}`, staleKey: `stale|${CACHE_GEN}|${who}|${source}|${url}` };
+};
 async function cachedReport(request: Request, env: Cloudflare.Env, ctx: ExecutionContext, pathname: string, run: () => Promise<Response>, user: SessionUser | null = null) {
   if (request.method !== 'GET' || !cacheable(pathname) || !user) return run();
   const wrote = recentWrite(request);
   let version = '';
-  try { version = await dataVersion(env, wrote); } catch { return run(); }
+  try {
+    const v = await dataVersion(env, wrote);
+    version = pathname === '/api/sync/pos' ? `${v.v}|${v.s}` : v.v;
+  } catch { return run(); }
   // Khóa gồm cả vai trò và nguồn team (Pancake / web nhân sự): một số báo cáo che bớt số theo vai trò (vd. đơn chia CSKH chỉ chủ hệ thống / giám đốc thấy).
   // URL đã được phân quyền thu hẹp (POS/nhóm của tài khoản) trước khi tới đây.
   // CACHE_GEN: đổi khi đổi dạng / phạm vi dữ liệu trả về (vd. che SĐT 11/10/2026) để bản lưu từ trước khi lên bản không còn được trả (QA L5).
-  const staleKey = `stale|${CACHE_GEN}|${user.role}|${usingHrTeams() ? 'hr' : 'pc'}|${request.url}`;
-  const key = `${CACHE_GEN}|${user.role}|${usingHrTeams() ? 'hr' : 'pc'}|${version}|${request.url}`;
+  const { key, staleKey } = cacheKeys(user.role, version, request.url, cacheScopeFor(user, pathname));
   const { origin } = new URL(request.url);
+  if (WARM_PATHS.has(pathname)) rememberRecent(request.url, user.role);
   const hit = reportCache.get(key);
   if (hit && Date.now() - hit.at < REPORT_CACHE_TTL_MS) return replay(hit, 'hit');
   const waiting = inflight.get(key);
@@ -197,6 +220,40 @@ async function cachedReport(request: Request, env: Cloudflare.Env, ctx: Executio
   } finally { inflight.delete(key); }
 }
 
+// Làm nóng sau đồng bộ (lib/reports/report-warm.ts): nhớ URL ba báo cáo nặng vừa có người xem (theo vai trò, vì khóa cache có vai trò);
+// cron mỗi phút thấy phiên bản dữ liệu đổi thì tính trước và nhớ vào cả hai tầng cache, người mở sau trúng cache thay vì chờ D1.
+// Trên PC (một tiến trình) hiệu quả trọn vẹn; trên Cloudflare chỉ giúp khi cron chạy cùng trạm với người xem.
+const RECENT_MAX = 100;
+const recentReports = new Map<string, RecentReport>();
+function rememberRecent(url: string, role: string) {
+  recentReports.delete(url);
+  if (recentReports.size >= RECENT_MAX) recentReports.delete(recentReports.keys().next().value!);
+  recentReports.set(url, { url, role, at: Date.now() });
+}
+let warmedVersion = '';
+async function warmRecentReports(env: Cloudflare.Env, ctx: ExecutionContext) {
+  if (!recentReports.size) return;
+  const version = (await dataVersion(env, true)).v;
+  if (version === warmedVersion) return;
+  warmedVersion = version;
+  const started = Date.now();
+  let done = 0;
+  for (const e of pickWarm([...recentReports.values()], started)) {
+    if (Date.now() - started > WARM_BUDGET_MS) break;
+    const { key, staleKey } = cacheKeys(e.role, version, e.url);
+    if (reportCache.has(key) || inflight.has(key)) continue;
+    try {
+      const body = await warmBody(new URL(e.url));
+      if (!body) continue;
+      const entry: CachedResponse = { at: Date.now(), status: 200, headers: [['content-type', 'application/json'], ['cache-control', 'private, no-store']], body: new TextEncoder().encode(body).buffer as ArrayBuffer };
+      remember(key, staleKey, entry);
+      ctx.waitUntil(Promise.all([sharedPut(new URL(e.url).origin, key, entry), sharedPut(new URL(e.url).origin, staleKey, entry, STALE_MAX_MS / 1000)]).catch((error) => console.error('warm cache put failed', error)));
+      done += 1;
+    } catch (error) { console.error('warm report failed', new URL(e.url).pathname, error); }
+  }
+  if (done) console.log(`warmed ${done} report(s) in ${Date.now() - started}ms`);
+}
+
 const BATCH_MAX = 12;
 const batchable = (path: string) => (path.startsWith('/api/reports/') && path !== '/api/reports/batch') || path === '/api/sync/pos' || path === '/api/employees';
 async function batchReports(request: Request, env: Cloudflare.Env, ctx: ExecutionContext, user: SessionUser) {
@@ -206,7 +263,7 @@ async function batchReports(request: Request, env: Cloudflare.Env, ctx: Executio
   if (!urls.length) return Response.json({ error: 'Thiếu danh sách URL.' }, { status: 400 });
   const results = await Promise.all(urls.map(async (u) => {
     const subUrl = new URL(u, request.url);
-    if (!batchable(subUrl.pathname)) return { url: u, status: 400, body: JSON.stringify({ error: 'URL không được gộp.' }) };
+    if (!isCanonicalPath(subUrl.pathname) || !batchable(subUrl.pathname)) return { url: u, status: 400, body: JSON.stringify({ error: 'URL không được gộp.' }) };
     const r = scopeApi(user, 'GET', subUrl);
     if (r.blocked) {
       // Lượt bị chặn trong gộp báo cáo cũng vào nhật ký như gọi riêng (QA 11/10/2026, L6).
@@ -218,7 +275,7 @@ async function batchReports(request: Request, env: Cloudflare.Env, ctx: Executio
     const h = new Headers(); const ck = request.headers.get('cookie'); if (ck) h.set('cookie', ck); h.set('accept', 'application/json');
     const sub = new Request(r.url.toString(), { method: 'GET', headers: h });
     try {
-      const res = await cachedReport(sub, env, ctx, subUrl.pathname, () => handler.fetch(sub, env, ctx), user);
+      const res = await cachedReport(sub, env, ctx, subUrl.pathname, () => withSegLens(r.url, () => handler.fetch(sub, env, ctx)), user);
       // Lượt xuất / mở hồ sơ đi qua gộp báo cáo cũng phải vào nhật ký như gọi riêng.
       const kind = classifyApi('GET', subUrl.pathname, subUrl.searchParams);
       if (kind) ctx.waitUntil(audit({ ...kind, userId: user.userId, email: user.email, name: user.displayName, detail: scrubSearch(subUrl.search), status: res.status, request }));
@@ -250,6 +307,8 @@ export default {
   async fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext) {
     const url = new URL(request.url);
     const { pathname } = url;
+    // Đường dẫn không ở dạng chuẩn (lib/auth/path-guard.ts): trả 404 trước mọi bước kiểm quyền.
+    if (!isCanonicalPath(pathname)) return new Response('Not Found', { status: 404 });
     // Mở bằng http:// (gõ tay trên điện thoại): cookie đăng nhập chỉ đi qua https nên sẽ không đăng nhập được, và trình duyệt
     // báo "Không bảo mật" → chuyển hẳn sang https (trừ máy thử nghiệm localhost).
     // wrangler dev gán hostname của route thật vào request.url và Host, nên máy thử tự khai bằng biến LOCAL_DEV
@@ -273,6 +332,11 @@ export default {
       const blocked = demoBlocked(request.method, pathname);
       if (blocked) return Response.json({ error: blocked }, { status: 403 });
     }
+    // Bản PC chạy song song (THP_READ_ONLY=1, chỉ đặt ở PC): chặn mọi lệnh sửa và webhook, chỉ cho đăng nhập + xem.
+    if (isReadOnly()) {
+      const blocked = readOnlyBlocked(request.method, pathname);
+      if (blocked) return Response.json({ error: blocked }, { status: 403 });
+    }
     // Nguồn team cho báo cáo (Pancake hay web nhân sự): đọc lại tối đa mỗi phút.
     if (pathname.startsWith('/api/')) await refreshTeamSource();
     // Phân quyền tập trung: mọi API (trừ đăng nhập/webhook) được thu hẹp theo POS/nhóm của tài khoản, phần không được cấp thì chặn.
@@ -285,7 +349,7 @@ export default {
     // /api/hr/* do web nhân sự gọi bằng bí mật HR_SHARED_SECRET, không có phiên đăng nhập. Riêng handoff là trình duyệt mở:
     // tự kiểm tra phiên và chuyển sang trang đăng nhập khi chưa đăng nhập (không trả JSON 401 ở đây).
     const hrInternal = pathname.startsWith('/api/hr/');
-    if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/') && pathname !== '/api/telegram/webhook' && pathname !== '/api/recruit/webhook' && pathname !== '/api/marketing/sheet-webhook' && !hrInternal && !deviceRoute(request.method, pathname, request.headers.get('Authorization'))) {
+    if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/') && pathname !== '/api/telegram/webhook' && pathname !== '/api/zalo/webhook' && !pathname.startsWith('/api/zalo/anh/') && pathname !== '/api/recruit/webhook' && pathname !== '/api/marketing/sheet-webhook' && !hrInternal && !deviceRoute(request.method, pathname, request.headers.get('Authorization'))) {
       let user: SessionUser | null;
       try { user = await getSessionUserFromRequest(request); }
       catch (error) {
@@ -294,6 +358,8 @@ export default {
         return Response.json({ error: 'Máy chủ dữ liệu đang bận, thử lại sau vài giây.' }, { status: 503, headers: { 'Retry-After': '3' } });
       }
       if (!user) return Response.json({ error: 'Đăng nhập để tiếp tục.' }, { status: 401 });
+      // MFA bắt buộc mà chưa bật: chặn mọi API dữ liệu (phần /api/auth/* để bật MFA không đi qua đây).
+      if (mfaBlocks(user)) return Response.json({ error: MFA_BLOCKED_ERROR, mfaRequired: true }, { status: 403 });
       sessionUser = user;
       // Gộp nhiều API báo cáo trong một request (trình duyệt gom các lời gọi song song lại): giảm số vòng đi–về trên mạng chậm.
       // Từng URL con vẫn qua đúng phân quyền và cache như gọi riêng.
@@ -313,7 +379,7 @@ export default {
       if (r.url.toString() !== request.url) scoped = new Request(r.url.toString(), request);
     }
     try {
-      const upstream = await cachedReport(scoped, env, ctx, pathname, () => handler.fetch(scoped, env, ctx), sessionUser);
+      const upstream = await cachedReport(scoped, env, ctx, pathname, () => withSegLens(new URL(scoped.url), () => handler.fetch(scoped, env, ctx)), sessionUser);
       // HSTS: trình duyệt nhớ 1 năm là chỉ dùng https với tên miền này (kể cả gõ http lần sau).
       let response = local ? upstream : withHsts(upstream);
       if (request.method !== 'GET' && request.method !== 'HEAD' && pathname.startsWith('/api/') && response.status < 400) {
@@ -324,7 +390,7 @@ export default {
         const declared = response.headers.get(AUDIT_HEADER);
         let action = auditKind.action, detail = request.method === 'GET' ? auditBody : summarizeBody(auditBody);
         if (declared) { const d = decodeURIComponent(declared); const i = d.indexOf('|'); if (i > 0) { action = d.slice(0, i); detail = d.slice(i + 1); } else detail = d; }
-        ctx.waitUntil(audit({ action, target: auditKind.target, userId: auditUser.userId, email: auditUser.email, name: auditUser.displayName, detail, status: response.status, request }));
+        ctx.waitUntil(audit({ action, target: auditKind.target, userId: auditUser.userId, email: auditUser.email, name: auditUser.actingAs ? `${auditUser.displayName} (do ${auditUser.actingAs.ownerName} xem như)` : auditUser.displayName, detail, status: response.status, request }));
       }
       return response;
     } finally {
@@ -335,10 +401,21 @@ export default {
     }
   },
   // Cron Trigger chỉ "đánh thức" bộ hẹn giờ DO; DO là nơi duy nhất chạy đồng bộ (không chạy chồng hai lượt lên D1).
-  // Cron chạy mỗi phút cho Chia số (thử nghiệm); các việc cũ vẫn giữ nhịp 5 phút.
+  // Cron chạy mỗi phút cho báo đơn kẹt; các việc cũ vẫn giữ nhịp 5 phút. Chia số đã bỏ 21/10/2026 (dữ liệu cũ giữ nguyên).
   async scheduled(controller: ScheduledController, env: Cloudflare.Env, ctx: ExecutionContext) {
-    ctx.waitUntil(import('@/lib/stuck-alert').then((m) => m.maybeStuckAlert(controller.scheduledTime)).catch((error) => console.error('stuck alert failed', error)));
-    ctx.waitUntil(runDispatch(new Date(controller.scheduledTime)).catch((error) => console.error('dispatch run failed', error)));
+    // Bản PC chỉ xem: chỉ đồng bộ Pancake, kéo web nhân sự và làm nóng báo cáo. Nhắn tin, AI, sao lưu R2 để web chính làm (tránh trùng).
+    if (isReadOnly()) {
+      ctx.waitUntil(warmRecentReports(env, ctx).catch((error) => console.error('warm reports failed', error)));
+      if (new Date(controller.scheduledTime).getUTCMinutes() % 5 !== 0) return;
+      await refreshTeamSource();
+      ctx.waitUntil(scheduler(env).kick().catch((error) => console.error('scheduler kick failed', error)));
+      if (env.HR_SHARED_SECRET) ctx.waitUntil(pullHr());
+      return;
+    }
+    ctx.waitUntil(import('@/lib/zalo/zalo-poll').then((m) => m.maybeZaloPoll()).catch(() => console.error('zalo poll failed')));
+    ctx.waitUntil(import('@/lib/zalo/zalo-tick').then((m) => m.maybeZaloTick(controller.scheduledTime)).catch(() => console.error('zalo tick failed')));
+    ctx.waitUntil(import('@/lib/bot/stuck-alert').then((m) => m.maybeStuckAlert(controller.scheduledTime)).catch((error) => console.error('stuck alert failed', error)));
+    // Vá nóng 09/11/2026: tắt làm nóng báo cáo trên web chính (cron mỗi phút) để bớt tải D1; người mở báo cáo vẫn tính đúng số mới nhất.
     if (new Date(controller.scheduledTime).getUTCMinutes() % 5 !== 0) return;
     // Canh gác lớp 2: bộ hẹn giờ im quá 15 phút (hoặc gọi không được) thì Worker tự gửi Telegram, không nhờ DO hay alarm.
     ctx.waitUntil(checkScheduler(env, () => scheduler(env).status()).catch((error) => console.error('watch sched failed', error)));
@@ -346,6 +423,8 @@ export default {
     ctx.waitUntil(scheduler(env).kick().catch((error) => console.error('scheduler kick failed', error)));
     // Tóm tắt sáng bằng Workers AI: một lần mỗi ngày sau 7h30 giờ VN.
     ctx.waitUntil(maybeDailySummary().catch((error) => console.error('ai summary failed', error)));
+    ctx.waitUntil(maybeReviewTick(new Date(controller.scheduledTime)).catch(logReviewError));
+    ctx.waitUntil(maybeForecastTick(new Date(controller.scheduledTime)).catch(() => console.error('forecast tick failed')));
     // Nhận xét xu hướng theo bộ phận: cũng một lần mỗi ngày sau 7h30.
     ctx.waitUntil(maybeDailyTrendNotes().catch((error) => console.error('ai trend notes failed', error)));
     // Sao lưu đêm nhóm bảng không lấy lại được ra R2: một lần mỗi ngày từ 02:00 giờ VN (chưa gắn kho R2 thì chỉ ghi "chưa cấu hình").

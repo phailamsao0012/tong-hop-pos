@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { matchShops, normalizeName } from '../lib/shop-map';
+import { matchShops, normalizeName } from '../lib/pancake/shop-map';
 
 test('normalizeName strips diacritics and punctuation', () => {
   assert.equal(normalizeName('Siêu vỏ gạo'), 'sieuvogao');

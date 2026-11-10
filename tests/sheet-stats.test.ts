@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { parseSheet } from '../lib/sheet-costs';
+import { parseSheet } from '../lib/ops/sheet-costs';
 
 // Tab CPQC Daily (BC MKT Agri): Ngày, Trang (= tên MKT), Sản phẩm, Chi phí QC Tổng, SĐT, Đơn, DT (anh Vũ 12/10/2026 đối chiếu POS với sheet).
 const match = (n: string) => ({ 'Hà Thương': 'u1', 'Dương': 'u2' } as Record<string, string>)[n];
@@ -36,4 +36,44 @@ void test('Sheet không có cột SĐT / Đơn / DT: chi phí đọc như cũ, k
   assert.equal(r.rows.length, 1);
   assert.equal(r.rows[0].amount, 1_000_000);
   assert.equal(r.stats.length, 0, '"Đơn giá" không phải cột Đơn');
+});
+
+void test('Gửi lại file mỗi giờ: chỉ ghi lại ngày có số đổi (anh Vũ 22/10/2026, giảm ghi D1)', async () => {
+  const { emptyDb } = await import('./support/d1-sqlite');
+  const { ingestSheet } = await import('../lib/ops/sheet-costs');
+  const { raw } = emptyDb();
+  try {
+    const sheet = (amount9: string) => tab([
+      ['Ngày', 'Trang', 'Sản phẩm', 'Chi phí QC Tổng', 'SĐT', 'Đơn', 'DT'],
+      ['09/10/2026', 'Hà Thương', 'Gentadox', amount9, '12', '5', '4.500.000'],
+      ['10/10/2026', 'Hà Thương', 'Gentadox', '500.000', '3', '1', '900.000'],
+    ]);
+    const ids = () => raw.prepare('SELECT day, id FROM ad_costs ORDER BY day').all() as { day: string; id: string }[];
+    await ingestSheet(sheet('1.200.000'));
+    const first = ids();
+    assert.equal(first.length, 2);
+    await ingestSheet(sheet('1.200.000'));
+    assert.deepEqual(ids(), first, 'không đổi gì thì không ghi lại');
+    await ingestSheet(sheet('1.300.000'));
+    const third = ids();
+    assert.notEqual(third[0].id, first[0].id, 'ngày 09/10 đổi số thì ghi lại');
+    assert.equal(third[1].id, first[1].id, 'ngày 10/10 giữ nguyên');
+    assert.equal((raw.prepare('SELECT SUM(amount) AS s FROM ad_costs').get() as { s: number }).s, 1_800_000);
+    assert.equal((raw.prepare('SELECT rows, amount FROM sheet_cost_sources').get() as { rows: number; amount: number }).rows, 2);
+  } finally { raw.close(); }
+});
+
+// File thật (07/11/2026): ô đầu là ngày chứ không phải chữ "Ngày", cột số ghi "Số lượng SĐT", "Số đơn khách mới", "Doanh thu khách mới", tiền có ₫.
+void test('Sheet: tiêu đề kiểu file thật vẫn đọc được SĐT, Đơn, DT', () => {
+  const r = parseSheet(tab([
+    ['13/08/2025', 'Trang', 'Sản phẩm', 'Chi phí QC Tổng', 'Số lượng SĐT', 'Số đơn khách mới', 'Doanh thu khách mới'],
+    ['05/11/2026', 'Dương', 'FLO', ' ₫200,000', '', '', ''],
+    ['05/11/2026', 'Dương', 'APEX', ' ₫300,000', '', '', ''],
+    ['06/11/2026', 'Hà Thương', 'FLO', ' ₫438,848', '7', '2', '1.900.000'],
+  ]), match);
+  const cols = r.layouts[0].columns;
+  assert.equal(cols.phones, 'Số lượng SĐT');
+  assert.equal(cols.orders, 'Số đơn khách mới');
+  assert.equal(cols.revenue, 'Doanh thu khách mới');
+  assert.deepEqual(r.stats.map((s) => [s.day, s.marketerId, s.phones, s.orders, s.revenue]), [['2026-11-06', 'u1', 7, 2, 1_900_000]]);
 });

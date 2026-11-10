@@ -3,8 +3,8 @@ import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import type { DatabaseSync } from 'node:sqlite';
 import { env } from 'cloudflare:workers';
-import { escapeLike, maskSearchTerm, orderKeys, phoneVariants, searchTermType } from '../lib/search-query';
-import { audit, classifyApi, scrubSearch } from '../lib/audit';
+import { escapeLike, maskSearchTerm, orderKeys, phoneVariants, searchTermType } from '../lib/shared/search-query';
+import { audit, classifyApi, scrubSearch } from '../lib/ops/audit';
 import { dayData, toSourceOrder } from '../lib/demo/world';
 import { emptyDb } from './support/d1-sqlite';
 import { loginAs, logout } from './support/session';
@@ -193,7 +193,8 @@ void test('tìm tên và ký tự đặc biệt: hai route, cả hai chế độ
       assert.equal(body.customers.length, 1);
     }
   }
-  for (const path of ['../app/api/raw/orders/route.ts', '../app/api/reports/customers/route.ts']) {
+  // SQL tìm kiếm nằm ở lib từ cải tổ B4/B5 (05/11/2026).
+  for (const path of ['../lib/pancake/raw-orders.ts', '../lib/reports/customers-list.ts']) {
     const source = readFileSync(new URL(path, import.meta.url), 'utf8');
     for (const match of source.matchAll(/\bLIKE\s+\?/g)) {
       assert.match(source.slice(match.index + match[0].length), /^ ESCAPE /);

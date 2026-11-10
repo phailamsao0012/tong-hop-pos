@@ -2,19 +2,20 @@
 
 // Sản phẩm (giai đoạn 4b · 26/09/2026): sản phẩm bán chạy so kỳ trước, tỷ trọng theo nhóm, xu hướng theo ngày của sản phẩm dẫn đầu, hoàn theo sản phẩm.
 import { usePosIds } from './pos-store';
-import { compareText } from '@/lib/periods';
+import { compareText } from '@/lib/shared/periods';
 import { usePeriod } from './period-store';
 import { AiPackButton } from './ai-pack';
 import { useMemo, useState } from 'react';
 import { BarChart3, FileDown, Layers, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { POS } from '@/lib/report-model';
-import type { ProductsReport } from '@/lib/products-report';
+import { POS } from '@/lib/shared/report-model';
+import type { ProductsReport } from '@/lib/reports/products-report';
 import { ICON } from './icons';
 import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';
 import { ChartCard, Definitions, DeltaPill, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, delta, dmy, pct, shortMoney, useSort, vi } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
+import { DeliveredProductsBlock } from './delivered-products-block';
 
 const GROUP_COLORS: Record<string, string> = { 'Kháng sinh': 'var(--ai-3)', 'Combo': 'var(--ai-5)', 'Khác': 'var(--ink-4)' };
 
@@ -70,19 +71,20 @@ export function ProductsView() {
       {!r && !error && <><SkeletonKpis count={4} className="xl:grid-cols-4" /><SkeletonTable rows={6} cols={6} /></>}
       {r && (
         <>
-          <div className={`grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4 ${loading ? 'opacity-70' : ''}`}>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
             <KpiCard icon={ICON.revenue} tone="teal" label="Tiền hàng" value={shortMoney(r.total.revenue)} delta={delta(r.total.revenue, r.total.prevRevenue)} tooltip={{ period: periodLabel, current: shortMoney(r.total.revenue), previous: shortMoney(r.total.prevRevenue), definition: r.definitions.revenue }} />
             <KpiCard icon={ICON.products} tone="blue" label="Số lượng bán" value={vi.format(r.total.qty)} note={`${vi.format(r.total.products)} sản phẩm có bán`} tooltip={{ period: periodLabel, current: vi.format(r.total.qty), definition: r.definitions.scope }} />
             <KpiCard icon={ICON.returned} tone="orange" invert label="Tỷ lệ hoàn (SL)" value={pct(r.total.returnRate)} note={`${vi.format(r.total.returnedQty)} sản phẩm hoàn`} tooltip={{ period: periodLabel, current: pct(r.total.returnRate), definition: r.definitions.returned }} />
             <KpiCard icon={Layers} tone="purple" label="Nhóm dẫn đầu" value={r.groups[0]?.label ?? '—'} note={r.groups[0] ? `${pct(r.total.revenue ? r.groups[0].revenue / r.total.revenue * 100 : null, 0)} tiền hàng` : ''} tooltip={{ period: periodLabel, definition: r.definitions.group }} />
           </div>
+          <DeliveredProductsBlock start={start} end={end} posIds={posIds} />
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
             <ChartCard icon={BarChart3} title="Bán chạy nhất · tiền hàng" subtitle="Thanh đậm = kỳ này, thanh mờ = kỳ trước cùng số ngày">
               {top.length ? (
                 <ul className="m-0 list-none space-y-2.5 p-0">
                   {top.map((x, i) => (
                     <li key={x.name} className="grid grid-cols-[1.25rem_minmax(0,14rem)_minmax(0,1fr)_6.5rem] items-center gap-2 text-[12.5px]">
-                      <span className="num text-[11px] text-ink-4">{i + 1}</span>
+                      <span className="num inline-block w-4 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span>
                       <span className="truncate text-ink" title={x.name}>{x.name}</span>
                       <span className="grid gap-0.5">
                         <span className="h-2.5 overflow-hidden rounded-full bg-surface-2"><i className="block h-full rounded-full" style={{ width: `${x.revenue / topMax * 100}%`, background: GROUP_COLORS[x.group] }} /></span>
@@ -99,7 +101,7 @@ export function ProductsView() {
                 <div className="flex h-4 gap-[2px] overflow-hidden rounded-full">{r.groups.map((g) => <i key={g.label} className="block h-full" style={{ width: `${r.total.revenue ? g.revenue / r.total.revenue * 100 : 0}%`, background: GROUP_COLORS[g.label] }} />)}</div>
                 <div className="mt-2 grid gap-1.5">
                   {r.groups.map((g) => (
-                    <button key={g.label} type="button" onClick={() => setGroup(group === g.label ? null : g.label)} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12.5px] hover:bg-tint-2 ${group === g.label ? 'bg-tint-2 font-semibold' : ''}`}>
+                    <button key={g.label} type="button" onClick={() => setGroup(group === g.label ? null : g.label)} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 tap text-left text-[12.5px] hover:bg-tint-2 ${group === g.label ? 'bg-tint-2 font-semibold' : ''}`}>
                       <i className="size-2.5 rounded-full" style={{ background: GROUP_COLORS[g.label] }} /><span className="text-ink">{g.label}</span>
                       <span className="num ml-auto text-ink">{shortMoney(g.revenue)}</span><DeltaPill variant="plain" value={g.prevRevenue ? delta(g.revenue, g.prevRevenue) : null} />
                     </button>

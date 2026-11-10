@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { RANK_STAGES, rankByStage, type RankRow } from '../lib/mkt-rank';
-import { stageSql } from '../lib/marketing-report';
-import { PACKED_SQL } from '../lib/van-don';
+import { RANK_STAGES, rankByStage, type RankRow } from '../lib/reports/mkt-rank';
+import { stageSql } from '../lib/reports/marketing-report';
+import { PACKED_SQL } from '../lib/reports/van-don';
 import { demoWorld, emptyDb } from './support/d1-sqlite';
 import { loginAs, logout } from './support/session';
-import { POS } from '../lib/report-model';
+import { POS } from '../lib/shared/report-model';
 
 void test('mkt-rank-stage: hạng theo đơn, hòa theo doanh thu rồi tên; đổi hạng và không sửa đầu vào', () => {
   const row = (rankName: string, confirmed: number, packed: number, net = 100): RankRow => ({

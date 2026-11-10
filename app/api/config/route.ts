@@ -1,7 +1,7 @@
-import { env } from 'cloudflare:workers';
-import { forbidden, getSessionUser } from '@/lib/auth';
-import { isOwner } from '@/lib/access';
-import { POS } from '@/lib/report-model';
+import { forbidden, getSessionUser } from '@/lib/auth/auth';
+import { isOwner } from '@/lib/auth/access';
+import { POS } from '@/lib/shared/report-model';
+import { alertRuleAndShops, saveAlertRule, saveShopId } from '@/lib/ops/config-store';
 
 const defaults = {
   enabled: false,
@@ -22,14 +22,7 @@ export async function GET() {
       { status: 401 },
     );
   if (!isOwner(user)) return forbidden(); // chặn cả ở đây, không chỉ dựa vào worker (Đợt 0, K1)
-  const [rule, shops] = await Promise.all([
-    env.DB.prepare('SELECT * FROM alert_rules WHERE owner_id=?')
-      .bind(user.userId)
-      .first<Record<string, unknown>>(),
-    env.DB.prepare(
-      'SELECT id,shop_id,status,last_sync_at,history_start,last_error FROM pos_shops',
-    ).all<Record<string, unknown>>(),
-  ]);
+  const [rule, shops] = await alertRuleAndShops(user);
   const byId = new Map(shops.results.map((r) => [String(r.id), r]));
   return Response.json(
     {
@@ -87,11 +80,7 @@ export async function PUT(request: Request) {
     const shopId = body.shopId?.trim();
     if (!pos || (shopId && !/^\d{1,20}$/.test(shopId)))
       return Response.json({ error: 'Shop ID phải là dãy số, không phải API key.' }, { status: 400 });
-    await env.DB.prepare(
-      'INSERT INTO pos_shops (id,name,shop_id,status) VALUES (?,?,?,?) ON CONFLICT(id) DO UPDATE SET shop_id=excluded.shop_id,status=?,last_sync_at=NULL,recent_watermark=NULL,recent_cursor=NULL,last_error=NULL',
-    )
-      .bind(pos.id, pos.name, shopId || null, 'pending', 'pending')
-      .run();
+    await saveShopId(pos, shopId);
     return Response.json({ ok: true });
   }
   if (body.type === 'alert') {
@@ -118,23 +107,7 @@ export async function PUT(request: Request) {
         { status: 400 },
       );
     const now = new Date().toISOString();
-    await env.DB.prepare(
-      'INSERT INTO alert_rules (owner_id,enabled,threshold,min_received,cooldown_minutes,shift_start,shift_end,repeat,chat_id,employee_ids_json,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(owner_id) DO UPDATE SET enabled=excluded.enabled,threshold=excluded.threshold,min_received=excluded.min_received,cooldown_minutes=excluded.cooldown_minutes,shift_start=excluded.shift_start,shift_end=excluded.shift_end,repeat=excluded.repeat,chat_id=excluded.chat_id,employee_ids_json=excluded.employee_ids_json,updated_at=excluded.updated_at',
-    )
-      .bind(
-        user.userId,
-        a.enabled ? 1 : 0,
-        a.threshold,
-        a.minReceived,
-        a.cooldownMinutes,
-        a.shiftStart,
-        a.shiftEnd,
-        a.repeat ? 1 : 0,
-        String(a.chatId ?? '').trim(),
-        JSON.stringify(a.employeeIds),
-        now,
-      )
-      .run();
+    await saveAlertRule(user, a, now);
     return Response.json({ ok: true });
   }
   return Response.json(

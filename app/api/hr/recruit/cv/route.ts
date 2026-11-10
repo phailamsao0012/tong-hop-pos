@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
-import { HR_SECRET_HEADER, secretMatches } from '@/lib/hr-link';
-import { audit } from '@/lib/audit';
-import { recruitCv } from '@/lib/recruit-api';
+import { HR_SECRET_HEADER, secretMatches } from '@/lib/teams/hr-link';
+import { audit } from '@/lib/ops/audit';
+import { recruitCv } from '@/lib/teams/recruit-api';
 
 // Web nhân sự lấy file CV của một ứng viên để hiện trong trang Tuyển dụng.
 // Nhật ký (luật dữ liệu cá nhân, 11/10/2026): web nhân sự gửi kèm người đang xem ở header x-hr-viewer (email), không có thì ghi "web nhân sự".

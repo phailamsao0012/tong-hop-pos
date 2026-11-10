@@ -1,17 +1,19 @@
 'use client';
+import { StaffName } from './staff-name';
 import { AdvisorPanel } from './advisor-panel';
 
 // Tổng quan từng bộ phận (Sale / CSKH): tình hình kinh doanh của riêng bộ phận đó — doanh thu, đơn chốt, GTTB, tỷ lệ chốt,
 // đơn chốt theo nhóm sản phẩm (thay chi phí giảm giá & ship từ 29/09/2026), hủy/hoàn, theo ngày, theo POS, theo nhân viên (yêu cầu 24/09/2026).
 // Số lấy từ cùng báo cáo Tổng quan POS (lọc đội), nên khớp các trang khác; trạng thái đơn theo bộ lọc chung trên thanh trên cùng.
 import { PackedRevenue, PACKED_HELP } from './sale-analytics-view';
-import type { PackedSeller } from '@/lib/sale-packed';
-import { type MonthForecast } from '@/lib/forecast';
-import { todayVn } from '@/lib/report-time';
+import type { PackedSeller } from '@/lib/reports/sale-packed';
+import { type MonthForecast } from '@/lib/kpi/forecast';
+import { todayVn } from '@/lib/shared/report-time';
 import { usePosIds } from './pos-store';
 import { usePeriod } from './period-store';
 import { ICON } from './icons';
 import { PancakeReference } from './pancake-reference';
+import { SaleSegmentBlock } from './sale-segment-block';
 import {
   METRIC_DEFS,
   cancelRateOf,
@@ -19,14 +21,19 @@ import {
   closeRateOf,
   closeRateTop,
   returnRateOf,
-} from '@/lib/metrics';
+} from '@/lib/reports/metrics';
 import { useMetricSettings } from './metric-settings';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { takeNavHint } from './nav-focus';
+import { SEGMENT_HINT, segmentFromHint } from '@/lib/shared/drill-hint';
+import { PRODUCT_SEGMENTS } from '@/lib/pancake/order-segments';
 import { PosTile } from './pos-badge';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import {
   CskhOriginBlock,
+  RateCells,
   SaleGroupBlock,
+  type StaffRates,
   useTagPref,
 } from './product-group-blocks';
 import {
@@ -54,14 +61,15 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from '@/components/ui/chart';
-import { POS } from '@/lib/report-model';
+import { POS } from '@/lib/shared/report-model';
 import { PeriodToolbar, PosChips, type OverviewReport } from './overview-view';
 import { GlobalStatusFilter } from './status-filter';
-import { parseStatus } from '@/lib/order-status';
+import { parseStatus } from '@/lib/pancake/order-status';
 import { useOrderStatus } from './status-store';
+import { LazyBlock } from './lazy-block';
 import { useApi } from './use-api';
 import { unitFor, useHrUnit, withUnit, useMktTeam } from './team-store';
-import { TrendNotes } from './overview-trends';
+import { PeriodBars, TrendNotes } from './overview-trends';
 import { StaleChip } from './stale-chip';
 import { TeamKpiProgress } from './team-kpi-progress';
 import {
@@ -125,6 +133,8 @@ export function TeamOverviewView({
   // Đang chọn một team của bộ phận này (thanh trên cùng): mọi số trên trang chỉ tính người thuộc team đó.
   const unit = unitFor(useHrUnit(), team);
   const mktLens = useMktTeam();
+  // Bấm số ở Tổng quan POS khi đang lọc nhóm đơn: giữ nhóm đó cho báo cáo chính của trang (đánh giá 21/10/2026), có nút bỏ lọc.
+  const [segment, setSegment] = useState(() => segmentFromHint(takeNavHint(SEGMENT_HINT)));
   const q = useMemo(
     () =>
       new URLSearchParams(withUnit('/?'+new URLSearchParams({
@@ -139,8 +149,8 @@ export function TeamOverviewView({
   );
   const api = useApi<OverviewReport & { forecast?: MonthForecast | null; packedStaff?: PackedSeller[] }>(
     useMemo(
-      () => `/api/reports/overview?${q}&groupBy=day&compare=previous&forecast=month`,
-      [q],
+      () => `/api/reports/overview?${q}&groupBy=day&compare=previous&forecast=month${segment ? `&productSegment=${segment}` : ''}`,
+      [q, segment],
     ),
   );
   // Đơn chốt theo nhóm sản phẩm (cùng lời gọi với bảng Chốt theo nhóm sản phẩm bên dưới).
@@ -161,7 +171,7 @@ export function TeamOverviewView({
     !showTags
       ? null
       : withUnit(
-          `/api/reports/product-groups?${new URLSearchParams({ start, end, posIds: posIds.join(','), team, dim: 'tag', basis: 'both', by: team === 'cskh' ? 'care' : 'seller' })}`,
+          `/api/reports/product-groups?${new URLSearchParams({ start, end, posIds: posIds.join(','), team, dim: 'tag', basis: 'both', by: 'seller' })}`,
           unit,
         ),
   );
@@ -196,6 +206,16 @@ export function TeamOverviewView({
   const report = api.data,
     cur = report?.current.total,
     prev = report?.compare?.total ?? null;
+  // Biểu đồ trong ô số (anh Vũ 21/10/2026): theo ngày, kỳ này đặt cạnh ngày cùng thứ tự của kỳ trước. Kỳ một ngày thì không vẽ.
+  const daily = (pick: (closedNet: number, closedOrders: number) => number) => {
+    const sum = (rows: { bucket: string; closedNet: number; closedOrders: number }[]) => {
+      const m = new Map<string, [number, number]>();
+      for (const r of rows) { const v = m.get(r.bucket) ?? [0, 0]; v[0] += r.closedNet; v[1] += r.closedOrders; m.set(r.bucket, v); }
+      return [...m].sort((a, b) => a[0].localeCompare(b[0])).map(([day, [net, n]]) => ({ day, v: pick(net, n) }));
+    };
+    const now = sum(report?.current.series ?? []), before = sum(report?.compare?.series ?? []);
+    return start === end ? null : now.map((p, i) => ({ label: p.day, actual: p.v, previous: before[i]?.v ?? 0 }));
+  };
   const today = todayVn();
   const forecast = start === today.slice(0, 7) + '-01' && end === today ? report?.forecast : null;
   const days = useMemo(() => {
@@ -211,7 +231,7 @@ export function TeamOverviewView({
       .map((d) => ({ ...d, netM: Math.round(d.net / 1e5) / 10 }));
   }, [report]);
   const staffSort = useSort<
-    'name' | 'closedOrders' | 'closedNet' | 'averageOrder' | 'rate' | 'cancel' | 'packedNet' | 'packedShare'
+    'name' | 'closedOrders' | 'closedNet' | 'averageOrder' | 'rate' | 'ret' | 'cancel' | 'packedNet' | 'packedShare'
   >('closedNet');
   const staff = useMemo(
     () =>
@@ -226,6 +246,8 @@ export function TeamOverviewView({
                 ? (closeRateOf(r, ms.rateBase) ?? -1)
                 : staffSort.key === 'cancel'
                   ? (cancelRate(r) ?? -1)
+                  : staffSort.key === 'ret'
+                  ? (returnRateOf(r, ms.returnBase) ?? -1)
                   : ((r[staffSort.key] ?? -1) as number);
           const c =
             staffSort.key === 'name'
@@ -233,8 +255,15 @@ export function TeamOverviewView({
               : v(a) - v(b);
           return staffSort.desc ? -c : c;
         }),
-    [report, staffSort.key, staffSort.desc, team, ms.rateBase],
+    [report, staffSort.key, staffSort.desc, team, ms.rateBase, ms.returnBase],
   );
+  // Cột Hoàn, Hủy ở bảng Từng nhân viên Sale: cùng cách tính hai ô Hoàn, Hủy đầu trang (khóa '' = tổng).
+  const staffRates = useMemo(() => {
+    const rateOf = (m: Metrics) => ({ ret: returnRateOf(m, ms.returnBase), returned: m.groups.returned.orders, cancel: cancelRateOf(m), cancelled: Math.max(0, m.groups.cancelled.orders - (m.deletedOrders ?? 0)) });
+    const map: StaffRates = new Map((report?.current.byEmployee ?? []).filter((r) => r.sellerId).map((r) => [r.sellerId, rateOf(r)]));
+    if (report) map.set('', rateOf(report.current.total));
+    return map;
+  }, [report, ms.returnBase]);
   const origins = report?.origins ?? [];
   const packedNet = report?.packedStaff?.reduce((n, r) => n + r.packedNet, 0);
   const self = origins
@@ -303,6 +332,12 @@ export function TeamOverviewView({
         extra={<GlobalStatusFilter size="md" />}
       />
       <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
+      {segment && (
+        <output className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-primary/40 bg-tint px-3 py-2 text-[13px] text-ink">
+          <span>Đang lọc nhóm đơn <b>{PRODUCT_SEGMENTS[segment]}</b> như ở Tổng quan POS: ô số, biểu đồ và bảng nhân viên tính theo nhóm này; các khối khác vẫn tính mọi nhóm.</span>
+          <button type="button" className="link" onClick={() => setSegment(null)}>Bỏ lọc nhóm</button>
+        </output>
+      )}
       {team === 'cskh' && <CskhFocusBar />}
       {api.error && !report && (
         <ErrorBox error={api.error} onRetry={api.reload} />
@@ -318,7 +353,7 @@ export function TeamOverviewView({
       {cur && report && (
         <>
           <div
-            className={`stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 transition-opacity ${api.loading ? 'opacity-70' : ''}`}
+            className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 transition-opacity"
             aria-busy={api.loading}
           >
             <KpiCard
@@ -359,6 +394,7 @@ export function TeamOverviewView({
                   : undefined
               }
               note={`Giao thành công TB ${shortMoney(cur.deliveredAverage)}`}
+              chart={(() => { const s = daily((net, n) => n ? net / n : 0); return s && s.length > 1 ? <PeriodBars series={s} unit="money" kind="line" fill /> : undefined; })()}
               tooltip={tip(
                 'Doanh thu ÷ đơn chốt.',
                 money(cur.averageOrder),
@@ -377,6 +413,7 @@ export function TeamOverviewView({
                 prev ? delta(cur.closedOrders, prev.closedOrders) : undefined
               }
               note={`${vi.format(cur.closedCustomers ?? 0)} khách · ${vi.format(cur.closedQuantity)} sản phẩm`}
+              chart={(() => { const s = daily((_, n) => n); return s?.length ? <PeriodBars series={s} unit="orders" kind="cum" periodEnd={end} fill /> : undefined; })()}
               tooltip={{
                 ...tip(
                   report.definitions.closed,
@@ -392,7 +429,8 @@ export function TeamOverviewView({
                   ]),
               }}
             />
-            {(() => {
+            {/* CSKH không xem tỷ lệ chốt (anh Vũ 31/10/2026). */}
+            {team === 'sale' && (() => {
               const r = closeRateOf(cur, ms.rateBase),
                 pr = prev ? closeRateOf(prev, ms.rateBase) : null,
                 den = closeRateBase(cur, ms.rateBase);
@@ -423,9 +461,11 @@ export function TeamOverviewView({
               <>
                 <KpiCard id="cskh-origin" icon={UserCheck} tone="green" label="Tự upsell" onClick={() => onNavigate('origin')}
                   value={vi.format(self.n)} unit="đơn" note={shortMoney(self.net)}
+                  chart={<OriginShare n={self.n} net={self.net} totalN={self.n + mkt.n} totalNet={self.net + mkt.net} tone="var(--t-green)" />}
                   tooltip={tip('Đơn chốt không có Marketer trong kỳ và phạm vi đang chọn; doanh thu từ cùng các đơn đó.', vi.format(self.n) + ' đơn · ' + money(self.net))} />
                 <KpiCard icon={Megaphone} tone="blue" label="Từ MKT" onClick={() => onNavigate('origin')}
                   value={vi.format(mkt.n)} unit="đơn" note={shortMoney(mkt.net)}
+                  chart={<OriginShare n={mkt.n} net={mkt.net} totalN={self.n + mkt.n} totalNet={self.net + mkt.net} tone="var(--t-blue)" />}
                   tooltip={tip('Đơn chốt có Marketer trong kỳ và phạm vi đang chọn; doanh thu từ cùng các đơn đó.', vi.format(mkt.n) + ' đơn · ' + money(mkt.net))} />
               </>
             ) : (
@@ -443,7 +483,8 @@ export function TeamOverviewView({
             )}
           </div>
           {!focusId && <AdvisorPanel dept={team} />}
-          <div className={`grid gap-3 ${team === 'cskh' ? 'grid-cols-2 lg:grid-cols-3' : 'grid-cols-2'}`}>
+          {/* Ô tự giãn lấp kín hàng, không để ô lẻ đứng một mình (anh Vũ 21/10/2026). */}
+          <div className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(min(100%,15rem),1fr))]">
             {team === 'cskh' && !mktLens && (
               <KpiCard icon={PhoneCall} tone="gray" label="Cuộc gọi/note trong kỳ"
                 className="!p-3 [&_.val]:!text-xl"
@@ -481,13 +522,14 @@ export function TeamOverviewView({
           </div>
           {!focusId && !mktLens && <TrendNotes depts={[team]} team={team} />}
           {kpi && team === 'cskh' && !mktLens && (
-            <TeamKpiProgress
+            <LazyBlock><TeamKpiProgress
               team="cskh"
               focusId={focusId}
               onOpen={() => onNavigate('cskh-kpi')}
-            />
+            /></LazyBlock>
           )}
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+          {team === 'sale' && !mktLens && <SaleSegmentBlock q={q.toString()} periodLabel={periodLabel} />}
+          <div className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(min(100%,15rem),1fr))]">
             {showTags &&
               (() => {
                 // Thay thẻ "Chi phí giảm giá + ship" (29/09/2026): đơn chốt theo từng thẻ đơn.
@@ -575,13 +617,13 @@ export function TeamOverviewView({
           </div>
           {/* Số cả cửa hàng: ẩn khi đang xem riêng một nhân viên để ảnh chụp không lộ số người khác. */}
           {!focusId && !mktLens && (
-            <PancakeReference
+            <LazyBlock><PancakeReference
               posIds={posIds}
               start={start}
               end={end}
               title="Số tham chiếu Pancake · cả cửa hàng"
               note={`Toàn bộ đơn của POS đang chọn (mọi bộ phận), như màn Thống kê Pancake · % so kỳ trước`}
-            />
+            /></LazyBlock>
           )}
 
           {team === 'cskh' && !mktLens && (
@@ -647,10 +689,10 @@ export function TeamOverviewView({
           )}
 
           {team === 'sale' && !mktLens && (
-            <SaleGroupBlock start={start} end={end} posIds={posIds} />
+            <LazyBlock className="h-72"><SaleGroupBlock start={start} end={end} posIds={posIds} rates={staffRates} /></LazyBlock>
           )}
           {team === 'cskh' && !mktLens && (
-            <SaleGroupBlock
+            <LazyBlock className="h-72"><SaleGroupBlock
               start={start}
               end={end}
               posIds={posIds}
@@ -661,15 +703,15 @@ export function TeamOverviewView({
               plainTitle="Từng nhân viên CSKH"
               plainSubtitle="Đơn chốt trong kỳ của từng người (NV chăm sóc trên đơn, trống thì người bán) · so cùng kỳ chọn ngay dưới · bấm số để xem từng đơn"
               subtitle="Đơn chốt trong kỳ của từng người (NV chăm sóc trên đơn, trống thì người bán), xếp theo sản phẩm của CHÍNH đơn đó · một đơn có cả hai loại tính ở cả hai nhóm · bấm số để xem từng đơn"
-            />
+            /></LazyBlock>
           )}
           {team === 'cskh' && !mktLens && (
-            <CskhOriginBlock
+            <LazyBlock className="h-72"><CskhOriginBlock
               start={start}
               end={end}
               posIds={posIds}
               focusId={focusId}
-            />
+            /></LazyBlock>
           )}
 
           <ChartCard
@@ -768,7 +810,7 @@ export function TeamOverviewView({
                       revenue={p.closedNet}
                       orders={p.closedOrders}
                       aov={p.averageOrder}
-                      rate={rateOf(p)}
+                      rate={team === 'cskh' ? undefined : rateOf(p)}
                       rateLabel="Tỷ lệ chốt"
                       share={
                         cur.closedNet
@@ -830,8 +872,9 @@ export function TeamOverviewView({
                       />
                       <SortTh k="averageOrder" label="AOV" title="Doanh thu ÷ đơn chốt" sort={staffSort} />
                       {team === 'sale' && <><SortTh k="packedNet" label="DT đóng hàng trở đi" title={PACKED_HELP} sort={staffSort} /><SortTh k="packedShare" label="% DT đóng hàng" title={PACKED_HELP} sort={staffSort} /></>}
-                      <SortTh k="rate" label="Tỷ lệ chốt" sort={staffSort} />
-                      <SortTh k="cancel" label="Hủy" sort={staffSort} />
+                      {team === 'sale' && <SortTh k="rate" label="Tỷ lệ chốt" sort={staffSort} />}
+                      <SortTh k="ret" label="Hoàn" title="Đỏ từ 7%, vàng từ 5%, xanh dưới 5%" sort={staffSort} />
+                      <SortTh k="cancel" label="Hủy" title="Đỏ từ 7%, vàng từ 5%, xanh dưới 5%" sort={staffSort} />
                       <th>Tỷ trọng doanh thu</th>
                     </tr>
                   </thead>
@@ -840,7 +883,7 @@ export function TeamOverviewView({
                       <tr key={r.sellerId}>
                         <td className="num text-[11px] text-ink-4">{i + 1}</td>
                         <td className="text-left font-medium text-ink">
-                          {r.name}
+                          <StaffName id={r.sellerId} name={r.name} />
                           {r.department && (
                             <span className="block text-[11px] font-normal text-ink-3">
                               {r.department}
@@ -851,12 +894,12 @@ export function TeamOverviewView({
                         <td className="n">{vi.format(r.closedOrders)}</td>
                         <td className="n">{shortMoney(r.averageOrder)}</td>
                         {team === 'sale' && <><td className="n"><PackedRevenue params={new URLSearchParams({ ...Object.fromEntries(q), employeeIds: r.sellerId })} net={r.packedNet} /></td><td className="n" title={PACKED_HELP}>{pct(r.packedShare)}</td></>}
-                        <td className="n">
-                          {r.assignedHidden && team === 'sale'
-                            ? '—'
-                            : pct(rateOf(r))}
-                        </td>
-                        <td className="n">{pct(cancelRate(r))}</td>
+                        {team === 'sale' && (
+                          <td className="n">
+                            {r.assignedHidden ? '—' : pct(rateOf(r))}
+                          </td>
+                        )}
+                        <RateCells v={staffRates.get(r.sellerId)} />
                         <td>
                           <span
                             className="block h-2 rounded-full bg-[var(--primary)]"
@@ -885,14 +928,11 @@ export function TeamOverviewView({
                           (t, r) => t + closeRateBase(r, ms.rateBase),
                           0,
                         );
-                      const orders = staff.reduce((t, r) => t + r.orders, 0),
-                        cancelled = staff.reduce(
-                          (t, r) =>
-                            t +
-                            r.groups.cancelled.orders -
-                            (r.deletedOrders ?? 0),
-                          0,
-                        );
+                      // Dòng tổng Hoàn, Hủy: cộng số đơn của những người trong bảng rồi tính như từng người.
+                      const sum = (f: (r: (typeof staff)[number]) => number) => staff.reduce((t, r) => t + f(r), 0);
+                      const g = (k: 'returned' | 'shipping' | 'delivered' | 'cancelled') => ({ orders: sum((r) => r.groups[k]?.orders ?? 0) });
+                      const all = { orders: sum((r) => r.orders), closedOrders: closed, deletedOrders: sum((r) => r.deletedOrders ?? 0), groups: { returned: g('returned'), shipping: g('shipping'), delivered: g('delivered'), cancelled: g('cancelled') } };
+                      const totalRates = { ret: returnRateOf(all, ms.returnBase), returned: all.groups.returned.orders, cancel: cancelRateOf(all), cancelled: Math.max(0, all.groups.cancelled.orders - all.deletedOrders) };
                       return (
                         <tfoot>
                           <tr>
@@ -906,15 +946,14 @@ export function TeamOverviewView({
                               {shortMoney(closed ? net / closed : null)}
                             </td>
                             {team === 'sale' && <><td className="n"><PackedRevenue params={q} net={report.packedStaff ? staff.reduce((n, r) => n + (r.packedNet ?? 0), 0) : undefined} /></td><td className="n" title={PACKED_HELP}>{pct(net && report.packedStaff ? staff.reduce((n, r) => n + (r.packedNet ?? 0), 0) / net * 100 : null)}</td></>}
-                            <td className="n">
-                              {staff.some((r) => r.assignedHidden) &&
-                              team === 'sale'
-                                ? '—'
-                                : pct(den ? (top / den) * 100 : null)}
-                            </td>
-                            <td className="n">
-                              {pct(orders ? (cancelled / orders) * 100 : null)}
-                            </td>
+                            {team === 'sale' && (
+                              <td className="n">
+                                {staff.some((r) => r.assignedHidden)
+                                  ? '—'
+                                  : pct(den ? (top / den) * 100 : null)}
+                              </td>
+                            )}
+                            <RateCells v={totalRates} />
                             <td className="text-[11px] font-normal text-ink-3">
                               {pct(
                                 cur.closedNet
@@ -937,5 +976,27 @@ export function TeamOverviewView({
         </>
       )}
     </div>
+  );
+}
+
+/** Phần của nguồn đơn (Tự upsell / Từ MKT) trong đơn chốt và doanh thu: hai vòng tròn tỷ lệ. */
+function OriginShare({ n, net, totalN, totalNet, tone }: { n: number; net: number; totalN: number; totalNet: number; tone: string }) {
+  const ring = (part: number, total: number, label: string) => {
+    const p = total ? part / total : 0, r = 15.9, c = 2 * Math.PI * r;
+    return (
+      <span className="flex items-center gap-2">
+        <svg viewBox="0 0 36 36" className="size-12 shrink-0 -rotate-90" aria-hidden="true">
+          <circle cx="18" cy="18" r={r} fill="none" stroke="var(--line)" strokeWidth="4" />
+          <circle cx="18" cy="18" r={r} fill="none" stroke={tone} strokeWidth="4" strokeLinecap="round" strokeDasharray={`${(p * c).toFixed(2)} ${c.toFixed(2)}`} />
+        </svg>
+        <span className="min-w-0 leading-tight"><span className="num block text-[15px] font-semibold text-ink">{pct(p * 100, 0)}</span><span className="block text-[11px] text-ink-3">{label}</span></span>
+      </span>
+    );
+  };
+  return (
+    <span className="mt-auto flex flex-wrap items-center gap-x-5 gap-y-2" title="Phần của nguồn này trong tổng đơn chốt Tự upsell + Từ MKT">
+      {ring(n, totalN, 'số đơn chốt')}
+      {ring(net, totalNet, 'doanh thu')}
+    </span>
   );
 }

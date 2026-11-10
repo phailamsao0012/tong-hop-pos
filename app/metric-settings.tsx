@@ -5,7 +5,8 @@
 import { useState, useSyncExternalStore } from 'react';
 import { Calculator, Check } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { DEFAULT_METRICS, RATE_BASES, RETURN_BASES, SUCCESS_BASES, type MetricSettings } from '@/lib/metrics';
+import { DEFAULT_METRICS, RATE_BASES, RETURN_BASES, SUCCESS_BASES, type MetricSettings } from '@/lib/reports/metrics';
+import { TableWrap } from './ui-kit';
 
 const KEY = 'thp_metric_settings';
 let current: MetricSettings = DEFAULT_METRICS;
@@ -111,7 +112,7 @@ export function MetricChangesCard() {
         <span className="min-w-0 flex-1">Mặc định công ty (bot Telegram và tài khoản chưa tự chọn): tỷ lệ chốt = {RATE_BASES[company.rateBase].short} · hoàn = {RETURN_BASES[company.returnBase].short} · mua thành công = {SUCCESS_BASES[company.success].label}.</span>
         <button type="button" className="btn sm" disabled={busy || isCompany} onClick={() => { setBusy(true); void setCompanyMetrics().finally(() => setBusy(false)); }}>{isCompany ? 'Đang là mặc định' : 'Đặt cách của tôi làm mặc định'}</button>
       </div>
-      <div className="tbl-wrap mt-3">
+      <TableWrap className="mt-3">
         <table className="w-full min-w-[640px] text-left text-[13px]">
           <thead><tr className="border-b border-line text-[11.5px] text-ink-3"><th className="py-2 pr-3 font-medium">Chỉ số</th><th className="py-2 pr-3 font-medium">Trước</th><th className="py-2 font-medium">Bây giờ</th></tr></thead>
           <tbody>{CHANGES.map((c) => (
@@ -120,7 +121,7 @@ export function MetricChangesCard() {
             </tr>
           ))}</tbody>
         </table>
-      </div>
+      </TableWrap>
     </section>
   );
 }

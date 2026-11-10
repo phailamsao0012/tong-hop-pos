@@ -1,7 +1,8 @@
 import { env } from 'cloudflare:workers';
-import { forbidden, getSessionUser } from '@/lib/auth';
-import { isOwner } from '@/lib/access';
-import { POS } from '@/lib/report-model';
+import { forbidden, getSessionUser } from '@/lib/auth/auth';
+import { isOwner } from '@/lib/auth/access';
+import { POS } from '@/lib/shared/report-model';
+import { shopIdRow } from '@/lib/pancake/connection-db';
 
 type PosOrder = {
   id?: number;
@@ -36,8 +37,7 @@ export async function GET(request: Request) {
   const posId = new URL(request.url).searchParams.get('posId');
   if (!POS.some((p) => p.id === posId))
     return Response.json({ error: 'POS ngoài phạm vi.' }, { status: 400 });
-  const row = await env.DB.prepare('SELECT shop_id FROM pos_shops WHERE id=?')
-    .bind(posId).first<{ shop_id: string | null }>();
+  const row = await shopIdRow(posId);
   const shopId = row?.shop_id;
   const apiKey = env.PANCAKE_POS_API_KEY?.trim();
   if (!apiKey || !shopId || !/^\d+$/.test(shopId))

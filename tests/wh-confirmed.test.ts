@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { WH_CONFIRMED_SQL, isWhConfirmed } from '../lib/van-don';
+import { WH_CONFIRMED_SQL, isWhConfirmed } from '../lib/reports/van-don';
 
 const confirmedAt = '2026-10-14T03:00:00Z';
 const cases = [

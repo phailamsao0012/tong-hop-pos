@@ -1,9 +1,11 @@
 import { redirect } from 'next/navigation';
-import { getSessionUser, hasAnyUser } from '@/lib/auth';
+import { getSessionUser, hasAnyUser } from '@/lib/auth/auth';
 import Dashboard from './dashboard';
 import { ensureDemoSeed, isDemo } from '@/lib/demo/mode';
-import { isOwner } from '@/lib/access';
+import { isOwner } from '@/lib/auth/access';
+import { isReadOnly } from '@/lib/ops/read-only';
 import { CritterPreview } from './loading-critter/preview';
+import { StickPreview } from './stickman/preview';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,8 +17,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
   const sp = await searchParams;
   // Trang xem thử con vật chờ tải: chỉ bản demo và chủ hệ thống; web thật bỏ qua tham số này (QA A7).
   if (demo && sp['xem-thu'] === 'con-vat' && isOwner(user)) return <><CritterPreview /><div className="demo-ribbon" role="note">Bản demo · người và số liệu ảo</div></>;
+  if (demo && sp['xem-thu'] === 'nguoi-que' && isOwner(user)) return <><StickPreview /><div className="demo-ribbon" role="note">Bản demo · người và số liệu ảo</div></>;
   // Trang mở thẳng bằng ?view=: máy chủ vẽ đúng trang đó để HTML khớp với trình duyệt (menu, thanh tab bộ phận).
   const view = sp.view;
   const dashboard = <Dashboard user={user} initialView={typeof view === 'string' ? view : undefined} demo={demo} />;
-  return demo ? <>{dashboard}<div className="demo-ribbon" role="note">Bản demo · người và số liệu ảo</div></> : dashboard;
+  if (demo) return <>{dashboard}<div className="demo-ribbon" role="note">Bản demo · người và số liệu ảo</div></>;
+  // Bản PC chạy song song (04/11/2026): nhãn nhỏ để không nhầm với web chính.
+  return isReadOnly() ? <>{dashboard}<div className="demo-ribbon" role="note">Bản PC · chỉ xem, sửa ở tonghopposmegatech.io.vn</div></> : dashboard;
 }

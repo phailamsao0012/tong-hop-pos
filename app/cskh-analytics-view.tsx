@@ -7,8 +7,8 @@ import { usePeriod } from './period-store';
 import { AiPackButton } from './ai-pack';
 import { useMemo } from 'react';
 import { GitBranch, Layers, Scale, Users } from 'lucide-react';
-import { POS } from '@/lib/report-model';
-import type { CskhAnalytics } from '@/lib/cskh-analytics';
+import { POS } from '@/lib/shared/report-model';
+import type { CskhAnalytics } from '@/lib/reports/cskh-analytics';
 import { ICON } from './icons';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { PeriodToolbar, PosChips } from './overview-view';
@@ -121,7 +121,7 @@ export function CskhAnalyticsView() {
       {!r && !error && <><SkeletonKpis count={4} className="xl:grid-cols-4" /><ChartCard title="Đường đi sản phẩm" subtitle="Đang tải…"><ThinkingLine lines={['Đang lấy lịch sử mua của từng khách…', 'Đang đối chiếu 6 POS…', 'Sắp xong…']} /><SkeletonTable rows={5} cols={4} /></ChartCard></>}
       {r && (
         <>
-          <div className={`grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4 ${loading ? 'opacity-70' : ''}`}>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
             <KpiCard icon={ICON.aov} tone="teal" label="GTTB CSKH" value={shortMoney(r.total.aov)} note={`Sale ${shortMoney(r.sale.aov)}${aovDiff === null ? '' : ` · CSKH ${aovDiff >= 0 ? 'cao hơn' : 'thấp hơn'} ${pct(Math.abs(aovDiff), 0)}`}`}
               tooltip={{ period: periodLabel, current: money(r.total.aov), previous: money(r.sale.aov), previousLabel: 'GTTB Sale cùng kỳ', definition: r.definitions.aov }} />
             <KpiCard icon={ICON.upsell} tone="green" label="Đơn là mua lại" value={pct(r.total.repeatShare, 0)} note={`${vi.format(r.total.orders - r.seqDist[1])} / ${vi.format(r.total.orders)} đơn là lần mua thứ 2 trở đi`}

@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
-import { branchFilter, branchSubquery } from '../lib/branch';
-import { teamFilter } from '../lib/team';
-import { scopeFromParams, scopeSql } from '../lib/scope-filter';
+import { branchFilter, branchSubquery } from '../lib/teams/branch';
+import { teamFilter } from '../lib/teams/team';
+import { scopeFromParams, scopeSql } from '../lib/shared/scope-filter';
 import { setBranch, unitFor, withUnit } from '../app/team-store';
 
 function fixture() {

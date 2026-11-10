@@ -1,0 +1,241 @@
+// Mua lại & Upsell (dùng chung cho web và bot).
+import { env } from 'cloudflare:workers';
+import { POS } from '@/lib/shared/report-model';
+import { SUCCESS_BASES, type SuccessBase } from '@/lib/reports/metrics';
+import { COMPANY_START, vnRangeUtc } from '@/lib/shared/report-time';
+import { EMPTY_ORDER_FILTERS, orderFilterSql, ORDER_ORIGINS, type OrderFilters } from '@/lib/pancake/order-segments';
+import { teamFilter, type Team } from '@/lib/teams/team';
+
+const VN_MONTH = (col: string) => `substr(date(datetime(${col},'+7 hours')),1,7)`;
+
+type Row = {
+  id: string; pos_id: string; phone: string; seller_id: string | null; created_at: string; net: number; tags_json: string;
+};
+type Hist = { t: string; tags: string[]; id: string; tagsJson: string };
+
+export { productTags } from '@/lib/reports/product-groups';
+import { productTags, groupsOf, itemNames, sortGroups, type GroupBasis, type GroupDim } from '@/lib/reports/product-groups';
+
+export type RepurchaseOptions = {
+  filters?: OrderFilters;
+  /** Chỉ tính đơn có thẻ này; "mua lại" = khách đã có đơn thành công mang CÙNG thẻ trước đó (đơn thẻ khác không tính). */
+  tag?: string;
+  /** Chỉ tính đơn của người bán này. */
+  sellerId?: string;
+  /** Cách chia nhóm sản phẩm cho "bắt đầu từ sản phẩm gì" (lib/product-groups). */
+  dim?: GroupDim; basis?: GroupBasis;
+  /** "Mua thành công" gồm gì (Cách tính chung): delivered = Đã nhận + Đã thu tiền; sent = thêm Đã gửi hàng. */
+  success?: SuccessBase;
+};
+
+export async function repurchaseReport(posIdsIn: string[], start: string, end: string, team: Team = 'all', options: RepurchaseOptions = {}) {
+  const tf = teamFilter('seller_id', team);
+  const successBase = options.success ?? 'delivered';
+  const SUCCESS = `status_code IN (${SUCCESS_BASES[successBase].codes.join(',')})`;
+  const posIds = posIdsIn.length ? posIdsIn : POS.map((x) => x.id);
+  const { startUtc, endUtc } = vnRangeUtc(start, end);
+  const db = env.DB;
+  const tagPick = (options.tag ?? '').trim();
+  const sellerPick = (options.sellerId ?? '').trim();
+  // Có lọc thẻ / nhân viên → phễu và cohort trọn đời cũng tính trên đúng tập đơn đó (đọc từ chỉ mục bao phủ
+  // idx_raw_orders_pos_status_phone_tags, ép dùng vì planner hay chọn chỉ mục SĐT rồi đọc từng dòng: 1,6 s → 36 ms).
+  const origin = orderFilterSql(options.filters ?? EMPTY_ORDER_FILTERS, team);
+  const originHistory = orderFilterSql(options.filters ?? EMPTY_ORDER_FILTERS, team, 'raw_pos_orders');
+  const scoped = !!(tagPick || sellerPick || origin.sql) || successBase !== 'sent';
+  const scopedWhere = `o.pos_id IN (${posIds.map(() => '?').join(',')}) AND o.${SUCCESS} AND o.phone IS NOT NULL AND o.phone<>''${teamFilter('o.seller_id', team)}${sellerPick ? ' AND o.seller_id=?' : ''}${tagPick ? ' AND instr(o.tags_json, ?)>0' : ''}${origin.sql}`;
+  const scopedBinds = [...posIds, ...(sellerPick ? [sellerPick] : []), ...(tagPick ? [`"name":${JSON.stringify(tagPick)}`] : []), ...origin.binds];
+  const IDX = origin.sql ? 'INDEXED BY idx_raw_orders_pos_status_origin' : 'INDEXED BY idx_raw_orders_pos_status_phone_tags';
+  // Cohort lấy toàn bộ từ tháng thành lập (03/2025) tới nay.
+  const cohortStartUtc12 = new Date(Date.parse(`${COMPANY_START}T00:00:00Z`) - 7 * 3600000).toISOString().slice(0, 19);
+  const [rows, names, funnelRes, cohortRes, sizeRes] = await db.batch([
+    // Đơn thành công trong kỳ kèm thẻ; thứ tự mua (chung và theo thẻ) tính ở dưới từ lịch sử của đúng các SĐT này.
+    db.prepare(`
+      SELECT o.id, o.pos_id, o.phone, o.seller_id, o.created_at, COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0)) AS net, o.tags_json
+      FROM raw_pos_orders o
+      WHERE o.pos_id IN (${posIds.map(() => '?').join(',')}) AND o.${SUCCESS} AND o.phone IS NOT NULL AND o.phone<>''${teamFilter('o.seller_id', team)}${sellerPick ? ' AND o.seller_id=?' : ''}
+        AND o.created_at>=? AND o.created_at<?${origin.sql}
+      ORDER BY o.created_at DESC LIMIT 20000`).bind(...posIds, ...(sellerPick ? [sellerPick] : []), startUtc, endUtc, ...origin.binds),
+    db.prepare("SELECT user_id,name FROM pos_users WHERE name<>''"),
+    // Phễu trọn đời: khách đã mua ≥1 / ≥2 / ≥3 lần (customer_stats của các POS đã chọn; có lọc thẻ/nhân viên thì đếm trên đơn).
+    scoped
+      ? db.prepare(`SELECT SUM(n>=1) AS once, SUM(n>=2) AS twice, SUM(n>=3) AS thrice FROM (SELECT o.pos_id, o.phone, COUNT(*) AS n FROM raw_pos_orders o ${IDX} WHERE ${scopedWhere} GROUP BY 1,2)`).bind(...scopedBinds)
+      : db.prepare(`SELECT SUM(success_orders>=1) AS once, SUM(success_orders>=2) AS twice, SUM(success_orders>=3) AS thrice FROM customer_stats WHERE pos_id IN (${posIds.map(() => '?').join(',')})${tf}`).bind(...posIds),
+    // Cohort: tháng mua lần đầu × số tháng kể từ đó → số khách có đơn thành công (từ tháng thành lập).
+    scoped
+      ? db.prepare(`WITH s AS (SELECT o.pos_id, o.phone, substr(date(datetime(o.created_at,'+7 hours')),1,7) AS m, MIN(o.created_at) OVER (PARTITION BY o.pos_id, o.phone) AS first
+            FROM raw_pos_orders o ${IDX} WHERE ${scopedWhere})
+          SELECT substr(date(datetime(first,'+7 hours')),1,7) AS cohort,
+            (CAST(substr(m,1,4) AS INT)-CAST(strftime('%Y', datetime(first,'+7 hours')) AS INT))*12+(CAST(substr(m,6,2) AS INT)-CAST(strftime('%m', datetime(first,'+7 hours')) AS INT)) AS diff,
+            COUNT(DISTINCT pos_id||':'||phone) AS customers
+          FROM s WHERE first>=? GROUP BY 1,2`).bind(...scopedBinds, cohortStartUtc12)
+      : db.prepare(`SELECT ${VN_MONTH('c.first_success_at')} AS cohort,
+        (CAST(strftime('%Y', datetime(o.created_at,'+7 hours')) AS INT) - CAST(strftime('%Y', datetime(c.first_success_at,'+7 hours')) AS INT)) * 12
+          + (CAST(strftime('%m', datetime(o.created_at,'+7 hours')) AS INT) - CAST(strftime('%m', datetime(c.first_success_at,'+7 hours')) AS INT)) AS diff,
+        COUNT(DISTINCT c.id) AS customers
+      FROM raw_pos_orders o JOIN customer_stats c ON c.id = o.pos_id||':'||o.phone
+      WHERE o.pos_id IN (${posIds.map(() => '?').join(',')}) AND o.${SUCCESS} AND o.phone IS NOT NULL AND o.phone<>''
+        AND o.created_at>=? AND c.first_success_at>=?${teamFilter('c.seller_id', team)}
+      GROUP BY 1,2`).bind(...posIds, cohortStartUtc12, cohortStartUtc12),
+    // Cỡ cohort = số khách có lần mua đầu trong tháng đó (từ customer_stats, không phụ thuộc đơn đã đồng bộ). Có lọc → lấy từ cột T0 của cohort.
+    scoped
+      ? db.prepare('SELECT NULL AS cohort, 0 AS n WHERE 0')
+      : db.prepare(`SELECT ${VN_MONTH('first_success_at')} AS cohort, COUNT(*) AS n FROM customer_stats WHERE pos_id IN (${posIds.map(() => '?').join(',')}) AND first_success_at>=?${tf} GROUP BY 1`).bind(...posIds, cohortStartUtc12),
+  ]);
+  // Lịch sử đơn thành công (trước cuối kỳ) của đúng các SĐT trong kỳ, tra theo chỉ mục (pos_id, phone), 90 SĐT một câu.
+  const allRows = rows.results as Row[];
+  const phonesByPos = new Map<string, Set<string>>();
+  for (const r of allRows) { if (!phonesByPos.has(r.pos_id)) phonesByPos.set(r.pos_id, new Set()); phonesByPos.get(r.pos_id)!.add(r.phone); }
+  const histStatements: D1PreparedStatement[] = [];
+  const histPos: string[] = []; // POS của từng câu (cùng thứ tự với histStatements)
+  for (const [posId, phones] of phonesByPos) {
+    const list = [...phones];
+    for (let i = 0; i < list.length; i += 90) {
+      const chunk = list.slice(i, i + 90);
+      histStatements.push(db.prepare(`SELECT id, phone, created_at, tags_json FROM raw_pos_orders WHERE pos_id=? AND phone IN (${chunk.map(() => '?').join(',')}) AND ${SUCCESS} AND created_at<?${originHistory.sql}`).bind(posId, ...chunk, endUtc, ...originHistory.binds));
+      histPos.push(posId);
+    }
+  }
+  const history = new Map<string, Hist[]>();
+  for (let i = 0; i < histStatements.length; i += 100) {
+    const results = await db.batch(histStatements.slice(i, i + 100));
+    results.forEach((res, j) => {
+      const posId = histPos[i + j];
+      for (const h of res.results as { id: string; phone: string; created_at: string; tags_json: string }[]) {
+        const key = `${posId}:${h.phone}`;
+        if (!history.has(key)) history.set(key, []);
+        history.get(key)!.push({ t: h.created_at, tags: productTags(h.tags_json), id: h.id, tagsJson: h.tags_json });
+      }
+    });
+  }
+  // Bắt đầu từ sản phẩm gì: nhóm sản phẩm của đơn thành công ĐẦU TIÊN của khách trong POS đó (yêu cầu 25/09/2026).
+  const dim = options.dim ?? 'main', basis = options.basis ?? 'both';
+  const firstOf = new Map<string, Hist>();
+  for (const [key, list] of history) { let f = list[0]; for (const h of list) if (h.t < f.t) f = h; if (f) firstOf.set(key, f); }
+  const currentIds = allRows.map((r) => r.id);
+  const itemMap = await itemNames(db, [...new Set([...[...firstOf.values()].map((h) => h.id), ...currentIds])]);
+  const startOf = (key: string) => { const f = firstOf.get(key); return f ? groupsOf(f.tagsJson, itemMap.get(f.id) ?? [], dim, basis) : ['Không rõ']; };
+  const groupsOfRow = (r: Row) => groupsOf(r.tags_json, itemMap.get(r.id) ?? [], dim, basis);
+  const priorOf = (r: Row, tag?: string) => (history.get(`${r.pos_id}:${r.phone}`) ?? []).filter((h) => h.t < r.created_at && (!tag || h.tags.includes(tag))).length;
+  // Theo thẻ (không áp bộ lọc thẻ, để bảng "Theo thẻ" và danh sách thẻ luôn đủ): đơn đầu / mua lại của từng dòng sản phẩm.
+  const tagAgg = new Map<string, { orders: number; resaleOrders: number; customers: Set<string>; resaleCustomers: Set<string>; net: number; resaleNet: number }>();
+  for (const r of allRows) {
+    for (const tag of productTags(r.tags_json)) {
+      if (!tagAgg.has(tag)) tagAgg.set(tag, { orders: 0, resaleOrders: 0, customers: new Set(), resaleCustomers: new Set(), net: 0, resaleNet: 0 });
+      const a = tagAgg.get(tag)!; const key = `${r.pos_id}:${r.phone}`;
+      a.orders++; a.customers.add(key); a.net += Number(r.net);
+      if (priorOf(r, tag) > 0) { a.resaleOrders++; a.resaleCustomers.add(key); a.resaleNet += Number(r.net); }
+    }
+  }
+  const byTag = [...tagAgg.entries()].map(([tag, a]) => ({
+    tag, orders: a.orders, customers: a.customers.size, net: a.net, resaleOrders: a.resaleOrders, resaleCustomers: a.resaleCustomers.size, resaleNet: a.resaleNet,
+    resaleRate: a.orders ? Math.round(a.resaleOrders / a.orders * 1000) / 10 : null,
+  })).sort((a, b) => b.orders - a.orders);
+  // Khi lọc theo thẻ: chỉ đơn mang thẻ đó; "lần mua" đếm trên đơn cùng thẻ.
+  const scopedRows = tagPick ? allRows.filter((r) => productTags(r.tags_json).includes(tagPick)) : allRows;
+  const rowsWithPrior = scopedRows.map((r) => ({ ...r, prior: priorOf(r, tagPick || undefined) }));
+  const funnelRow = funnelRes.results[0] as { once: number | null; twice: number | null; thrice: number | null };
+  const cohortMap = new Map<string, Map<number, number>>();
+  for (const r of cohortRes.results as { cohort: string; diff: number; customers: number }[]) {
+    if (!cohortMap.has(r.cohort)) cohortMap.set(r.cohort, new Map());
+    cohortMap.get(r.cohort)!.set(Number(r.diff), Number(r.customers));
+  }
+  const cohortSize = scoped
+    ? new Map([...cohortMap.entries()].map(([month, m]) => [month, m.get(0) ?? 0]))
+    : new Map((sizeRes.results as { cohort: string; n: number }[]).map((r) => [r.cohort, Number(r.n)]));
+  const cohorts = [...cohortSize.entries()].filter(([, n]) => n > 0).sort(([a], [b]) => a.localeCompare(b)).map(([month, size]) => {
+    const m = cohortMap.get(month) ?? new Map<number, number>();
+    const maxDiff = Math.max(0, ...m.keys());
+    return {
+      month, size,
+      retention: Array.from({ length: maxDiff + 1 }, (_, d) => d === 0 ? 100 : Math.min(100, Math.round((m.get(d) ?? 0) / size * 1000) / 10)),
+      /** Số khách của nhóm có đơn thành công ở tháng thứ d (để tooltip ghi "a / b khách"). */
+      counts: Array.from({ length: maxDiff + 1 }, (_, d) => d === 0 ? size : Math.min(size, m.get(d) ?? 0)),
+    };
+  });
+  const nameMap = new Map((names.results as { user_id: string; name: string }[]).map((r) => [r.user_id, r.name]));
+  const levelOf = (prior: number) => prior === 0 ? 0 : prior === 1 ? 1 : prior === 2 ? 2 : 3; // 3 = Upsell lần 3 trở lên
+  const empty = () => ({ customers: new Set<string>(), orders: 0, net: 0 });
+  const levels = [empty(), empty(), empty(), empty()];
+  const byPos = new Map<string, ReturnType<typeof empty>[]>();
+  const byEmployee = new Map<string, ReturnType<typeof empty>[]>();
+  const ensure = (map: Map<string, ReturnType<typeof empty>[]>, key: string) => {
+    if (!map.has(key)) map.set(key, [empty(), empty(), empty(), empty()]);
+    return map.get(key)!;
+  };
+  for (const r of rowsWithPrior) {
+    const lvl = levelOf(Number(r.prior));
+    const key = `${r.pos_id}:${r.phone}`;
+    for (const bucket of [levels[lvl], ensure(byPos, r.pos_id)[lvl], ensure(byEmployee, r.seller_id ?? '')[lvl]]) {
+      bucket.customers.add(key); bucket.orders++; bucket.net += Number(r.net);
+    }
+  }
+  const pack = (b: ReturnType<typeof empty>[]) => b.map((x, i) => ({
+    level: i, label: ['Mua lần đầu', 'Upsell lần 1', 'Upsell lần 2', 'Upsell lần 3+'][i], customers: x.customers.size, orders: x.orders, net: x.net,
+  }));
+  const repurchase = (b: ReturnType<typeof empty>[]) => ({
+    customers: new Set([...b[1].customers, ...b[2].customers, ...b[3].customers]).size,
+    orders: b[1].orders + b[2].orders + b[3].orders, net: b[1].net + b[2].net + b[3].net,
+  });
+  return {
+
+    period: { start, end },
+    filters: { tag: tagPick || null, sellerId: sellerPick || null, orderOrigin: options.filters?.orderOrigin ?? 'all', marketerId: options.filters?.marketerId || null },
+    summary: { levels: pack(levels), repurchase: repurchase(levels), successOrders: rowsWithPrior.length },
+    byTag,
+    funnel: { once: Number(funnelRow?.once ?? 0), twice: Number(funnelRow?.twice ?? 0), thrice: Number(funnelRow?.thrice ?? 0) },
+    cohorts,
+    byPos: [...byPos.entries()].map(([posId, b]) => ({ posId, posName: POS.find((x) => x.id === posId)?.name ?? posId, levels: pack(b), repurchase: repurchase(b) })),
+    byEmployee: [...byEmployee.entries()].map(([sellerId, b]) => ({
+      sellerId, name: sellerId ? nameMap.get(sellerId) ?? `NV ${sellerId.slice(0, 8)}` : 'Chưa gán người bán', levels: pack(b), repurchase: repurchase(b),
+    })).sort((a, b) => b.repurchase.net - a.repurchase.net),
+    startFlow: (() => {
+      // Khách mua lại trong kỳ: bắt đầu bằng nhóm nào → đơn mua lại thuộc nhóm nào.
+      const cells = new Map<string, { customers: Set<string>; orders: number; net: number }>();
+      const starts = new Map<string, { customers: Set<string>; repeatCustomers: Set<string> }>();
+      const nows = new Map<string, number>();
+      for (const r of rowsWithPrior) {
+        const key = `${r.pos_id}:${r.phone}`;
+        for (const st of startOf(key)) {
+          if (!starts.has(st)) starts.set(st, { customers: new Set(), repeatCustomers: new Set() });
+          starts.get(st)!.customers.add(key);
+          if (Number(r.prior) === 0) continue;
+          starts.get(st)!.repeatCustomers.add(key);
+          for (const now of groupsOfRow(r)) {
+            const c = `${st}\u0000${now}`;
+            if (!cells.has(c)) cells.set(c, { customers: new Set(), orders: 0, net: 0 });
+            const x = cells.get(c)!; x.customers.add(key); x.orders++; x.net += Number(r.net);
+            nows.set(now, (nows.get(now) ?? 0) + 1);
+          }
+        }
+      }
+      const startOrder = sortGroups(dim, new Map([...starts.entries()].map(([k, v]) => [k, v.customers.size])));
+      const nowOrder = sortGroups(dim, nows);
+      return {
+        dim, basis, starts: startOrder.slice(0, 20).map((st) => ({ label: st, customers: starts.get(st)!.customers.size, repeatCustomers: starts.get(st)!.repeatCustomers.size })),
+        nows: nowOrder.slice(0, 20),
+        cells: [...cells.entries()].map(([k, v]) => { const [from, to] = k.split('\u0000'); return { from, to, customers: v.customers.size, orders: v.orders, net: v.net }; }),
+      };
+    })(),
+    recent: rowsWithPrior.filter((r) => Number(r.prior) > 0).slice(0, 400).map((r) => ({
+      startGroups: startOf(`${r.pos_id}:${r.phone}`), groups: groupsOfRow(r),
+      posName: POS.find((x) => x.id === r.pos_id)?.name ?? r.pos_id, posId: r.pos_id, phone: r.phone, createdAt: r.created_at, net: Number(r.net),
+      level: levelOf(Number(r.prior)), prior: Number(r.prior), sellerName: r.seller_id ? nameMap.get(r.seller_id) ?? `NV ${r.seller_id.slice(0, 8)}` : '—', tags: productTags(r.tags_json),
+    })),
+    definitions: {
+      origin: origin.sql ? `Nguồn CSKH: ${ORDER_ORIGINS[options.filters!.orderOrigin]}. Đơn trong kỳ, lịch sử lần mua, phễu và cohort cùng dùng nguồn đang chọn${options.filters?.marketerId ? ' và marketer đang chọn' : ''}.` : 'Nguồn đơn: cả hai. Sale không áp dụng bộ lọc MKT/tự ups.',
+      basis: `Đơn mua thành công (${SUCCESS_BASES[successBase].label}) tạo trong kỳ, tính theo ngày tạo đơn giờ VN. Đổi ở nút Cách tính.`,
+      upsell: tagPick
+        ? `Đang lọc thẻ "${tagPick}": chỉ tính đơn mang thẻ này; Upsell lần n = đơn thành công thứ n+1 CÙNG THẺ của cùng SĐT trong cùng POS. Đơn thẻ khác (ví dụ sát khuẩn khi đang xem kháng sinh) không tính là mua lại.`
+        : 'Upsell lần n = đơn mua thành công thứ n+1 của cùng SĐT trong cùng POS, xét toàn bộ lịch sử đã đồng bộ (lịch sử càng đủ thì số càng chính xác).',
+      tag: 'Theo thẻ: mỗi đơn xét theo thẻ dòng sản phẩm gắn trên đơn (bỏ thẻ vận hành như Chưa đối soát, Không nghe máy…). Mua lại theo thẻ = khách đã có đơn thành công mang cùng thẻ trước đó. Tỷ lệ mua lại = đơn mua lại ÷ đơn có thẻ trong kỳ.',
+      employee: 'Ghi nhận cho người bán đang gán trên đơn mua lại.',
+      cohort: scoped
+        ? `Cohort theo bộ lọc${tagPick ? ` thẻ "${tagPick}"` : ''}${sellerPick ? ' và nhân viên đã chọn' : ''}: khách gom theo tháng có đơn thành công đầu tiên TRONG tập đơn này; mỗi cột = % khách của nhóm có đơn thành công (cùng bộ lọc) ở tháng thứ n kể từ đó.`
+        : 'Cohort: khách gom theo tháng mua thành công lần đầu; mỗi cột = % khách của nhóm có đơn thành công ở tháng thứ n kể từ đó (T0 = tháng mua đầu, luôn 100%).',
+      funnel: scoped
+        ? `Phễu trọn đời theo bộ lọc${tagPick ? ` thẻ "${tagPick}"` : ''}${sellerPick ? ' và nhân viên đã chọn' : ''}: số khách có ≥1, ≥2, ≥3 đơn thành công trong tập đơn đó (đơn thẻ khác / người bán khác không tính).`
+        : 'Phễu trọn đời (không theo kỳ): số khách đã mua thành công ≥1, ≥2, ≥3 lần trong các POS đã chọn.',
+    },
+  };
+}
+export type RepurchaseReport = Awaited<ReturnType<typeof repurchaseReport>>;

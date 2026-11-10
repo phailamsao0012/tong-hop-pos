@@ -1,6 +1,6 @@
-import { env } from 'cloudflare:workers';
-import { audit } from '@/lib/audit';
-import { getSessionUser, hashPassword, passwordProblem, unauthorized, verifyPassword } from '@/lib/auth';
+import { passwordHashOf, setPasswordDropSessions } from '@/lib/auth/auth-db';
+import { audit } from '@/lib/ops/audit';
+import { getSessionUser, hashPassword, passwordProblem, unauthorized, verifyPassword } from '@/lib/auth/auth';
 
 // Đổi mật khẩu của chính mình.
 export async function PUT(request: Request) {
@@ -11,15 +11,10 @@ export async function PUT(request: Request) {
   catch { return Response.json({ error: 'JSON không hợp lệ.' }, { status: 400 }); }
   const problem = await passwordProblem(body.next, user.email);
   if (problem || typeof body.next !== 'string') return Response.json({ error: problem ?? 'Mật khẩu không hợp lệ.' }, { status: 400 });
-  const row = await env.DB.prepare('SELECT password_hash FROM users WHERE id=?')
-    .bind(user.userId).first<{ password_hash: string }>();
-  if (!row || typeof body.current !== 'string' || !(await verifyPassword(body.current, row.password_hash)))
+  const hash = await passwordHashOf(user.userId);
+  if (!hash || typeof body.current !== 'string' || !(await verifyPassword(body.current, hash)))
     return Response.json({ error: 'Mật khẩu hiện tại không đúng.' }, { status: 400 });
-  await env.DB.batch([
-    env.DB.prepare('UPDATE users SET password_hash=?,updated_at=? WHERE id=?')
-      .bind(await hashPassword(body.next), new Date().toISOString(), user.userId),
-    env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(user.userId),
-  ]);
+  await setPasswordDropSessions(user.userId, await hashPassword(body.next), new Date().toISOString());
   await audit({ action: 'password.change', userId: user.userId, email: user.email, name: user.displayName, request, status: 200 });
   return Response.json({ ok: true, reLogin: true });
 }

@@ -1,0 +1,245 @@
+{
+ "ngay": "2026-11-01",
+ "api": {
+  "pancake-ref": {
+   "url": "/api/reports/pancake-ref?start={S}&end={E}&posIds={P}",
+   "status": 200,
+   "sha256": "994874fe0432a36a",
+   "bytes": 7669
+  },
+  "overview-all": {
+   "url": "/api/reports/overview?posIds={P}&team=all&start={S}&end={E}&groupBy=day&compare=previous",
+   "status": 200,
+   "sha256": "b0cbd38b53770bf2",
+   "bytes": 698870
+  },
+  "overview-sale": {
+   "url": "/api/reports/overview?start={S}&end={E}&posIds={P}&team=sale&groupBy=day&compare=previous",
+   "status": 200,
+   "sha256": "6334cab722f20ebb",
+   "bytes": 443131
+  },
+  "overview-cskh": {
+   "url": "/api/reports/overview?start={S}&end={E}&posIds={P}&team=cskh&groupBy=day&compare=previous",
+   "status": 200,
+   "sha256": "d9b5aacb8fe7edf4",
+   "bytes": 406098
+  },
+  "overview-30": {
+   "url": "/api/reports/overview?posIds={P}&team=all&start={E29}&end={E}&groupBy=day&compare=previous",
+   "status": 200,
+   "sha256": "cee11edffeafa6f7",
+   "bytes": 1280150
+  },
+  "sections": {
+   "url": "/api/reports/sections?start={S}&end={E}&posIds={P}&productSegment=all",
+   "status": 200,
+   "sha256": "ad061afd37f90bbf",
+   "bytes": 3031
+  },
+  "trends": {
+   "url": "/api/reports/trends?start={S}&end={E}&posIds={P}&productSegment=all",
+   "status": 200,
+   "sha256": "44f23b648bfa0879",
+   "bytes": 46610
+  },
+  "shift-today": {
+   "url": "/api/reports/shift?posIds={P}&team=all&date={T}&shift=auto",
+   "status": 200,
+   "sha256": "ddf718bb21efec57",
+   "bytes": 8411
+  },
+  "shift-sale": {
+   "url": "/api/reports/shift?posIds={P}&team=sale&date={T}&shift=auto",
+   "status": 200,
+   "sha256": "a0cb48f1fb7414bb",
+   "bytes": 6897
+  },
+  "pipeline": {
+   "url": "/api/reports/pipeline?posIds={P}&team=all&start={S}&end={E}&basis=confirmed",
+   "status": 200,
+   "sha256": "dd1efe622b3337aa",
+   "bytes": 46003
+  },
+  "shipping-lines": {
+   "url": "/api/reports/shipping-lines?start={S}&end={E}&posIds={P}&basis=confirmed&team=all&dim=line",
+   "status": 200,
+   "sha256": "45c4c5ce6eea7162",
+   "bytes": 11467
+  },
+  "repurchase": {
+   "url": "/api/reports/repurchase?posIds={P}&team=all&start={S}&end={E}",
+   "status": 200,
+   "sha256": "5234ebf27e649c70",
+   "bytes": 71216
+  },
+  "targets": {
+   "url": "/api/targets?month={M}",
+   "status": 200,
+   "sha256": "86c980003b2374ed",
+   "bytes": 12395
+  },
+  "product-groups-sale": {
+   "url": "/api/reports/product-groups?start={S}&end={E}&posIds={P}&team=sale&dim=tag&basis=both&by=seller",
+   "status": 200,
+   "sha256": "75d4c72fd484b155",
+   "bytes": 73671
+  },
+  "product-groups-cskh": {
+   "url": "/api/reports/product-groups?start={S}&end={E}&posIds={P}&team=cskh&dim=tag&basis=both&by=care",
+   "status": 200,
+   "sha256": "2e6aad82c672c09f",
+   "bytes": 64833
+  },
+  "product-groups-all": {
+   "url": "/api/reports/product-groups?start={S}&end={E}&posIds={P}&team=all&dim=tag&basis=both&by=seller",
+   "status": 200,
+   "sha256": "d4807ddf1373fe8e",
+   "bytes": 133940
+  },
+  "delivered-products": {
+   "url": "/api/reports/delivered-products?start={S}&end={E}&posIds={P}",
+   "status": 200,
+   "sha256": "21019c4063c8720f",
+   "bytes": 3739
+  },
+  "calls-cskh": {
+   "url": "/api/reports/calls?start={S}&end={E}&posIds={P}&team=cskh",
+   "status": 200,
+   "sha256": "df45532320f8d15b",
+   "bytes": 14301
+  },
+  "calls-all": {
+   "url": "/api/reports/calls?start={S}&end={E}&posIds={P}&team=all",
+   "status": 200,
+   "sha256": "65e8c77855b73ea2",
+   "bytes": 27724
+  },
+  "cskh-origin": {
+   "url": "/api/reports/cskh-origin?start={S}&end={E}&posIds={P}&dim=main&basis=both",
+   "status": 200,
+   "sha256": "8fa901ba54920231",
+   "bytes": 5611
+  },
+  "cskh-badge": {
+   "url": "/api/reports/cskh-badge",
+   "status": 200,
+   "sha256": "c34a2a60c2944a37",
+   "bytes": 105
+  },
+  "van-don": {
+   "url": "/api/reports/van-don?start={S}&end={E}&posIds={P}",
+   "status": 200,
+   "sha256": "29eaea73f23f7494",
+   "bytes": 59880
+  },
+  "customers": {
+   "url": "/api/reports/customers?posIds={P}&q=&page=1&size=50&sort=spend&sellerId=&team=all&group=all",
+   "status": 200,
+   "sha256": "a397cf0f74ad0588",
+   "bytes": 75806
+  },
+  "care": {
+   "url": "/api/reports/care?posIds={P}&assigned=all&q=&minDays=0&sort=note_old&size=50&page=1&team=cskh",
+   "status": 200,
+   "sha256": "3d1ea57215721910",
+   "bytes": 36198
+  },
+  "employees-all": {
+   "url": "/api/employees?team=all",
+   "status": 200,
+   "sha256": "f4999e17f12a2ef7",
+   "bytes": 10269
+  },
+  "employees-cskh": {
+   "url": "/api/employees?team=cskh",
+   "status": 200,
+   "sha256": "cc7c93a3ddf17bb4",
+   "bytes": 3130
+  },
+  "employees-sale": {
+   "url": "/api/employees?team=sale",
+   "status": 200,
+   "sha256": "7ef64cdb4d92c13e",
+   "bytes": 3631
+  },
+  "web-teams": {
+   "url": "/api/web-teams",
+   "status": 200,
+   "sha256": "d40aa95435086556",
+   "bytes": 7377
+  },
+  "sync-pos": {
+   "url": "/api/sync/pos",
+   "status": 200,
+   "sha256": "2ec74a2cc36bc755",
+   "bytes": 11744
+  },
+  "prefs-metrics": {
+   "url": "/api/prefs/metrics",
+   "status": 200,
+   "sha256": "b7cf88485ff16f6d",
+   "bytes": 1479
+  },
+  "me": {
+   "url": "/api/auth/me",
+   "status": 200,
+   "sha256": "63a43befbfb1b567",
+   "bytes": 329
+  },
+  "users": {
+   "url": "/api/users",
+   "status": 200,
+   "sha256": "1e652045cecd73c7",
+   "bytes": 4153
+  },
+  "marketing-teams": {
+   "url": "/api/marketing-teams",
+   "status": 200,
+   "sha256": "8b2c6d105546d716",
+   "bytes": 7419
+  },
+  "growth": {
+   "url": "/api/reports/growth?dept=sale&posIds={P}&start={S}&end={E}",
+   "status": 200,
+   "sha256": "3ff6ff365f92874b",
+   "bytes": 6189
+  },
+  "sale-analytics": {
+   "url": "/api/reports/sale-analytics?start={S}&end={E}&posIds={P}",
+   "status": 200,
+   "sha256": "927fe027e93520ad",
+   "bytes": 23344
+  },
+  "cskh-analytics": {
+   "url": "/api/reports/cskh-analytics?start={S}&end={E}&posIds={P}",
+   "status": 200,
+   "sha256": "e0d14b85f3a877e8",
+   "bytes": 9444
+  },
+  "returns": {
+   "url": "/api/reports/returns?start={S}&end={E}&posIds={P}",
+   "status": 200,
+   "sha256": "9716ed988b1864ec",
+   "bytes": 4825
+  },
+  "exec": {
+   "url": "/api/reports/exec?posIds={P}&start={S}&end={E}",
+   "status": 200,
+   "sha256": "68d6a48287c21648",
+   "bytes": 1529
+  },
+  "products": {
+   "url": "/api/reports/products?start={S}&end={E}&posIds={P}",
+   "status": 200,
+   "sha256": "df74450fbd7a7534",
+   "bytes": 8924
+  },
+  "sale-ladder": {
+   "url": "/api/reports/sale-ladder?posIds={P}&start={S}&end={E}",
+   "status": 200,
+   "sha256": "e8145b9ea0e66dce",
+   "bytes": 25330
+  }
+ }
+}

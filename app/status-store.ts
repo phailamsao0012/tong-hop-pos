@@ -3,7 +3,7 @@
 // Trạng thái đơn đang xem, dùng chung cho mọi trang báo cáo (yêu cầu 24/09/2026). Mặc định "Đã xác nhận trở đi".
 // Giống bộ lọc nhóm: KHÔNG nhớ qua lần mở sau, để mở web ra luôn thấy đúng số như ô Đơn chốt Pancake.
 import { useSyncExternalStore } from 'react';
-import { DEFAULT_STATUS } from '@/lib/order-status';
+import { DEFAULT_STATUS } from '@/lib/pancake/order-status';
 
 let current: string = DEFAULT_STATUS;
 const listeners = new Set<() => void>();

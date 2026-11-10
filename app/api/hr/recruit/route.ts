@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
-import { HR_SECRET_HEADER, secretMatches } from '@/lib/hr-link';
-import { recruitGet } from '@/lib/recruit-api';
+import { HR_SECRET_HEADER, secretMatches } from '@/lib/teams/hr-link';
+import { recruitGet } from '@/lib/teams/recruit-api';
 
 // Web nhân sự đọc danh sách / chi tiết ứng viên (đã kiểm quyền người dùng ở phía web nhân sự).
 export async function GET(request: Request) {

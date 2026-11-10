@@ -4,6 +4,7 @@
 // lọc nhân viên dưới N cuộc/ngày, xem lịch sử từng cuộc (ai, giờ, khách, nội dung, đơn chốt cùng ngày) và xuất Excel.
 // Giao diện v2: bảng .tbl sắp xếp ở tiêu đề (SortTh), dòng bấm được bằng bàn phím, sparkline lộ ra khi rê chuột,
 // tooltip cách tính trên thẻ KPI, xương khi tải, huỷ request cũ khi đổi bộ lọc / đổi nhân viên.
+import { StaffName } from './staff-name';
 import { usePosIds } from './pos-store';
 import { usePeriod } from './period-store';
 import { ICON } from './icons';
@@ -16,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { POS } from '@/lib/report-model';
+import { POS } from '@/lib/shared/report-model';
 import { PeriodToolbar, PosChips } from './overview-view';
 import { useTeam } from './team-store';
 import { useApi } from './use-api';
@@ -30,7 +31,7 @@ import { saveXlsx } from '@/app/save-xlsx';
 type DayStat = { notes: number; customers: number; orders: number; net: number };
 type Staff = { authorId: string; name: string; department: string | null; assigned: number; notes: number; customers: number; orders: number; net: number; activeDays: number; byDay: Record<string, DayStat> };
 type Backfill = { posId: string; completed: boolean; page: number; done: number; total: number | null; percent: number | null }[];
-type Report = { period: { start: string; end: string; days: string[] }; staff: Staff[]; coverage: { customers: number; notes: number; firstNote: string | null; lastFetch: string | null; backfill?: Backfill; unknownAuthorNotes?: number; unknownAuthors?: number }; definitions: Record<string, string> };
+type Report = { period: { start: string; end: string; days: string[] }; staff: Staff[]; coverage: { customers: number; notes: number; firstNote: string | null; lastFetch: string | null; backfill?: Backfill; pendingCustomers?: number; unknownAuthorNotes?: number; unknownAuthors?: number }; definitions: Record<string, string> };
 type HistoryItem = { id: string; posId: string; posName: string; day: string; createdAt: string; author: string; customer: string; phone: string | null; message: string; source: string; assignedTo: string | null; customerSuccessOrders: number | null; customerPurchased: number | null; orders: { id: string; orderId: string; statusName: string; net: number; confirmedAt: string | null; items: string; seller: string | null }[] };
 type History = { authorId: string; author: string; period: { start: string; end: string }; days: { day: string; calls: number; customers: number; orders: number; net: number; aov: number | null }[]; items: HistoryItem[] };
 type CallSort = 'perDay' | 'notes' | 'customers' | 'assigned' | 'name';
@@ -41,7 +42,7 @@ const rowKeys = (fn: () => void) => (e: KeyboardEvent<HTMLElement>) => {
   if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); }
 };
 
-export function CallsView() {
+export function CallsView({ canExport = false }: { canExport?: boolean }) {
   const team = useTeam();
   const motionOn = useMotionOK();
   const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
@@ -141,7 +142,7 @@ export function CallsView() {
   return (
     <div className="space-y-5">
       <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title="Cuộc gọi CSKH" subtitle="Mỗi ghi chú trên hồ sơ khách Pancake = một cuộc gọi"
-        actions={<><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} /><Button variant="outline" onClick={exportStaff} disabled={!report}><FileDown size={14} />Xuất Excel bảng nhân viên</Button></>} />
+        actions={<><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} />{canExport && <Button variant="outline" onClick={exportStaff} disabled={!report}><FileDown size={14} />Xuất Excel bảng nhân viên</Button>}</>} />
       <CskhFocusBar />
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset}
         onStart={setStart} onEnd={setEnd} loading={loading} onReload={reload}
@@ -178,7 +179,7 @@ export function CallsView() {
       )}
       {report && (
         <>
-          <div className={`grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-4 ${loading ? 'opacity-70' : ''}`} aria-busy={loading}>
+          <div className="grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-4" aria-busy={loading}>
             <KpiCard icon={ICON.calls} tone="green" label="Cuộc gọi (ghi chú)" value={vi.format(totals.notes)} countUp rawValue={totals.notes} note={`${rows.length} nhân viên · ${days.length} ngày`}
               tooltip={{ period: periodLabel, current: `${vi.format(totals.notes)} ghi chú`, definition: report.definitions.call }} />
             <KpiCard icon={Users} tone="teal" label="Số khách đã gọi" value={vi.format(totals.customers)} countUp rawValue={totals.customers} note={`TB ${vi.format(avgCustomers)} khách/người/ngày`}
@@ -234,7 +235,7 @@ export function CallsView() {
                         <tr key={s.authorId || 'none'} tabIndex={0} aria-selected={on} onClick={() => void openHistory(s)} onKeyDown={rowKeys(() => void openHistory(s))}
                           className={`cursor-pointer focus-visible:-outline-offset-2 ${on ? '[&>td]:bg-tint-2' : ''}`}>
                           <td className="num text-[11px] text-ink-4">{i + 1}</td>
-                          <td className="font-medium text-ink"><span className="inline-flex items-center gap-2">{s.name}<HoverReveal><span className="btn sm">Lịch sử<ChevronRight size={12} /></span></HoverReveal></span></td>
+                          <td className="font-medium text-ink"><span className="inline-flex items-center gap-2"><StaffName id={s.authorId} name={s.name} /><HoverReveal><span className="btn sm">Lịch sử<ChevronRight size={12} /></span></HoverReveal></span></td>
                           <td className="mut text-xs">{s.department ?? '—'}</td>
                           <td className="n">{s.activeDays}</td>
                           <td className="n">{vi.format(s.notes)}</td>
@@ -265,7 +266,7 @@ export function CallsView() {
           <div id="call-history" className="scroll-mt-16">
             {selected && (
               <ChartCard icon={PhoneCall} title={`Lịch sử cuộc gọi · ${selected.name}`} subtitle={`${periodLabel} · mỗi dòng một ghi chú; đơn chốt cùng ngày của khách đó gắn vào ghi chú đầu tiên trong ngày · tổng đơn chốt/doanh thu theo ngày tính theo người bán trên đơn`}
-                action={<><Button size="sm" onClick={exportHistory} disabled={!history}><FileDown size={14} />Xuất Excel lịch sử</Button><Button size="sm" variant="ghost" onClick={closeHistory}>Đóng</Button></>}>
+                action={<>{canExport && <Button size="sm" onClick={exportHistory} disabled={!history}><FileDown size={14} />Xuất Excel lịch sử</Button>}<Button size="sm" variant="ghost" onClick={closeHistory}>Đóng</Button></>}>
                 {historyState === 'loading' && <SkeletonTable rows={5} cols={6} />}
                 {historyState === 'error' && <ErrorBox error={historyError ?? 'Không tải được lịch sử cuộc gọi.'} onRetry={() => void openHistory(selected, false)} />}
                 {history && (
@@ -301,6 +302,7 @@ export function CallsView() {
             )}
           </div>
           <Definitions items={[report.definitions.call, 'Đơn chốt, doanh thu của CSKH xem ở Tổng quan CSKH và Tự ups & từ MKT.', report.definitions.assigned, report.definitions.coverage, `Ghi chú sớm nhất đã gom: ${dt(report.coverage.firstNote, true)}.`].filter((s): s is string => !!s)} />
+          {(report.coverage.pendingCustomers ?? 0) > 0 && <p className="text-xs text-muted-foreground">Số liệu ghi chú còn thiếu: {vi.format(report.coverage.pendingCustomers ?? 0)} khách đang chờ lấy đủ ghi chú trong các POS đã chọn (mọi ngày, mọi nhân viên). Hệ thống tự lấy bù ở nền.</p>}
         </>
       )}
     </div>

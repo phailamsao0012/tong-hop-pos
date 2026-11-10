@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Network, RotateCw } from 'lucide-react';
-import { ChartCard, ErrorBox, toast } from './ui-kit';
+import { ChartCard, ErrorBox, TableWrap, toast } from './ui-kit';
 
 type Row = { team: 'sale' | 'cskh'; pancakePeople: number; hrPeople: number; pancakeRevenue: number; hrRevenue: number };
 type Data = {
@@ -56,20 +56,20 @@ export function HrSyncPanel() {
           {data.state.error ? ` Lỗi: ${data.state.error}` : ''}
         </span>
       </div>
-      <div className="tbl-wrap"><table className="tbl">
+      <TableWrap><table className="tbl">
         <thead><tr><th>Team</th><th className="num">Người (Pancake)</th><th className="num">Người (nhân sự)</th><th className="num">Doanh thu tháng (Pancake)</th><th className="num">Doanh thu tháng (nhân sự)</th></tr></thead>
         <tbody>{data.rows.map((r) => <tr key={r.team}>
           <td>{TEAM[r.team]}</td><td className="num">{r.pancakePeople}</td><td className="num">{r.hrPeople}</td>
           <td className="num">{money(r.pancakeRevenue)}</td><td className={`num ${r.hrRevenue !== r.pancakeRevenue ? 'text-bad font-semibold' : ''}`}>{money(r.hrRevenue)}</td>
         </tr>)}</tbody>
-      </table></div>
+      </table></TableWrap>
       <p className="text-sm">{data.matched
         ? 'Khớp: không ai đổi team, số báo cáo theo team giữ nguyên khi bật.'
         : `${data.mismatches.length} người có team khác Pancake. Sửa trên web nhân sự (hoặc chấp nhận nếu web nhân sự đúng) rồi kéo lại.`}</p>
-      {!!data.mismatches.length && <div className="tbl-wrap"><table className="tbl">
+      {!!data.mismatches.length && <TableWrap><table className="tbl">
         <thead><tr><th>Người</th><th>Pancake</th><th>Web nhân sự</th><th className="num">Doanh thu tháng</th></tr></thead>
         <tbody>{data.mismatches.map((m) => <tr key={m.id}><td>{m.name}</td><td>{m.pancake ? TEAM[m.pancake] : 'Không thuộc Sale/CSKH'}</td><td>{TEAM[m.hr]}{m.department ? ` · ${m.department}` : ''}</td><td className="num">{money(m.revenue)}</td></tr>)}</tbody>
-      </table></div>}
+      </table></TableWrap>}
       {data.unlinkedCount > 0 && <details className="text-sm">
         <summary className="cursor-pointer text-ink-2">{data.unlinkedCount} tài khoản POS chưa gắn hồ sơ nhân sự (vẫn theo Pancake)</summary>
         <ul className="mt-2 space-y-1">{data.unlinked.map((u) => <li key={u.id} className="flex justify-between gap-3"><span>{u.name}{u.pancake ? ` · ${TEAM[u.pancake]}` : ''}</span><span className="num text-ink-3">{money(u.revenue)}</span></li>)}</ul>

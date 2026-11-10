@@ -1,11 +1,11 @@
 'use client';
 
+import { currentStaffProfile, setProfileEnabled, subscribeStaffProfile } from './staff-profile-link';
 import { focusAfterNav } from './nav-focus';
 import { Spotlight } from './spotlight';
-import { Fragment, Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react';
+import { Fragment, Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent } from 'react';
 import {
   Activity,
-  ListTodo,
   Undo2,
   BarChart3,
   CalendarDays,
@@ -22,7 +22,7 @@ import {
   SlidersHorizontal,
   UsersRound,
 } from 'lucide-react';
-import { AlertTriangle, LogOut, Maximize2, MonitorPlay, X, ChevronLeft, Menu, PhoneCall, HeartHandshake, House, TrendingUp, UserCheck, Sparkles, ShieldCheck, Package, Shuffle, UserX } from 'lucide-react';
+import { AlertTriangle, LogOut, Maximize2, MonitorPlay, X, ChevronLeft, Menu, PhoneCall, HeartHandshake, House, TrendingUp, UserCheck, Sparkles, ShieldCheck, Package, Shuffle, UserX, IdCard } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, XAxis } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -65,8 +65,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { demoData } from '@/lib/demo-data';
-import type { SessionUser } from '@/lib/auth';
+import { demoData } from '@/lib/shared/demo-data';
+import type { SessionUser } from '@/lib/auth/auth';
 
 
 
@@ -85,7 +85,8 @@ import type { SessionUser } from '@/lib/auth';
 
 import { SecurityPanel } from './security-panel';
 
-import { TEAM_LABELS, useMktTeam, setHrUnit, setTeam, useHrUnit, useTeam } from './team-store';
+import { StaffStatusPanel, StatusPainter } from './staff-name';
+import { TEAM_LABELS, useMktTeam, setHrUnit, setPageDept, setTeam, useHrUnit, useTeamChoice } from './team-store';
 import { HrTeamPicker } from './hr-team-picker';
 import { BranchSwitch } from './branch-switch';
 import { useBranch } from './team-store';
@@ -105,11 +106,11 @@ import {
   productRows,
   reportScope,
   upsellSummary,
-} from '@/lib/report-metrics';
+} from '@/lib/reports/report-metrics';
 import { installApiFetch } from './api-fetch';
 import { setScope } from './access-store';
-import { DEPT_LAYOUT, SECTIONS, firstDeptOf, layoutFor } from '@/lib/nav-structure';
-import { ROLE_LABELS, canView, isOwner } from '@/lib/access';
+import { DEPT_LAYOUT, firstDeptOf, layoutFor } from '@/lib/shared/nav-structure';
+import { ROLE_LABELS, canExport, canView, canViewForecast, isOwner } from '@/lib/auth/access';
 import {
   POS,
   PRODUCTS,
@@ -117,11 +118,18 @@ import {
   type Dataset,
   type Filters,
   type Order,
-} from '@/lib/report-model';
+} from '@/lib/shared/report-model';
 
 // Mỗi trang là một gói mã riêng, chỉ tải khi mở (trang đầu nhẹ hơn nhiều); mã của trang đã mở được giữ lại.
 const ReturnsView = lazy(() => import('./returns-view').then((m) => ({ default: m.ReturnsView })));
-const TasksView = lazy(() => import('./tasks-view').then((m) => ({ default: m.TasksView })));
+const GrowthView = lazy(() => import('./growth-view').then((m) => ({ default: m.GrowthView })));
+const StaffProfilePage = lazy(() => import('./staff-profile').then((m) => ({ default: m.StaffProfilePage })));
+const GiaoViecView = lazy(() => import('./giao-viec-view').then(m => ({ default: m.GiaoViecView })));
+const GiaoViecChatView = lazy(() => import('./giao-viec-chat-view').then(m => ({ default: m.GiaoViecChatView })));
+const GiaoViecHopView = lazy(() => import('./giao-viec-hop-view').then(m => ({ default: m.GiaoViecHopView })));
+const GiaoViecZaloView = lazy(() => import('./giao-viec-zalo-view').then(m => ({ default: m.GiaoViecZaloView })));
+const GiaoViecKpiView = lazy(() => import('./giao-viec-kpi-view').then(m => ({ default: m.GiaoViecKpiView })));
+const GiaoViecBaoCaoView = lazy(() => import('./giao-viec-bao-cao-view').then(m => ({ default: m.GiaoViecBaoCaoView })));
 const UsersPanel = lazy(() => import('./users-panel').then((m) => ({ default: m.UsersPanel })));
 const OverviewView = lazy(() => import('./overview-view').then((m) => ({ default: m.OverviewView })));
 const SchedulerPanel = lazy(() => import('./scheduler-panel').then((m) => ({ default: m.SchedulerPanel })));
@@ -140,6 +148,8 @@ const CenterView = lazy(() => import('./center-view').then((m) => ({ default: m.
 const CallsView = lazy(() => import('./calls-view').then((m) => ({ default: m.CallsView })));
 import { GlobalStatusFilter } from './status-filter';
 import { MetricChangesCard, MetricSettingsButton } from './metric-settings';
+import { SettingsHub, SettingsSectionHeader, useSettingsPills, type SettingsSection } from './settings-hub';
+import { savedSettingsSection, useStayOnReload } from './stay-on-reload';
 import { IdleLock, Watermark } from './idle-lock';
 const TeamOverviewView = lazy(() => import('./team-overview-view').then((m) => ({ default: m.TeamOverviewView })));
 const OriginView = lazy(() => import('./origin-view').then((m) => ({ default: m.OriginView })));
@@ -158,6 +168,9 @@ const TeamGroupsView = lazy(() => import('./team-groups-view').then((m) => ({ de
 const MarketingView = lazy(() => import('./marketing-view').then((m) => ({ default: m.MarketingView })));
 const HrSyncPanel = lazy(() => import('./hr-sync-panel').then((m) => ({ default: m.HrSyncPanel })));
 const MarketingTeamsPanel = lazy(() => import('./marketing-teams-panel').then((m) => ({ default: m.MarketingTeamsPanel })));
+const TeamSheetPanel = lazy(() => import('./team-sheet-panel').then((m) => ({ default: m.TeamSheetPanel })));
+const PermissionTreePanel = lazy(() => import('./permission-tree-panel').then((m) => ({ default: m.PermissionTreePanel })));
+const AiAskView = lazy(() => import('./ai-ask-view').then((m) => ({ default: m.AiAskView })));
 const DispatchView = lazy(() => import('./dispatch-view').then((m) => ({ default: m.DispatchView })));
 const AuditView = lazy(() => import('./audit-view').then((m) => ({ default: m.AuditView })));
 const CatalogPanel = lazy(() => import('./catalog-panel').then((m) => ({ default: m.CatalogPanel })));
@@ -166,13 +179,18 @@ const AlertPanel = lazy(() => import('./alert-panel').then((m) => ({ default: m.
 const WatchPanel = lazy(() => import('./watch-panel').then((m) => ({ default: m.WatchPanel })));
 import { clearSnapshots, setSnapshotScope, useRefreshStatus } from './use-api';
 import { SkeletonKpis } from './ui-kit';
+import { RefreshStick } from './stickman/slot';
+import { AiBotGlyph } from './ai-bot';
 
 const MentorView = lazy(() => import('./mentor-view').then((m) => ({ default: m.MentorView })));
 
-type View =
+type View = 'giao-viec' | 'giao-viec-chat' | 'giao-viec-hop' | 'giao-viec-zalo' | 'giao-viec-kpi' | 'giao-viec-bao-cao'
+  | 'ai-ask'
   | 'mentor'
   | 'tasks'
   | 'returns'
+  | 'growth'
+  | 'ho-so'
   | 'center'
   | 'overview'
   | 'dormant'
@@ -375,8 +393,10 @@ type Detail = {
 };
 const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'mentor', label: 'Team của tôi', icon: UsersRound },
-  { id: 'tasks', label: 'Việc của tôi', icon: ListTodo },
   { id: 'returns', label: 'Lý do hoàn', icon: Undo2 },
+  { id: 'growth', label: 'Tăng trưởng nhân viên', icon: TrendingUp },
+  { id: 'ho-so', label: 'Hồ sơ nhân sự', icon: IdCard },
+  { id: 'ai-ask', label: 'Hỏi AI', icon: AiBotGlyph as unknown as typeof Activity },
   { id: 'center', label: 'Điều hành', icon: LayoutDashboard },
   { id: 'overview', label: 'Tổng quan POS', icon: BarChart3 },
   { id: 'shift', label: 'Trong ngày · chốt nóng', icon: Activity },
@@ -413,13 +433,24 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'marketing', label: 'Tổng quan MKT', icon: Megaphone },
   { id: 'recruit', label: 'Tuyển dụng', icon: UsersRound },
   { id: 'raw-orders', label: 'Đơn nguồn Pancake POS', icon: Database },
-  { id: 'config', label: 'Cấu hình & kết nối', icon: Settings2 },
+  { id: 'giao-viec', label: 'Giao việc', icon: UsersRound },
+  { id: 'giao-viec-chat', label: 'Chat', icon: UsersRound },
+  { id: 'giao-viec-hop', label: 'Họp', icon: UsersRound },
+  { id: 'giao-viec-zalo', label: 'Danh bạ Zalo', icon: UsersRound },
+  { id: 'giao-viec-kpi', label: 'KPI team', icon: UsersRound },
+  { id: 'giao-viec-bao-cao', label: 'Cài đặt báo cáo', icon: UsersRound },
+  { id: 'config', label: 'Cài đặt', icon: Settings2 },
   { id: 'audit', label: 'Nhật ký hoạt động', icon: ScrollText },
   { id: 'security', label: 'Bảo mật tài khoản', icon: Settings2 },
 ];
 // Các bộ phận và nhóm tab lấy từ khung điều hướng chung.
 type NavGroup = { title: string; ids: View[]; accent?: boolean; color: string; icon: typeof Activity; solo?: boolean; depts?: string[] };
-const DEPT_ICONS: Record<string, typeof Activity> = { sale: UsersRound, cskh: HeartHandshake, mkt: Megaphone, 'van-don': Truck, khach: UserCheck, 'cai-dat': Settings2 };
+const DEPT_ICONS: Record<string, typeof Activity> = { sale: UsersRound, cskh: HeartHandshake, mkt: Megaphone, 'van-don': Truck, khach: UserCheck, 'giao-viec': UsersRound, 'cai-dat': Settings2 };
+// Trang riêng của Sale / CSKH (trang dùng chung với bộ phận khác như Lý do hoàn thì không tính): chọn bộ phận kia ở thanh trên thì chỉ tính người thuộc cả hai.
+const DEPT_PAGE_KEYS = ['sale', 'cskh', 'mkt', 'van-don'];
+const PAGE_DEPT = new Map<string, 'sale' | 'cskh'>(DEPT_LAYOUT.flatMap((d) => d.key === 'sale' || d.key === 'cskh'
+  ? d.sections.flatMap((s) => s.tabs.map(([id]) => id)).filter((id) => DEPT_LAYOUT.filter((o) => o.sections.some((s) => s.tabs.some(([t]) => t === id))).length === 1).map((id) => [id, d.key as 'sale' | 'cskh'] as const)
+  : []));
 const deptViews = (keys: string[]) => DEPT_LAYOUT.filter((d) => keys.includes(d.key)).flatMap((d) => d.sections.flatMap((s) => s.tabs.map(([id]) => id as View)));
 // Con người (nhân sự, cấp bậc, tổ chức & mục tiêu, tuyển dụng) đã chuyển sang web nhân sự từ 01/10/2026; mục menu dẫn sang đó.
 const CRM_URL = 'https://crm.tonghopposmegatech.io.vn';
@@ -432,6 +463,7 @@ const NAV_GROUPS: NavGroup[] = [
   // Data được cấp tạm ẩn khỏi menu (25/09/2026: chưa cần); trang vẫn còn, mở lại bằng cách thêm 'batches' vào tab của Sale.
   { title: 'Khách hàng', ids: deptViews(['khach']), depts: ['khach'], color: 'var(--t-teal)', icon: UserCheck },
   { title: 'Báo cáo & AI', ids: ['monthly', 'custom', 'uncounted'], color: 'var(--t-orange)', icon: Sparkles },
+  { title: 'Giao việc', ids: deptViews(['giao-viec']), depts: ['giao-viec'], color: 'var(--primary)', icon: UsersRound },
   { title: 'Hệ thống', ids: deptViews(['cai-dat']), depts: ['cai-dat'], color: 'var(--ink-3)', icon: ShieldCheck },
 ];
 const vi = new Intl.NumberFormat('vi-VN');
@@ -753,12 +785,12 @@ function SidebarStatus({ good, bad, sub, onOpen }: { good: number; bad: { name: 
   );
 }
 const TABS: [View, string, typeof Activity][] = [['center', 'Điều hành', LayoutDashboard], ['overview', 'Doanh thu', BarChart3], ['shift', 'Trong ngày', Activity], ['customers', 'Khách', UsersRound]];
-/** Thanh tab dưới cùng trên điện thoại; "Thêm" mở ngăn kéo menu (state openMobile của SidebarProvider). */
-function MobileTabBar({ view, onSelect }: { view: View; onSelect: (v: View) => void }) {
+/** Thanh tab dưới cùng trên điện thoại; "Thêm" mở ngăn kéo menu (state openMobile của SidebarProvider). Chỉ hiện trang người xem có quyền. */
+function MobileTabBar({ view, onSelect, can }: { view: View; onSelect: (v: View) => void; can: (id: string) => boolean }) {
   const { setOpenMobile } = useSidebar();
   return (
     <nav className="tabbar md:hidden" aria-label="Điều hướng nhanh">
-      {TABS.map(([id, label, Icon]) => (
+      {TABS.filter(([id]) => can(id)).map(([id, label, Icon]) => (
         <button key={id} type="button" onClick={() => onSelect(id)} aria-current={view === id ? 'page' : undefined} className={`tab ${view === id ? 'is-active' : ''}`}><Icon size={20} aria-hidden="true" />{label}</button>
       ))}
       <button type="button" onClick={() => setOpenMobile(true)} className="tab" aria-label="Mở menu đầy đủ"><Menu size={20} aria-hidden="true" />Thêm</button>
@@ -796,6 +828,10 @@ function Surface({
 installApiFetch();
 
 export default function Dashboard({ user, initialView, demo = false }: { user: SessionUser; initialView?: string; demo?: boolean }) {
+  const [workBoss, setWorkBoss] = useState(false);
+  useEffect(() => { let live = true; fetch('/api/giao-viec/me', { cache: 'no-store' }).then(r => r.json() as Promise<{ boss?: boolean }>).then(d => { if (live) setWorkBoss(d.boss === true); }).catch(() => {}); return () => { live = false; }; }, []);
+  // KPI team: chủ hệ thống đặt; leader / mentor / giám đốc xem KPI team mình cầm (05/11/2026). Các tab Giao việc khác theo người được giao việc.
+  const canNavigate = useCallback((id: string) => id === 'giao-viec-kpi' ? workBoss || ['director', 'lead', 'mentor'].includes(user.role) : id.startsWith('giao-viec') ? workBoss : canView(user, id), [workBoss, user]);
   setSnapshotScope(user.userId);
   // Trang mở thẳng bằng ?view= chỉ biết ở trình duyệt: phần phụ thuộc trang hiện tại ngoài Suspense (thanh tab bộ phận) vẽ sau khi gắn để khớp HTML máy chủ.
   const [mounted, setMounted] = useState(false);
@@ -803,9 +839,21 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   // App iOS mở thẳng một trang qua ?view=…; trang không có quyền sẽ về Điều khiển trung tâm như thường.
   const [view, setView] = useState<View>(() => {
     const v = typeof window === 'undefined' ? initialView : new URLSearchParams(window.location.search).get('view');
-    if (user.role === 'mentor') return v === 'tasks' || v === 'security' ? v : 'mentor';
+    if (user.role === 'mentor' && !user.teamScope) return v === 'security' ? v : 'mentor';
     return v && navigation.some((n) => n.id === v) && !(v in CRM_VIEWS) ? (v as View) : 'center';
   });
+  setPageDept(PAGE_DEPT.get(view) ?? null);
+  // Bấm tên ở bảng nào cũng sang trang Hồ sơ nhân sự (anh Vũ 09/11/2026); chỉ chủ hệ thống. Nhớ trang cũ cho nút Quay lại.
+  const profileOn = canView(user, 'ho-so');
+  useLayoutEffect(() => { setProfileEnabled(profileOn); }, [profileOn]);
+  const profileTarget = useSyncExternalStore(subscribeStaffProfile, currentStaffProfile, () => null);
+  const [profileBack, setProfileBack] = useState<View | null>(null);
+  const lastProfileAt = useRef(profileTarget?.at ?? 0);
+  useEffect(() => {
+    if (!profileTarget || profileTarget.at === lastProfileAt.current) return;
+    lastProfileAt.current = profileTarget.at;
+    if (view !== 'ho-so') { setProfileBack(view); setView('ho-so'); window.scrollTo({ top: 0 }); }
+  }, [profileTarget, view]);
   const [openDept, setOpenDept] = useState<string>();
   const deptOf = (v: View) => firstDeptOf(v, openDept);
   const activeDept = deptOf(view)?.key;
@@ -821,11 +869,11 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   // Vai trò bắt buộc 2 lớp mà chưa bật: chỉ được vào trang Bảo mật cho tới khi bật xong.
   const gated = user.mfaRequired && !user.mfaEnabled && view !== 'security';
   // Báo trang vừa mở cho nhật ký hoạt động (một dòng mỗi lần đổi trang).
-  useEffect(() => { if (gated || user.role === 'mentor') return; void fetch('/api/activity', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ view }), keepalive: true }).catch(() => undefined); }, [view, gated, user.role]);
+  useEffect(() => { if (gated || user.role === 'mentor' && !user.teamScope) return; void fetch('/api/activity', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ view }), keepalive: true }).catch(() => undefined); }, [view, gated, user.role, user.teamScope]);
   // Con vật chờ tải: mỗi lần mở trang (kể cả quay lại trang cũ) bốc con mới.
   useEffect(() => { noteCritterPage(view); }, [view]);
   const [searchQuery, setSearchQuery] = useState('');
-  const team = useTeam();
+  const team = useTeamChoice();
   const selectedUnit = useHrUnit();
   const hrUnit = selectedUnit?.branchOnly ? null : selectedUnit;
   const mktLens = useMktTeam();
@@ -877,10 +925,16 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   useEffect(() => { if (!navHydrated.current) return; try { localStorage.setItem('thp_nav_open', JSON.stringify(navOpen)); } catch { /* bỏ qua */ } }, [navOpen]);
   useEffect(() => watchSystemTheme(), []);
   // Phạm vi xem của tài khoản: POS và nhóm bị khóa theo quyền; trang không được cấp thì chuyển về trang đầu tiên được cấp.
+  // Mentor / Leader (Cài đặt → Team): khóa theo bộ phận của team phụ trách.
+  const lockedTeam = user.teamScope && user.teamScope.dept !== 'all' ? user.teamScope.dept : user.team;
   useEffect(() => {
-    setScope({ posIds: user.posIds, team: user.team });
-    if (user.team !== 'all') setTeam(user.team);
-  }, [user.posIds, user.team]);
+    setScope({ posIds: user.posIds, team: lockedTeam });
+    if (lockedTeam !== 'all') setTeam(lockedTeam);
+  }, [user.posIds, lockedTeam]);
+  // Nút Tất cả / Sale / CSKH chỉ ở trang chung (Tổng quan…); vào riêng Sale, CSKH, Marketing, Vận đơn thì ẩn nút và bỏ lựa chọn,
+  // trang tự tính theo bộ phận của nó (anh Vũ 04/11/2026: "khi tôi ấn vào bộ phận sale riêng, thì bỏ cái đó đi").
+  const deptPage = !!activeDept && DEPT_PAGE_KEYS.includes(activeDept);
+  useEffect(() => { if (deptPage && lockedTeam === 'all' && !hrUnit && team !== 'all') setTeam('all'); }, [deptPage, view]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!canView(user, view)) {
       const first = NAV_GROUPS.flatMap((g) => g.ids).find((id) => canView(user, id));
@@ -888,16 +942,13 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
-  const [taskCounts, setTaskCounts] = useState<{ overdue: number; today: number } | null>(null);
-  const [taskHint, setTaskHint] = useState<string | null>(null);
   const [cskhBadge, setCskhBadge] = useState<{ callsToday: number; over20: number } | null>(null);
   useEffect(() => {
-    if (user.role === 'mentor') return;
+    if (user.role === 'mentor' && !user.teamScope) return;
     const tick = () => {
-      void fetch('/api/tasks?scope=mine', { cache: 'no-store' }).then((r) => r.ok ? r.json() as Promise<{ counts: { overdue: number; today: number } }> : null).then((b) => setTaskCounts(b?.counts ?? null)).catch(() => setTaskCounts(null));
       void fetch('/api/reports/cskh-badge', { cache: 'no-store' }).then((r) => r.ok ? r.json() as Promise<{ callsToday: number; over20: number }> : null).then((b) => { if (b) setCskhBadge(b); }).catch(() => undefined); };
     tick(); const t = setInterval(tick, 120000); return () => clearInterval(t);
-  }, [user.role]);
+  }, [user.role, user.teamScope]);
   const [data, setData] = useState<Dataset>(emptyData);
   const [filters, setFilters] = useState<Filters>(() => ({
     start: today(),
@@ -1169,7 +1220,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   };
 
   useEffect(() => {
-    if (user.role === 'mentor') return;
+    if (user.role === 'mentor' && !user.teamScope) return;
     fetch('/api/data')
       .then(async (r) => {
         const result = await r.json() as unknown;
@@ -1234,10 +1285,10 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
       .catch(() => {});
     void Promise.resolve().then(() => checkConnection());
     void Promise.resolve().then(() => refreshRawSync());
-  }, [user.role]);
+  }, [user.role, user.teamScope]);
   // Đồng bộ định kỳ do bộ lập lịch trên Cloudflare đảm nhiệm (5 phút/lần); trình duyệt chỉ làm mới số liệu.
   useEffect(() => {
-    if (user.role === 'mentor') return;
+    if (user.role === 'mentor' && !user.teamScope) return;
     const run = () => {
       if (document.visibilityState !== 'visible') return;
       setRawRefresh((value) => value + 1);
@@ -1249,7 +1300,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', run);
     };
-  }, [user.role]);
+  }, [user.role, user.teamScope]);
   const scope = useMemo(() => reportScope(data, filters), [data, filters]);
   const assignmentsReady = data.mode === 'demo' || data.assignments.length > 0;
   const hotKpisReady =
@@ -1295,7 +1346,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   const title = navigation.find((n) => n.id === view)?.label ?? '';
   const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
   const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  const SELF_HEADED: View[] = ['mentor', 'returns', 'tasks', 'custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'uncounted'];
+  const SELF_HEADED: View[] = ['giao-viec', 'giao-viec-chat', 'giao-viec-hop', 'giao-viec-zalo', 'giao-viec-kpi', 'giao-viec-bao-cao', 'mentor', 'returns', 'growth', 'ho-so', 'tasks', 'custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'ai-ask', 'uncounted'];
   const changeFilters = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
   const setPeriodChoice = (choice: string) => {
@@ -1396,7 +1447,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   });
   const badPos = posHealth.filter((p) => p.bad);
   const syncState: 'ok' | 'warn' | 'bad' = badPos.length === 0 ? 'ok' : badPos.length >= 3 ? 'bad' : 'warn';
-  // Dấu hiệu làm mới số liệu: vạch chạy dưới thanh trên, ô "Đang làm mới…", thẻ số mờ đi; xong thì báo "Mới HH:MM" 6 giây.
+  // Dấu hiệu làm mới số liệu: vạch chạy dưới thanh trên, ô "Đang làm mới…", người que chạy chơi trên ô số (không làm mờ thẻ, 22/10/2026); xong thì báo "Mới HH:MM" 6 giây.
   const refresh = useRefreshStatus();
   const [justFresh, setJustFresh] = useState<string | null>(null);
   useEffect(() => {
@@ -1406,7 +1457,6 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
     return () => window.clearTimeout(t);
   }, [refresh.freshAt, refresh.busy]);
   const refreshClass = refresh.busy ? 'is-refreshing' : justFresh ? 'is-refreshed' : '';
-  const refreshStyle = justFresh ? ({ '--fresh-at': `"${timeOnly(justFresh)}"` } as CSSProperties) : undefined;
   const syncDetail = (
     <>
       <b>Đồng bộ Pancake theo POS</b>
@@ -1415,23 +1465,21 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
     </>
   );
   const visibleDepts = useMemo(() => {
-    const depts = DEPT_LAYOUT.filter((d) => d.sections.some((s) => s.tabs.some(([id]) => id !== 'tasks' && canView(user, id))));
+    const depts = DEPT_LAYOUT.filter((d) => d.sections.some((s) => s.tabs.some(([id]) => id !== 'tasks' && canNavigate(id))));
     return depts.length ? depts : DEPT_LAYOUT.slice(0, 1);
-  }, [user]);
-  const navGroups = useMemo(() => NAV_GROUPS.filter((g) => g.ids.some((id) => canView(user, id))).map((g) => ({
+  }, [canNavigate]);
+  const navGroups = useMemo(() => NAV_GROUPS.filter((g) => g.ids.some((id) => canNavigate(id))).map((g) => ({
     title: g.title, accent: g.accent, color: g.color, icon: g.icon, solo: g.solo,
     items: g.depts
-      ? visibleDepts.filter((d) => g.depts!.includes(d.key)).map((d) => ({ d, tabs: layoutFor(d.key, (id) => canView(user, id)).flatMap((s) => s.tabs) })).filter((x) => x.tabs.length)
+      ? visibleDepts.filter((d) => g.depts!.includes(d.key)).map((d) => ({ d, tabs: layoutFor(d.key, (id) => canNavigate(id)).flatMap((s) => s.tabs) })).filter((x) => x.tabs.length)
         .map(({ d, tabs }) => ({ id: tabs[0][0] as View, label: d.label, icon: DEPT_ICONS[d.key], deptKey: d.key, match: tabs.map(([id]) => id as View) }))
-      : g.ids.filter((id) => canView(user, id)).map((id) => { const n = navigation.find((x) => x.id === id)!; return id === 'people' ? { ...n, match: ['people', 'person'] as View[] } : n; }),
-  })).filter((g) => g.items.length), [user, visibleDepts]);
+      : g.ids.filter((id) => canNavigate(id)).map((id) => { const n = navigation.find((x) => x.id === id)!; return id === 'people' ? { ...n, match: ['people', 'person'] as View[] } : n; }),
+  })).filter((g) => g.items.length), [canNavigate, visibleDepts]);
   const navCounts: NavCounts = {
     ...(cskhBadge && canView(user, 'calls') ? { calls: { value: cskhBadge.callsToday, title: 'Cuộc gọi CSKH hôm nay' }, care: { value: cskhBadge.over20, hot: true, title: 'Khách quá 20 ngày chưa note' } } : {}),
-    ...(taskCounts ? { tasks: { value: taskCounts.overdue + taskCounts.today, hot: taskCounts.overdue > 0, title: 'Quá hạn: ' + taskCounts.overdue + ' · Hôm nay: ' + taskCounts.today } } : {}),
   };
   const goTo = (id: View, deptKey?: string) => {
     if (!canView(user, id)) return;
-    setTaskHint(null);
     setOpenDept(firstDeptOf(id, deptKey ?? activeDept)?.key);
     // Phần Con người đã chuyển sang web nhân sự: mở thẳng trang tương ứng bên đó.
     if (id in CRM_VIEWS && demo) { window.alert('Bản demo không kèm web nhân sự. Team, Leader, Trưởng phòng xem ở Sale hoặc CSKH → Theo team.'); return; }
@@ -1440,6 +1488,14 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
     if (id === 'monthly' && period === 'today') setPeriodChoice('month');
     window.scrollTo({ top: 0 });
   };
+  // Cài đặt gọn lại (anh Vũ 31/10/2026): trang đầu là mục lục, bấm mục mới mở phần chỉnh.
+  const [cfgSection, setCfgSection] = useState<SettingsSection | null>(null);
+  const openSettings = (section: SettingsSection) => { setCfgSection(section); goTo('config'); };
+  // Chủ hệ thống: F5 đứng nguyên trang, mục Cài đặt và chỗ đang cuộn (anh Vũ 04/11/2026).
+  const stay = isOwner(user) && !user.actingAs;
+  useStayOnReload(stay, view, cfgSection);
+  useEffect(() => { if (stay) { const c = savedSettingsSection('config'); if (c && view === 'config') setCfgSection(c as SettingsSection); } }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const pills = useSettingsPills(view === 'config' && isOwner(user));
   const updatedText = !gated && view === 'raw-orders'
     ? dateText(rawSync[rawPosId]?.fetchedAt ?? null)
     : data.mode === 'empty' ? dateTimeText(lastSyncIso)
@@ -1448,7 +1504,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   return (
     <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen}>
       <Sidebar collapsible="offcanvas" className="border-r-0">
-        <SidebarHeader className="px-4 pt-5 pb-4">
+        <SidebarHeader data-no-st className="px-4 pt-5 pb-4">
           <div className="flex items-center gap-2.5">
             <img src="/logo.svg" alt="MEGATECH" width={34} height={34} className="size-[34px] rounded-[9px] shadow-[0_2px_10px_rgba(0,0,0,.25)]" />
             <div className="min-w-0">
@@ -1470,11 +1526,12 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               : data.mode === 'empty'
                 ? lastSyncIso ? `Cập nhật ${dateTimeText(lastSyncIso)}` : 'Chờ đồng bộ dữ liệu báo cáo'
               : `Cập nhật ${dateText(data.updatedAt)}`}
-            onOpen={canView(user, 'config') ? () => goTo('config') : undefined} />
+            onOpen={canView(user, 'config') ? () => openSettings('data') : undefined} />
         </SidebarFooter>
       </Sidebar>
       <SidebarInset className="min-w-0 bg-canvas">
         <Spotlight />
+        <StatusPainter />
         <IdleLock paused={presenting} owner={user.role === 'owner'} onLogout={async () => { await clearSnapshots(); await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/login'; }} />
         {user.role !== 'owner' && <Watermark text={`${user.displayName} · ${user.email} · ${today()}`} />}
         {/* Màn 1280–1440 (có thanh bên): tên web chỉ hiện từ 1700px, chữ "Trình chiếu" từ 2xl, để thanh trên không tràn (QA 08/10). */}
@@ -1491,9 +1548,9 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               className="field pl-8" />
           </form>
           <button type="button" className="btn icon ml-auto md:hidden" title="Tìm khách" aria-label="Tìm khách" onClick={() => setView('customers')}><Search size={15} /></button>
-          {user.team === 'all' && <TeamSwitch size="sm" />}
+          {user.team === 'all' && !deptPage && <TeamSwitch size="sm" />}
           <BranchSwitch />
-          {(canView(user, 'sale-teams') || canView(user, 'cskh-teams') || canView(user, 'van-don')) && <HrTeamPicker />}
+          {(canView(user, 'sale-teams') || canView(user, 'cskh-teams') || canView(user, 'van-don')) && <HrTeamPicker section={activeDept} />}
           {/* Trang Vận đơn không dùng bộ lọc trạng thái, và Vận đơn không có chữ "chốt" (anh Vũ 10/10/2026). */}
           {view !== 'van-don' && <GlobalStatusFilter className="hidden md:inline-flex" />}
           <MetricSettingsButton className="hidden lg:inline-flex" />
@@ -1505,8 +1562,8 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           </>}
           <ThemeSwitch className="hidden sm:inline-flex" />
           <div className="user">
-            <button type="button" title="Bảo mật tài khoản" aria-label="Bảo mật tài khoản" onClick={() => setView('security')} className="grid size-[26px] place-items-center rounded-full bg-primary text-[10.5px] font-semibold tracking-[.02em] text-primary-ink transition-colors duration-[var(--dur)] hover:bg-primary-2">{initials(user.displayName)}</button>
-            <div className="hidden max-w-40 whitespace-nowrap leading-[1.15] xl:block [&>div]:truncate" title={`${ROLE_LABELS[user.role]}${user.title ? ` · ${user.title}` : ''}`}>
+            <button type="button" title="Bảo mật tài khoản" aria-label="Bảo mật tài khoản" onClick={() => setView('security')} className="grid size-[26px] max-md:size-8 pointer-coarse:size-8 place-items-center rounded-full bg-primary text-[10.5px] font-semibold tracking-[.02em] text-primary-ink transition-colors duration-[var(--dur)] hover:bg-primary-2">{initials(user.displayName)}</button>
+            <div className="hidden max-w-40 whitespace-nowrap leading-[1.15] 2xl:block [&>div]:truncate" title={`${ROLE_LABELS[user.role]}${user.title ? ` · ${user.title}` : ''}`}>
               <div className="text-xs font-semibold text-ink">{user.displayName}</div>
               <div className="text-[10.5px] text-ink-3">{user.title || ROLE_LABELS[user.role]}</div>
             </div>
@@ -1516,6 +1573,12 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
             </button>
           </div>
         </header>}
+        {user.actingAs && (
+          <button type="button" className="fixed right-3 bottom-[calc(env(safe-area-inset-bottom,0px)+76px)] z-50 rounded-full md:bottom-3 border border-line bg-surface/95 px-3 py-1.5 text-xs font-semibold text-ink shadow-float backdrop-blur"
+            onClick={async () => { await clearSnapshots(); await fetch('/api/auth/act-as', { method: 'DELETE' }); window.location.href = '/'; }}>
+            Thoát xem như
+          </button>
+        )}
         {presenting && (
           <div className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 rounded-full border border-line bg-surface/95 px-2 py-1.5 text-[13px] text-ink shadow-float backdrop-blur">
             <button type="button" className="rounded-full p-1.5 transition-colors duration-[var(--dur)] hover:bg-surface-2" title="Trang trước (←)" aria-label="Trang trước" onClick={() => { const i = PRESENT_VIEWS.indexOf(view); setView(PRESENT_VIEWS[(i - 1 + PRESENT_VIEWS.length) % PRESENT_VIEWS.length]); window.scrollTo({ top: 0 }); }}><ChevronLeft size={16} /></button>
@@ -1527,14 +1590,16 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
             <button type="button" className="rounded-full p-1.5 transition-colors duration-[var(--dur)] hover:bg-bad-bg hover:text-bad" title="Thoát trình chiếu (Esc)" aria-label="Thoát trình chiếu" onClick={stopPresenting}><X size={16} /></button>
           </div>
         )}
-        {!presenting && <MobileTabBar view={view} onSelect={goTo} />}
+        {!presenting && <MobileTabBar view={view} onSelect={goTo} can={canNavigate} />}
         <div className="refresh-bar" hidden={!refresh.busy} aria-hidden="true"><i /></div>
-        <main className={`${refreshClass} ${presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1360px] px-4 pt-4 pb-[calc(88px+env(safe-area-inset-bottom,0px))] sm:pt-6 md:px-6 md:pb-12'}`} style={{ ...(presenting ? { zoom: 1.15 } : {}), ...refreshStyle }}>
+        <RefreshStick busy={refresh.busy} />
+        <main className={`${refreshClass} ${presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1360px] px-4 pt-4 pb-[calc(88px+env(safe-area-inset-bottom,0px))] sm:pt-6 md:px-6 md:pb-12'}`} style={presenting ? { zoom: 1.15 } : undefined}>
           {team !== 'all' && !hrUnit && !['config', 'audit'].includes(view) && (
             <div className="notice warn mb-4 items-center justify-between" role="status">
               <AlertTriangle size={15} className="shrink-0" aria-hidden="true" />
-              <span><strong>Đang lọc riêng nhóm {TEAM_LABELS[team]}</strong> — mọi số trên trang chỉ tính đơn, khách và data do nhân viên {team === 'sale' ? 'Sale / bán hàng' : 'CSKH'} phụ trách, nên sẽ thấp hơn Pancake. Bấm "Tất cả" ở thanh trên (hoặc nút bên phải) để so với Pancake.</span>
-              <button type="button" className="link ml-auto shrink-0 text-xs font-semibold underline" onClick={() => setTeam('all')}>Xem tất cả</button>
+              {PAGE_DEPT.get(view) && PAGE_DEPT.get(view) !== team ? <span><strong>Trang {TEAM_LABELS[PAGE_DEPT.get(view)!]} đang chọn {TEAM_LABELS[team]}</strong>: chỉ tính người vừa thuộc {TEAM_LABELS[PAGE_DEPT.get(view)!]} vừa thuộc {TEAM_LABELS[team]}. Bấm &quot;Tất cả&quot; hoặc &quot;{TEAM_LABELS[PAGE_DEPT.get(view)!]}&quot; ở thanh trên để xem số.</span>
+              : <span><strong>Đang lọc riêng nhóm {TEAM_LABELS[team]}</strong> — mọi số trên trang chỉ tính đơn, khách và data do nhân viên {team === 'sale' ? 'Sale / bán hàng' : 'CSKH'} phụ trách, nên sẽ thấp hơn Pancake. Bấm "Tất cả" ở thanh trên (hoặc nút bên phải) để so với Pancake.</span>}
+              <button type="button" className="link tap ml-auto shrink-0 text-xs font-semibold underline" onClick={() => setTeam('all')}>Xem tất cả</button>
             </div>
           )}
           {mktLens && <output className="notice warn mb-4">Đang xem team MKT {mktLens.name}: chỉ tính đơn có Marketer thuộc team này, Sale và CSKH là người chốt các đơn đó.</output>}
@@ -1543,14 +1608,14 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
             <div className="notice warn mb-4 items-center justify-between" role="status">
               <AlertTriangle size={15} className="shrink-0" aria-hidden="true" />
               {UNIT_VIEWS.includes(view)
-                ? <span><strong>Đang xem riêng team {hrUnit.name}</strong> — số trên trang chỉ tính người đang thuộc team này bên web nhân sự (theo team hiện tại: người chuyển team thì số các kỳ trước đi theo team mới; người đã nghỉ không tính).</span>
+                ? <span><strong>Đang xem riêng team {hrUnit.name}</strong> — số trên trang chỉ tính người đang thuộc team này {hrUnit.id.startsWith('wt_') ? 'theo bảng chia team ở Cài đặt' : 'bên web nhân sự'} (theo team hiện tại: người chuyển team thì số các kỳ trước đi theo team mới; người đã nghỉ không tính).</span>
                 : <span><strong>Trang này chưa lọc được theo team</strong> — đang hiện số cả nhóm {TEAM_LABELS[team]}, không riêng team {hrUnit.name}. Xem theo team ở Tổng quan Sale / CSKH, Tổng quan POS, Theo team và Vận đơn.</span>}
-              <button type="button" className="link ml-auto shrink-0 text-xs font-semibold underline" onClick={() => setHrUnit(null)}>Bỏ chọn team</button>
+              <button type="button" className="link tap ml-auto shrink-0 text-xs font-semibold underline" onClick={() => setHrUnit(null)}>Bỏ chọn team</button>
             </div>
           )}
           {(() => {
             const d = deptOf(view);
-            const sections = d ? layoutFor(d.key, (id) => canView(user, id)) : [];
+            const sections = d ? layoutFor(d.key, (id) => canNavigate(id)) : [];
             if (!d || !sections.length || presenting) return null;
             const Icon = DEPT_ICONS[d.key];
             return (
@@ -1558,7 +1623,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
                 <span className="dept-name"><Icon size={15} aria-hidden="true" />{d.label}</span>
                 {sections.map((section) => (
                   <Fragment key={section.key}>
-                    {sections.length > 1 && <span className="dept-sec">{SECTIONS.find((s) => s.key === section.key)!.label}</span>}
+                    {/* Không hiện tên nhóm (Hôm nay, Báo cáo...): anh Vũ 21/10/2026 tưởng là nút mà bấm không được. */}
                     {section.tabs.map(([id, label]) => {
                       const c = navCounts[id as View];
                       return (
@@ -1584,7 +1649,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               ) : undefined}
             />
           )}
-          {!['mentor', 'custom', 'config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'uncounted'].includes(view) && (
+          {!['giao-viec', 'giao-viec-chat', 'giao-viec-hop', 'giao-viec-zalo', 'giao-viec-kpi', 'giao-viec-bao-cao', 'mentor', 'growth', 'ho-so', 'custom', 'config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'ai-ask', 'uncounted'].includes(view) && (
             <Toolbar className="mb-5">
               <span className="px-1.5 text-[12.5px] font-semibold text-ink-2">
                 Bộ lọc
@@ -1651,33 +1716,29 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
             </div>
           )}
 
-          {!gated && taskHint && (view === 'raw-orders' || view === 'customer360') && <output id="task-link-target" className="notice block break-words">Gợi ý tìm từ việc: {taskHint}<button type="button" className="btn sm" onClick={() => setTaskHint(null)}>Đóng</button></output>}
           {gated && <SecurityPanel user={user} gate />}
           <Suspense fallback={<div className="space-y-4" aria-busy="true"><SkeletonKpis count={4} /><div className="skel h-64 w-full rounded-2xl" /></div>}>
           {!gated && canView(user, view) && view === 'returns' && <ReturnsView onOpen={() => { if (!canView(user, 'raw-orders')) { toast('Bạn không có quyền xem trang này.', { kind: 'error' }); return; } focusAfterNav('raw-list', { 'raw.group': 'returned' }); setView('raw-orders'); }} />}
-          {!gated && view === 'tasks' && canView(user, 'tasks') && <TasksView user={user} onNavigate={(link) => {
-            if (!canView(user, link.view)) { toast('Bạn không có quyền xem trang này.', { kind: 'error' }); return; }
-            focusAfterNav(link.view === 'raw-orders' ? 'raw-list' : 'task-link-target', link.hint);
-            goTo(link.view);
-            setTaskHint(Object.values(link.hint).join(' · '));
-          }} />}
-          {!gated && view === 'center' && <CenterView canRegenerateAi={isOwner(user)} onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
+          {!gated && view === 'center' && <CenterView canForecast={canViewForecast(user)} canRegenerateAi={isOwner(user)} onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
           {!gated && view === 'overview' && <OverviewView onNavigate={(v) => goTo(v as View)} canRewriteAi={isOwner(user)} />}
           {!gated && view === 'shift' && <ShiftView />}
           {!gated && view === 'custom' && <CustomReportView />}
           {!gated && view === 'compare' && <CompareView />}
+          {!gated && canView(user, view) && view === 'growth' && <GrowthView key={activeDept} navDept={activeDept} />}
+          {!gated && canView(user, view) && view === 'ho-so' && <StaffProfilePage onBack={profileBack ? () => { setView(profileBack); setProfileBack(null); } : undefined} />}
           {!gated && view === 'batches' && <BatchesView />}
           {!gated && view === 'raw-orders' && <RawOrdersView onSyncNow={() => { void syncRecentAll(true); }} syncing={autoSyncing} />}
-          {!gated && view === 'customers' && <CustomersPage key={searchQuery} initialQ={searchQuery} />}
-          {!gated && view === 'dormant' && <CustomersView mode="dormant" />}
+          {!gated && view === 'customers' && <CustomersPage key={searchQuery} initialQ={searchQuery} canExport={canExport(user)} />}
+          {!gated && view === 'dormant' && <CustomersView mode="dormant" canExport={canExport(user)} />}
           {!gated && view === 'repurchase' && <RepurchaseView />}
           {!gated && view === 'monthly' && <MonthlyView onNavigate={(v) => goTo(v as View)} />}
           {!gated && view === 'pipeline' && <PipelineView />}
           {!gated && view === 'van-don' && <VanDonView />}
-          {!gated && view === 'calls' && <CallsView />}
+          {!gated && view === 'calls' && <CallsView canExport={canExport(user)} />}
           {!gated && view === 'origin' && <OriginView />}
           {!gated && view === 'cskh-overview' && <TeamOverviewView key="cskh" team="cskh" kpi={canView(user, 'cskh-kpi')} onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
           {!gated && view === 'sale-overview' && <TeamOverviewView key="sale" team="sale" onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
+          {/* Bỏ hẳn Việc của tôi (anh Vũ 31/10/2026: "xóa hẳn ngay cái việc của tôi"): khối này đọc D1 nhiều nhất kỳ 17/10. */}
           {!gated && view === 'mentor' && canView(user, 'mentor') && <MentorView />}
           {!gated && view === 'care' && <CareView />}
           {!gated && view === 'cskh-kpi' && canView(user, 'cskh-kpi') && <CskhKpiView />}
@@ -1691,267 +1752,256 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {!gated && view === 'uncounted' && <UncountedView />}
           {!gated && view === 'customer360' && <Customer360View />}
           {!gated && view === 'products' && <ProductsView />}
-          {!gated && view === 'marketing' && <MarketingView onManageTeams={isOwner(user) ? () => goTo('config') : undefined} onOpenRoas={canView(user, 'mkt-roas') ? () => goTo('mkt-roas') : undefined} />}
+          {!gated && view === 'marketing' && <MarketingView onManageTeams={isOwner(user) ? () => openSettings('team') : undefined} onOpenRoas={canView(user, 'mkt-roas') ? () => goTo('mkt-roas') : undefined} />}
           {!gated && view === 'security' && <SecurityPanel user={user} />}
+          {!gated && view === 'ai-ask' && isOwner(user) && <AiAskView onNavigate={(v) => goTo(v as View)} />}
+          {!gated && workBoss && view === 'giao-viec' && <GiaoViecView />}
+          {!gated && workBoss && view === 'giao-viec-chat' && <GiaoViecChatView />}
+          {!gated && workBoss && view === 'giao-viec-hop' && <GiaoViecHopView />}
+          {!gated && workBoss && view === 'giao-viec-zalo' && <GiaoViecZaloView />}
+          {!gated && canNavigate('giao-viec-kpi') && view === 'giao-viec-kpi' && <GiaoViecKpiView owner={isOwner(user)} onOpen={(v) => goTo(v)} />}
+          {!gated && workBoss && view === 'giao-viec-bao-cao' && <GiaoViecBaoCaoView />}
           {!gated && view === 'audit' && isOwner(user) && <AuditView />}
           {!gated && view === 'dispatch' && isOwner(user) && <DispatchView />}
-          {!gated && view === 'config' && isOwner(user) && (
-            <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
-              <div className="space-y-5 xl:col-span-2">
-                <MarketingTeamsPanel />
-                <TargetsPanel canEdit={isOwner(user)} />
-                <MetricChangesCard />
-                {isOwner(user) && <CatalogPanel />}
-              </div>
-              <div className="xl:col-span-2">
-                <SchedulerPanel Surface={Surface} />
-              </div>
-              <div className="xl:col-span-2">
-                <BackupPanel Surface={Surface} />
-              </div>
-              <div className="xl:col-span-2">
-                <CritterSettingPanel Surface={Surface} demo={demo} />
-              </div>
-              <Surface
-                title="Kết nối 6 POS"
-                description="Kiểm tra API trước, sau đó chọn đúng mã cửa hàng cho từng POS"
-                className="xl:col-span-2"
-              >
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
-                  <div className="rounded-xl border border-line bg-surface-2 p-4 text-sm md:col-span-2 2xl:col-span-3">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <strong>Trạng thái API Pancake POS</strong>
-                      <Button variant="outline" onClick={checkConnection} disabled={checkingConnection}>
-                        {checkingConnection ? 'Đang kiểm tra...' : 'Kiểm tra API'}
-                      </Button>
-                    </div>
-                    <p className="mt-2 text-ink-2">
-                      {connection?.message ?? 'Đang kiểm tra cấu hình bí mật của web...'}
-                    </p>
-                    {connection?.status === 'missing_key' && (
-                      <p className="mt-2 text-ink-2">
-                        Đặt biến bí mật <strong>PANCAKE_POS_API_KEY</strong> cho Worker bằng lệnh
-                        {' '}<code>wrangler secret put PANCAKE_POS_API_KEY</code> (API key tạo tại Pancake POS →
-                        Cài đặt → Nâng cao → Kết nối bên thứ ba → Webhook/API).
-                      </p>
-                    )}
-                    {connection?.status === 'verified' && (
-                      <p className="mt-2 text-ink-2">
-                        Chọn Shop ID từ danh sách bên dưới. Bước đồng bộ số nhận, lịch sử chốt
-                        và đơn cần xác định dữ liệu nguồn trước khi số liệu được dùng chính thức.
-                      </p>
-                    )}
-                    <a
-                      className="mt-2 inline-block font-medium text-primary underline"
-                      href="https://docs.pancake.biz/pos/st-f13/st-p2?lang=vi"
-                      target="_blank" rel="noreferrer"
-                    >
-                      Hướng dẫn lấy API key của Pancake POS
-                    </a>
-                  </div>
-                  {shops.map((s) => (
-                    <div
-                      key={s.id}
-                      className="flex min-w-0 flex-wrap items-center gap-3 rounded-xl border border-line p-3 [&>div:first-child]:min-w-0 [&>div:first-child]:flex-1 [&>div:first-child]:basis-full"
-                    >
-                      <div>
-                        <strong className="block text-sm">{s.name}</strong>
-                        <span className="text-xs text-ink-3">
-                          {s.status === 'connected'
-                            ? `Đồng bộ ${dateText(s.lastSyncAt)} · lịch sử từ ${s.historyStart ?? 'chưa rõ'}`
-                            : 'Chưa có báo cáo chốt nóng'}
-                        </span>
-                        {s.invalidSavedId && (
-                          <p className="mt-1 text-xs font-medium text-warn">
-                            Giá trị đã lưu không phải Shop ID dạng số. Nếu đó là API key,
-                            hãy xóa khỏi ô này và thay key trong Pancake POS.
-                          </p>
-                        )}
-                        {inspections[s.id] && (
-                          <p className="mt-1 text-xs text-ink-2">
-                            API có {vi.format(inspections[s.id].totalOrders ?? 0)} đơn;
-                            mẫu {inspections[s.id].sampledOrders} đơn có{' '}
-                            {inspections[s.id].coverage.phone} số điện thoại,{' '}
-                            {inspections[s.id].coverage.seller} người bán,{' '}
-                            {inspections[s.id].coverage.firstConfirmationEvent} mốc xác nhận.
-                            Lịch sử bắt đầu từ {dateText(inspections[s.id].earliestCreatedAt)}.
-                          </p>
-                        )}
-                        {inspections[s.id]?.pageSizeProbe?.success && (
-                          <p className="mt-1 text-xs text-ink-2">
-                            Thử trang 100 đơn: API trả {inspections[s.id].pageSizeProbe!.returned}
-                            {' '}đơn{inspections[s.id].pageSizeProbe!.reported
-                              ? `, cỡ trang báo về ${inspections[s.id].pageSizeProbe!.reported}` : ''}.
-                          </p>
-                        )}
-                        {inspections[s.id] && (
-                          <p className="mt-1 text-xs text-warn">
-                            Trong mẫu có {inspections[s.id].coverage.sellerAssignmentTime}/
-                            {inspections[s.id].sampledOrders} mốc giao người bán và{' '}
-                            {inspections[s.id].coverage.firstConfirmationValueInHistory}/
-                            {inspections[s.id].sampledOrders} bản lịch sử chứa giá trị ở trạng thái xác nhận.
-                            {' '}Chi tiết đơn: {inspections[s.id].detailConfirmationValueInHistory ?? 0}/
-                            {inspections[s.id].detailOrdersChecked ?? 0} có giá trị tại mốc đó.
-                            Vẫn cần nguồn tệp số đã cấp để tính tỷ lệ.
-                          </p>
-                        )}
-                        {inspections[s.id]?.otherHistoryFields?.length ? (
-                          <details className="mt-1 text-xs text-ink-3">
-                            <summary className="cursor-pointer">Tên trường lịch sử API để đối chiếu</summary>
-                            <p className="mt-1 break-words">{inspections[s.id].otherHistoryFields!.join(', ')}</p>
-                          </details>
-                        ) : null}
-                        {inspections[s.id]?.historyCoverage && (
-                          <p className="mt-1 text-xs text-ink-2">
-                            Sự kiện thay đổi món hàng trước khi xác nhận:{' '}
-                            {inspections[s.id].historyCoverage!.itemSnapshotBeforeConfirmation}/
-                            {inspections[s.id].sampledOrders} đơn; sự kiện giảm giá trước mốc:{' '}
-                            {inspections[s.id].historyCoverage!.discountBeforeConfirmation}/
-                            {inspections[s.id].sampledOrders}. Chưa kết luận được giá trị đơn tại lúc chốt.
-                          </p>
-                        )}
-                        {inspections[s.id]?.historyItemFields?.length ? (
-                          <details className="mt-1 text-xs text-ink-3">
-                            <summary className="cursor-pointer">Tên trường món hàng trong lịch sử API</summary>
-                            <p className="mt-1 break-words">{inspections[s.id].historyItemFields!.join(', ')}</p>
-                          </details>
-                        ) : null}
-                        {inspections[s.id]?.customersReadable && inspections[s.id].customerCoverage && (
-                          <p className="mt-1 text-xs text-ink-2">
-                            Khách hàng API: {vi.format(inspections[s.id].totalCustomers ?? 0)} bản ghi;
-                            mẫu {inspections[s.id].sampledCustomers ?? 0} có{' '}
-                            {inspections[s.id].customerCoverage!.phone} số điện thoại,{' '}
-                            {inspections[s.id].customerCoverage!.assignedUser} người được giao và{' '}
-                            {inspections[s.id].customerCoverage!.assignmentTime} thời điểm giao.
-                          </p>
-                        )}
-                        {inspections[s.id]?.customersReadable && inspections[s.id].customerFields?.length ? (
-                          <details className="mt-1 text-xs text-ink-3">
-                            <summary className="cursor-pointer">Tên trường khách hàng API để đối chiếu</summary>
-                            <p className="mt-1 break-words">{inspections[s.id].customerFields!.join(', ')}</p>
-                          </details>
-                        ) : null}
-                        {(rawSync[s.id]?.records ?? 0) > 0 && (
-                          <p className="mt-1 text-xs font-medium text-primary">
-                            Đã lưu {vi.format(rawSync[s.id].records)} đơn nguồn;
-                            {' '}{vi.format(rawSync[s.id].withConfirmation)} có mốc xác nhận,
-                            {' '}{vi.format(rawSync[s.id].withSeller)} có người bán,
-                            {' '}{vi.format(rawSync[s.id].withAssignmentTime)} có thời điểm phân công ·
-                            {' '}kiểm tra {dateText(rawSync[s.id].fetchedAt)}
-                          </p>
-                        )}
-                        {(rawSync[s.id]?.records ?? 0) > 0 && (
-                          <p className="mt-1 text-xs text-ink-2">
-                            Kho đơn nguồn: {dateText(rawSync[s.id].earliestCreatedAt ?? null)}
-                            {' '}– {dateText(rawSync[s.id].latestCreatedAt ?? null)}.
-                          </p>
-                        )}
-                        {rawSync[s.id]?.backfillCursor && (
-                          <p className="mt-1 text-xs text-ink-2">
-                            {rawSync[s.id].backfillCursor?.completed
-                              ? 'Đã đi hết các tháng lịch sử API'
-                              : `Lịch sử đang ở ${rawSync[s.id].backfillCursor?.month}, trang ${rawSync[s.id].backfillCursor?.page} (${rawSync[s.id].backfillCursor?.pageSize ?? 50} đơn/trang)`}
-                          </p>
-                        )}
-                        {s.shopId && (
-                          backfillingPos === s.id ? (
-                            <button
-                              className="mt-1 text-xs font-semibold text-warn underline disabled:opacity-50"
-                              disabled={stoppingBackfill}
-                              onClick={() => { backfillStop.current = true; setStoppingBackfill(true); }}
-                            >
-                              {stoppingBackfill ? 'Sẽ dừng sau trang hiện tại' : 'Dừng sau trang hiện tại'}
-                            </button>
-                          ) : rawSync[s.id]?.backfillCursor?.completed ? (
-                            <button
-                              className="mt-1 text-xs font-semibold text-primary underline disabled:opacity-50"
-                              disabled={Boolean(backfillingPos)}
-                              onClick={() => backfillPages(s.id, 10000, true)}
-                            >
-                              Đọc lại lịch sử để cập nhật trường mới (giữ trang này mở)
-                            </button>
-                          ) : (
-                            <button
-                              className="mt-1 text-xs font-semibold text-primary underline disabled:opacity-50"
-                              disabled={Boolean(backfillingPos)}
-                              onClick={() => backfillPages(s.id, 10000)}
-                            >
-                              Chạy tiếp đến hết lịch sử (giữ trang này mở)
-                            </button>
-                          )
-                        )}
-                      </div>
-                      {connection?.status === 'verified' && connection.shops.length ? (
-                        <select
-                          aria-label={`Shop ID ${s.name}`}
-                          className="field h-8 w-auto text-[12.5px]"
-                          value={s.shopId}
-                          onChange={(e) => setShops((all) => all.map((x) =>
-                            x.id === s.id ? { ...x, shopId: e.target.value } : x))}
-                        >
-                          <option value="">Chọn cửa hàng</option>
-                          {connection.shops.map((shop) => (
-                            <option key={shop.id} value={shop.id}>{shop.name} · {shop.id}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <Input
-                          aria-label={`Shop ID ${s.name}`}
-                          placeholder="Shop ID dạng số"
-                          inputMode="numeric"
-                          value={s.shopId}
-                          onChange={(e) => setShops((all) => all.map((x) =>
-                            x.id === s.id ? { ...x, shopId: e.target.value } : x))}
-                        />
-                      )}
-                      <Button
-                        variant="outline"
-                        onClick={() => saveShop(s.id, s.shopId)}
-                      >
-                        {s.invalidSavedId && !s.shopId ? 'Xóa giá trị' : 'Lưu ID'}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        disabled={!s.shopId || syncingPos === s.id || backfillingPos === s.id}
-                        onClick={() => syncPilot(s.id)}
-                      >
-                        {syncingPos === s.id ? 'Đang lưu' : 'Lấy 50 đơn'}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        disabled={!s.shopId || Boolean(backfillingPos) || Boolean(rawSync[s.id]?.backfillCursor?.completed)}
-                        onClick={() => backfillPages(s.id, 10)}
-                      >
-                        {backfillingPos === s.id ? `Đang lấy ${backfillCount} trang` : 'Lấy 10 trang lịch sử'}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        disabled={!s.shopId || inspectingPos === s.id}
-                        onClick={() => inspectPos(s.id)}
-                      >
-                        {inspectingPos === s.id ? 'Đang đọc' : 'Khảo sát'}
-                      </Button>
-                    </div>
-                  ))}
+          {!gated && view === 'config' && isOwner(user) && cfgSection === null && (
+            <SettingsHub pills={pills} onOpen={(section) => section === 'me' ? goTo('security') : setCfgSection(section)} />
+          )}
+          {!gated && view === 'config' && isOwner(user) && cfgSection !== null && (
+            <div className="space-y-5">
+              <SettingsSectionHeader section={cfgSection} onBack={() => setCfgSection(null)} pill={pills[cfgSection]} />
+              {cfgSection === 'team' && <><TeamSheetPanel /><StaffStatusPanel /><PermissionTreePanel /><MarketingTeamsPanel /><UsersPanel currentUser={user} Surface={Surface} /><HrSyncPanel /></>}
+              {cfgSection === 'kpi' && <><TargetsPanel canEdit={isOwner(user)} /><MetricChangesCard /></>}
+          {cfgSection === 'data' && (<Surface
+            title="Kết nối 6 POS"
+            description="Kiểm tra API trước, sau đó chọn đúng mã cửa hàng cho từng POS"
+          >
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
+              <div className="rounded-xl border border-line bg-surface-2 p-4 text-sm md:col-span-2 2xl:col-span-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <strong>Trạng thái API Pancake POS</strong>
+                  <Button variant="outline" onClick={checkConnection} disabled={checkingConnection}>
+                    {checkingConnection ? 'Đang kiểm tra...' : 'Kiểm tra API'}
+                  </Button>
                 </div>
-                <p className="mt-4 text-sm text-ink-3">
-                  Đơn được lưu theo POS + mã đơn để không nhân đôi khi lấy lại.
-                  Đây là dữ liệu nguồn; báo cáo chốt nóng cần lịch sử số được giao,
-                  người chốt và giá trị tại lần xác nhận đầu tiên.
+                <p className="mt-2 text-ink-2">
+                  {connection?.message ?? 'Đang kiểm tra cấu hình bí mật của web...'}
                 </p>
-              </Surface>
-              <div className="xl:col-span-2">
-                <AlertPanel Surface={Surface} />
+                {connection?.status === 'missing_key' && (
+                  <p className="mt-2 text-ink-2">
+                    Đặt biến bí mật <strong>PANCAKE_POS_API_KEY</strong> cho Worker bằng lệnh
+                    {' '}<code>wrangler secret put PANCAKE_POS_API_KEY</code> (API key tạo tại Pancake POS →
+                    Cài đặt → Nâng cao → Kết nối bên thứ ba → Webhook/API).
+                  </p>
+                )}
+                {connection?.status === 'verified' && (
+                  <p className="mt-2 text-ink-2">
+                    Chọn Shop ID từ danh sách bên dưới. Bước đồng bộ số nhận, lịch sử chốt
+                    và đơn cần xác định dữ liệu nguồn trước khi số liệu được dùng chính thức.
+                  </p>
+                )}
+                <a
+                  className="mt-2 inline-block font-medium text-primary underline"
+                  href="https://docs.pancake.biz/pos/st-f13/st-p2?lang=vi"
+                  target="_blank" rel="noreferrer"
+                >
+                  Hướng dẫn lấy API key của Pancake POS
+                </a>
               </div>
-              <div className="xl:col-span-2">
-                <WatchPanel />
-              </div>
-              <div className="xl:col-span-2">
-                <UsersPanel currentUser={user} Surface={Surface} />
-              </div>
-              <div className="xl:col-span-2">
-                <HrSyncPanel />
-              </div>
+              {shops.map((s) => (
+                <div
+                  key={s.id}
+                  className="flex min-w-0 flex-wrap items-center gap-3 rounded-xl border border-line p-3 [&>div:first-child]:min-w-0 [&>div:first-child]:flex-1 [&>div:first-child]:basis-full"
+                >
+                  <div>
+                    <strong className="block text-sm">{s.name}</strong>
+                    <span className="text-xs text-ink-3">
+                      {s.status === 'connected'
+                        ? `Đồng bộ ${dateText(s.lastSyncAt)} · lịch sử từ ${s.historyStart ?? 'chưa rõ'}`
+                        : 'Chưa có báo cáo chốt nóng'}
+                    </span>
+                    {s.invalidSavedId && (
+                      <p className="mt-1 text-xs font-medium text-warn">
+                        Giá trị đã lưu không phải Shop ID dạng số. Nếu đó là API key,
+                        hãy xóa khỏi ô này và thay key trong Pancake POS.
+                      </p>
+                    )}
+                    {inspections[s.id] && (
+                      <p className="mt-1 text-xs text-ink-2">
+                        API có {vi.format(inspections[s.id].totalOrders ?? 0)} đơn;
+                        mẫu {inspections[s.id].sampledOrders} đơn có{' '}
+                        {inspections[s.id].coverage.phone} số điện thoại,{' '}
+                        {inspections[s.id].coverage.seller} người bán,{' '}
+                        {inspections[s.id].coverage.firstConfirmationEvent} mốc xác nhận.
+                        Lịch sử bắt đầu từ {dateText(inspections[s.id].earliestCreatedAt)}.
+                      </p>
+                    )}
+                    {inspections[s.id]?.pageSizeProbe?.success && (
+                      <p className="mt-1 text-xs text-ink-2">
+                        Thử trang 100 đơn: API trả {inspections[s.id].pageSizeProbe!.returned}
+                        {' '}đơn{inspections[s.id].pageSizeProbe!.reported
+                          ? `, cỡ trang báo về ${inspections[s.id].pageSizeProbe!.reported}` : ''}.
+                      </p>
+                    )}
+                    {inspections[s.id] && (
+                      <p className="mt-1 text-xs text-warn">
+                        Trong mẫu có {inspections[s.id].coverage.sellerAssignmentTime}/
+                        {inspections[s.id].sampledOrders} mốc giao người bán và{' '}
+                        {inspections[s.id].coverage.firstConfirmationValueInHistory}/
+                        {inspections[s.id].sampledOrders} bản lịch sử chứa giá trị ở trạng thái xác nhận.
+                        {' '}Chi tiết đơn: {inspections[s.id].detailConfirmationValueInHistory ?? 0}/
+                        {inspections[s.id].detailOrdersChecked ?? 0} có giá trị tại mốc đó.
+                        Vẫn cần nguồn tệp số đã cấp để tính tỷ lệ.
+                      </p>
+                    )}
+                    {inspections[s.id]?.otherHistoryFields?.length ? (
+                      <details className="mt-1 text-xs text-ink-3">
+                        <summary className="cursor-pointer">Tên trường lịch sử API để đối chiếu</summary>
+                        <p className="mt-1 break-words">{inspections[s.id].otherHistoryFields!.join(', ')}</p>
+                      </details>
+                    ) : null}
+                    {inspections[s.id]?.historyCoverage && (
+                      <p className="mt-1 text-xs text-ink-2">
+                        Sự kiện thay đổi món hàng trước khi xác nhận:{' '}
+                        {inspections[s.id].historyCoverage!.itemSnapshotBeforeConfirmation}/
+                        {inspections[s.id].sampledOrders} đơn; sự kiện giảm giá trước mốc:{' '}
+                        {inspections[s.id].historyCoverage!.discountBeforeConfirmation}/
+                        {inspections[s.id].sampledOrders}. Chưa kết luận được giá trị đơn tại lúc chốt.
+                      </p>
+                    )}
+                    {inspections[s.id]?.historyItemFields?.length ? (
+                      <details className="mt-1 text-xs text-ink-3">
+                        <summary className="cursor-pointer">Tên trường món hàng trong lịch sử API</summary>
+                        <p className="mt-1 break-words">{inspections[s.id].historyItemFields!.join(', ')}</p>
+                      </details>
+                    ) : null}
+                    {inspections[s.id]?.customersReadable && inspections[s.id].customerCoverage && (
+                      <p className="mt-1 text-xs text-ink-2">
+                        Khách hàng API: {vi.format(inspections[s.id].totalCustomers ?? 0)} bản ghi;
+                        mẫu {inspections[s.id].sampledCustomers ?? 0} có{' '}
+                        {inspections[s.id].customerCoverage!.phone} số điện thoại,{' '}
+                        {inspections[s.id].customerCoverage!.assignedUser} người được giao và{' '}
+                        {inspections[s.id].customerCoverage!.assignmentTime} thời điểm giao.
+                      </p>
+                    )}
+                    {inspections[s.id]?.customersReadable && inspections[s.id].customerFields?.length ? (
+                      <details className="mt-1 text-xs text-ink-3">
+                        <summary className="cursor-pointer">Tên trường khách hàng API để đối chiếu</summary>
+                        <p className="mt-1 break-words">{inspections[s.id].customerFields!.join(', ')}</p>
+                      </details>
+                    ) : null}
+                    {(rawSync[s.id]?.records ?? 0) > 0 && (
+                      <p className="mt-1 text-xs font-medium text-primary">
+                        Đã lưu {vi.format(rawSync[s.id].records)} đơn nguồn;
+                        {' '}{vi.format(rawSync[s.id].withConfirmation)} có mốc xác nhận,
+                        {' '}{vi.format(rawSync[s.id].withSeller)} có người bán,
+                        {' '}{vi.format(rawSync[s.id].withAssignmentTime)} có thời điểm phân công ·
+                        {' '}kiểm tra {dateText(rawSync[s.id].fetchedAt)}
+                      </p>
+                    )}
+                    {(rawSync[s.id]?.records ?? 0) > 0 && (
+                      <p className="mt-1 text-xs text-ink-2">
+                        Kho đơn nguồn: {dateText(rawSync[s.id].earliestCreatedAt ?? null)}
+                        {' '}– {dateText(rawSync[s.id].latestCreatedAt ?? null)}.
+                      </p>
+                    )}
+                    {rawSync[s.id]?.backfillCursor && (
+                      <p className="mt-1 text-xs text-ink-2">
+                        {rawSync[s.id].backfillCursor?.completed
+                          ? 'Đã đi hết các tháng lịch sử API'
+                          : `Lịch sử đang ở ${rawSync[s.id].backfillCursor?.month}, trang ${rawSync[s.id].backfillCursor?.page} (${rawSync[s.id].backfillCursor?.pageSize ?? 50} đơn/trang)`}
+                      </p>
+                    )}
+                    {s.shopId && (
+                      backfillingPos === s.id ? (
+                        <button
+                          className="mt-1 text-xs font-semibold text-warn underline disabled:opacity-50"
+                          disabled={stoppingBackfill}
+                          onClick={() => { backfillStop.current = true; setStoppingBackfill(true); }}
+                        >
+                          {stoppingBackfill ? 'Sẽ dừng sau trang hiện tại' : 'Dừng sau trang hiện tại'}
+                        </button>
+                      ) : rawSync[s.id]?.backfillCursor?.completed ? (
+                        <button
+                          className="mt-1 text-xs font-semibold text-primary underline disabled:opacity-50"
+                          disabled={Boolean(backfillingPos)}
+                          onClick={() => backfillPages(s.id, 10000, true)}
+                        >
+                          Đọc lại lịch sử để cập nhật trường mới (giữ trang này mở)
+                        </button>
+                      ) : (
+                        <button
+                          className="mt-1 text-xs font-semibold text-primary underline disabled:opacity-50"
+                          disabled={Boolean(backfillingPos)}
+                          onClick={() => backfillPages(s.id, 10000)}
+                        >
+                          Chạy tiếp đến hết lịch sử (giữ trang này mở)
+                        </button>
+                      )
+                    )}
+                  </div>
+                  {connection?.status === 'verified' && connection.shops.length ? (
+                    <select
+                      aria-label={`Shop ID ${s.name}`}
+                      className="field h-8 w-auto text-[12.5px]"
+                      value={s.shopId}
+                      onChange={(e) => setShops((all) => all.map((x) =>
+                        x.id === s.id ? { ...x, shopId: e.target.value } : x))}
+                    >
+                      <option value="">Chọn cửa hàng</option>
+                      {connection.shops.map((shop) => (
+                        <option key={shop.id} value={shop.id}>{shop.name} · {shop.id}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <Input
+                      aria-label={`Shop ID ${s.name}`}
+                      placeholder="Shop ID dạng số"
+                      inputMode="numeric"
+                      value={s.shopId}
+                      onChange={(e) => setShops((all) => all.map((x) =>
+                        x.id === s.id ? { ...x, shopId: e.target.value } : x))}
+                    />
+                  )}
+                  <Button
+                    variant="outline"
+                    onClick={() => saveShop(s.id, s.shopId)}
+                  >
+                    {s.invalidSavedId && !s.shopId ? 'Xóa giá trị' : 'Lưu ID'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={!s.shopId || syncingPos === s.id || backfillingPos === s.id}
+                    onClick={() => syncPilot(s.id)}
+                  >
+                    {syncingPos === s.id ? 'Đang lưu' : 'Lấy 50 đơn'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={!s.shopId || Boolean(backfillingPos) || Boolean(rawSync[s.id]?.backfillCursor?.completed)}
+                    onClick={() => backfillPages(s.id, 10)}
+                  >
+                    {backfillingPos === s.id ? `Đang lấy ${backfillCount} trang` : 'Lấy 10 trang lịch sử'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={!s.shopId || inspectingPos === s.id}
+                    onClick={() => inspectPos(s.id)}
+                  >
+                    {inspectingPos === s.id ? 'Đang đọc' : 'Khảo sát'}
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <p className="mt-4 text-sm text-ink-3">
+              Đơn được lưu theo POS + mã đơn để không nhân đôi khi lấy lại.
+              Đây là dữ liệu nguồn; báo cáo chốt nóng cần lịch sử số được giao,
+              người chốt và giá trị tại lần xác nhận đầu tiên.
+            </p>
+          </Surface>)}
+              {cfgSection === 'data' && <><SchedulerPanel Surface={Surface} /><CatalogPanel /></>}
+              {cfgSection === 'alert' && <><AlertPanel Surface={Surface} /><WatchPanel /></>}
+              {cfgSection === 'sys' && <BackupPanel Surface={Surface} />}
+              {cfgSection === 'look' && <CritterSettingPanel Surface={Surface} demo={demo} />}
             </div>
           )}
           </Suspense>

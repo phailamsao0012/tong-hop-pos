@@ -28,7 +28,7 @@ export function LadderTable({ rows, steps, first, extra = [], total, onPick, pic
 }) {
   const isOn = (row: string | null, step: number) => !!picked && picked.row === row && picked.step === step;
   const pickable = (row: string | null, label: string, step: number, n: number, child: ReactNode) => onPick && n > 0
-    ? <button type="button" className={`block w-full cursor-pointer rounded-md text-right hover:underline ${isOn(row, step) ? 'outline-2 outline-primary' : ''}`} aria-pressed={isOn(row, step)}
+    ? <button type="button" className={`block w-full cursor-pointer rounded-md text-right tap hover:underline ${isOn(row, step) ? 'outline-2 outline-primary' : ''}`} aria-pressed={isOn(row, step)}
         title={step ? `Xem khách chưa mua T${step} / đã mua T${step}` : 'Xem danh sách khách T0'} onClick={() => onPick({ row, label, step })}>{child}</button>
     : child;
   const shade = (rate: number | null) => rate === null ? 'transparent' : `color-mix(in oklab, var(--primary) ${Math.round(Math.min(32, rate * 0.5))}%, transparent)`;
@@ -53,7 +53,7 @@ export function LadderTable({ rows, steps, first, extra = [], total, onPick, pic
         <thead><tr>
           <th className="text-left">{first}</th>
           <th className="n">T0 · khách</th>
-          {Array.from({ length: steps }, (_, i) => <th key={i} className="n">T{i + 1}<span className="block text-[10px] font-normal normal-case tracking-normal text-ink-3">lần {i + 2}</span></th>)}
+          {Array.from({ length: steps }, (_, i) => <th key={i} className="n">T{i + 1}<span className="block text-[11px] font-normal normal-case tracking-normal text-ink-3">lần {i + 2}</span></th>)}
           {extra.map((x) => <th key={x.head} className="n whitespace-normal">{x.head}</th>)}
         </tr></thead>
         <tbody>

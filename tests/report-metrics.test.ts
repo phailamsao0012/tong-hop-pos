@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { reportScope, upsellSummary } from '../lib/report-metrics';
-import type { Dataset, Filters, Order } from '../lib/report-model';
+import { reportScope, upsellSummary } from '../lib/reports/report-metrics';
+import type { Dataset, Filters, Order } from '../lib/shared/report-model';
+import { closeRateOfMany } from '../lib/reports/metrics';
 
 const order = (
   id: string,
@@ -215,4 +216,11 @@ test('a transferred phone does not move hot results from the actual closer', () 
   assert.equal(assigned.closed, 0);
   assert.equal(closer.activityHotOrders, 1);
   assert.equal(closer.received, 0);
+});
+
+void test('closeRateOfMany: tỉ lệ chốt cả đội = cộng tử số ÷ cộng mẫu số (KPI Sale 02/11/2026)', () => {
+  const rows = [{ orders: 10, closedOrders: 4, createdClosedOrders: 4 }, { orders: 30, closedOrders: 9, createdClosedOrders: 9 }];
+  assert.equal(closeRateOfMany(rows, 'created'), 32.5);
+  assert.equal(closeRateOfMany([], 'created'), null);
+  assert.equal(closeRateOfMany([{ orders: 5, closedOrders: 1, assignedOrders: 5, assignedHidden: true }], 'assigned'), null);
 });

@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/shared/utils';
 
 // Bảng shadcn theo token MEGATECH: cuộn ngang trong thẻ (.tbl-wrap), tiêu đề nhỏ in hoa, dòng sáng lên khi rê chuột / focus.
 function Table({ className, ...props }: React.ComponentProps<'table'>) {

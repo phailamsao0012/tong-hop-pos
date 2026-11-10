@@ -1,7 +1,7 @@
-import { audit } from '@/lib/audit';
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { decideLoginRequest, pendingForUser, requestForApproval } from '@/lib/login-requests';
-import { currentSessionId } from '@/lib/login-session';
+import { audit } from '@/lib/ops/audit';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { decideLoginRequest, pendingForUser, requestForApproval } from '@/lib/auth/login-requests';
+import { currentSessionId } from '@/lib/auth/login-session';
 
 // Phía app đã đăng nhập:
 //   GET                  → {items}: yêu cầu duyệt đăng nhập đang chờ của chính mình (app hỏi vài giây một lần khi đang mở)

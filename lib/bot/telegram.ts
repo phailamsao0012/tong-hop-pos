@@ -1,0 +1,114 @@
+// Gửi tin qua Telegram Bot API. Token bot nằm trong biến bí mật TELEGRAM_BOT_TOKEN.
+import { env } from 'cloudflare:workers';
+import { guardReadOnly } from '@/lib/ops/read-only';
+
+const API = 'https://api.telegram.org';
+/** Bản demo (số ảo) không bao giờ gửi Telegram thật, kể cả khi lỡ đặt token cho Worker demo. */
+const guardDemo = () => { if (env.DEMO_MODE === '1') throw new Error('demo: không gửi Telegram'); guardReadOnly('gửi Telegram'); };
+/** protect: tin có dữ liệu cá nhân (hồ sơ khách, ứng viên, CV) — Telegram chặn chuyển tiếp và lưu (protect_content). */
+export type SendOptions = { protect?: boolean };
+const protectField = (o?: SendOptions) => (o?.protect ? { protect_content: true } : {});
+
+export async function sendTelegram(token: string, chatId: string, text: string, options?: SendOptions) {
+  guardDemo();
+  const response = await fetch(`${API}/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true, ...protectField(options) }),
+    signal: AbortSignal.timeout(10000),
+  });
+  const result = await response.json() as { ok?: boolean; description?: string };
+  if (!response.ok || !result.ok) throw new Error(result.description ?? `Telegram HTTP ${response.status}`);
+  return result;
+}
+
+/** Các cuộc trò chuyện đã nhắn cho bot gần đây (để tìm Chat ID). */
+export async function recentChats(token: string) {
+  const response = await fetch(`${API}/bot${token}/getUpdates?limit=100`, { signal: AbortSignal.timeout(10000) });
+  const result = await response.json() as {
+    ok?: boolean; description?: string;
+    result?: { message?: { chat?: { id?: number; type?: string; title?: string; first_name?: string; last_name?: string; username?: string } } }[];
+  };
+  if (!response.ok || !result.ok) throw new Error(result.description ?? `Telegram HTTP ${response.status}`);
+  const chats = new Map<string, { id: string; type: string; name: string }>();
+  for (const u of result.result ?? []) {
+    const c = u.message?.chat;
+    if (!c?.id) continue;
+    chats.set(String(c.id), {
+      id: String(c.id), type: c.type ?? '',
+      name: c.title ?? [c.first_name, c.last_name].filter(Boolean).join(' ') ?? c.username ?? String(c.id),
+    });
+  }
+  return [...chats.values()];
+}
+
+export async function botInfo(token: string) {
+  const response = await fetch(`${API}/bot${token}/getMe`, { signal: AbortSignal.timeout(10000) });
+  const result = await response.json() as { ok?: boolean; description?: string; result?: { username?: string; first_name?: string } };
+  if (!response.ok || !result.ok) throw new Error(result.description ?? `Telegram HTTP ${response.status}`);
+  return result.result ?? {};
+}
+
+export async function setWebhook(token: string, url: string, secret: string) {
+  guardDemo();
+  const response = await fetch(`${API}/bot${token}/setWebhook`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url, secret_token: secret, allowed_updates: ['message', 'callback_query'], drop_pending_updates: true }),
+    signal: AbortSignal.timeout(10000),
+  });
+  const result = await response.json() as { ok?: boolean; description?: string };
+  if (!response.ok || !result.ok) throw new Error(result.description ?? `Telegram HTTP ${response.status}`);
+  return result;
+}
+
+export async function webhookInfo(token: string) {
+  const response = await fetch(`${API}/bot${token}/getWebhookInfo`, { signal: AbortSignal.timeout(10000) });
+  const result = await response.json() as { ok?: boolean; result?: { url?: string; last_error_message?: string; pending_update_count?: number } };
+  return result.result ?? {};
+}
+
+export async function setCommands(token: string, commands: { command: string; description: string }[]) {
+  guardDemo();
+  await fetch(`${API}/bot${token}/setMyCommands`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ commands }), signal: AbortSignal.timeout(10000),
+  });
+}
+
+export async function telegramCall(token: string, method: string, payload: Record<string, unknown>) {
+  guardDemo();
+  const response = await fetch(`${API}/bot${token}/${method}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal: AbortSignal.timeout(10000),
+  });
+  const result = await response.json() as { ok?: boolean; description?: string; result?: unknown };
+  if (!response.ok || !result.ok) throw new Error(result.description ?? `Telegram HTTP ${response.status}`);
+  return result.result;
+}
+export const sendWithMarkup = (token: string, chatId: string, text: string, replyMarkup?: unknown, options?: SendOptions) =>
+  telegramCall(token, 'sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true, ...(replyMarkup ? { reply_markup: replyMarkup } : {}), ...protectField(options) });
+export const editMessage = (token: string, chatId: string, messageId: number, text: string, replyMarkup?: unknown) =>
+  telegramCall(token, 'editMessageText', { chat_id: chatId, message_id: messageId, text, parse_mode: 'HTML', disable_web_page_preview: true, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) });
+export const answerCallback = (token: string, id: string, text?: string) =>
+  telegramCall(token, 'answerCallbackQuery', { callback_query_id: id, ...(text ? { text } : {}) }).catch(() => undefined);
+export const sendPhoto = (token: string, chatId: string, photoUrl: string, caption: string, replyMarkup?: unknown) =>
+  telegramCall(token, 'sendPhoto', { chat_id: chatId, photo: photoUrl, caption: caption.slice(0, 1000), parse_mode: 'HTML', ...(replyMarkup ? { reply_markup: replyMarkup } : {}) });
+
+/** Gửi file (PDF, ảnh…) dạng multipart; trả về file_id Telegram để tải lại sau. */
+export async function sendDocumentBlob(token: string, chatId: string, blob: Blob, filename: string, caption: string, replyMarkup?: unknown, options?: SendOptions) {
+  guardDemo();
+  const form = new FormData();
+  form.set('chat_id', chatId);
+  if (options?.protect) form.set('protect_content', 'true');
+  form.set('document', blob, filename);
+  if (caption) { form.set('caption', caption.slice(0, 1024)); form.set('parse_mode', 'HTML'); }
+  if (replyMarkup) form.set('reply_markup', JSON.stringify(replyMarkup));
+  const response = await fetch(`${API}/bot${token}/sendDocument`, { method: 'POST', body: form, signal: AbortSignal.timeout(60000) });
+  const result = await response.json() as { ok?: boolean; description?: string; result?: { document?: { file_id?: string } } };
+  if (!response.ok || !result.ok) throw new Error(result.description ?? `Telegram HTTP ${response.status}`);
+  return result.result?.document?.file_id ?? null;
+}
+/** Đường dẫn tải một file đã gửi qua bot (Telegram giữ ≥ 1 giờ; gọi lại getFile khi hết hạn). */
+export async function telegramFileUrl(token: string, fileId: string) {
+  const r = await telegramCall(token, 'getFile', { file_id: fileId }) as { file_path?: string };
+  if (!r?.file_path) throw new Error('Telegram không trả đường dẫn file.');
+  return `${API}/file/bot${token}/${r.file_path}`;
+}

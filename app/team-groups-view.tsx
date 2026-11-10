@@ -3,16 +3,21 @@
 // Sale / CSKH theo team (01/10/2026): team, Leader, Trưởng phòng lấy từ web nhân sự; số liệu cộng từ cùng báo cáo Tổng quan bộ phận
 // (doanh thu, đơn chốt, GTTB, tỷ lệ chốt theo từng nhân viên) nên khớp các trang khác. KPI tháng theo team chỉ chủ hệ thống xem và đặt.
 // 03/10/2026: lọc và so sánh theo chi nhánh (Hà Nội / Thái Nguyên); CSKH có thêm data đang cầm, cần note, note hôm nay, doanh thu tự chốt theo team.
+import { StaffName } from './staff-name';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Building2, ChevronDown, ChevronRight, Crown, ExternalLink, Save, Target, Trophy, Users, UsersRound, Wallet } from 'lucide-react';
-import { closeRateOf, type RateBase } from '@/lib/metrics';
-import { POS } from '@/lib/report-model';
+import { closeRateOf, closeRateOfMany, type RateBase } from '@/lib/reports/metrics';
+import { parseRate } from '@/lib/kpi/kpi-pace';
+import { POS } from '@/lib/shared/report-model';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { todayVn } from '@/lib/report-time';
-import type { HrTeamGroup } from '@/lib/hr-teams';
+import { todayVn } from '@/lib/shared/report-time';
+import type { HrTeamGroup } from '@/lib/teams/hr-teams';
+import { unitIds } from '@/lib/teams/team';
 import { usePeriod } from './period-store';
-import { usePosIds } from './pos-store';
+import { ManagerChip } from './manager-chip';
+import { managedBy } from '@/lib/teams/managed-by';
+import { usePosIds, usePosStaffFilter } from './pos-store';
 import { useMetricSettings } from './metric-settings';
 import { PeriodToolbar, PosChips, type OverviewReport } from './overview-view';
 import { GlobalStatusFilter } from './status-filter';
@@ -20,6 +25,8 @@ import { useApi } from './use-api';
 import { unitFor, useHrUnit } from './team-store';
 import { StaleChip } from './stale-chip';
 import { daysInMonth, fetchTargets, parseMoney, type TargetItem } from './targets-panel';
+import { KpiInlineEditor } from './kpi-inline-editor';
+import { officeLabel, officeList } from '@/lib/teams/web-teams';
 import {
   ChartCard, EmptyState, ErrorBox, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, delta, dmy, pct, shortMoney, toast, useSort, vi,
 } from './ui-kit';
@@ -61,7 +68,9 @@ const tenure = (day: string | null) => {
 };
 
 /** Gắn số liệu từng nhân viên vào team; ai có đơn mà chưa gắn hồ sơ nhân sự gom vào "Chưa gắn hồ sơ nhân sự". */
-function buildRows(teams: HrTeamGroup[], cur: Emp[], prev: Emp[] | null, care: CareStaff[] | null): Row[] {
+function buildRows(allTeams: HrTeamGroup[], cur: Emp[], prev: Emp[] | null, care: CareStaff[] | null, inPos: ((id: string) => boolean) | null = null): Row[] {
+  // Chọn POS nào chỉ còn người của POS đó trong từng team (anh Vũ 02/11/2026).
+  const teams = inPos ? allTeams.map((t) => ({ ...t, members: t.members.filter((m) => inPos(m.posUserId)) })) : allTeams;
   const careById = new Map((care ?? []).map((s) => [s.id, s]));
   const byId = new Map(cur.filter((e) => e.sellerId).map((e) => [e.sellerId, e]));
   const prevById = prev ? new Map(prev.filter((e) => e.sellerId).map((e) => [e.sellerId, e])) : null;
@@ -98,19 +107,16 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
     const actual = kpiReport.data?.current.byEmployee.find((row) => row.sellerId === id)?.closedNet ?? 0;
     return goal && kpiReport.data ? pct(actual / goal * 100, 0) : '—';
   };
-  const editPersonal = async (id: string) => {
-    const raw = window.prompt('Doanh thu KPI tháng hiện tại (₫)');
-    if (raw === null) return;
-    const rawOrders = window.prompt('Số đơn chốt mục tiêu tháng hiện tại');
-    if (rawOrders === null) return;
-    const closedOrders = Number(rawOrders);
-    if (!Number.isSafeInteger(closedOrders) || closedOrders < 0) return;
-    const revenue = Number(raw);
-    if (!Number.isFinite(revenue) || revenue < 0) return;
+  // Đặt KPI cá nhân bằng ô nhập ngay trong bảng (trước đây là window.prompt; đánh giá giao diện điện thoại 21/10/2026).
+  const [kpiEditing, setKpiEditing] = useState<string | null>(null);
+  const editPersonal = async (id: string, revenue: number, rate: number | null) => {
     const existing = personalTargets[`employee:${id}`];
-    const response = await fetch('/api/targets', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ month: kpiMonth, only: [`employee:${id}`], items: [{ ...existing, scope: 'employee', refId: id, revenue, closedOrders }] }) });
+    // Sale: thêm tỉ lệ chốt mục tiêu; CSKH chỉ KPI doanh số (anh Vũ 02/11/2026).
+    const closeRate = team === 'sale' ? rate : existing?.closeRate ?? null;
+    const response = await fetch('/api/targets', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ month: kpiMonth, only: [`employee:${id}`], items: [{ ...existing, scope: 'employee', refId: id, revenue, closedOrders: existing?.closedOrders ?? 0, closeRate }] }) });
     if (!response.ok) { toast('Không có quyền đặt KPI người này hoặc không lưu được.'); return; }
     setPersonalTargets(await fetchTargets(kpiMonth));
+    setKpiEditing(null);
   };
 
   const ms = useMetricSettings();
@@ -124,28 +130,35 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
   const careApi = useApi<{ staff: CareStaff[] }>(team === 'cskh' ? `/api/reports/care?${new URLSearchParams({ posIds: posIds.join(','), size: '1' })}` : null);
   const isCare = team === 'cskh';
   const report = api.data;
-  const allRows = useMemo(() => teamsApi.data && report ? buildRows(teamsApi.data.teams, report.current.byEmployee, report.compare?.byEmployee ?? null, careApi.data?.staff ?? null) : null, [teamsApi.data, report, careApi.data]);
+  const inPos = usePosStaffFilter();
+  const allRows = useMemo(() => teamsApi.data && report ? buildRows(teamsApi.data.teams, report.current.byEmployee, report.compare?.byEmployee ?? null, careApi.data?.staff ?? null, inPos) : null, [teamsApi.data, report, careApi.data, inPos]);
   // Chi nhánh = văn phòng của team bên web nhân sự (Hà Nội, Thái Nguyên…). Lọc một chi nhánh thì ẩn "Chưa vào team" / "Chưa gắn hồ sơ".
-  const offices = useMemo(() => [...new Set((allRows ?? []).map((r) => r.office).filter((o): o is string => !!o))].sort((a, b) => a.localeCompare(b, 'vi')), [allRows]);
+  const offices = useMemo(() => [...new Set((allRows ?? []).flatMap((r) => officeList(r.office)))].sort((a, b) => a.localeCompare(b, 'vi')), [allRows]);
   const [branch, setBranch] = useState<string>(ALL);
   const curBranch = branch === ALL || offices.includes(branch) ? branch : ALL;
   // Đang chọn một team (thanh trên cùng): chỉ hiện team đó, mở sẵn từng người.
   const unit = unitFor(useHrUnit(), team);
-  const rows = useMemo(() => allRows && (unit ? allRows.filter((r) => r.id === unit.id) : curBranch === ALL ? allRows : allRows.filter((r) => r.office === curBranch)), [allRows, curBranch, unit]);
+  const rows = useMemo(() => allRows && (unit ? allRows.filter((r) => unitIds(unit.id).includes(r.id)) : curBranch === ALL ? allRows : allRows.filter((r) => officeList(r.office).includes(curBranch))), [allRows, curBranch, unit]);
   const branches = useMemo(() => offices.map((o) => {
-    const list = (allRows ?? []).filter((r) => r.office === o);
+    const list = (allRows ?? []).filter((r) => officeList(r.office).includes(o));
     const s = list.reduce((x, r) => { x.revenue += r.cur.revenue; x.closed += r.cur.closed; x.prev += r.prev?.revenue ?? 0; x.people += r.people.filter((p) => p.active).length; x.selling += r.selling; addCare(x.care, { id: '', assigned: r.care.assigned, neverNoted: r.care.need, over20: 0, notedToday: r.care.notedToday, ownNet: r.care.ownNet, ownOrders: r.care.ownOrders }); return x; },
       { revenue: 0, closed: 0, prev: 0, people: 0, selling: 0, care: noCare() });
     return { office: o, teams: list.length, ...s };
   }), [offices, allRows]);
   const total = rows?.reduce((s, r) => s + r.cur.revenue, 0) ?? 0;
   const sort = useSort<'name' | 'revenue' | 'share' | 'closed' | 'aov' | 'rate' | 'perHead' | 'people' | 'data' | 'need' | 'today' | 'own'>('revenue');
+  // Số người Leader / Mentor quản lý: cộng mọi team họ cầm trong bộ phận (theo POS đang chọn), không theo chi nhánh đang lọc.
+  const managed = useMemo(() => {
+    const list = (allRows ?? []).filter((r) => r.id !== 'none' && r.id !== UNLINKED);
+    const names = (r: Row) => r.people.filter((p) => p.active).map((p) => p.name);
+    return { mentor: managedBy(list, (r) => r.mentor, names), leader: managedBy(list, (r) => r.leader, names) };
+  }, [allRows]);
   const shown = useMemo(() => rows ? sort.apply(rows, (r, k) => k === 'name' ? r.name : k === 'revenue' || k === 'share' ? r.cur.revenue : k === 'closed' ? r.cur.closed
     : k === 'aov' ? aov(r.cur) : k === 'rate' ? rate(r.cur, ms.rateBase) : k === 'people' ? r.selling
     : k === 'data' ? r.care.assigned : k === 'need' ? r.care.need : k === 'today' ? r.care.notedToday : k === 'own' ? r.care.ownNet
     : r.selling ? r.cur.revenue / r.selling : null) : [], [rows, sort, ms.rateBase]);
   const [open, setOpen] = useState<string | null>(null);
-  useEffect(() => { if (unit) setOpen(unit.id); }, [unit]);
+  useEffect(() => { if (unit) setOpen(unitIds(unit.id)[0]); }, [unit]);
   const teamsOnly = rows?.filter((r) => r.id !== 'none' && r.id !== UNLINKED) ?? [];
   const best = [...teamsOnly].sort((a, b) => b.cur.revenue - a.cur.revenue)[0];
   const loose = rows?.filter((r) => r.id === 'none' || r.id === UNLINKED).reduce((n, r) => n + r.people.filter((p) => p.active).length, 0) ?? 0;
@@ -185,7 +198,7 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
       {!rows && !error && <><SkeletonKpis count={4} /><ChartCard title="Các team" subtitle="Đang tải…"><SkeletonTable rows={5} cols={7} /></ChartCard></>}
       {rows && (
         <>
-          <div className={`grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4 ${api.loading ? 'opacity-70' : ''}`}>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
             <KpiCard icon={UsersRound} tone="blue" label="Số team" value={vi.format(teamsOnly.length)} note={`${vi.format(teamsOnly.reduce((n, r) => n + r.people.filter((p) => p.active).length, 0))} người đang làm trong team`} />
             <KpiCard icon={Wallet} tone="green" label={`Doanh thu ${LABEL[team]}`} value={shortMoney(total)} note="Cộng các team trong kỳ"
               delta={rows.every((r) => r.prev) ? delta(total, rows.reduce((s, r) => s + (r.prev?.revenue ?? 0), 0)) ?? undefined : undefined} />
@@ -253,7 +266,11 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
                                 {isOpen ? <ChevronDown size={15} className="mt-0.5 shrink-0" /> : <ChevronRight size={15} className="mt-0.5 shrink-0" />}
                                 <span className="min-w-0">
                                   <b className={`block font-semibold ${r.id === 'none' || r.id === UNLINKED ? 'text-bad' : ''}`}>{r.name}</b>
-                                  <span className="block text-[11px] text-ink-3">{[r.office, r.mentor ? `Mentor ${r.mentor}` : null, r.leader ? `Leader ${r.leader}` : null, r.head ? `TP ${r.head}` : null].filter(Boolean).join(' · ') || (r.id === 'none' ? 'Đang nằm thẳng ở phòng, chưa xếp team' : r.id === UNLINKED ? 'Tài khoản POS chưa gắn với hồ sơ bên web nhân sự' : '—')}</span>
+                                  <span className="flex flex-wrap items-center gap-x-1 text-[11px] text-ink-3">{[officeLabel(r.office) || null,
+                                    r.mentor ? <ManagerChip key="m" label="Mentor" name={r.mentor} people={managed.mentor.get(r.mentor) ?? []} /> : null,
+                                    r.leader ? <ManagerChip key="l" label="Leader" name={r.leader} people={managed.leader.get(r.leader) ?? []} /> : null,
+                                    r.head ? `TP ${r.head}` : null].filter(Boolean).flatMap((x, i) => i ? [' · ', x] : [x])}
+                                  {!officeLabel(r.office) && !r.mentor && !r.leader && !r.head && (r.id === 'none' ? 'Đang nằm thẳng ở phòng, chưa xếp team' : r.id === UNLINKED ? 'Tài khoản POS chưa gắn với hồ sơ bên web nhân sự' : '—')}</span>
                                 </span>
                               </span>
                             </td>
@@ -268,14 +285,17 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
                           </tr>
                           {isOpen && r.people.filter((p) => p.active || p.cur.closed || p.cur.orders).sort((a, b) => b.cur.revenue - a.cur.revenue).map((p) => (
                             <tr key={p.id} className="bg-surface-2/60 text-[13px]">
-                              <td className="pl-8"><span className="flex items-center gap-1.5">{p.isLeader && <Crown size={13} className="text-warn" aria-label="Leader" />}{p.name}{!p.active && <span className="text-[11px] text-ink-3">(đã nghỉ)</span>}{p.level && <span className="text-[11px] text-ink-3">· {p.level}</span>}</span></td>
+                              <td className="pl-8"><span className="flex items-center gap-1.5">{p.isLeader && <Crown size={13} className="text-warn" aria-label="Leader" />}<StaffName id={p.id} name={p.name} tenure={false} />{!p.active && <span className="text-[11px] text-ink-3">(đã nghỉ)</span>}{p.level && <span className="text-[11px] text-ink-3">· {p.level}</span>}</span></td>
                               <td className="r num text-ink-3" title={p.joinedOn ? `Vào làm ${p.joinedOn.split('-').reverse().join('/')}` : 'Chưa có ngày vào trên web nhân sự'}>{tenure(p.joinedOn)}</td>
                               <td className="r num">{shortMoney(p.cur.revenue)}</td>
                               <td className="r num">{r.cur.revenue ? `${pct(p.cur.revenue / r.cur.revenue * 100, 0)} team` : '—'}</td>
                               <td className="r num">{vi.format(p.cur.closed)}</td>
                               <td className="r num">{shortMoney(aov(p.cur))}</td>
                               <td className="r num">{pct(rate(p.cur, ms.rateBase))}</td>
-                              <td>—</td><td className="r" title="Cách tính: doanh thu đơn chốt tháng hiện tại trong mọi POS được cấp ÷ KPI doanh thu tháng"><span>{personalProgress(p.id)}</span> {(owner || editableStaff.includes(p.id)) && <button type="button" className="link" onClick={() => void editPersonal(p.id)}>Đặt KPI</button>}</td>
+                              <td>—</td><td className="r" title="Cách tính: doanh thu đơn chốt tháng hiện tại trong mọi POS được cấp ÷ KPI doanh thu tháng"><span>{personalProgress(p.id)}</span> {(owner || editableStaff.includes(p.id)) && (kpiEditing === p.id
+                                ? <KpiInlineEditor withRate={team === 'sale'} initialRevenue={personalTargets[`employee:${p.id}`]?.revenue} initialRate={personalTargets[`employee:${p.id}`]?.closeRate}
+                                  onSave={(revenue, rate) => editPersonal(p.id, revenue, rate)} onCancel={() => setKpiEditing(null)} />
+                                : <button type="button" className="link" onClick={() => setKpiEditing(p.id)}>Đặt KPI</button>)}</td>
                               {careCells(p.care, r.care)}
                             </tr>
                           ))}
@@ -295,9 +315,26 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
 }
 
 /** KPI tháng theo team (chủ hệ thống): đặt doanh thu / đơn chốt mục tiêu, xem tiến độ từ đầu tháng và dự báo cuối tháng. */
-function TeamKpi({ team, teams }: { team: Dept; teams: Row[] }) {
+type KpiTeam = { id: string; name: string; mentor?: string | null; leader: string | null; people: { id: string; name: string; active: boolean }[] };
+
+/** KPI team đặt ngay ở trang KPI (anh Vũ 21/10/2026: "set kpi cho team đâu chưa thấy nhỉ"); cùng khối với trang Theo team. */
+export function TeamKpiPanel({ team }: { team: Dept }) {
+  const api = useApi<{ teams: HrTeamGroup[] }>(`/api/teams?team=${team}`);
+  const inPos = usePosStaffFilter();
+  const teams = useMemo<KpiTeam[]>(() => (api.data?.teams ?? []).filter((t) => t.id !== 'none' && t.id !== UNLINKED)
+    .map((t) => ({ id: t.id, name: t.name, mentor: t.mentor ?? null, leader: t.leader, people: t.members.filter((m) => !inPos || inPos(m.posUserId)).map((m) => ({ id: m.posUserId, name: m.name, active: m.active })) })).filter((t) => !inPos || t.people.length), [api.data, inPos]);
+  if (!teams.length) return null;
+  return <TeamKpi team={team} teams={teams} />;
+}
+
+function TeamKpi({ team, teams }: { team: Dept; teams: KpiTeam[] }) {
   const today = todayVn();
   const [month, setMonth] = useState(today.slice(0, 7));
+  const managed = useMemo(() => {
+    const names = (t: KpiTeam) => t.people.filter((p) => p.active).map((p) => p.name);
+    return { mentor: managedBy(teams, (t) => t.mentor, names), leader: managedBy(teams, (t) => t.leader, names) };
+  }, [teams]);
+
   const last = `${month}-${String(daysInMonth(month)).padStart(2, '0')}`;
   const end = last < today ? last : today;
   const elapsed = month < today.slice(0, 7) ? daysInMonth(month) : Math.max(1, Number(today.slice(8, 10)));
@@ -305,7 +342,9 @@ function TeamKpi({ team, teams }: { team: Dept; teams: Row[] }) {
     ? `/api/reports/overview?${new URLSearchParams({ start: `${month}-01`, end, posIds: POS.map((p) => p.id).join(','), team })}`
     : null);
   const [items, setItems] = useState<TargetItem[] | null>(null);
-  const [draft, setDraft] = useState<Record<string, { revenue: string; closed: string }>>({});
+  const [draft, setDraft] = useState<Record<string, { revenue: string; rate: string }>>({});
+  const isSale = team === 'sale';
+  const ms = useMetricSettings();
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => {
@@ -319,18 +358,19 @@ function TeamKpi({ team, teams }: { team: Dept; teams: Row[] }) {
     return () => { live = false; };
   }, [month]);
   const target = (id: string) => items?.find((i) => i.scope === 'team' && i.refId === id);
-  const personal = (t: Row) => (items ?? []).filter((i) => i.scope === 'employee' && t.people.some((p) => p.id === i.refId))
-    .reduce((s, i) => ({ revenue: s.revenue + i.revenue, closed: s.closed + i.closedOrders }), { revenue: 0, closed: 0 });
+  const personal = (t: KpiTeam) => (items ?? []).filter((i) => i.scope === 'employee' && t.people.some((p) => p.id === i.refId))
+    .reduce((s, i) => ({ revenue: s.revenue + i.revenue }), { revenue: 0 });
+  const teamRate = (t: KpiTeam) => { const byId = new Map((monthApi.data?.current.byEmployee ?? []).map((e) => [e.sellerId, e])); return closeRateOfMany(t.people.map((p) => byId.get(p.id)).filter((r): r is NonNullable<typeof r> => !!r), ms.rateBase); };
   const done = useMemo(() => {
     const byId = new Map((monthApi.data?.current.byEmployee ?? []).map((e) => [e.sellerId, e]));
     return new Map(teams.map((t) => [t.id, t.people.reduce((s, p) => add(s, byId.get(p.id)), empty())]));
   }, [monthApi.data, teams]);
-  const val = (t: Row, k: 'revenue' | 'closed') => draft[t.id]?.[k] ?? String((k === 'revenue' ? target(t.id)?.revenue : target(t.id)?.closedOrders) || '');
-  const set = (id: string, k: 'revenue' | 'closed', v: string) => setDraft((d) => ({ ...d, [id]: { revenue: d[id]?.revenue ?? val(teams.find((t) => t.id === id)!, 'revenue'), closed: d[id]?.closed ?? val(teams.find((t) => t.id === id)!, 'closed'), [k]: v } }));
+  const val = (t: KpiTeam, k: 'revenue' | 'rate') => draft[t.id]?.[k] ?? (k === 'revenue' ? String(target(t.id)?.revenue || '') : String(target(t.id)?.closeRate ?? '').replace('.', ','));
+  const set = (id: string, k: 'revenue' | 'rate', v: string) => setDraft((d) => ({ ...d, [id]: { revenue: d[id]?.revenue ?? val(teams.find((t) => t.id === id)!, 'revenue'), rate: d[id]?.rate ?? val(teams.find((t) => t.id === id)!, 'rate'), [k]: v } }));
   const save = async () => {
     setSaving(true); setErr(null);
     try {
-      const list = teams.map((t) => ({ scope: 'team' as const, refId: t.id, revenue: parseMoney(val(t, 'revenue')), closedOrders: Number(val(t, 'closed').replace(/\D/g, '')) || 0 }));
+      const list = teams.map((t) => ({ scope: 'team' as const, refId: t.id, revenue: parseMoney(val(t, 'revenue')), closedOrders: target(t.id)?.closedOrders ?? 0, closeRate: isSale ? parseRate(val(t, 'rate')) : target(t.id)?.closeRate ?? null }));
       const r = await fetch('/api/targets', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ month, only: teams.map((t) => `team:${t.id}`), items: list }) });
       const b = await r.json() as { items?: TargetItem[]; error?: string };
       if (!r.ok) throw new Error(b.error ?? 'Không lưu được.');
@@ -340,7 +380,7 @@ function TeamKpi({ team, teams }: { team: Dept; teams: Row[] }) {
   const dirty = Object.keys(draft).length > 0;
 
   return (
-    <ChartCard icon={Target} title={`KPI tháng theo team ${LABEL[team]}`} subtitle="Chỉ chủ hệ thống xem và đặt · tiến độ tính từ đầu tháng, mọi POS"
+    <ChartCard icon={Target} title={`KPI tháng theo team ${LABEL[team]}`} subtitle="Chỉ chủ hệ thống xem và đặt · tiến độ từ đầu tháng, cộng mọi POS của từng người · chọn POS thì chỉ còn người của POS đó"
       action={<span className="flex items-center gap-2">
         <Input type="month" className="h-8 w-40 text-[13px]" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} aria-label="Tháng" />
         <Button size="sm" disabled={!dirty || saving} onClick={() => void save()}><Save size={14} />{saving ? 'Đang lưu…' : 'Lưu'}</Button>
@@ -349,23 +389,24 @@ function TeamKpi({ team, teams }: { team: Dept; teams: Row[] }) {
       {!items ? <SkeletonTable rows={4} cols={6} /> : teams.length ? (
         <TableWrap minWidth={820}>
           <table className="tbl w-full">
-            <thead><tr><th className="text-left">Team</th><th className="r">DT mục tiêu</th><th className="r">Đơn mục tiêu</th><th className="r">Đã đạt</th><th className="r">Tiến độ</th><th className="r">Dự báo cuối tháng</th><th className="r">Tổng KPI cá nhân</th></tr></thead>
+            <thead><tr><th className="text-left">Team</th><th className="r">DT mục tiêu</th>{isSale && <th className="r">Tỉ lệ chốt mục tiêu</th>}<th className="r">Đã đạt</th><th className="r">Tiến độ</th><th className="r">Dự báo cuối tháng</th><th className="r">Tổng KPI cá nhân</th></tr></thead>
             <tbody>
               {teams.map((t) => {
-                const goal = parseMoney(val(t, 'revenue')), goalClosed = Number(val(t, 'closed').replace(/\D/g, '')) || 0;
+                const goal = parseMoney(val(t, 'revenue')), goalRate = isSale ? parseRate(val(t, 'rate')) : null, rate = isSale && monthApi.data ? teamRate(t) : null;
                 const d = done.get(t.id) ?? empty();
                 const p = goal ? d.revenue / goal * 100 : null;
                 const forecast = d.revenue / elapsed * daysInMonth(month);
                 const pers = personal(t);
                 return (
                   <tr key={t.id}>
-                    <td><b className="font-semibold">{t.name}</b><span className="block text-[11px] text-ink-3">{[t.mentor ? `Mentor ${t.mentor}` : null, t.leader ? `Leader ${t.leader}` : null].filter(Boolean).join(' · ')}</span></td>
+                    <td><b className="font-semibold">{t.name}</b><span className="flex flex-wrap items-center gap-x-1 text-[11px] text-ink-3">{[t.mentor ? <ManagerChip key="m" label="Mentor" name={t.mentor} people={managed.mentor.get(t.mentor) ?? []} /> : null,
+                      t.leader ? <ManagerChip key="l" label="Leader" name={t.leader} people={managed.leader.get(t.leader) ?? []} /> : null].filter(Boolean).flatMap((x, i) => i ? [' · ', x] : [x])}</span></td>
                     <td className="r"><Input className="num ml-auto h-8 w-32 text-right" inputMode="numeric" value={val(t, 'revenue')} placeholder="vd 500tr" onChange={(e) => set(t.id, 'revenue', e.target.value)} aria-label={`Doanh thu mục tiêu ${t.name}`} /></td>
-                    <td className="r"><Input className="num ml-auto h-8 w-20 text-right" inputMode="numeric" value={val(t, 'closed')} onChange={(e) => set(t.id, 'closed', e.target.value)} aria-label={`Đơn chốt mục tiêu ${t.name}`} /></td>
-                    <td className="r num">{monthApi.data ? <>{shortMoney(d.revenue)}<span className="block text-[11px] text-ink-3">{vi.format(d.closed)}{goalClosed ? `/${vi.format(goalClosed)}` : ''} đơn</span></> : '…'}</td>
+                    {isSale && <td className="r"><span className="inline-flex items-center gap-1"><Input className="num ml-auto h-8 w-16 text-right" inputMode="decimal" value={val(t, 'rate')} placeholder="vd 35" onChange={(e) => set(t.id, 'rate', e.target.value)} aria-label={`Tỉ lệ chốt mục tiêu ${t.name}`} /><span className="text-xs text-ink-3">%</span></span></td>}
+                    <td className="r num">{monthApi.data ? <>{shortMoney(d.revenue)}<span className="block text-[11px] text-ink-3">{vi.format(d.closed)} đơn{isSale && rate !== null ? <> · <span className={goalRate ? (rate >= goalRate ? 'text-good' : 'text-bad') : ''}>chốt {pct(rate, 1)}</span>{goalRate ? ` / ${pct(goalRate, 1)}` : ''}</> : null}</span></> : '…'}</td>
                     <td className="r num"><span className="flex items-center justify-end gap-2">{pct(p, 0)}<ProgressBar value={d.revenue} max={goal || 1} width={64} size="sm" color={p === null ? undefined : p >= 100 ? 'var(--good)' : p >= elapsed / daysInMonth(month) * 100 ? 'var(--t-lime)' : 'var(--warn)'} /></span></td>
                     <td className="r num">{monthApi.data ? <>{shortMoney(forecast)}{goal ? <span className={`block text-[11px] ${forecast >= goal ? 'text-good' : 'text-bad'}`}>{pct(forecast / goal * 100, 0)} mục tiêu</span> : null}</> : '…'}</td>
-                    <td className="r num">{pers.revenue ? <button type="button" className="text-primary underline-offset-2 hover:underline" title="Dùng tổng KPI cá nhân làm KPI team" onClick={() => setDraft((x) => ({ ...x, [t.id]: { revenue: String(pers.revenue), closed: String(pers.closed || '') } }))}>{shortMoney(pers.revenue)}</button> : <span className="text-ink-3">—</span>}</td>
+                    <td className="r num">{pers.revenue ? <button type="button" className="text-primary underline-offset-2 hover:underline tap" title="Dùng tổng KPI cá nhân làm KPI team" onClick={() => setDraft((x) => ({ ...x, [t.id]: { revenue: String(pers.revenue), rate: x[t.id]?.rate ?? val(t, 'rate') } }))}>{shortMoney(pers.revenue)}</button> : <span className="text-ink-3">—</span>}</td>
                   </tr>
                 );
               })}

@@ -1,6 +1,6 @@
-import { canView } from '@/lib/access';
-import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
-import { recruitCv } from '@/lib/recruit-api';
+import { canView } from '@/lib/auth/access';
+import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { recruitCv } from '@/lib/teams/recruit-api';
 
 // App của sếp · Tuyển dụng: tải file CV của một ứng viên (?id=) để xem ngay trong app.
 export async function GET(request: Request) {

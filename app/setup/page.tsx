@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { hasAnyUser } from '@/lib/auth';
+import { hasAnyUser } from '@/lib/auth/auth';
 import { AuthForm } from '../auth-form';
 import { isDemo } from '@/lib/demo/mode';
 

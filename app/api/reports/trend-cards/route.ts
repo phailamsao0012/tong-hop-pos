@@ -1,12 +1,12 @@
 import { env } from 'cloudflare:workers';
-import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
-import { canView, scopeApi } from '@/lib/access';
-import { POS } from '@/lib/report-model';
-import { DATE_RE, todayVn } from '@/lib/report-time';
-import { parseTeam } from '@/lib/team';
-import { resolveHrUnit } from '@/lib/hr-unit';
-import { TREND_DEPTS, trendCards, trendOrderPage } from '@/lib/trend-period';
-import { readTrendNotes } from '@/lib/ai-trends';
+import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { canView, scopeApi } from '@/lib/auth/access';
+import { POS } from '@/lib/shared/report-model';
+import { DATE_RE, todayVn } from '@/lib/shared/report-time';
+import { parseTeam } from '@/lib/teams/team';
+import { resolveHrUnit } from '@/lib/teams/hr-unit';
+import { TREND_DEPTS, trendCards, trendOrderPage } from '@/lib/reports/trend-period';
+import { readTrendNotes } from '@/lib/ai/ai-trends';
 
 const DEPT_VIEW = { sale: 'sale-overview', cskh: 'cskh-overview', mkt: 'marketing', vandon: 'van-don' } as const;
 

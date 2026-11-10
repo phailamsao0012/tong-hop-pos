@@ -8,11 +8,11 @@ import { usePeriod } from './period-store';
 import { AiPackButton } from './ai-pack';
 import { useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Clock, Flame, Trophy } from 'lucide-react';
-import { RATE_THRESHOLDS, rateLevel } from '@/lib/metrics';
-import type { SaleAnalytics } from '@/lib/sale-analytics';
-import { STATUS_NAMES } from '@/lib/order-status';
-import { todayVn } from '@/lib/report-time';
-import { WEEKDAYS, byWeekday, dayTotal, sumRows, vnDayHour, weekdayOf, type DayHours } from '@/lib/sale-hours';
+import { RATE_THRESHOLDS, rateLevel } from '@/lib/reports/metrics';
+import type { SaleAnalytics } from '@/lib/reports/sale-analytics';
+import { STATUS_NAMES } from '@/lib/pancake/order-status';
+import { todayVn } from '@/lib/shared/report-time';
+import { WEEKDAYS, byWeekday, dayTotal, sumRows, vnDayHour, weekdayOf, type DayHours } from '@/lib/reports/sale-hours';
 import { ICON } from './icons';
 import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';
@@ -116,8 +116,8 @@ function HourBoard({ days, definition, asOf }: { days: DayHours[]; definition: s
       <tr key={r.key} data-k={r.key}>
         <th scope="row" className="sticky left-0 z-[1] bg-surface p-0 text-left" style={{ boxShadow: '0 0 0 3px var(--surface)' }}>
           <button type="button" aria-pressed={on} title={`Xem riêng ${r.title}`}
-            className={`block w-full whitespace-nowrap rounded-md px-1.5 py-1 text-left text-[11.5px] leading-tight transition-colors ${on ? 'bg-primary font-semibold text-primary-ink' : 'text-ink-2 hover:bg-surface-2'}`}>
-            {r.label}{r.sub && <span className={`block text-[10px] font-normal ${on ? 'opacity-80' : 'text-ink-3'}`}>{r.sub}</span>}
+            className={`block w-full whitespace-nowrap rounded-md px-1.5 py-1 tap text-left text-[11.5px] leading-tight transition-colors ${on ? 'bg-primary font-semibold text-primary-ink' : 'text-ink-2 hover:bg-surface-2'}`}>
+            {r.label}{r.sub && <span className={`block text-[11px] font-normal ${on ? 'opacity-80' : 'text-ink-3'}`}>{r.sub}</span>}
           </button>
         </th>
         {HOURS.map((h) => {
@@ -170,7 +170,7 @@ function HourBoard({ days, definition, asOf }: { days: DayHours[]; definition: s
                   const v = values[h], isFuture = future(focus, h), ratio = isFuture ? 0 : Math.min(1, (v ?? 0) / barMax), thin = metric === 'rate' && focus.a[h] < 5;
                   return (
                     <div key={h} data-h={h} className="flex h-full cursor-default flex-col items-center justify-end">
-                      <span className={`num mb-0.5 whitespace-nowrap text-[10px] leading-none ${h === peak ? 'font-bold text-primary' : 'text-ink-2'}`}>{isFuture ? '' : fmtCell(v, metric)}</span>
+                      <span className={`num mb-0.5 whitespace-nowrap text-[11px] leading-none ${h === peak ? 'font-bold text-primary' : 'text-ink-2'}`}>{isFuture ? '' : fmtCell(v, metric)}</span>
                       {isFuture
                         ? <i className="block h-2 w-full rounded-t-[4px] border border-b-0 border-dashed border-line-2" />
                         : <i className="block w-full rounded-t-[5px] transition-[height] duration-500 ease-out"
@@ -181,7 +181,7 @@ function HourBoard({ days, definition, asOf }: { days: DayHours[]; definition: s
               </div>
               <div className="mt-1 grid grid-cols-[repeat(24,minmax(0,1fr))] gap-[3px] border-t border-line pt-1">
                 {HOURS.map((h) => (
-                  <span key={h} className={`num text-center text-[10px] ${focus.day === today && h === nowHour ? 'rounded bg-primary font-bold text-primary-ink' : 'text-ink-3'}`}>{h}h</span>
+                  <span key={h} className={`num text-center text-[11px] ${focus.day === today && h === nowHour ? 'rounded bg-primary font-bold text-primary-ink' : 'text-ink-3'}`}>{h}h</span>
                 ))}
               </div>
             </div>
@@ -198,7 +198,7 @@ function HourBoard({ days, definition, asOf }: { days: DayHours[]; definition: s
             {multi && (
               <tfoot><tr data-k="all">
                 <th scope="row" className="sticky bottom-0 left-0 z-[3] bg-surface p-0 text-left" style={{ boxShadow: '0 0 0 3px var(--surface)' }}>
-                  <button type="button" aria-pressed={focusKey === 'all'} className={`block w-full rounded-md px-1.5 py-1 text-left text-[11.5px] font-semibold ${focusKey === 'all' ? 'bg-primary text-primary-ink' : 'text-ink hover:bg-surface-2'}`}>Cả kỳ</button>
+                  <button type="button" aria-pressed={focusKey === 'all'} className={`tap block w-full rounded-md px-1.5 py-1 text-left text-[11.5px] font-semibold ${focusKey === 'all' ? 'bg-primary text-primary-ink' : 'text-ink hover:bg-surface-2'}`}>Cả kỳ</button>
                 </th>
                 {HOURS.map((h) => <td key={h} data-h={h} className="sticky bottom-0 z-[2] h-7 cursor-pointer rounded-md bg-surface-3 px-0.5 text-center align-middle num text-[10.5px] font-semibold text-ink" style={{ boxShadow: '0 0 0 3px var(--surface)' }}>{fmtCell(cellValue(total, metric, h), metric)}</td>)}
                 <td className="sticky bottom-0 z-[2] whitespace-nowrap bg-surface pl-2 text-right num text-[11.5px] font-bold text-ink" style={{ boxShadow: '0 0 0 3px var(--surface)' }}>{fmtFull(rowTotal(total, metric), metric)}</td>
@@ -254,7 +254,7 @@ export function SaleAnalyticsView() {
       {!r && !error && <><SkeletonKpis count={4} className="xl:grid-cols-4" /><ChartCard title="Giờ vàng" subtitle="Đang tải…"><ThinkingLine /><SkeletonTable rows={5} cols={6} /></ChartCard></>}
       {r && (
         <>
-          <div className={`grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4 ${loading ? 'opacity-70' : ''}`}>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
             <KpiCard icon={ICON.rate} tone="green" label="Tỷ lệ chốt data" value={pct(r.total.dataRate)} note={`${vi.format(r.total.closedFromAssigned)} chốt / ${vi.format(r.total.assigned)} số được chia`}
               progress={r.total.dataRate === null ? undefined : { value: r.total.dataRate, max: 100 }} tooltip={{ period: periodLabel, current: pct(r.total.dataRate), definition: r.definitions.dataRate }} />
             <KpiCard icon={Clock} tone="blue" label="Thời gian chốt (trung vị)" value={duration(r.total.medianMinutes)} note="Từ lúc nhận số tới lúc xác nhận" tooltip={{ period: periodLabel, current: duration(r.total.medianMinutes), definition: r.definitions.time }} />
@@ -275,7 +275,7 @@ export function SaleAnalyticsView() {
               </ul>
             </ChartCard>
           </div>
-          <ChartCard icon={Trophy} title={`Xếp hạng · ${staff.length} người`} subtitle={`Màu tỷ lệ chốt data: xanh từ ${RATE_THRESHOLDS.good}%, vàng từ ${RATE_THRESHOLDS.warn}% · bấm tiêu đề cột để sắp xếp`} info={r.definitions.scope}>
+          <ChartCard icon={Trophy} title={`Xếp hạng · ${staff.length} người`} subtitle={`Màu tỷ lệ chốt data: xanh từ ${RATE_THRESHOLDS.good}%, dưới là đỏ · bấm tiêu đề cột để sắp xếp`} info={r.definitions.scope}>
             {staff.length ? (
               <TableWrap minWidth={960} maxHeight="34rem" stickyFirst>
                 <table className="tbl">
@@ -330,7 +330,7 @@ export function PackedRevenue({ params, net }: { params: URLSearchParams; net: n
   q.set('team', 'sale'); q.set('packed', '1'); q.set('page', String(page));
   const api = useApi<{ orders: { id: string; code: string; status: number; net: number }[]; more: boolean }>(open ? '/api/reports/overview?' + q : null, { keep: false });
   return <>
-    <button type="button" className="num rounded px-1 hover:bg-surface-2" title={PACKED_HELP} disabled={net === undefined} onClick={() => { setPage(0); setOpen(true); }}>{shortMoney(net ?? null)}</button>
+    <button type="button" className="num rounded px-1 hover:bg-surface-2 tap" title={PACKED_HELP} disabled={net === undefined} onClick={() => { setPage(0); setOpen(true); }}>{shortMoney(net ?? null)}</button>
     <Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-h-[85vh] overflow-auto">
       <DialogHeader><DialogTitle>Đơn Sale · DT đóng hàng trở đi</DialogTitle><DialogDescription>{PACKED_HELP} Giữ kỳ, POS và team đã chọn.</DialogDescription></DialogHeader>
       {api.error && <ErrorBox error={api.error} onRetry={api.reload} />}

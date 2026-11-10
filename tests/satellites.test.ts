@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseAccess, scopeApi } from '../lib/access';
-import { HR_DOWN, SATELLITES, actorHeader, decisionSummary, performanceOf, posAccountsOf, relay, satModule, visibleSatellites } from '../lib/satellites';
+import { parseAccess, scopeApi } from '../lib/auth/access';
+import { HR_DOWN, SATELLITES, actorHeader, decisionSummary, performanceOf, posAccountsOf, relay, satModule, visibleSatellites } from '../lib/ops/satellites';
 
 const owner = parseAccess({ role: 'owner' });
 const director = parseAccess({ role: 'director' });

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { STAFF, dayData, findOrder, hrSnapshot, listCustomers, listOrders, toSourceOrder } from '../lib/demo/world';
 import { fakePancake } from '../lib/demo/fake-pancake';
-import { computePosTeams } from '../lib/hr-copy';
+import { computePosTeams } from '../lib/teams/hr-copy';
 
 const now = Date.parse('2026-10-04T11:00:00Z');
 const sec = (iso: string) => String(Date.parse(iso) / 1000);

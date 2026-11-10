@@ -1,8 +1,8 @@
-import { env } from 'cloudflare:workers';
-import { audit } from '@/lib/audit';
-import { createLoginRequest, pollLoginRequest } from '@/lib/login-requests';
-import { OTP_MINUTES, createChallenge, maskEmail, otpCode, sha256b64 } from '@/lib/mfa';
-import { mailConfigured, otpMail, sendMail } from '@/lib/mail';
+import { pendingApproveRequest } from '@/lib/auth/auth-db';
+import { audit } from '@/lib/ops/audit';
+import { createLoginRequest, pollLoginRequest } from '@/lib/auth/login-requests';
+import { OTP_MINUTES, createChallenge, maskEmail, otpCode, sha256b64 } from '@/lib/auth/mfa';
+import { mailConfigured, otpMail, sendMail } from '@/lib/ops/mail';
 
 // Đăng nhập bằng QR / duyệt trên app — phía máy đang đăng nhập (chưa có phiên):
 //   {action:'create'}                 → mã QR mới {id, pollToken, number, seconds}; QR chứa <origin>/qr/<id>
@@ -25,8 +25,7 @@ export async function POST(request: Request) {
     return Response.json({ status: r.status }, { headers: { 'Cache-Control': 'no-store' } });
   }
   if (body.action === 'email') {
-    const row = await env.DB.prepare("SELECT r.user_id,r.poll_hash,u.email FROM login_requests r JOIN users u ON u.id=r.user_id WHERE r.id=? AND r.kind='approve' AND r.status='pending' AND r.expires_at>?")
-      .bind(id, new Date().toISOString()).first<{ user_id: string; poll_hash: string; email: string }>();
+    const row = await pendingApproveRequest(id, new Date().toISOString());
     if (!row || row.poll_hash !== await sha256b64(pollToken)) return Response.json({ error: 'Yêu cầu đã hết hạn, đăng nhập lại.' }, { status: 410 });
     if (!mailConfigured()) return Response.json({ error: 'Chưa cấu hình gửi thư. Dùng app hoặc mã ứng dụng.' }, { status: 400 });
     const code = otpCode();

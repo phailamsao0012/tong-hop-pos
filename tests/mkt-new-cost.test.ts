@@ -1,10 +1,10 @@
 ﻿import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { emptyDb } from './support/d1-sqlite';
-import { ensureAdCostSchema, mktSummary, roasReport, mktTotal, emptyNewSplit } from '../lib/ad-costs';
-import { mktAnalytics } from '../lib/mkt-analytics';
+import { ensureAdCostSchema, mktSummary, roasReport, mktTotal, emptyNewSplit } from '../lib/ops/ad-costs';
+import { mktAnalytics } from '../lib/reports/mkt-analytics';
 
-void test('mkt-new-cost: ba nơi cùng New, nút Sale/CSKH giữ chi phí và số về', async () => {
+void test('mkt-new-cost: ba nơi cùng New, nút Sale/CSKH giữ chi phí, số về chỉ đơn chia Sale (nút CSKH xem riêng CSKH)', async () => {
   const { raw } = emptyDb();
   await ensureAdCostSchema();
   for (const [id, name, dept] of [['sale','NV A SALE','Sale'],['care','NV B CSKH','CSKH'],['other','NV C',''],['m1','NV D MKT','MKT'],['m2','NV E MKT','MKT']]) {
@@ -25,7 +25,8 @@ void test('mkt-new-cost: ba nơi cùng New, nút Sale/CSKH giữ chi phí và s�
     assert.equal(summary.net,team==='all'?3600:team==='sale'?2000:1200);
     assert.equal(summary.newNet+summary.cskhNet+summary.otherNet,3600);
     assert.equal(summary.cost,200);
-    assert.equal(summary.phones,6);
+    // Số về chỉ tính đơn chia Sale (07/11/2026): Tất cả = Sale = 2 số; nút CSKH xem riêng 2 số của CSKH.
+    assert.equal(summary.phones,2);
     for (const x of [report.total,analytics.current]) {
       assert.equal(x.net,summary.net); assert.equal(x.cost,summary.cost); assert.equal(x.phones,summary.phones);
       assert.equal(x.roas,summary.roas); assert.equal(x.costPerClosed,summary.costPerClosed);

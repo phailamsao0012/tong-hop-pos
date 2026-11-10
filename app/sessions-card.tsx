@@ -41,7 +41,7 @@ export function SessionsCard({ owner }: { owner: boolean }) {
     <ChartCard icon={MonitorSmartphone} className="lg:col-span-2" title={`Thiết bị đang đăng nhập · ${rows?.length ?? '…'}`}
       subtitle="Thấy máy lạ thì bấm Đăng xuất máy đó và đổi mật khẩu. Máy lạ vào tài khoản sẽ được báo qua Telegram cho chủ hệ thống."
       action={<span className="flex flex-wrap items-center gap-2">
-        {owner && <label className="flex cursor-pointer items-center gap-1.5 text-xs text-ink-2"><input type="checkbox" className="accent-[var(--primary)]" checked={all} onChange={(e) => setAll(e.target.checked)} />Mọi tài khoản</label>}
+        {owner && <label className="tap flex cursor-pointer items-center gap-1.5 text-xs text-ink-2"><input type="checkbox" className="accent-[var(--primary)]" checked={all} onChange={(e) => setAll(e.target.checked)} />Mọi tài khoản</label>}
         {!all && others > 0 && (confirmOthers
           ? <><Button size="sm" variant="destructive" disabled={!!busy} onClick={() => void revoke('others=1', 'others', 'Đã đăng xuất mọi máy khác.')}>Chắc chắn đăng xuất {others} máy</Button><Button size="sm" variant="ghost" onClick={() => setConfirmOthers(false)}>Thôi</Button></>
           : <Button size="sm" variant="outline" onClick={() => setConfirmOthers(true)}><LogOut size={13} />Đăng xuất mọi máy khác</Button>)}

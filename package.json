@@ -9,8 +9,10 @@
     "dev": "vinext dev",
     "build": "vinext build",
     "preview": "wrangler dev --config dist/server/wrangler.json",
+    "build:pc": "vite build --config vite.config.pc.ts",
+    "start:pc": "node dist/pc/server.js",
     "deploy": "node scripts/deploy.mjs",
-    "test": "tsx --import ./tests/support/register.mjs --test tests/*.test.ts",
+    "test": "tsx --import ./tests/support/register.mjs --test tests/*.test.ts tests/arch/*.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint",
     "format": "oxfmt",
@@ -19,6 +21,7 @@
     "db:migrate": "wrangler d1 migrations apply DB --remote"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.131.0",
     "@base-ui/react": "1.7.0",
     "@shadcn/react": "0.3.0",
     "@simplewebauthn/browser": "^14.0.0",

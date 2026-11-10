@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { emptyDb, demoWorld } from './support/d1-sqlite';
 import { loginAs, logout } from './support/session';
-import { POS } from '../lib/report-model';
-import { packedBySeller, packedOrderPage, packedQuery } from '../lib/sale-packed';
-import { PACKED_SQL, isPacked } from '../lib/van-don';
-import { saleAnalytics } from '../lib/sale-analytics';
-import type { overviewReport } from '../lib/overview-report';
-import type { PackedSeller } from '../lib/sale-packed';
+import { POS } from '../lib/shared/report-model';
+import { packedBySeller, packedOrderPage, packedQuery } from '../lib/reports/sale-packed';
+import { PACKED_SQL, isPacked } from '../lib/reports/van-don';
+import { saleAnalytics } from '../lib/reports/sale-analytics';
+import type { overviewReport } from '../lib/reports/overview-report';
+import type { PackedSeller } from '../lib/reports/sale-packed';
 
 type TestOverview = Awaited<ReturnType<typeof overviewReport>> & { packedStaff: PackedSeller[] };
 type TestSections = { sale: { packedNet: number }; cskh: Record<string, unknown> };
@@ -67,7 +67,7 @@ void test('sale-packed: phân trang không mất đơn, team và nhóm sản ph�
     assert.equal(first.length, 101);
     assert.equal(second.length, 5);
     assert.equal(new Set([...first.slice(0, 100), ...second].map((o) => o.id)).size, 105);
-    const { EMPTY_ORDER_FILTERS } = await import('../lib/order-segments');
+    const { EMPTY_ORDER_FILTERS } = await import('../lib/pancake/order-segments');
     assert.equal((await packedBySeller(db, { ...opts, scope: { filters: { ...EMPTY_ORDER_FILTERS, productSegment: 'skgk' } } }))[0].packedNet, 10500);
     assert.equal((await packedBySeller(db, { ...opts, scope: { filters: { ...EMPTY_ORDER_FILTERS, productSegment: 'gentadox' } } }))[0]?.packedNet ?? 0, 0);
     assert.deepEqual(await packedBySeller(db, { ...opts, scope: { unit: { id: 'empty-team', name: 'Team MKT 1', dept: 'sale' } } }), []);

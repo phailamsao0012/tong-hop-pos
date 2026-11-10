@@ -1,4 +1,4 @@
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/shared/utils';
 
 // Xương lấp lánh (shimmer 1,3 s) theo token --skel-1 / --skel-2; tự tắt hoạt ảnh khi giảm chuyển động (globals.css).
 function Skeleton({ className, ...props }: React.ComponentProps<'div'>) {

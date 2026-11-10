@@ -1,5 +1,5 @@
-import { env } from 'cloudflare:workers';
-import { getSessionUser } from '@/lib/auth';
+import { deletePreset, insertPreset, listPresets } from '@/lib/reports/report-presets';
+import { getSessionUser } from '@/lib/auth/auth';
 
 export async function GET() {
   const user = await getSessionUser();
@@ -8,16 +8,7 @@ export async function GET() {
       { error: 'Đăng nhập để xem báo cáo.' },
       { status: 401 },
     );
-  const rows = await env.DB.prepare(
-    'SELECT id,title,config_json,updated_at FROM report_presets WHERE owner_id=? ORDER BY updated_at DESC',
-  )
-    .bind(user.userId)
-    .all<{
-      id: string;
-      title: string;
-      config_json: string;
-      updated_at: string;
-    }>();
+  const rows = await listPresets(user);
   return Response.json(
     rows.results.map((r) => ({
       id: r.id,
@@ -53,11 +44,7 @@ export async function POST(request: Request) {
     return Response.json({ error: 'Cấu hình quá lớn.' }, { status: 400 });
   const id = crypto.randomUUID(),
     now = new Date().toISOString();
-  await env.DB.prepare(
-    'INSERT INTO report_presets (id,owner_id,title,config_json,created_at,updated_at) VALUES (?,?,?,?,?,?)',
-  )
-    .bind(id, user.userId, title, encoded, now, now)
-    .run();
+  await insertPreset(id, user, title, encoded, now);
   return Response.json({ id, title, config, updatedAt: now }, { status: 201 });
 }
 export async function DELETE(request: Request) {
@@ -70,8 +57,6 @@ export async function DELETE(request: Request) {
   const id = new URL(request.url).searchParams.get('id');
   if (!id)
     return Response.json({ error: 'Thiếu mã báo cáo.' }, { status: 400 });
-  await env.DB.prepare('DELETE FROM report_presets WHERE id=? AND owner_id=?')
-    .bind(id, user.userId)
-    .run();
+  await deletePreset(id, user);
   return Response.json({ ok: true });
 }
