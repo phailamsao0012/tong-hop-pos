@@ -45,13 +45,14 @@ writeFileSync('dist/server/wrangler.ci.json', JSON.stringify(config));
 writeFileSync('dist/server/wrangler.ci-d1.json', JSON.stringify({ name: config.name, compatibility_date: config.compatibility_date, d1_databases: config.d1_databases }));
 NODE
 # Wrangler chỉ tạo DB; sqlite3 đọc nguyên file để giữ nguyên trigger CASE…END.
-pnpm exec wrangler d1 execute DB --local --command "select 1" --config dist/server/wrangler.ci-d1.json --persist-to "$RUNNER_TEMP/wstate"
+pnpm exec wrangler d1 execute DB --local --command "CREATE TABLE IF NOT EXISTS _web_ao_init(x INTEGER)" --config dist/server/wrangler.ci-d1.json --persist-to "$RUNNER_TEMP/wstate"
+find "$RUNNER_TEMP/wstate" -type f | sed 's#.*/wstate/##'
 databases=()
 while IFS= read -r file; do
   databases+=("$file")
-done < <(find "$RUNNER_TEMP/wstate/v3/d1/" -type f -name '*.sqlite')
-[ "${#databases[@]}" = 1 ] || { echo '::error::web-ao: không tìm được duy nhất một DB'; exit 1; }
-db=${databases[0]}
+done < <(find "$RUNNER_TEMP/wstate" -type f -path '*/miniflare-D1DatabaseObject/*' -name '*.sqlite' ! -name 'metadata.sqlite')
+[ "${#databases[@]}" -gt 0 ] || { echo '::error::web-ao: không tìm được DB'; exit 1; }
+db=$(ls -t "${databases[@]}" | head -1)
 sqlite3 -bail "$db" 'CREATE TABLE IF NOT EXISTS d1_migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL);'
 for file in drizzle/*.sql; do
   name=${file##*/}
