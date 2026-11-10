@@ -268,7 +268,7 @@ private struct ShiftAlertRow: View {
 
     var body: some View {
         let tint: Color = high ? .bad : .warn
-        let soft: Color = high ? .badSoft : .warnSoft
+        let soft: Color = high ? Palette.badSoft : Palette.warnSoft
         HStack(alignment: .top, spacing: MT.cellGap) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(tint)
