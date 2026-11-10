@@ -26,7 +26,7 @@ concurrency:
 jobs:
   preview:
     runs-on: macos-latest
-    timeout-minutes: 80
+    timeout-minutes: 100
     permissions:
       contents: write
     defaults:
@@ -102,6 +102,30 @@ jobs:
           out="$(SIMCTL_CHILD_MEGATECH_DECODE_TEST=1 timeout 120 xcrun simctl launch --console-pty "$UDID" "$BUNDLE" 2>&1 || true)"
           echo "$out" | grep DECODE_TEST || { echo "$out" | tail -40; echo "::error::App không in DECODE_TEST."; exit 1; }
           echo "$out" | grep -q "DECODE_TEST OK" || exit 1
+
+      - name: Cài pnpm cho web ảo
+        id: web-ao-pnpm
+        continue-on-error: true
+        uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4
+        with:
+          version: '10'
+
+      - name: Cài Node cho web ảo
+        id: web-ao-node
+        continue-on-error: true
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+
+      - name: Web ảo
+        id: web-ao
+        timeout-minutes: 18
+        continue-on-error: true
+        run: bash scripts/ci/web-ao.sh
+
+      - name: Dự phòng web demo
+        if: steps.web-ao.outcome != 'success'
+        run: echo '::warning::web-ao: không bật được, dùng demo'
 
       - name: Phiên đăng nhập bản demo
         run: |
@@ -696,6 +720,15 @@ jobs:
             -c:v libx264 -preset veryfast -crf 24 -pix_fmt yuv420p -movflags +faststart -an "$OUT/so-sanh-icon.mp4" || echo "::warning::Không ghép được video so sánh icon."
           ls -la "$OUT"
 
+      - name: Thu log web ảo
+        if: always()
+        run: |
+          mkdir -p "$OUT"
+          # Chỉ giữ phương thức, đường dẫn không query và mã HTTP; bỏ mọi nội dung khác.
+          if [ -f "$RUNNER_TEMP/web-ao.log" ]; then
+            tail -200 "$RUNNER_TEMP/web-ao.log" | sed -nE 's/.*(GET|POST|HEAD) (\/[^ ?]*)[^ ]* ([0-9]{3}).*/web-ao: \1 \2 \3/p' > "$OUT/web-ao.log"
+          fi
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -721,3 +754,19 @@ jobs:
         run: |
           [ -n "${TOKEN:-}" ] || exit 0
           curl -sS -o /dev/null -b "thp_session=$TOKEN" -H 'content-type: application/json' -d '{}' "$BASE/api/auth/logout" || true
+
+      - name: Dừng web ảo
+        if: always()
+        run: |
+          python3 - "$RUNNER_TEMP/web-ao.pid" <<'PY'
+          from os import killpg
+          from signal import SIGTERM
+          from sys import argv
+          from pathlib import Path
+          path = Path(argv[1])
+          if path.exists():
+              try:
+                  killpg(int(path.read_text()), SIGTERM)
+              except ProcessLookupError:
+                  pass
+          PY
