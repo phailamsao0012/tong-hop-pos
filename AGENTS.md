@@ -2,6 +2,9 @@
 
 Claude Code và Codex cùng đọc file này. `CLAUDE.md` chỉ trỏ về đây, nên chỉ sửa luật ở file này.
 
+## Bộ luật vận hành (anh Vũ duyệt 10/11/2026)
+- Gặp việc gì thì tra `docs/bo-luat/README.md` trước. Bộ luật có câu trả lời thì làm theo, không hỏi lại anh. Chỉ hỏi anh việc ở chương 14 hoặc việc bộ luật chưa nói tới, rồi ghi câu trả lời vào bộ luật.
+
 ## Ai làm gì
 - **Claude là kỹ sư.** Viết plan vào `docs/plans/`, chia việc thành các bước nhỏ. Mỗi bước có tiêu chí xong và cách kiểm. Claude giao việc cho Codex, sau đó kiểm bài và mở PR.
 - **Codex là thợ.** Làm đúng một bước trong plan được giao. Không làm thêm. Plan và code thật khác nhau thì dừng lại và ghi câu hỏi, không tự đoán.
