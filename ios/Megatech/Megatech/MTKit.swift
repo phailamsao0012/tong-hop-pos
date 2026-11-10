@@ -268,6 +268,7 @@ struct MTFilterSheet<Content: View>: View {
             }
         }.tint(Palette.accent).presentationDetents([.medium, .large])
             .presentationCornerRadius(MT.rSheet).presentationBackground(Palette.card).presentationDragIndicator(.visible)
+            .presentationContentInteraction(.scrolls)
     }
 }
 
@@ -311,7 +312,10 @@ struct MTStateContainerView<Content: View>: View {
                     .accessibilityElement(children: .ignore).accessibilityLabel(text)
             case .failed, .empty, .offline:
                 Image(systemName: state == .empty ? "tray" : state == .offline ? "wifi.slash" : "exclamationmark.triangle")
-                    .font(.title2).foregroundStyle(state == .empty ? Palette.muted : Palette.warn).accessibilityHidden(true)
+                    .font(.title2).foregroundStyle(state == .empty ? Palette.muted : Palette.warn)
+                    .frame(width: 44, height: 44)
+                    .background(state == .empty ? Palette.mtSurfaceCell : Palette.warnSoft, in: .circle)
+                    .accessibilityHidden(true)
                 Text(text).mtFont(.body).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                 content
             }

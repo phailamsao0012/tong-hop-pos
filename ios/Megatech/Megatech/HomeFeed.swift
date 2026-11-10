@@ -97,15 +97,15 @@ struct HomeFeed: View {
     }
 
     private var hero: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: MT.cardGap) {
             ScopeStrip(text: scopeLine, trailing: sync.short, tone: sync.tone)
             if canRef { revenueHero }
             if !vdOnly {
                 HStack {
-                    Text("Theo bộ phận").font(.title3.weight(.bold))
+                    Text("Theo bộ phận").mtFont(.cardHeader)
                     InfoButton(InfoText(title: "Theo bộ phận", body: "Xem riêng, không cộng lại · so cùng giờ hôm qua"))
                 }
-                Text("Xem riêng, không cộng lại · so cùng giờ hôm qua").font(.footnote).foregroundStyle(Palette.muted)
+                Text("Xem riêng, không cộng lại · so cùng giờ hôm qua").mtFont(.caption).foregroundStyle(Palette.muted)
                 if let error { StateView(error: error, compact: true) { await reload(force: true) } }
                 departmentCells
                 if showSale { teamRow(.sale, sale) }
@@ -140,7 +140,7 @@ struct HomeFeed: View {
         let cur = ref.map { Self.refSum($0.current) }, prev = ref.map { Self.refSum($0.previous) }
         return VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("Doanh thu hôm nay").font(.headline)
+                Text("Doanh thu hôm nay").mtFont(.cardHeader)
                 Spacer()
                 if let cur, let ref {
                     metricInfo("Cách tính doanh thu hôm nay", onHero: true) { totalExplain(cur, prev, posCount: ref.current.count, day: ref.start) }
@@ -157,7 +157,8 @@ struct HomeFeed: View {
                                      isPrivacyMasked: hideMoney)
                     Text("\(Fmt.int(cur.orders)) đơn chốt · \(n) POS").font(.subheadline).foregroundStyle(Palette.heroMuted)
                     if let prev {
-                        HStack { Text("Hôm qua cả ngày"); Spacer(); Text(hideMoney ? "••••" : Fmt.shortMoney(prev.revenue)).font(.headline) }
+                        HStack { Text("Hôm qua cả ngày"); Spacer(); Text(hideMoney ? "••• tr ₫" : Fmt.shortMoney(prev.revenue)).mtFont(.cardMetric) }
+                            .mtFont(.caption)
                     }
                     Text(w == 0 ? "Tổng cộng thống kê Pancake, cộng \(n) POS" : w == n ? "Web tự tính, cộng \(n) POS" : "Pancake \(n - w) POS + web tự tính \(w) POS")
                         .font(.footnote).foregroundStyle(Palette.heroMuted).frame(maxWidth: .infinity, alignment: .leading)
@@ -199,15 +200,17 @@ struct HomeFeed: View {
                        explain: t.map { t in { revenueExplain(dept, t, o?.compare?.total, o?.current.reconcile) } })
     }
     private func deptRow(_ dept: CompanyDept, net: Double?, prev: Double?, note: String?, previousLabel: String = "Cùng giờ hôm qua", explain make: (() -> MetricExplain)?) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: MT.cellGap) {
             HStack {
-                Text(dept.title).font(.headline).foregroundStyle(dept.tint)
+                Text(dept.title).mtFont(.cardHeader).foregroundStyle(dept.tint)
                 if let make { metricInfo("Cách tính doanh thu \(dept.title)", make: make) }
                 Spacer()
             }
             opener(dept) {
                 VStack(alignment: .leading, spacing: 10) {
-                    if let net { compactAmount(net) }
+                    if let net {
+                        Text(money(net)).mtFont(.cardMetric).lineLimit(1).minimumScaleFactor(0.6)
+                    }
                     else if error == nil { Skeleton(height: 40) }
                     else { Text("—").font(.title) }
                     HStack {
@@ -220,7 +223,7 @@ struct HomeFeed: View {
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
-        }.padding(16).cardSurface()
+        }.padding(MT.cardPad).cardSurface()
         .overlay(alignment: .leading) { Capsule().fill(dept.tint).frame(width: 3).padding(.vertical, 20) }
     }
 
@@ -494,7 +497,7 @@ struct AlertsEmpty: View {
         if failed {
             StateView(error: "Chưa tải được việc cần xử lý · \(text ?? "Không tải được")", retry: retry)
         } else {
-            Panel { Label("Không có việc khẩn cấp lúc này.", systemImage: "checkmark.circle.fill").font(.subheadline).foregroundStyle(Color.good) }
+            StateView(empty: "Không có việc khẩn cấp lúc này.", compact: true)
         }
     }
 }

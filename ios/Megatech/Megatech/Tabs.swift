@@ -209,16 +209,22 @@ struct AlertsPage: View {
                         if let s = alerts.shift {
                             if s.alerts.isEmpty { Label("Không có cảnh báo trong ca.", systemImage: "checkmark.circle.fill").font(.system(size: 12)).foregroundStyle(Color.good) }
                             ForEach(Array(s.alerts.enumerated()), id: \.offset) { _, a in
-                                HStack(alignment: .top, spacing: 8) {
-                                    Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 12)).foregroundStyle(a.level == "high" ? Color.bad : Color.warn)
-                                    VStack(alignment: .leading, spacing: 1) {
-                                        Text(a.title).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink)
-                                        Text(a.detail).font(.system(size: 11)).foregroundStyle(Color.inkSoft)
+                                HStack(alignment: .top, spacing: MT.cellGap) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .foregroundStyle(a.level == "high" ? Color.bad : Color.warn)
+                                        .frame(width: 44, height: 44)
+                                        .background((a.level == "high" ? Color.badSoft : Color.warnSoft), in: .circle)
+                                        .accessibilityHidden(true)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(a.title).mtFont(.cardHeader).foregroundStyle(Color.ink)
+                                        Text(a.detail).mtFont(.caption).foregroundStyle(Color.inkSoft)
+                                            .fixedSize(horizontal: false, vertical: true)
                                     }
                                     Spacer(minLength: 0)
                                 }
-                                .padding(8).frame(maxWidth: .infinity, alignment: .leading)
-                                .background((a.level == "high" ? Color.bad : Color.warn).opacity(0.08), in: .rect(cornerRadius: 8))
+                                .padding(MT.cellGap).frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Palette.mtSurfaceCell, in: .rect(cornerRadius: MT.rCell))
+                                .accessibilityElement(children: .combine)
                             }
                         } else if alerts.loaded {
                             Text("Chưa đọc được số trong ca.").font(.system(size: 12)).foregroundStyle(Color.inkSoft)
@@ -232,7 +238,7 @@ struct AlertsPage: View {
                             HStack(spacing: 8) {
                                 PosBadge(id: id, size: 20)
                                 VStack(alignment: .leading, spacing: 0) {
-                                    Text(PosBreakdown.names[id] ?? id).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink)
+                                    Text(PosBreakdown.names[id] ?? id).mtFont(.cardHeader).foregroundStyle(Color.ink)
                                     Text(p?.lastError ?? "đồng bộ lúc \(Fmt.dateTime(p?.lastSyncAt))").mtFont(.caption).foregroundStyle(p?.lastError != nil ? Color.bad : Color.inkSoft).fixedSize(horizontal: false, vertical: true)
                                 }
                                 Spacer()
