@@ -125,7 +125,8 @@ jobs:
 
       - name: Dự phòng web demo
         if: steps.web-ao.outcome != 'success'
-        run: echo '::warning::web-ao: không bật được, dùng demo'
+        run: |
+          echo '::warning::web-ao: không bật được, dùng demo'
 
       - name: Phiên đăng nhập bản demo
         run: |
