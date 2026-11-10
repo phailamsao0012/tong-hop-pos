@@ -1,13 +1,13 @@
 import SwiftUI
 
-// Bảng màu theo bộ ảnh thiết kế: thanh đầu xanh đậm, nền kem sáng, thẻ trắng, nhấn xanh MEGATECH.
+// Tên màu tương thích cho các màn đang dùng hệ thiết kế chung.
 extension Color {
     static let brand = Color("AccentColor")
     static let brandDeep = Palette.brand
     static let brandDark = Palette.brand
     static let brandSoft = Palette.accentSoft
     static let cream = Palette.bg
-    static let lime = Color(red: 0xd9/255, green: 0xf3/255, blue: 0x6d/255)
+    static let lime = Palette.mtSuccessInk
     static let good = Palette.good
     static let bad = Palette.bad
     static let warn = Palette.warn

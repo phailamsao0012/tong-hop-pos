@@ -31,7 +31,7 @@ struct HrTeamChip: View {
     private var allowed: Bool { ["sale-teams", "cskh-teams", "van-don"].contains { auth.me?.canView($0) == true } }
     var body: some View {
         if allowed {
-            Button { open = true } label: { Pill(title: nav?.hrUnit?.shortName ?? "Team", icon: "person.2", on: nav?.hrUnit != nil, chevron: false) }
+            MTFilterBarPill(title: nav?.hrUnit?.shortName ?? "Team", icon: "person.2", selected: nav?.hrUnit != nil) { open = true }
                 .buttonStyle(.plain).accessibilityLabel("Team: \(nav?.hrUnit?.shortName ?? "Team")")
                 .sheet(isPresented: $open) { HrTeamSheet() }
                 #if DEBUG
@@ -118,7 +118,7 @@ struct HrTeamSheet: View {
                 }
             }
             #endif
-        }.tint(Palette.accent).presentationCornerRadius(28).presentationBackground(Palette.card).presentationDragIndicator(.visible)
+        }.tint(Palette.accent).presentationDetents([.medium, .large]).presentationCornerRadius(MT.rSheet).presentationBackground(Palette.card).presentationDragIndicator(.visible)
     }
     private func pick(_ t: API.HrTeamItem?) {
         nav?.hrUnit = t.map { HrUnit(id: $0.id, name: $0.name, dept: $0.dept) }

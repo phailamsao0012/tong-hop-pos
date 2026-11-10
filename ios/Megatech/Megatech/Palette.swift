@@ -1,44 +1,59 @@
 import SwiftUI
 import UIKit
 
-/// Màu hướng A, tự đổi theo giao diện máy.
+/// Màu Gemini, tự đổi theo giao diện máy.
 enum Palette {
-    static func dynamic(_ light: UInt32, _ dark: UInt32) -> Color {
-        Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(rgb: dark) : UIColor(rgb: light) })
+    static func dynamic(_ light: UInt32, _ dark: UInt32, lightAlpha: CGFloat = 1, darkAlpha: CGFloat = 1) -> Color {
+        Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(rgb: dark, alpha: darkAlpha) : UIColor(rgb: light, alpha: lightAlpha) })
     }
-    static let bg = dynamic(0xEDF4ED, 0x091F19)
-    static let card = dynamic(0xFFFEF9, 0x18392E)
-    static let cardEnd = dynamic(0xF7FBF5, 0x18392E)
-    static let wash = dynamic(0xDCE9DD, 0x244B3B)
-    static let line = dynamic(0x9CAD9D, 0x416153)
-    static let nav = dynamic(0xFFFEF9, 0x102D24)
-    static let ink = dynamic(0x142D22, 0xF5FFF8)
-    static let muted = dynamic(0x435E4E, 0xBFD1C7)
-    static let hero = dynamic(0xD9EBD5, 0x102F24)
-    static let heroStart = dynamic(0xE6F5EA, 0x102F24)
-    static let heroEnd = dynamic(0xCFE9DC, 0x091F19)
-    static let heroGlow = dynamic(0xB9E3CE, 0xB9E3CE)
-    static let heroInk = dynamic(0x143222, 0xF5FFF8)
-    static let heroMuted = dynamic(0x375640, 0xBFD1C7)
-    static let accent = dynamic(0x17684B, 0xB8ED8F)
-    static let brand = dynamic(0x17684B, 0x17684B)
+    static let mtBrandPrimary = dynamic(0x17684B, 0x17684B)
+    static let mtBackground = dynamic(0xF4F7F5, 0x071711)
+    static let mtSurfaceCard = dynamic(0xFFFFFF, 0x0E291F)
+    static let mtCardBorder = dynamic(0xDCE6E0, 0x34D399, darkAlpha: 0.18)
+    static let mtSurfaceCell = dynamic(0xF4F8F6, 0x071912)
+    static let mtTextPrimary = dynamic(0x0F291E, 0xF0FDF4)
+    static let mtTextSecondary = dynamic(0x335C4A, 0xA7F3D0)
+    static let mtSuccessInk = dynamic(0x0F5E3F, 0x6EE7B7)
+    static let mtSuccessBg = dynamic(0xD1FAE5, 0x10B981, darkAlpha: 0.20)
+    static let mtWarningInk = dynamic(0x78350F, 0xFDE68A)
+    static let mtWarningBg = dynamic(0xFEF3C7, 0xF59E0B, darkAlpha: 0.16)
+    static let mtDangerInk = dynamic(0xBE123C, 0xFDA4AF)
+    static let mtDangerBg = dynamic(0xFFE4E6, 0xF43F5E, darkAlpha: 0.20)
+    static let mtRolePurpleInk = dynamic(0x4C1D95, 0xDDD6FE)
+    static let mtRolePurpleBg = dynamic(0xF3E8FF, 0x8B5CF6, darkAlpha: 0.25)
+    static let bg = mtBackground
+    static let card = mtSurfaceCard
+    static let cardEnd = mtSurfaceCard
+    static let wash = mtSurfaceCell
+    static let line = mtCardBorder
+    static let nav = mtSurfaceCard
+    static let ink = mtTextPrimary
+    static let muted = mtTextSecondary
+    static let hero = mtSurfaceCard
+    static let heroStart = mtSurfaceCard
+    static let heroEnd = mtSurfaceCard
+    static let heroGlow = dynamic(0x17684B, 0x17684B, lightAlpha: 0.12, darkAlpha: 0.12)
+    static let heroInk = mtTextPrimary
+    static let heroMuted = mtTextSecondary
+    static let accent = dynamic(0x17684B, 0x6EE7B7)
+    static let brand = mtBrandPrimary
     static let brandTop = dynamic(0x1B7554, 0x1B7554)
-    static let good = dynamic(0x17643E, 0x8CE8B7)
-    static let bad = dynamic(0xA82C23, 0xFFB7AC)
-    static let sale = dynamic(0x944700, 0xFFC889)
+    static let good = mtSuccessInk
+    static let bad = mtDangerInk
+    static let sale = mtSuccessInk
     static let cskh = dynamic(0x00637A, 0x7CDDF2)
-    static let mkt = dynamic(0xA12B59, 0xFFB2D0)
-    static let vandon = dynamic(0x726000, 0xE3D887)
+    static let mkt = mtWarningInk
+    static let vandon = mtRolePurpleInk
     static let hr = dynamic(0x7044A0, 0xD1B5FF)
     static let badge = dynamic(0xD8424F, 0xF06B75)
-    static let goodSoft = dynamic(0xE2F4E9, 0x133222)
-    static let badSoft = dynamic(0xFCEBEA, 0x3B1C1A)
-    static let warn = dynamic(0x9A6500, 0xE3A63A)
-    static let warnSoft = dynamic(0xFCF3E3, 0x33270F)
+    static let goodSoft = mtSuccessBg
+    static let badSoft = mtDangerBg
+    static let warn = mtWarningInk
+    static let warnSoft = mtWarningBg
     static let info = dynamic(0x2A5FC4, 0x8FB4F2)
     static let infoSoft = dynamic(0xEBF1FD, 0x182842)
-    static let purple = dynamic(0x6B4FC8, 0xB19CF0)
-    static let purpleSoft = dynamic(0xEFEBFB, 0x261F3D)
+    static let purple = mtRolePurpleInk
+    static let purpleSoft = mtRolePurpleBg
     static let orange = dynamic(0xBB4F16, 0xF2A07A)
     static let orangeSoft = dynamic(0xFDEDE4, 0x3A2216)
     static let teal = dynamic(0x0F7A68, 0x5CC9B3)
@@ -60,7 +75,25 @@ enum Palette {
 }
 
 private extension UIColor {
-    convenience init(rgb: UInt32) {
-        self.init(red: CGFloat((rgb >> 16) & 0xFF) / 255, green: CGFloat((rgb >> 8) & 0xFF) / 255, blue: CGFloat(rgb & 0xFF) / 255, alpha: 1)
+    convenience init(rgb: UInt32, alpha: CGFloat = 1) {
+        self.init(red: CGFloat((rgb >> 16) & 0xFF) / 255, green: CGFloat((rgb >> 8) & 0xFF) / 255, blue: CGFloat(rgb & 0xFF) / 255, alpha: alpha)
     }
+}
+
+extension Color {
+    static let mtBrandPrimary = Palette.mtBrandPrimary
+    static let mtBackground = Palette.mtBackground
+    static let mtSurfaceCard = Palette.mtSurfaceCard
+    static let mtCardBorder = Palette.mtCardBorder
+    static let mtSurfaceCell = Palette.mtSurfaceCell
+    static let mtTextPrimary = Palette.mtTextPrimary
+    static let mtTextSecondary = Palette.mtTextSecondary
+    static let mtSuccessInk = Palette.mtSuccessInk
+    static let mtSuccessBg = Palette.mtSuccessBg
+    static let mtWarningInk = Palette.mtWarningInk
+    static let mtWarningBg = Palette.mtWarningBg
+    static let mtDangerInk = Palette.mtDangerInk
+    static let mtDangerBg = Palette.mtDangerBg
+    static let mtRolePurpleInk = Palette.mtRolePurpleInk
+    static let mtRolePurpleBg = Palette.mtRolePurpleBg
 }

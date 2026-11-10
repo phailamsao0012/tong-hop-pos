@@ -29,7 +29,7 @@ struct InfoSheet: View {
                 .navigationTitle(info.title).navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Đóng") { dismiss() } } }
         }.tint(Palette.accent).presentationDetents([.medium, .large])
-        .presentationCornerRadius(28).presentationBackground(Palette.card).presentationDragIndicator(.visible)
+        .presentationCornerRadius(MT.rSheet).presentationBackground(Palette.card).presentationDragIndicator(.visible)
     }
 }
 
@@ -39,7 +39,7 @@ struct GroupTitle: View {
     var info: InfoText? = nil
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack { Text(title).font(.title2.weight(.bold)); if let info { InfoButton(info) } }
+            HStack { Text(title).mtFont(.cardHeader); if let info { InfoButton(info) } }
             if let subtitle { Text(subtitle).font(.footnote).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true) }
         }.foregroundStyle(Palette.ink)
     }
@@ -56,10 +56,10 @@ struct Pill: View {
         HStack(spacing: 8) {
             if let leading { leading }
             else if let icon { Image(systemName: icon).font(.system(size: 15)).foregroundStyle(Palette.muted) }
-            Text(title).font(.subheadline.weight(.semibold))
+            Text(title).mtFont(.body).fixedSize(horizontal: false, vertical: true)
             if chevron { Image(systemName: "chevron.down").font(.system(size: 11, weight: .bold)).foregroundStyle(Palette.muted) }
         }.foregroundStyle(on ? Palette.accent : Palette.ink)
-        .padding(.horizontal, 14).padding(.vertical, 10).frame(minHeight: 40)
+        .padding(.horizontal, 14).padding(.vertical, 10).frame(minHeight: 44)
         .background(Palette.wash, in: .capsule)
         .overlay { Capsule().strokeBorder(on ? Palette.accent : .clear, lineWidth: 1.5) }
         .accessibilityAddTraits(on ? .isSelected : [])
@@ -69,7 +69,7 @@ struct Pill: View {
 struct FilterBar<Content: View>: View {
     @ViewBuilder let content: Content
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 8) { content }.padding(.horizontal, 16) }.padding(.horizontal, -16)
+        MTFlowLayout(spacing: MT.cellGap) { content }
     }
 }
 
@@ -115,33 +115,20 @@ struct ListGroup<Content: View>: View {
 }
 
 private struct Surface: ViewModifier {
-    var radius: CGFloat = 24
+    var radius: CGFloat = MT.rCard
     var hero = false
     var tint: Color = Palette.accent
     @Environment(\.colorScheme) private var scheme
     func body(content: Content) -> some View {
-        let dark = scheme == .dark
-        content.background {
-            GeometryReader { g in
-                ZStack {
-                    LinearGradient(colors: hero ? (dark ? [Palette.hero, Palette.bg] : [Palette.heroStart, Palette.heroEnd]) : [Palette.card, Palette.cardEnd], startPoint: hero ? (dark ? UnitPoint(x: 0.289, y: 0.047) : UnitPoint(x: 0.213, y: 0.090)) : UnitPoint(x: 0.25, y: 0.067), endPoint: hero ? (dark ? UnitPoint(x: 0.711, y: 0.953) : UnitPoint(x: 0.787, y: 0.910)) : UnitPoint(x: 0.75, y: 0.933))
-                    if hero {
-                        RadialGradient(colors: [dark ? tint.opacity(0.23) : Palette.heroGlow, .clear], center: .topTrailing, startRadius: 0, endRadius: g.size.width * (dark ? 0.68 : 0.72))
-                    } else if dark {
-                        LinearGradient(colors: [.white.opacity(0.035), .clear], startPoint: UnitPoint(x: 0.371, y: 0.017), endPoint: UnitPoint(x: 0.629, y: 0.983))
-                    }
+        content.background(Palette.mtSurfaceCard, in: .rect(cornerRadius: radius))
+            .overlay {
+                if hero && scheme == .dark {
+                    RoundedRectangle(cornerRadius: radius).fill(RadialGradient(colors: [Palette.heroGlow, .clear], center: .topTrailing, startRadius: 0, endRadius: 180)).allowsHitTesting(false)
                 }
             }
-            .clipShape(.rect(cornerRadius: radius))
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: radius).strokeBorder(LinearGradient(stops: [.init(color: .white.opacity(dark ? (hero ? 0.25 : 0.15) : 1), location: 0), .init(color: .clear, location: 0.5)], startPoint: .top, endPoint: .bottom), lineWidth: 1)
-                .allowsHitTesting(false)
-        }
-        .shadow(color: dark ? .black.opacity(hero ? 0.20 : 0.13) : Color(hex: hero ? 0x153E23 : 0x143823).opacity(hero ? 0.11 : 0.07), radius: hero ? 18 : 12, y: hero ? 18 : 10)
+            .overlay { RoundedRectangle(cornerRadius: radius).strokeBorder(Palette.mtCardBorder, lineWidth: 1).allowsHitTesting(false) }
     }
 }
-
 private struct CardShadow: ViewModifier {
     @Environment(\.colorScheme) private var scheme
     func body(content: Content) -> some View {
@@ -150,11 +137,11 @@ private struct CardShadow: ViewModifier {
 }
 
 extension View {
-    func cardSurface(radius: CGFloat = 24) -> some View { modifier(Surface(radius: radius)) }
+    func cardSurface(radius: CGFloat = MT.rCard) -> some View { modifier(Surface(radius: radius)) }
     func heroSurface(tint: Color = Palette.accent) -> some View {
-        padding(20).foregroundStyle(Palette.heroInk).modifier(Surface(hero: true, tint: tint))
+        padding(MT.cardPad).foregroundStyle(Palette.heroInk).modifier(Surface(hero: true, tint: tint))
     }
-    func tileSurface() -> some View { padding(12).background(Palette.wash, in: .rect(cornerRadius: 18)) }
+    func tileSurface() -> some View { padding(MT.cardPad).background(Palette.wash, in: .rect(cornerRadius: MT.rCell)) }
 }
 
 struct DeltaPill: View {
@@ -202,7 +189,7 @@ struct StatTile: View {
     @Environment(\.thinking) private var thinking
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(label).font(.footnote).foregroundStyle(Palette.muted).lineLimit(2)
+            Text(label).mtFont(.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
             MoneyNumber(value: value, unit: unit, money: money).loadingPlaceholder(thinking)
             if let delta { DeltaPill(delta, good: deltaGood).loadingPlaceholder(thinking) }
             if let note { Text(note).font(.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).loadingPlaceholder(thinking) }
@@ -219,8 +206,8 @@ private struct MoneyNumber: View {
     var body: some View {
         let pair = money.map(Fmt.compactMoney)
         HStack(alignment: .firstTextBaseline, spacing: 3) {
-            Text(pair?.value ?? value).font(.system(size: size, weight: .heavy, design: .rounded)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5).rolling(pair?.value ?? value)
-            if let u = pair?.unit ?? unit { Text(u).font(.system(size: 13, weight: .bold, design: .rounded)).foregroundStyle(Palette.muted) }
+            Text(pair?.value ?? value).mtFont(.cardMetric).lineLimit(1).minimumScaleFactor(0.6).rolling(pair?.value ?? value)
+            if let u = pair?.unit ?? unit { Text(u).mtFont(.caption).foregroundStyle(Palette.muted).lineLimit(1) }
         }.foregroundStyle(Palette.ink)
         .accessibilityElement(children: .ignore).accessibilityLabel(money.map(Fmt.money) ?? [value, unit].compactMap { $0 }.joined(separator: " "))
     }
@@ -233,17 +220,9 @@ struct StatCell: View {
     var note: String? = nil
     var tone: Color? = nil
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(label).font(.footnote).foregroundStyle(Palette.muted)
-            HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text(value).font(.system(.title3, design: .rounded, weight: .heavy)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5).rolling(value)
-                if let unit { Text(unit).font(.caption) }
-            }.foregroundStyle(tone ?? Palette.ink)
-            if let note { Text(note).font(.caption).foregroundStyle(Palette.muted) }
-        }.frame(maxWidth: .infinity, alignment: .leading).tileSurface()
+        MTStatCell(label: label, value: [value, unit].compactMap { $0 }.joined(separator: " "), note: note, tone: tone)
     }
 }
-
 struct PairBars: View {
     let prev: Double; let prevText: String; let prevLabel: String
     let cur: Double; let curText: String; let curLabel: String; let tint: Color
@@ -435,7 +414,7 @@ struct TabHeader: View {
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 4) {
                     if let greeting { Text(greeting).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.muted) }
-                    Text(title).font(.system(size: 34, weight: .bold)).foregroundStyle(Palette.ink)
+                    Text(title).font(MT.screenTitle).foregroundStyle(Palette.ink)
                 }.frame(maxWidth: .infinity, alignment: .leading)
                 SyncButton()
                 BellButton()
@@ -561,7 +540,7 @@ struct SectionHead: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
         HStack {
-            Text(title).font(.title3.weight(.bold)).foregroundStyle(Color.ink)
+            Text(title).mtFont(.cardHeader).foregroundStyle(Color.ink)
             if let info { InfoButton(info) }
             if let count { Text("\(count)").font(.caption2.weight(.bold)).foregroundStyle(.white).padding(.horizontal, 6).padding(.vertical, 2).background(Palette.badge, in: .capsule) }
             Spacer()
@@ -588,7 +567,7 @@ struct KpiCard: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 IconSquare(icon, tint: tint, size: 28)
-                Text(label).font(.footnote).foregroundStyle(Palette.muted).lineLimit(2)
+                Text(label).mtFont(.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
             }
             MoneyNumber(value: value, unit: unit, money: money).loadingPlaceholder(thinking)
             if let delta { DeltaPill(delta, good: deltaGood).loadingPlaceholder(thinking) }
@@ -607,7 +586,7 @@ struct StatCard: View {
                 MetricIcon(icon, size: 13).foregroundStyle(tint).frame(width: 28, height: 28).background(tint.opacity(0.13), in: .rect(cornerRadius: 8))
                 Text(label).font(.footnote).foregroundStyle(Color.inkSoft).lineLimit(1)
             }
-            Text(value).font(.system(size: 40, weight: .heavy, design: .rounded)).foregroundStyle(Color.ink).monospacedDigit().minimumScaleFactor(0.5).lineLimit(1).rolling(value)
+            Text(value).mtFont(.heroNumber).foregroundStyle(Color.ink).minimumScaleFactor(0.6).lineLimit(1).rolling(value)
             if let sub { Text(sub).font(.caption).foregroundStyle(Color.inkSoft).lineLimit(1) }
         }
         .padding(12).frame(maxWidth: .infinity, alignment: .leading)
@@ -665,25 +644,8 @@ struct FilterChip: View {
 /// Bộ chọn phân đoạn kiểu ảnh: nền xám nhạt, mục chọn xanh đậm.
 struct Segmented<T: Hashable>: View {
     @Binding var selection: T; let options: [(T, String)]
-    @Environment(\.accessibilityReduceMotion) private var reduce
-    var body: some View {
-        HStack(spacing: 3) {
-            ForEach(options, id: \.0) { v, label in
-                Button { withAnimation(reduce ? nil : .snappy(duration: 0.25)) { selection = v } } label: {
-                    Text(label).font(.footnote.weight(.bold)).lineLimit(1).minimumScaleFactor(0.8)
-                        .frame(maxWidth: .infinity, minHeight: 36)
-                        .background {
-                            if selection == v { RoundedRectangle(cornerRadius: 10).fill(Palette.card).shadow(color: .black.opacity(0.13), radius: 4, y: 2) }
-                        }
-                        .foregroundStyle(selection == v ? Palette.ink : Palette.muted)
-                }.buttonStyle(.plain).accessibilityAddTraits(selection == v ? .isSelected : [])
-            }
-        }
-        .padding(3).background(Palette.wash, in: .rect(cornerRadius: 12))
-        .sensoryFeedback(.selection, trigger: selection)
-    }
+    var body: some View { MTSegmentedControl(selection: $selection, options: options) }
 }
-
 /// Vòng tròn tiến độ (72%, 78%).
 struct Ring: View {
     let value: Double; var size: CGFloat = 64; var line: CGFloat = 7; var tint: Color = .good; var label: String? = nil
@@ -821,6 +783,7 @@ private struct PressButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.scaleEffect(configuration.isPressed && !reduce ? 0.97 : 1)
             .animation(reduce ? nil : .easeOut(duration: 0.15), value: configuration.isPressed)
+            .sensoryFeedback(.selection, trigger: configuration.isPressed)
     }
 }
 
@@ -834,7 +797,7 @@ struct TabPage<Content: View>: View {
     @Environment(\.refresh) private var outer
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: MT.cardGap) {
                 TabHeader(title: title, greeting: greeting, subtitle: subtitle)
                 content
             }.padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 24)
@@ -857,8 +820,8 @@ struct Hint: View { let text: String; var body: some View { Text(text).font(.cap
 struct Card<Content: View>: View {
     let title: String; @ViewBuilder let content: Content
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) { Text(title).font(.callout.weight(.bold)).foregroundStyle(Color.ink); content }
-            .padding(14).frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: MT.cellGap) { Text(title).mtFont(.cardHeader).foregroundStyle(Color.ink); content }
+            .padding(MT.cardPad).frame(maxWidth: .infinity, alignment: .leading)
             .cardSurface()
     }
 }
@@ -866,7 +829,7 @@ struct MiniStat: View {
     let title: String; let value: String; var tint: Color = .ink
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(value).font(.system(size: 26, weight: .heavy, design: .rounded)).monospacedDigit().foregroundStyle(tint).minimumScaleFactor(0.5).lineLimit(1).rolling(value)
+            Text(value).mtFont(.cardMetric).foregroundStyle(tint).minimumScaleFactor(0.6).lineLimit(1).rolling(value)
             Text(title).font(.caption).foregroundStyle(Color.inkSoft).lineLimit(1)
         }.frame(maxWidth: .infinity, alignment: .leading).padding(12).cardSurface()
     }
@@ -955,26 +918,9 @@ struct StateView: View {
     }
 
     var body: some View {
-        Group {
-            if compact || onDark {
-                HStack(spacing: 10) {
-                    icon
-                    Text(text).font(.subheadline.weight(.semibold)).foregroundStyle(textColor).fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 4)
-                    retryButton
-                }.padding(12).background(onDark ? Palette.heroInk.opacity(0.08) : Palette.card, in: .rect(cornerRadius: 16))
-            } else {
-                VStack(spacing: 12) {
-                    if kind == .loading {
-                        Skeleton(height: 56)
-                    } else {
-                        icon.frame(width: 56, height: 56)
-                            .overlay { Circle().strokeBorder(kind == .failed ? Palette.warn : Palette.line, lineWidth: 2) }
-                    }
-                    Text(text).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink).multilineTextAlignment(.center)
-                    retryButton
-                }.frame(maxWidth: .infinity).padding(20).cardSurface()
-            }
+        MTStateContainerView(state: kind == .loading ? .loading : kind == .empty ? .empty : text == "Mất mạng, kiểm tra kết nối" ? .offline : .failed,
+                             text: text, compact: compact || onDark) {
+            retryButton
         }
         #if DEBUG
         // Lượt tự xem MEGATECH_TOUR=reload "bấm" mọi nút Thử lại đang hiện (máy ảo không chạm được).
@@ -992,7 +938,7 @@ struct StateView: View {
                     Text("Thử lại").font(.headline)
                 }
                 .foregroundStyle(onDark ? Palette.heroInk : .white)
-                .padding(.horizontal, 14).frame(minHeight: compact || onDark ? 36 : 50)
+                .padding(.horizontal, 14).frame(minHeight: compact || onDark ? 44 : 50)
                 .frame(maxWidth: compact || onDark ? nil : .infinity)
                 .background(onDark ? Palette.heroInk.opacity(0.12) : Palette.brand, in: .rect(cornerRadius: compact || onDark ? 18 : 16))
             }.buttonStyle(PressButtonStyle()).disabled(retrying)

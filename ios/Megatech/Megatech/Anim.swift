@@ -124,15 +124,14 @@ struct Skeleton: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: FrameCap.interval, paused: reduce)) { t in
             let phase = reduce ? 0 : t.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.4) / 1.4 * 1.8 - 0.8
-            RoundedRectangle(cornerRadius: 18).fill(Palette.wash)
+            RoundedRectangle(cornerRadius: MT.rCell).fill(Palette.mtSurfaceCell)
                 .overlay {
                     GeometryReader { g in
-                        LinearGradient(colors: [.clear] + Thinking.palette.dropLast().map { $0.opacity(reduce ? 0.10 : 0.18) } + [.clear], startPoint: .leading, endPoint: .trailing)
+                        LinearGradient(colors: [.clear, Palette.mtTextSecondary.opacity(reduce ? 0 : 0.12), .clear], startPoint: .leading, endPoint: .trailing)
                             .frame(width: g.size.width * 0.8).offset(x: phase * g.size.width)
                     }
                 }
-                .clipShape(.rect(cornerRadius: 18))
-                .overlay(ThinkingBorder(radius: 18, glow: false))
+                .clipShape(.rect(cornerRadius: MT.rCell))
         }.frame(height: height).accessibilityLabel("Đang tải")
     }
 }

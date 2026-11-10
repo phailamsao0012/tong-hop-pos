@@ -38,9 +38,9 @@ struct RootTabs: View {
     @SceneStorage(NavMemory.pathsKey) private var savedPaths = ""
     init() {
         let appearance = UITabBarAppearance()
-        appearance.configureWithDefaultBackground()
-        appearance.backgroundColor = UIColor(Palette.nav).withAlphaComponent(0.94)
-        appearance.shadowColor = .clear
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = UIColor(Palette.mtSurfaceCard)
+        appearance.shadowColor = UIColor(Palette.mtCardBorder)
         for item in [appearance.stackedLayoutAppearance, appearance.inlineLayoutAppearance, appearance.compactInlineLayoutAppearance] {
             item.selected.iconColor = UIColor(Palette.accent)
             item.selected.titleTextAttributes = [.foregroundColor: UIColor(Palette.accent)]
@@ -55,15 +55,15 @@ struct RootTabs: View {
         let rev = MetricPrefs.shared.revision
         @Bindable var nav = nav
         TabView(selection: $nav.tab) {
-            HomeFeed().id(rev).tabItem { Label { Text("Hôm nay") } icon: { Reicon.tab("house.fill", "ri_home", on: nav.tab == .home) } }.tag(AppTab.home)
-            OrdersHome().id(rev).tabItem { Label { Text("Đơn hàng") } icon: { Reicon.tab("shippingbox.fill", "ri_box", on: nav.tab == .orders) } }.tag(AppTab.orders)
+            HomeFeed().id(rev).modifier(MTRootTabView()).tabItem { Label { Text("Trang chủ") } icon: { Image(systemName: "house.fill") } }.tag(AppTab.home)
+            OrdersHome().id(rev).modifier(MTRootTabView()).tabItem { Label { Text("Đơn hàng") } icon: { Image(systemName: "shippingbox.fill") } }.tag(AppTab.orders)
             // Tổng quan dùng cùng kiểu icon với bốn tab còn lại.
-            HomeView().id(rev).tabItem { Label { Text("Tổng quan") } icon: { Reicon.tab("chart.bar.fill", "ri_chart", on: nav.tab == .overview) } }.tag(AppTab.overview)
-            DeptsHome().tabItem { Label { Text("Phòng ban") } icon: { Reicon.tab("building.2.fill", "ri_buildings", on: nav.tab == .depts) } }.tag(AppTab.depts)
-            MoreHome().tabItem { Label { Text("Thêm") } icon: { Reicon.tab("line.3.horizontal", "ri_menu2", on: nav.tab == .more) } }.tag(AppTab.more)
+            HomeView().id(rev).modifier(MTRootTabView()).tabItem { Label { Text("Tổng quan") } icon: { Image(systemName: "chart.bar.fill") } }.tag(AppTab.overview)
+            DeptsHome().modifier(MTRootTabView()).tabItem { Label { Text("Phòng ban") } icon: { Image(systemName: "building.2.fill") } }.tag(AppTab.depts)
+            MoreHome().modifier(MTRootTabView()).tabItem { Label { Text("Thêm") } icon: { Image(systemName: "ellipsis.circle.fill") } }.tag(AppTab.more)
         }
         .dynamicTypeSize(...DynamicTypeSize.accessibility2)
-        .tint(.brand)
+        .modifier(MTRootTabView())
         .environment(nav)
         .environment(alerts)
         .modifier(NavMemoryKeeper(nav: nav, savedPaths: $savedPaths))
