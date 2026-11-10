@@ -311,10 +311,13 @@ struct MTStateContainerView<Content: View>: View {
                 }.redacted(reason: .placeholder)
                     .accessibilityElement(children: .ignore).accessibilityLabel(text)
             case .failed, .empty, .offline:
-                Image(systemName: state == .empty ? "tray" : state == .offline ? "wifi.slash" : "exclamationmark.triangle")
-                    .font(.title2).foregroundStyle(state == .empty ? Palette.muted : Palette.warn)
+                let symbol: String = state == .empty ? "tray" : state == .offline ? "wifi.slash" : "exclamationmark.triangle"
+                let tint: Color = state == .empty ? Palette.muted : Palette.warn
+                let soft: Color = state == .empty ? Palette.mtSurfaceCell : Palette.warnSoft
+                Image(systemName: symbol)
+                    .font(.title2).foregroundStyle(tint)
                     .frame(width: 44, height: 44)
-                    .background(state == .empty ? Palette.mtSurfaceCell : Palette.warnSoft, in: .circle)
+                    .background(soft, in: Circle())
                     .accessibilityHidden(true)
                 Text(text).mtFont(.body).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                 content

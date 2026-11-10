@@ -209,22 +209,7 @@ struct AlertsPage: View {
             if let s = alerts.shift {
                 if s.alerts.isEmpty { Label("Không có cảnh báo trong ca.", systemImage: "checkmark.circle.fill").font(.system(size: 12)).foregroundStyle(Color.good) }
                 ForEach(Array(s.alerts.enumerated()), id: \.offset) { _, a in
-                    HStack(alignment: .top, spacing: MT.cellGap) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(a.level == "high" ? Color.bad : Color.warn)
-                            .frame(width: 44, height: 44)
-                            .background((a.level == "high" ? Color.badSoft : Color.warnSoft), in: .circle)
-                            .accessibilityHidden(true)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(a.title).mtFont(.cardHeader).foregroundStyle(Color.ink)
-                            Text(a.detail).mtFont(.caption).foregroundStyle(Color.inkSoft)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .padding(MT.cellGap).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Palette.mtSurfaceCell, in: .rect(cornerRadius: MT.rCell))
-                    .accessibilityElement(children: .combine)
+                    ShiftAlertRow(title: a.title, detail: a.detail, high: a.level == "high")
                 }
             } else if alerts.loaded {
                 Text("Chưa đọc được số trong ca.").font(.system(size: 12)).foregroundStyle(Color.inkSoft)
@@ -238,18 +223,8 @@ struct AlertsPage: View {
             ForEach(PosBreakdown.order, id: \.self) { id in
                 let p = sync.pos.first { $0.posId == id }
                 let tone: Color = syncTone(p)
-                HStack(spacing: 8) {
-                    PosBadge(id: id, size: 20)
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(PosBreakdown.names[id] ?? id).mtFont(.cardHeader).foregroundStyle(Color.ink)
-                        Text(p?.lastError ?? "đồng bộ lúc \(Fmt.dateTime(p?.lastSyncAt))").mtFont(.caption).foregroundStyle(p?.lastError != nil ? Color.bad : Color.inkSoft).fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer()
-                    Image(systemName: syncSymbol(p))
-                        .foregroundStyle(tone).accessibilityHidden(true)
-                    Text(syncAge(p)).mtFont(.caption).foregroundStyle(tone)
-                }
-                .padding(.vertical, 2)
+                PancakeSyncRow(id: id, detail: p?.lastError ?? "đồng bộ lúc \(Fmt.dateTime(p?.lastSyncAt))",
+                               hasError: p?.lastError != nil, tone: tone, symbol: syncSymbol(p), age: syncAge(p))
             }
         }
     }
@@ -283,6 +258,58 @@ struct AlertsPage: View {
     @MainActor private func refreshBoth() async {
         let me = auth.me
         await runTogether([{ await sync.refresh() }, { await alerts.refresh(maxAge: 0, me: me) }])
+    }
+}
+
+private struct ShiftAlertRow: View {
+    let title: String
+    let detail: String
+    let high: Bool
+
+    var body: some View {
+        let tint: Color = high ? .bad : .warn
+        let soft: Color = high ? .badSoft : .warnSoft
+        HStack(alignment: .top, spacing: MT.cellGap) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(tint)
+                .frame(width: 44, height: 44)
+                .background(soft, in: Circle())
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).mtFont(.cardHeader).foregroundStyle(Color.ink)
+                Text(detail).mtFont(.caption).foregroundStyle(Color.inkSoft)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(MT.cellGap).frame(maxWidth: .infinity, alignment: .leading)
+        .background(Palette.mtSurfaceCell, in: .rect(cornerRadius: MT.rCell))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct PancakeSyncRow: View {
+    let id: String
+    let detail: String
+    let hasError: Bool
+    let tone: Color
+    let symbol: String
+    let age: String
+
+    var body: some View {
+        let detailTint: Color = hasError ? .bad : .inkSoft
+        HStack(spacing: 8) {
+            PosBadge(id: id, size: 20)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(PosBreakdown.names[id] ?? id).mtFont(.cardHeader).foregroundStyle(Color.ink)
+                Text(detail).mtFont(.caption).foregroundStyle(detailTint)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            Image(systemName: symbol).foregroundStyle(tone).accessibilityHidden(true)
+            Text(age).mtFont(.caption).foregroundStyle(tone)
+        }
+        .padding(.vertical, 2)
     }
 }
 
