@@ -148,37 +148,38 @@ struct MarketingView: View {
     private var posLimited: Bool { !pos.isEmpty || !dataPos.isEmpty || grantedPos > 0 }
 
     var body: some View {
-        PageTitle(title: "Marketing", subtitle: "Doanh thu, chi phí quảng cáo, số về")
-        PeriodChips(period: $period)
-        PosChipRow(selection: $pos, label: nil, allLabel: "Tất cả POS")
-        ScopeLine(period: period, pos: pos)
-        if let d = data {
-            if let error { StateView(error: error, compact: true) { await load() } }
-            filterLine(d)
-            hero(d).environment(\.thinking, loading)
-            if d.timeline.count > 1 {
-                Panel {
-                    Text("Doanh thu MKT theo kỳ").mtFont(.cardHeader)
-                    MTTrendChart(points: d.timeline.map { (Fmt.bucketLabel($0.key, d.bucket), $0.m.net) },
-                                 value: Fmt.shortMoney, scope: periodLabel(d))
+        VStack(alignment: .leading, spacing: MT.cardGap) {
+            PageTitle(title: "Marketing", subtitle: "Doanh thu, chi phí quảng cáo, số về")
+            PeriodChips(period: $period)
+            PosChipRow(selection: $pos, label: nil, allLabel: "Tất cả POS")
+            ScopeLine(period: period, pos: pos)
+            if let d = data {
+                if let error { StateView(error: error, compact: true) { await load() } }
+                filterLine(d)
+                hero(d).environment(\.thinking, loading)
+                if d.timeline.count > 1 {
+                    Panel {
+                        Text("Doanh thu MKT theo kỳ").mtFont(.cardHeader)
+                        MTTrendChart(points: d.timeline.map { (Fmt.bucketLabel($0.key, d.bucket), $0.m.net) },
+                                     value: Fmt.shortMoney, scope: periodLabel(d))
+                    }
                 }
-            }
-            MktChart(points: d.timeline, bucket: d.bucket, blocked: posLimited)
-            breakdown(d)
-            if auth.me?.canView("marketing") == true {
-                MarketingRank(period: period, pos: pos, teamId: teamId, marketerId: marketerId,
-                              productFiltered: product != nil, refresh: rankRefresh) { id, isTeam in
-                    if isTeam { marketerId = nil; teamId = id }
-                    else { teamId = nil; marketerId = id }
+                MktChart(points: d.timeline, bucket: d.bucket, blocked: posLimited)
+                breakdown(d)
+                if auth.me?.canView("marketing") == true {
+                    MarketingRank(period: period, pos: pos, teamId: teamId, marketerId: marketerId,
+                                  productFiltered: product != nil, refresh: rankRefresh) { id, isTeam in
+                        if isTeam { marketerId = nil; teamId = id }
+                        else { teamId = nil; marketerId = id }
+                    }
                 }
+                Text(source(d)).mtFont(.caption).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
+            } else if let error {
+                StateView(error: error) { await load() }
+            } else {
+                SkeletonGrid(tiles: 4); Skeleton(height: 200)
             }
-            Text(source(d)).mtFont(.caption).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
-        } else if let error {
-            StateView(error: error) { await load() }
-        } else {
-            SkeletonGrid(tiles: 4); Skeleton(height: 200)
         }
-        Color.clear.frame(height: 0)
             .task(id: key) { await load() }
             // Kéo để làm mới trang chứa (trang MKT).
             .pullToReload { rankRefresh += 1; await load() }
