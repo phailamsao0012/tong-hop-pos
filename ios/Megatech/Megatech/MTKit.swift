@@ -335,7 +335,7 @@ struct MTRootTabView: ViewModifier {
     }
 }
 
-private struct MTPressStyle: ButtonStyle {
+struct MTPressStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduce
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.scaleEffect(configuration.isPressed && !reduce ? 0.97 : 1)
