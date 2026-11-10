@@ -12,6 +12,7 @@ enum DecodeSelfTest {
         marketingRank(&r)
         staffDetail(&r)
         appB5(&r)
+        appB6(&r)
         emit(r.failed == 0 ? "DECODE_TEST OK \(r.total) cases" : "DECODE_TEST FAILED \(r.failed)/\(r.total)")
         exit(r.failed == 0 ? 0 : 1)
     }
@@ -32,6 +33,33 @@ enum DecodeSelfTest {
                 check(code, false)
                 return nil
             }
+        }
+    }
+    private static func appB6(_ r: inout Run) {
+        let metrics = #"""
+        "cost":12,"net":30,"closed":12,"orders":12,"phones":30
+        """#
+        for extra in ["", ",\"newNet\":12,\"cskhNet\":12,\"otherNet\":6", ",\"newNet\":null,\"cskhNet\":null,\"otherNet\":null"] {
+            if let m = r.decode("B6_MKT_SPLIT", API.RoasMetrics.self, "{\(metrics)\(extra)}") {
+                let present = extra.contains(":12")
+                r.check("B6_MKT_SPLIT_VALUES", present ? m.newNet == 12 && m.cskhNet == 12 && m.otherNet == 6 : m.newNet == nil && m.cskhNet == nil && m.otherNet == nil)
+            }
+        }
+        let line = #"""
+        {"key":"total","label":"Tổng","closed":30,"closedNet":30,"confirmed":12,"waiting":12,"failed":6,"cancelledAfter":0,"sent":12,"sentNet":30,"delivered":12,"returned":0,"returnedNet":0}
+        """#
+        let seller = #"""
+        {"key":"staff-a","label":"NV A","dept":"Sale","closed":30,"sent":12,"sentNet":30,"returned":0,"returnedNet":0,"returnRate":null,"returnRateNet":null}
+        """#
+        for extra in ["", ",\"sellers\":null", ",\"sellers\":[]", ",\"sellers\":[\(seller)]"] {
+            if let d = r.decode("B6_VD_SELLERS", API.VanDon.self, "{\"total\":\(line),\"sellerDepts\":[],\"confirmers\":[],\"reasons\":[]\(extra)}") {
+                if extra.contains("staff-a") {
+                    r.check("B6_VD_SELLER_VALUES", d.sellers?.first?.key == "staff-a" && d.sellers?.first?.label == "NV A" && d.sellers?.first?.dept == "Sale" && d.sellers?.first?.closed == 30 && d.sellers?.first?.sent == 12 && d.sellers?.first?.sentNet == 30 && d.sellers?.first?.returned == 0 && d.sellers?.first?.returnedNet == 0 && d.sellers?.first?.returnRate == nil && d.sellers?.first?.returnRateNet == nil)
+                } else { r.check("B6_VD_SELLERS_OPTIONAL", d.sellers?.isEmpty ?? true) }
+            }
+        }
+        if let d = r.decode("B6_VD_RATES", API.VanDonSellerRow.self, #"{"key":"staff-a","label":"NV A","closed":30,"sent":12,"sentNet":30,"returned":12,"returnedNet":12,"returnRate":30,"returnRateNet":12}"#) {
+            r.check("B6_VD_RATES_VALUES", d.returnRate == 30 && d.returnRateNet == 12 && d.dept == nil)
         }
     }
     private static func appB5(_ r: inout Run) {

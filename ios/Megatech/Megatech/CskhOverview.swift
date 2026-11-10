@@ -5,6 +5,7 @@ import SwiftUI
 // Cùng cách tính với web: KPI theo đầu người cộng cả đội, đã đạt = doanh thu đơn chốt của những người đó từ đầu tháng.
 
 struct CskhOverviewView: View {
+    @AppStorage("thp_hide_money") private var hideMoney = false
     var embedded = false
     @Environment(AuthModel.self) private var auth
     @Environment(AppNav.self) private var nav: AppNav?
@@ -45,30 +46,33 @@ struct CskhOverviewView: View {
             if let t = data?.current.total {
                 let p = data?.compare?.total
                 let closed = OrderQuery(start: range.0, end: range.1, posIds: pos.isEmpty ? [] : [pos], group: "closed", basis: "confirmed", title: "Đơn chốt CSKH", team: "cskh", product: product)
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                    NavigationLink(value: Route.orders(closed)) { KpiCard(icon: "ic_m_revenue", tint: .teal, label: "Doanh thu CSKH", value: Fmt.vnd(t.closedNet), delta: Fmt.delta(t.closedNet, p?.closedNet)) }
-                    NavigationLink(value: Route.orders(closed)) { KpiCard(icon: "ic_m_closed", tint: .good, label: "Đơn chốt", value: Fmt.int(t.closedOrders), delta: Fmt.delta(t.closedOrders, p?.closedOrders)) }
-                    KpiCard(icon: "ic_m_aov", tint: .blue, label: "Giá trị TB đơn", value: Fmt.vnd(t.averageOrder ?? 0), delta: Fmt.delta(t.averageOrder ?? 0, p?.averageOrder))
-                    KpiCard(icon: "ic_m_rate", tint: .purple, label: "Tỷ lệ chốt", value: Fmt.pct(t.shownRate), delta: (t.shownRate != nil && p?.shownRate != nil) ? Fmt.points(t.shownRate! - p!.shownRate!) : nil, deltaGood: (t.shownRate ?? 0) >= (p?.shownRate ?? 0), note: t.rateFrac)
+                NavigationLink(value: Route.orders(closed)) {
+                    MTMetricHeroCard(label: "Doanh thu CSKH", value: Fmt.shortMoney(t.closedNet),
+                                     scope: "\(period.title) · \(pos.isEmpty ? "Mọi POS" : (PosBreakdown.names[pos] ?? pos)) · CSKH",
+                                     comparison: Fmt.delta(t.closedNet, p?.closedNet), isPrivacyMasked: hideMoney)
+                }.buttonStyle(.plain)
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: MT.cellGap), GridItem(.flexible(), spacing: MT.cellGap)], spacing: MT.cellGap) {
+                    NavigationLink(value: Route.orders(closed)) { MTStatCell(label: "Đơn chốt CSKH", value: Fmt.int(t.closedOrders)) }
+                    MTStatCell(label: "Giá trị TB đơn", value: t.averageOrder.map { Fmt.shortMoney($0) } ?? "—")
                 }
                 .buttonStyle(.plain)
                 .environment(\.thinking, loading)
-                Text("\(period.title)\(pos.isEmpty ? "" : " · POS \(PosBreakdown.names[pos] ?? pos)")\(product == "all" ? "" : " · nhóm \(Fmt.productGroup(product))") · so với kỳ liền trước · đơn do nhân viên CSKH phụ trách").font(.system(size: 10)).foregroundStyle(Color.inkSoft).padding(.top, -8)
+                Text("\(period.title)\(pos.isEmpty ? "" : " · POS \(PosBreakdown.names[pos] ?? pos)")\(product == "all" ? "" : " · nhóm \(Fmt.productGroup(product))") · so với kỳ liền trước · đơn do nhân viên CSKH phụ trách").mtFont(.caption).foregroundStyle(Color.inkSoft).padding(.top, -8)
                 if let s = data?.current.series, Set(s.map(\.bucket)).count > 1 {
                     Panel {
-                        HStack { Text("Doanh thu theo ngày").font(.system(size: 15, weight: .bold)); Spacer(); Hint(text: "Đơn chốt CSKH") }
-                        LineChart(points: byDay(s))
+                        HStack { Text("Doanh thu theo ngày").mtFont(.cardHeader); Spacer(); Hint(text: "Đơn chốt CSKH") }
+                        MTTrendChart(points: byDay(s), value: Fmt.shortMoney, scope: "\(period.title) · CSKH")
                     }
                 }
                 if let b = badge {
                     NavigationLink(value: Route.page("calls")) {
                         HStack(spacing: 12) {
-                            Image(systemName: "phone.fill").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.good).frame(width: 36, height: 36).background(Color.brandSoft, in: .rect(cornerRadius: 10))
+                            Image(systemName: "phone.fill").mtFont(.cardHeader).foregroundStyle(Color.good).frame(width: 36, height: 36).background(Color.brandSoft, in: .rect(cornerRadius: 10))
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Hôm nay đã gọi \(Fmt.int(b.callsToday)) cuộc").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink)
-                                Text(b.over20 > 0 ? "\(Fmt.int(b.over20)) khách quá 20 ngày chưa ghi chú" : "Không có khách quá 20 ngày chưa ghi chú").font(.system(size: 11)).foregroundStyle(b.over20 > 0 ? Color.warn : Color.inkSoft)
+                                Text("Hôm nay có \(Fmt.int(b.callsToday)) ghi chú").mtFont(.cardHeader).foregroundStyle(Color.ink)
+                                Text(b.over20 > 0 ? "\(Fmt.int(b.over20)) khách quá 20 ngày chưa ghi chú" : "Không có khách quá 20 ngày chưa ghi chú").mtFont(.caption).foregroundStyle(b.over20 > 0 ? Color.warn : Color.inkSoft)
                             }
-                            Spacer(); Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.inkSoft)
+                            Spacer(); Image(systemName: "chevron.right").mtFont(.caption).foregroundStyle(Color.inkSoft)
                         }.padding(12).background(Color.card, in: .rect(cornerRadius: 12)).cardShadow()
                     }.buttonStyle(.plain).id("team-cskh-calls")
                     if applied != nil { Text("Cuộc gọi hôm nay chưa lọc theo team.").font(.caption).foregroundStyle(Color.inkSoft) }
@@ -82,15 +86,15 @@ struct CskhOverviewView: View {
                                 HStack(spacing: 10) {
                                     Medal(rank: i + 1)
                                     VStack(alignment: .leading, spacing: 3) {
-                                        HStack { Text(r.name ?? "—").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1); Spacer(); Text(Fmt.shortMoney(r.closedNet)).font(.system(size: 13, weight: .bold)).monospacedDigit().foregroundStyle(Color.ink) }
+                                        HStack { Text(r.name ?? "—").mtFont(.body).foregroundStyle(Color.ink).lineLimit(1); Spacer(); Text(Fmt.shortMoney(r.closedNet)).mtFont(.body).monospacedDigit().foregroundStyle(Color.ink) }
                                         Bar(value: t.closedNet > 0 ? r.closedNet / t.closedNet : 0, tint: .good, height: 5)
-                                        Text("\(Fmt.int(r.closedOrders)) đơn · \(Fmt.pct0(t.closedNet > 0 ? r.closedNet / t.closedNet * 100 : nil)) doanh thu đội").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                                        Text("\(Fmt.int(r.closedOrders)) đơn · \(Fmt.pct0(t.closedNet > 0 ? r.closedNet / t.closedNet * 100 : nil)) doanh thu đội").mtFont(.caption).foregroundStyle(Color.inkSoft)
                                     }
                                 }.padding(10).contentShape(.rect)
                             }.buttonStyle(.plain)
                             if i < min(staff.count, 10) - 1 { Divider().padding(.leading, 42) }
                         }
-                    }.background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
+                    }.background(Color.card, in: .rect(cornerRadius: MT.rCard)).cardShadow()
                 }
             } else if error == nil { SkeletonGrid(tiles: 4) }
             if auth.me?.canView("cskh-overview") == true {
@@ -137,6 +141,7 @@ struct CskhOverviewView: View {
 
 /// Thẻ tiến độ KPI tháng hiện tại của cả đội CSKH: đã đạt / KPI, vạch tiến độ chuẩn theo ngày, thiếu / vượt, cần mỗi ngày, hôm nay, số người đúng tiến độ.
 struct CskhKpiProgress: View {
+    @AppStorage("thp_hide_money") private var hideMoney = false
     @State private var targets: API.Targets?
     @State private var month: API.Overview?
     @State private var today: API.Overview?
@@ -150,13 +155,13 @@ struct CskhKpiProgress: View {
             NavigationLink(value: Route.page("cskh-kpi")) {
                 Panel {
                     HStack {
-                        Image(systemName: "target").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.good)
-                        Text("KPI CSKH tháng \(Int(ym.suffix(2)) ?? 0)/\(ym.prefix(4))").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink)
+                        Image(systemName: "target").mtFont(.cardHeader).foregroundStyle(Color.good)
+                        Text("KPI CSKH tháng \(Int(ym.suffix(2)) ?? 0)/\(ym.prefix(4))").mtFont(.cardHeader).foregroundStyle(Color.ink)
                         Spacer()
-                        HStack(spacing: 2) { Text("Từng người"); Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)) }.font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.brand)
+                        HStack(spacing: 2) { Text("Từng người"); Image(systemName: "chevron.right").mtFont(.caption) }.mtFont(.body).foregroundStyle(Color.brand)
                     }
                     if let s = summary { content(s) }
-                    else if failText != nil { Text("Chưa tính được tiến độ KPI tháng này.").font(.system(size: 12)).foregroundStyle(Color.inkSoft) }
+                    else if failText != nil { Text("Chưa tính được tiến độ KPI tháng này.").mtFont(.body).foregroundStyle(Color.inkSoft) }
                     else { Skeleton(height: 120) }
                 }
             }
@@ -202,7 +207,7 @@ struct CskhKpiProgress: View {
 
     @ViewBuilder private func content(_ s: Summary) -> some View {
         if s.goal <= 0 {
-            Text("Tháng này chưa đặt KPI CSKH. Đã chốt \(Fmt.shortMoney(s.done)) · \(Fmt.int(s.doneOrders)) đơn từ đầu tháng. Chạm để đặt KPI.").font(.system(size: 12)).foregroundStyle(Color.inkSoft)
+            Text("Tháng này chưa đặt KPI CSKH. Đã chốt \(Fmt.shortMoney(s.done)) · \(Fmt.int(s.doneOrders)) đơn từ đầu tháng. Chạm để đặt KPI.").mtFont(.body).foregroundStyle(Color.inkSoft)
         } else {
             let p = s.done / s.goal, expected = Double(s.day) / Double(s.dim), pace = expected > 0 ? p / expected : 1
             let tint: Color = progressTint(pace)
@@ -211,9 +216,9 @@ struct CskhKpiProgress: View {
             HStack(alignment: .center, spacing: 14) {
                 Ring(value: p, size: 72, line: 8, tint: tint)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Đã đạt").font(.system(size: 11)).foregroundStyle(Color.inkSoft)
-                    Text(Fmt.shortMoney(s.done)).font(.system(size: 24, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).monospacedDigit().rolling(Fmt.short(s.done))
-                    Text("trên KPI \(Fmt.shortMoney(s.goal)) · ngày \(s.day)/\(s.dim)").font(.system(size: 11)).foregroundStyle(Color.inkSoft)
+                    Text("Đã đạt").mtFont(.caption).foregroundStyle(Color.inkSoft)
+                    Text(hideMoney ? "••• tr ₫" : Fmt.shortMoney(s.done)).mtFont(.heroNumber).lineLimit(1).minimumScaleFactor(0.6).foregroundStyle(Color.ink).monospacedDigit().rolling(hideMoney ? "••• tr ₫" : Fmt.short(s.done))
+                    Text("trên KPI \(Fmt.shortMoney(s.goal)) · ngày \(s.day)/\(s.dim)").mtFont(.caption).foregroundStyle(Color.inkSoft)
                 }
                 Spacer(minLength: 0)
             }
@@ -225,7 +230,7 @@ struct CskhKpiProgress: View {
                         Rectangle().fill(Color.ink).frame(width: 2, height: 16).offset(x: max(0, min(g.size.width - 2, g.size.width * expected - 1)))
                     }.frame(height: 16)
                 }.frame(height: 16)
-                Text("Vạch đen = mức cần đạt tới hôm nay (\(Fmt.pct0(expected * 100)) KPI)").font(.system(size: 9)).foregroundStyle(Color.inkSoft)
+                Text("Vạch đen = mức cần đạt tới hôm nay (\(Fmt.pct0(expected * 100)) KPI)").mtFont(.caption).foregroundStyle(Color.inkSoft)
             }
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
                 MiniKpi(label: "So với tiến độ", value: "\(gap >= 0 ? "Vượt" : "Thiếu") \(Fmt.shortMoney(abs(gap)))", tint: gap >= 0 ? .good : .bad, sub: "Cần \(Fmt.shortMoney(should)) tới hôm nay")
@@ -273,9 +278,9 @@ private struct MiniKpi: View {
     let label: String; let value: String; let tint: Color; let sub: String
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1)
+            Text(label).mtFont(.caption).foregroundStyle(Color.inkSoft).lineLimit(1)
             Text(value).font(.system(size: 15, weight: .bold, design: .rounded)).foregroundStyle(tint).monospacedDigit().minimumScaleFactor(0.7).lineLimit(1)
-            Text(sub).font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.8)
+            Text(sub).mtFont(.caption).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.8)
         }
         .padding(10).frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.black.opacity(0.03), in: .rect(cornerRadius: 10))

@@ -84,6 +84,7 @@ enum MarketingRankSort: String, CaseIterable {
 }
 
 struct MarketingRank: View {
+    @AppStorage("thp_hide_money") private var hideMoney = false
     let period: Period
     let pos: String
     let teamId: String?
@@ -138,6 +139,8 @@ struct MarketingRank: View {
             } label: { Text("Xếp theo: \(sortTitle) ▾").font(.subheadline) }
             if let error { StateView(error: error, compact: true) { await load() } }
             if let d = data {
+                MTMetricHeroCard(label: "Tổng đơn duy nhất", value: Fmt.int(d.summary.n("orders")),
+                                 scope: "\(period.title) · \(pos.isEmpty ? "Mọi POS" : (PosBreakdown.names[pos] ?? pos)) · Marketing")
                 if rows.isEmpty { Text(team ? MarketingRankTerms.emptyTeam : MarketingRankTerms.emptyPerson).font(.caption).foregroundStyle(Color.inkSoft) }
                 ForEach(Array(rows.prefix(showAll ? rows.count : 12).enumerated()), id: \.element.id) { i, row in
                     Button { selected = row } label: { rankRow(row, rank: i + 1) }.buttonStyle(.plain)
@@ -191,13 +194,13 @@ struct MarketingRank: View {
         HStack(alignment: .top) {
             Medal(rank: rank)
             VStack(alignment: .leading) {
-                Text(row.name).font(.system(size: 13, weight: .bold)).lineLimit(1)
+                Text(row.name).mtFont(.body).lineLimit(1)
                 Text(team ? "\(Fmt.int(row.marketerCount)) marketer" : row.marketingTeamName ?? "—").font(.caption)
             }
             Spacer(minLength: 4)
             VStack(alignment: .trailing) {
-                Text(display(effectiveSort, row)).font(.system(size: 13, weight: .bold))
-                Text(secondary(row)).font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                Text(display(effectiveSort, row)).mtFont(.body)
+                Text(secondary(row)).mtFont(.caption).foregroundStyle(Color.inkSoft)
             }
         }
         .foregroundStyle(Color.ink).padding(8)
@@ -214,6 +217,14 @@ struct MarketingRank: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 12) {
+                    MTMetricHeroCard(label: row.name, value: Fmt.shortMoney(row.n("net")),
+                                     scope: "\(period.title) · \(pos.isEmpty ? "Mọi POS" : (PosBreakdown.names[pos] ?? pos)) · Marketing", isPrivacyMasked: hideMoney)
+                    if !hideMoney && row.n("net") > 0 && row.n("newNet") + row.n("cskhNet") == row.n("net") {
+                        Text("Tỷ trọng doanh thu").mtFont(.cardHeader)
+                        MTDonutChart(parts: [(label: "DT New", value: row.n("newNet"), valueText: Fmt.shortMoney(row.n("newNet")), color: Palette.good),
+                                         (label: "DT CSKH", value: row.n("cskhNet"), valueText: Fmt.shortMoney(row.n("cskhNet")), color: Palette.cskh)],
+                                 total: row.n("net"), totalText: Fmt.shortMoney(row.n("net")), scope: period.title)
+                    }
                     ForEach(Array(MarketingRankTerms.detailSorts.enumerated()), id: \.offset) { i, s in
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {

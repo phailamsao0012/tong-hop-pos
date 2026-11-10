@@ -1,4 +1,15 @@
 import Foundation
+
+extension API {
+    /// Chỉ các số tổng hợp của người lên đơn, từ cùng phản hồi Vận đơn đang gọi.
+    struct VanDonSellerRow: Decodable, Identifiable {
+        let key: String; let label: String; let dept: String?
+        let closed: Double; let sent: Double; let sentNet: Double
+        let returned: Double; let returnedNet: Double
+        let returnRate: Double?; let returnRateNet: Double?
+        var id: String { key }
+    }
+}
 import UniformTypeIdentifiers
 
 /// Gọi API của web tonghopposmegatech.io.vn. Phiên đăng nhập là cookie `thp_session`; app giữ token trong Keychain

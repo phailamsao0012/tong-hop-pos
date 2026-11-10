@@ -12,6 +12,7 @@ extension API {
         let cost: Double; let net: Double; let closed: Double; let orders: Double; let phones: Double
         let coveredNet: Double?; let coveredClosed: Double?; let coveredPhones: Double?; let marketers: Double?
         let roas: Double?; let costPerClosed: Double?; let costPerLead: Double?
+        let newNet: Double?; let cskhNet: Double?; let otherNet: Double?
         /// Một phần doanh thu thuộc marketer chưa có chi phí nên không vào ROAS.
         var partial: Bool { net > (coveredNet ?? net) + 0.5 }
     }
@@ -99,6 +100,7 @@ extension MktSort {
 }
 
 struct MarketingView: View {
+    @AppStorage("thp_hide_money") private var hideMoney = false
     @Environment(AuthModel.self) private var auth
     enum Tab: Hashable { case people, teams, products, time }
     @State private var period: Period
@@ -154,6 +156,13 @@ struct MarketingView: View {
             if let error { StateView(error: error, compact: true) { await load() } }
             filterLine(d)
             hero(d).environment(\.thinking, loading)
+            if d.timeline.count > 1 {
+                Panel {
+                    Text("Doanh thu MKT theo kỳ").mtFont(.cardHeader)
+                    MTTrendChart(points: d.timeline.map { (Fmt.bucketLabel($0.key, d.bucket), $0.m.net) },
+                                 value: Fmt.shortMoney, scope: periodLabel(d))
+                }
+            }
             MktChart(points: d.timeline, bucket: d.bucket, blocked: posLimited)
             breakdown(d)
             if auth.me?.canView("marketing") == true {
@@ -163,7 +172,7 @@ struct MarketingView: View {
                     else { teamId = nil; marketerId = id }
                 }
             }
-            Text(source(d)).font(.system(size: 10)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
+            Text(source(d)).mtFont(.caption).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
         } else if let error {
             StateView(error: error) { await load() }
         } else {
@@ -185,22 +194,22 @@ struct MarketingView: View {
         if filtered {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
-                    Text("Đang xem").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.inkSoft)
+                    Text("Đang xem").mtFont(.body).foregroundStyle(Color.inkSoft)
                     if !pos.isEmpty { chip("storefront", posName) { pos = "" } }
                     if let id = marketerId { chip("person.fill", d.filters.marketerName ?? d.people.first { $0.id == id }?.name ?? "Marketer") { marketerId = nil } }
                     else if let id = teamId { chip("person.2.fill", d.filters.teamName ?? d.teams.first { $0.id == id }?.name ?? "Team") { teamId = nil } }
                     if let p = product { chip("shippingbox.fill", Self.productName(p)) { product = nil } }
-                    Button { marketerId = nil; teamId = nil; product = nil; pos = "" } label: { Text("Bỏ lọc").font(.system(size: 12)).foregroundStyle(Color.inkSoft).underline() }.buttonStyle(.plain)
+                    Button { marketerId = nil; teamId = nil; product = nil; pos = "" } label: { Text("Bỏ lọc").mtFont(.body).foregroundStyle(Color.inkSoft).underline() }.buttonStyle(.plain)
                 }
             }
         } else {
-            Text("Toàn bộ Marketing, \(posScope). Chạm một marketer, team hoặc sản phẩm ở bảng dưới để xem riêng.").font(.system(size: 11)).foregroundStyle(Color.inkSoft)
+            Text("Toàn bộ Marketing, \(posScope). Chạm một marketer, team hoặc sản phẩm ở bảng dưới để xem riêng.").mtFont(.caption).foregroundStyle(Color.inkSoft)
         }
     }
     private func chip(_ icon: String, _ text: String, clear: @escaping () -> Void) -> some View {
         Button(action: clear) {
-            HStack(spacing: 4) { Image(systemName: icon).font(.system(size: 10)); Text(text).lineLimit(1); Image(systemName: "xmark").font(.system(size: 9, weight: .bold)) }
-                .font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.brand)
+            HStack(spacing: 4) { Image(systemName: icon).mtFont(.caption); Text(text).lineLimit(1); Image(systemName: "xmark").mtFont(.caption) }
+                .mtFont(.body).foregroundStyle(Color.brand)
                 .padding(.horizontal, 10).padding(.vertical, 6).background(Color.brandSoft, in: .capsule)
         }.buttonStyle(.plain).accessibilityHint("Bỏ lọc")
     }
@@ -212,7 +221,7 @@ struct MarketingView: View {
     private func hero(_ d: API.MktAnalytics) -> some View {
         let c = d.current, p = d.prev
         return VStack(spacing: 10) {
-            HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: MT.cardGap) {
                 MktBig(icon: "banknote.fill", tint: .good, label: "Doanh thu MKT", value: Fmt.shortVnd(c.net),
                        delta: Fmt.delta(c.net, p.net), upIsGood: true, sub: "\(Fmt.int(c.closed)) đơn chốt" + (posLimited ? "" : " · ROAS \(Fmt.roas(c.roas))")) {
                     explain = MetricExplain(title: "Doanh thu MKT", value: Fmt.money(c.net),
@@ -228,6 +237,7 @@ struct MarketingView: View {
                 }
             }
             .fixedSize(horizontal: false, vertical: true)
+            revenueSplit(c, scope: periodLabel(d))
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                 Button { explain = MetricExplain(title: "Số về", value: "\(Fmt.int(c.phones)) số", definition: "Số điện thoại khác nhau trên các đơn có Marketer được tạo trong kỳ (số MKT đưa về cho Sale, CSKH gọi). Kỳ này có \(Fmt.int(c.orders)) đơn có Marketer được tạo. Không tính đơn đã xoá. \(scopeText).", period: periodLabel(d), previous: ("Kỳ trước", "\(Fmt.int(p.phones)) số")) } label: {
                     KpiCard(icon: "phone.fill", tint: .teal, label: "Số về", value: Fmt.int(c.phones), delta: Fmt.delta(c.phones, p.phones), note: "\(Fmt.int(c.orders)) đơn lên")
@@ -250,16 +260,66 @@ struct MarketingView: View {
 
     // MARK: Tách theo
 
+    @ViewBuilder private func revenueSplit(_ m: API.RoasMetrics, scope: String) -> some View {
+        if m.newNet != nil || m.cskhNet != nil || m.otherNet != nil {
+            Panel {
+                Text("Thành phần doanh thu MKT").mtFont(.cardHeader)
+                Text(scope).mtFont(.caption).foregroundStyle(Palette.muted)
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: MT.cellGap) {
+                    MTStatCell(label: "DT New", value: m.newNet.map { Fmt.shortMoney($0) } ?? "—")
+                    MTStatCell(label: "DT CSKH", value: m.cskhNet.map { Fmt.shortMoney($0) } ?? "—")
+                    if let other = m.otherNet, other != 0 { MTStatCell(label: "Khác", value: Fmt.shortMoney(other)) }
+                }
+                if !hideMoney, let new = m.newNet, let care = m.cskhNet, let other = m.otherNet {
+                    MTDonutChart(parts: [(label: "New", value: new, valueText: Fmt.shortMoney(new), color: Palette.good),
+                                         (label: "CSKH", value: care, valueText: Fmt.shortMoney(care), color: Palette.cskh)]
+                                 + (other == 0 ? [] : [(label: "Khác", value: other, valueText: Fmt.shortMoney(other), color: Palette.mtRolePurpleInk)]),
+                                 total: m.net, totalText: Fmt.shortMoney(m.net), scope: scope)
+                }
+            }
+        }
+    }
+
     private struct Row: Identifiable {
         let id: String; let name: String; var sub: String? = nil; let m: API.RoasMetrics
         var active = false; var dim = false
+    }
+    private enum Column: String, CaseIterable, Identifiable {
+        case cost = "Chi phí QC", net = "Doanh thu MKT", new = "DT New", care = "DT CSKH", other = "Khác", phones = "Số về", closed = "Đơn chốt", roas = "ROAS", cpl = "CP mỗi số", cpc = "CP mỗi đơn"
+        var id: String { rawValue }
+        var sort: MktSort? {
+            switch self {
+            case .cost: return .cost
+            case .net: return .net
+            case .phones: return .phones
+            case .closed: return .closed
+            case .roas: return .roas
+            case .cpl: return .cpl
+            case .cpc: return .cpc
+            default: return nil
+            }
+        }
+        func text(_ m: API.RoasMetrics, blocked: Bool) -> String {
+            switch self {
+            case .cost: return Fmt.shortMoney(m.cost)
+            case .net: return Fmt.shortMoney(m.net)
+            case .new: return m.newNet.map { Fmt.shortMoney($0) } ?? "—"
+            case .care: return m.cskhNet.map { Fmt.shortMoney($0) } ?? "—"
+            case .other: return m.otherNet.map { Fmt.shortMoney($0) } ?? "—"
+            case .phones: return Fmt.int(m.phones)
+            case .closed: return Fmt.int(m.closed)
+            case .roas: return Fmt.roas(blocked ? nil : m.roas)
+            case .cpl: return Fmt.shortVnd(blocked ? nil : m.costPerLead)
+            case .cpc: return Fmt.shortVnd(blocked ? nil : m.costPerClosed)
+            }
+        }
     }
 
     @ViewBuilder private func breakdown(_ d: API.MktAnalytics) -> some View {
         let unit = d.bucket == "week" ? "Tuần" : d.bucket == "month" ? "Tháng" : "Ngày"
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Tách theo").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink)
+                Text("Tách theo").mtFont(.cardHeader).foregroundStyle(Color.ink)
                 Spacer()
                 if tab == .people || tab == .teams {
                     Menu {
@@ -271,7 +331,7 @@ struct MarketingView: View {
                         }
                         if posLimited { Text(MktSort.posHint) }
                     } label: {
-                        Text("Xếp theo: \(effectiveSort.label) ▾").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.brand)
+                        Text("Xếp theo: \(effectiveSort.label) ▾").mtFont(.body).foregroundStyle(Color.brand)
                     }
                 }
             }
@@ -288,26 +348,37 @@ struct MarketingView: View {
                 }
             }
             #endif
-            Segmented(selection: $tab, options: [(.people, "Marketer"), (.teams, "Team"), (.products, "Sản phẩm"), (.time, unit)])
+            MTSegmentedControl(selection: $tab, options: [(.people, "Marketer"), (.teams, "Team"), (.products, "Sản phẩm"), (.time, unit)])
             let rows = rowsFor(d)
-            if tab == .products { Text("Sản phẩm theo cột Sản phẩm của sheet chi phí; số về, đơn, doanh thu lấy từ đơn Pancake có nhãn hoặc tên sản phẩm khớp. Một đơn nhiều sản phẩm được tính ở mỗi sản phẩm.").font(.system(size: 10)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true) }
-            if tab != .time && !rows.isEmpty { Text("Chạm một dòng để xem riêng, chạm lại để bỏ.").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }
+            if tab == .products { Text("Sản phẩm theo cột Sản phẩm của sheet chi phí; số về, đơn, doanh thu lấy từ đơn Pancake có nhãn hoặc tên sản phẩm khớp. Một đơn nhiều sản phẩm được tính ở mỗi sản phẩm.").mtFont(.caption).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true) }
+            if tab != .time && !rows.isEmpty { Text("Chạm một dòng để xem riêng, chạm lại để bỏ.").mtFont(.caption).foregroundStyle(Color.inkSoft) }
             if rows.isEmpty {
-                Panel { Text("Không có chi phí hoặc đơn Marketing trong phạm vi đang chọn.").font(.system(size: 12)).foregroundStyle(Color.inkSoft) }
+                Panel { Text("Không có chi phí hoặc đơn Marketing trong phạm vi đang chọn.").mtFont(.body).foregroundStyle(Color.inkSoft) }
             } else {
                 let shown = showAll ? rows : Array(rows.prefix(12))
-                let maxCost = max(1, rows.map(\.m.cost).max() ?? 1), maxPhones = max(1, rows.map(\.m.phones).max() ?? 1)
-                VStack(spacing: 0) {
-                    ForEach(Array(shown.enumerated()), id: \.element.id) { i, r in
-                        let line = MktRowView(row: r.name, sub: r.sub, m: r.m, maxCost: maxCost, maxPhones: maxPhones, active: r.active, dim: r.dim, rank: tab == .people ? i + 1 : nil, ratios: !posLimited, sort: tab == .people || tab == .teams ? effectiveSort : .phones)
-                        if tab == .time { line } else { Button { pick(r.id) } label: { line }.buttonStyle(.plain) }
-                        if i < shown.count - 1 { Divider().padding(.leading, 12) }
+                MTStickyColumnTable(rows: shown, total: tab == .products ? nil : Row(id: "__total", name: "Tổng", m: d.current),
+                                    columns: Column.allCases, title: { $0.rawValue },
+                                    sort: { column in
+                                        if tab == .people || tab == .teams, let sort = column.sort,
+                                           !(posLimited && sort.needsAllPos) { savedSort = sort.rawValue }
+                                    },
+                                    firstTitle: tab == .people ? "Marketer" : tab == .teams ? "Team" : tab == .products ? "Sản phẩm" : unit,
+                                    scope: periodLabel(d)) { row in
+                    if row.id == "__total" { Text(row.name).mtFont(.cardHeader) }
+                    else if tab == .time { Text(row.name).mtFont(.body) }
+                    else {
+                        Button { pick(row.id) } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(row.name).mtFont(.body)
+                                if let sub = row.sub { Text(sub).mtFont(.caption).foregroundStyle(Palette.muted) }
+                            }.foregroundStyle(row.active ? Palette.brand : Palette.ink)
+                        }.buttonStyle(.plain)
                     }
-                }
-                .background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
+                } cell: { row, column in Text(column.text(row.m, blocked: posLimited)) }
+                .padding(MT.cellGap).cardSurface(radius: MT.rCard)
                 if rows.count > 12 {
                     Button { withAnimation(.snappy) { showAll.toggle() } } label: {
-                        Text(showAll ? "Thu gọn" : "Xem tất cả \(rows.count) dòng").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.brand).frame(maxWidth: .infinity)
+                        Text(showAll ? "Thu gọn" : "Xem tất cả \(rows.count) dòng").mtFont(.body).foregroundStyle(Color.brand).frame(maxWidth: .infinity)
                     }.buttonStyle(.plain)
                 }
             }
@@ -446,6 +517,7 @@ struct MarketingView: View {
 
 /// Ô số lớn (doanh thu MKT, chi phí quảng cáo) có dải màu trên đầu như web; chạm xem cách tính.
 private struct MktBig: View {
+    @AppStorage("thp_hide_money") private var hideMoney = false
     @Environment(\.thinking) private var thinking
     let icon: String; let tint: Color; let label: String; let value: String
     var delta: String? = nil; var upIsGood = true; let sub: String
@@ -456,20 +528,17 @@ private struct MktBig: View {
                 HStack(spacing: 6) {
                     MetricIcon(icon, size: 12).foregroundStyle(tint)
                         .frame(width: 26, height: 26).background(tint.opacity(0.14), in: .rect(cornerRadius: 8))
-                    Text(label).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.8)
+                    Text(label).mtFont(.body).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.8)
                 }
-                Text(value).font(.system(size: 24, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).monospacedDigit()
-                    .lineLimit(1).minimumScaleFactor(0.5).rolling(value)
+                Text(hideMoney ? "••• tr ₫" : value).mtFont(.heroNumber).foregroundStyle(Color.ink).monospacedDigit()
+                    .lineLimit(1).minimumScaleFactor(0.6).rolling(hideMoney ? "••• tr ₫" : value)
                     .loadingPlaceholder(thinking)
-                if let delta { MktDelta(text: delta, good: delta.hasPrefix("-") ? !upIsGood : upIsGood).loadingPlaceholder(thinking) }
-                Text(sub).font(.system(size: 10)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
+                if let delta, !hideMoney { MktDelta(text: delta, good: delta.hasPrefix("-") ? !upIsGood : upIsGood).loadingPlaceholder(thinking) }
+                if !hideMoney { Text(sub).mtFont(.caption).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true) }
                 Spacer(minLength: 0)
             }
-            .padding(12).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(Color.card)
-            .overlay(alignment: .top) { Rectangle().fill(tint).frame(height: 3) }
-            .clipShape(.rect(cornerRadius: 16))
-            .cardShadow()
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .heroSurface()
             .contentShape(.rect)
         }.buttonStyle(.plain)
     }
@@ -488,39 +557,35 @@ private struct CostCard: View {
             Button(action: lead) {
                 VStack(alignment: .leading, spacing: 4) {
                     head("Chi phí mỗi số")
-                    Text(Fmt.shortVnd(cpl)).font(.system(size: 28, weight: .bold, design: .rounded)).foregroundStyle(Color.lime)
+                    Text(Fmt.shortVnd(cpl)).mtFont(.cardMetric).foregroundStyle(Palette.ink)
                         .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6).rolling(Fmt.shortVnd(cpl))
                         .loadingPlaceholder(thinking)
-                    if let d = cpl.flatMap({ Fmt.delta($0, prev.costPerLead) }) { MktDelta(text: d, good: d.hasPrefix("-"), onDark: true) }
+                    if let d = cpl.flatMap({ Fmt.delta($0, prev.costPerLead) }) { MktDelta(text: d, good: d.hasPrefix("-"), onDark: false) }
                     Text(blocked ? "Chi phí là của mọi POS, không chia theo POS được" : cpl.map { "Mỗi số về tốn \(Fmt.money($0)) quảng cáo" } ?? "Cần chi phí trong kỳ để tính")
-                        .font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.85)).fixedSize(horizontal: false, vertical: true)
+                        .mtFont(.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading).contentShape(.rect)
             }.buttonStyle(.plain)
-            Rectangle().fill(.white.opacity(0.14)).frame(width: 1).padding(.horizontal, 12)
+            Rectangle().fill(Palette.line).frame(width: 1).padding(.horizontal, 12)
             Button(action: closed) {
                 VStack(alignment: .leading, spacing: 4) {
                     head("Chi phí mỗi đơn chốt")
-                    Text(Fmt.shortVnd(cpc)).font(.system(size: 22, weight: .bold, design: .rounded)).foregroundStyle(.white)
+                    Text(Fmt.shortVnd(cpc)).mtFont(.cardMetric).foregroundStyle(Palette.ink)
                         .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6).rolling(Fmt.shortVnd(cpc))
                         .loadingPlaceholder(thinking)
-                    if let d = cpc.flatMap({ Fmt.delta($0, prev.costPerClosed) }) { MktDelta(text: d, good: d.hasPrefix("-"), onDark: true) }
-                    Text("\(Fmt.int(now.closed)) đơn chốt").font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.85))
+                    if let d = cpc.flatMap({ Fmt.delta($0, prev.costPerClosed) }) { MktDelta(text: d, good: d.hasPrefix("-"), onDark: false) }
+                    Text("\(Fmt.int(now.closed)) đơn chốt").mtFont(.caption).foregroundStyle(Palette.muted)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading).contentShape(.rect)
             }.buttonStyle(.plain)
         }
-        .padding(16)
-        .background(LinearGradient(colors: [Color.brandDark, Color.brandDeep], startPoint: .topLeading, endPoint: .bottomTrailing))
-        .overlay(alignment: .topTrailing) { Circle().fill(Color.lime.opacity(0.08)).frame(width: 150, height: 150).offset(x: 50, y: -60).allowsHitTesting(false) }
-        .clipShape(.rect(cornerRadius: 18))
-        .shadow(color: Color.brandDeep.opacity(0.22), radius: 10, y: 5)
+        .padding(MT.cardPad).cardSurface()
     }
     private func head(_ t: String) -> some View {
         HStack(spacing: 4) {
-            Text(t).font(.system(size: 12, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
-            Image(systemName: "info.circle").font(.system(size: 10))
-        }.foregroundStyle(.white.opacity(0.85))
+            Text(t).mtFont(.body).lineLimit(1).minimumScaleFactor(0.8)
+            Image(systemName: "info.circle").mtFont(.caption)
+        }.foregroundStyle(Palette.muted)
     }
 }
 
@@ -532,7 +597,7 @@ private struct MktDelta: View {
         let color: Color = onDark ? (good ? Color.lime : Color(red: 1, green: 0.62, blue: 0.6)) : (good ? .good : .bad)
         HStack(spacing: 3) {
             Image(systemName: up ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill").font(.system(size: 8))
-            Text(text).font(.system(size: 11, weight: .semibold))
+            Text(text).mtFont(.caption)
         }
         .foregroundStyle(color).padding(.horizontal, 7).padding(.vertical, 3)
         .background(onDark ? Color.white.opacity(0.1) : color.opacity(0.1), in: .capsule)
@@ -566,15 +631,15 @@ private struct MktRowView: View {
             if let rank { Medal(rank: rank) }
             VStack(alignment: .leading, spacing: 5) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    if active { Image(systemName: "checkmark.circle.fill").font(.system(size: 12)).foregroundStyle(Color.brand) }
+                    if active { Image(systemName: "checkmark.circle.fill").mtFont(.body).foregroundStyle(Color.brand) }
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(row).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1)
-                        if let sub { Text(sub).font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1) }
+                        Text(row).mtFont(.body).foregroundStyle(Color.ink).lineLimit(1)
+                        if let sub { Text(sub).mtFont(.caption).foregroundStyle(Color.inkSoft).lineLimit(1) }
                     }
                     Spacer(minLength: 4)
                     VStack(alignment: .trailing, spacing: 1) {
-                        Text(primary).font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink).monospacedDigit()
-                        Text(secondary).font(.system(size: 10, weight: .semibold)).foregroundStyle(Color.good).monospacedDigit()
+                        Text(primary).mtFont(.body).foregroundStyle(Color.ink).monospacedDigit()
+                        Text(secondary).mtFont(.caption).foregroundStyle(Color.good).monospacedDigit()
                     }
                 }
                 VStack(spacing: 3) {
@@ -582,7 +647,7 @@ private struct MktRowView: View {
                     Bar(value: m.phones / maxPhones, tint: .teal, height: 5)
                 }
                 Text(ratios ? "Chi phí \(Fmt.short(m.cost)) · CP/số \(m.costPerLead.map { Fmt.short($0) } ?? "—") · CP/đơn \(m.costPerClosed.map { Fmt.short($0) } ?? "—")" : "Chi phí \(Fmt.short(m.cost)) (mọi POS)")
-                    .font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.85).monospacedDigit()
+                    .mtFont(.caption).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.85).monospacedDigit()
             }
         }
         .padding(12)
@@ -602,7 +667,6 @@ private struct MktChart: View {
     @State private var picked: Date?
     private struct P: Identifiable { let id: String; let date: Date; let phones: Double; let closed: Double; let p: API.RoasPoint }
     private var unit: Calendar.Component { bucket == "month" ? .month : bucket == "week" ? .weekOfYear : .day }
-    private var axisFormat: Date.FormatStyle { bucket == "month" ? Fmt.axisMonth : Fmt.axisDay }
     private var word: String { bucket == "week" ? "tuần" : bucket == "month" ? "tháng" : "ngày" }
     private static func date(_ key: String) -> Date? {
         var cal = Calendar(identifier: .gregorian); cal.timeZone = VNDate.tz
@@ -620,9 +684,9 @@ private struct MktChart: View {
         if list.count > 1 {
             Panel {
                 HStack {
-                    Text("Số về và đơn chốt theo \(word)").font(.system(size: 14, weight: .bold)).foregroundStyle(Color.ink)
+                    Text("Số về và đơn chốt theo \(word)").mtFont(.cardHeader).foregroundStyle(Color.ink)
                     Spacer()
-                    Text("số / đơn").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                    Text("số / đơn").mtFont(.caption).foregroundStyle(Color.inkSoft)
                 }
                 HStack(spacing: 12) {
                     legend(.teal, "Số về"); legend(.good, "Đơn chốt")
@@ -631,14 +695,14 @@ private struct MktChart: View {
                 if let s = selected {
                     let m = s.p.m
                     Text("\(Fmt.bucketLabel(s.id, bucket)): \(Fmt.int(m.phones)) số · \(Fmt.int(m.closed)) đơn chốt · chi phí \(Fmt.short(m.cost))" + (blocked ? " (mọi POS)" : " · CP/số \(m.costPerLead.map { Fmt.short($0) } ?? "—")"))
-                        .font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink).monospacedDigit().lineLimit(2)
+                        .mtFont(.caption).foregroundStyle(Color.ink).monospacedDigit().lineLimit(2)
                 } else {
-                    Text("Chạm hoặc kéo trên biểu đồ để xem chi phí từng \(word).").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                    Text("Chạm hoặc kéo trên biểu đồ để xem chi phí từng \(word).").mtFont(.caption).foregroundStyle(Color.inkSoft)
                 }
                 Chart {
                     ForEach(list) { r in
                         BarMark(x: .value("Ngày", r.date, unit: unit), y: .value("Số về", r.phones))
-                            .foregroundStyle(Color.teal.opacity(0.75)).cornerRadius(3)
+                            .foregroundStyle(Palette.cskh.opacity(0.75)).cornerRadius(3)
                     }
                     ForEach(list) { r in
                         LineMark(x: .value("Ngày", r.date, unit: unit), y: .value("Đơn chốt", r.closed))
@@ -653,17 +717,20 @@ private struct MktChart: View {
                 }
                 .chartXSelection(value: $picked)
                 .chartXAxis {
-                    AxisMarks(values: .automatic(desiredCount: 5)) { _ in
-                        AxisGridLine().foregroundStyle(Color.black.opacity(0.05))
-                        AxisValueLabel(format: axisFormat)
+                    AxisMarks(values: .automatic(desiredCount: 5)) { value in
+                        AxisGridLine().foregroundStyle(Palette.line)
+                        AxisValueLabel { if let date = value.as(Date.self) { Text(Fmt.bucketLabel(VNDate.string(date), bucket)) } }
                     }
                 }
-                .chartYAxis { AxisMarks(position: .leading) { _ in AxisGridLine().foregroundStyle(Color.black.opacity(0.05)); AxisValueLabel() } }
+                .chartYAxis { AxisMarks(position: .leading) { value in
+                    AxisGridLine().foregroundStyle(Palette.line)
+                    AxisValueLabel { if let amount = value.as(Double.self) { Text(Fmt.int(amount)) } }
+                } }
                 .frame(height: 190)
             }
         }
     }
     private func legend(_ c: Color, _ t: String) -> some View {
-        HStack(spacing: 4) { RoundedRectangle(cornerRadius: 2).fill(c).frame(width: 10, height: 10); Text(t).font(.system(size: 11)).foregroundStyle(Color.inkSoft) }
+        HStack(spacing: 4) { RoundedRectangle(cornerRadius: 2).fill(c).frame(width: 10, height: 10); Text(t).mtFont(.caption).foregroundStyle(Color.inkSoft) }
     }
 }
