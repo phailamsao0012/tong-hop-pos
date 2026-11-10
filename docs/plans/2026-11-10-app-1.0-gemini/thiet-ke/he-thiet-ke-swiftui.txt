@@ -1,0 +1,145 @@
+HỆ THIẾT KẾ SWIFTUI iOS 17 & BẢNG TỰ KIỂM 19 MÀN —
+MEGATECH
+Đối tượng sử dụng: Chủ doanh nghiệp ( Sếp · Ảnh đại diện S ) · Nền tảng: SwiftUI iOS 17 · Khổ chuẩn: 390 × 844 pt · Màu chủ đạo:
+#17684B   .
+  Quy Tắc Nghiệp Vụ & Hiển Thị Cốt Lõi
+  • Tỷ lệ chốt Sale: Dưới 42% tô Đỏ kèm dấu ▼ ; từ 42% trở lên tô Xanh kèm dấu ✓ . Ngưỡng KPI tỷ lệ chốt chuẩn toàn phòng là ≥ 42% .
+  • Tỷ lệ hoàn / hủy: Từ 7% trở lên tô Đỏ kèm dấu ▲ ; từ 5% đến dưới 7% tô Vàng kèm dấu ! ; dưới 5% tô Xanh kèm dấu ✓ .
+  • Chữ nghiệp vụ Vận đơn: Chỉ dùng Doanh số chuyển đi, Đơn chuyển đi, Đơn vào Chờ xác nhận, Người lên đơn, Người gọi xác nhận (tính
+  riêng, không cộng vào tổng công ty).
+  • Đồng nhất dữ liệu: Chi nhánh dùng tên thật Hà Nội và Thái Nguyên; tiền trong cùng danh sách dùng cùng đơn vị tr ₫ ; thiếu tỷ lệ hiện
+   —   (không hiện 0 ).
+
+1. Bảng Màu Sáng & Tối (Color Tokens · Chuẩn Tương Phản WCAG AA ≥ 4.5:1)
+ Token SwiftUI                  Vai trò hiển thị                Bản Nền Tối (Dark)       Bản Nền Sáng (Light)     Tương phản & Quy
+                                                                                                                  chuẩn
+ Color.mtBrandPrimary           Màu chủ đạo thương hiệu, nút     #17684B                  #17684B                 6.8:1 với chữ trắng
+                                chính, Tab đang chọn                                                               #FFFFFF (AA)
+
+ Color.mtBackground             Nền toàn trang (Canvas           #071711                  #F4F7F5                 Nền phân lớp sâu, dịu
+                                background)                                                                       mắt
+ Color.mtSurfaceCard            Nền thẻ nội dung chính (Card     #0E291F                  #FFFFFF                 Viền Dark #34D399
+                                container)                                                                        (18%) · Light #DCE6E0
+Token SwiftUI             Vai trò hiển thị                 Bản Nền Tối (Dark)   Bản Nền Sáng (Light)   Tương phản & Quy
+                                                                                                       chuẩn
+Color.mtSurfaceCell       Nền ô chỉ số con bên trong thẻ   #071912              #F4F8F6                Bo góc 12pt, tách lớp rõ
+                                                                                                       với thẻ
+Color.mtTextPrimary       Chữ chính, con số KPI lớn        #F0FDF4              #0F291E                Dark 16.4:1 · Light 14.8:1
+                                                                                                       (AAA)
+Color.mtTextSecondary     Nhãn phụ, phạm vi kỳ/POS, chú    #A7F3D0              #335C4A                Dark 10.8:1 · Light 7.2:1
+                          thích                                                                        (AAA)
+Color.mtSemanticSuccess   Tăng (↗ +), Hoàn <5% (✓), Chốt   Chữ #6EE7B7 / Nền    Chữ #0F5E3F / Nền      Luôn kèm mũi tên ↗
+                          Sale ≥42% (✓)                    #10B981 (20%)        #D1FAE5                hoặc dấu ✓
+Color.mtSemanticWarning   Cảnh báo chưa lọc team, Hoàn     Chữ #FDE68A / Nền    Chữ #78350F / Nền      Light đạt 8.4:1, kèm icon
+                          5%–<7% (!)                       #F59E0B (16%)        #FEF3C7                cảnh báo
+Color.mtSemanticDanger    Giảm (↘ −), Hoàn ≥7% (▲), Chốt   Chữ #FDA4AF / Nền    Chữ #BE123C / Nền      Luôn kèm dấu ↘ − , ▲
+                          Sale <42% (▼)                    #F43F5E (20%)        #FFE4E6                hoặc ▼
+Color.mtBadgeRolePurple   Nhãn chức danh Leader / Bộ       Chữ #DDD6FE / Nền    Chữ #4C1D95 / Nền      Light đạt 9.3:1 (AAA)
+                          phận Vận đơn                     #8B5CF6 (25%)        #F3E8FF
+
+
+
+
+                                                                                                                        Trang 2 / 6
+2. Thang Cỡ Chữ, Lưới 8pt, Khoảng Cách & Bo Góc
+ Thang Cỡ Chữ Cố Định (Tối đa 2 phông: SF Pro & SF Pro                Khổ Màn Hình, Lưới 8pt & Bo Góc Thống Nhất
+ Rounded)                                                             • Khổ iPhone chuẩn: 390 × 844 pt (Safe Area Top 59 pt ·
+ • Hero Number (30–32pt Heavy Rounded): .system(size: 30,             Bottom Tab Bar 49 + 34 = 83 pt ).
+ weight: .heavy, design: .rounded).monospacedDigit()                  • Vùng bấm tối thiểu: 44 × 44 pt , khoảng cách giữa các nút ≥
+ • Screen Title (22pt Bold): .system(.title2).weight(.bold)           8 pt .
+ • Card Metric (16–18pt Bold Rounded): .system(size: 16,              • Khoảng cách (Spacing): Lề ngang trang 16 pt · Giữa các thẻ
+ weight: .bold, design: .rounded).monospacedDigit()                    12 pt · Padding trong thẻ 16 pt · Lưới ô con 8 pt .
+ • Card Header (15pt Bold): .system(size: 15, weight:                 • Bo góc (Corner Radius): Thẻ lớn 16 pt · Ô chỉ số con & Nút 12
+ .bold)                                                               pt   · Segmented Control 11 pt · Tấm kéo Bottom Sheet 24 pt .
+ • Body / Table Cell (12pt Medium): .system(size: 12, weight:
+ .medium).monospacedDigit()
+ • Caption / Scope Label (11pt Medium): .system(size: 11,
+ weight: .medium)
+
+
+
+
+3. Danh Sách Thành Phần Dùng Lại (Reusable Components) Kèm Tên SwiftUI Gợi Ý
+Thành phần UI                Tên Struct SwiftUI gợi ý   Đặc tả kỹ thuật & Hành vi tương tác                          Màn áp dụng
+1. Thẻ số lớn đầu trang      MTMetricHeroCard           Hiển thị phạm vi, số lớn (tự động che thành ••• tr ₫ khi bật 01–06, 08–15, 17
+                                                         isPrivacyMasked ), badge so sánh kỳ, vòng tỷ trọng 3 POS
+                                                        có chú thích và nút (i) .
+2. Ô chỉ số Nhãn trên - Số   MTStatCell                  VStack(alignment: .leading, spacing: 4) : nhãn 11pt         Toàn bộ 19 màn
+dưới                                                    ở trên, số 16pt .monospacedDigit() .lineLimit(1) ở
+                                                        dưới để không dính chữ và không rớt dòng chữ ₫ .
+
+
+                                                                                                                                 Trang 3 / 6
+Thành phần UI               Tên Struct SwiftUI gợi ý   Đặc tả kỹ thuật & Hành vi tương tác                          Màn áp dụng
+3. Thẻ thanh đôi so sánh kỳ MTComparisonBarRow         Vẽ 2 thanh tiến độ so sánh Hôm qua cùng giờ vs Giờ này hoặc 01, 02, 08, 11, 12, 15
+                                                       Kỳ trước vs Kỳ này, kèm thanh tiến độ KPI tháng có vạch mốc
+                                                       cần đạt tới hôm nay.
+4. Biểu đồ Swift Charts      MTTrendChart /            Dùng Charts gốc iOS 17: LineMark + AreaMark đủ 9            01, 03–05, 08–15, 17
+                             MTDonutChart              điểm ngày ( 01/11 → 09/11 ), SectorMark (Donut),
+                                                        BarMark (Bước đơn & 6 tháng), PointMark (Scatter Sale).
+
+5. Bảng cuộn ngang cố        MTStickyColumnTable       Cột 1 cố định bên trái + ScrollView(.horizontal) cho các 02, 08, 09A, 11C, 12A,
+định cột 1                                             cột số canh phải, phủ LinearGradient bóng mờ mép phải 13, 15C
+                                                       kèm dấu ⇄ báo hiệu còn cột ẩn.
+6. Nhãn Tỷ lệ chốt &         MTRateBadge               Xét ngưỡng tự động: Sale <42% đỏ ( ▼ ) / ≥42% xanh ( ✓ ); 02, 05, 08, 09, 10, 13,
+Hoàn/Hủy                                               Hoàn/hủy ≥7% đỏ ( ▲ ), 5–<7% vàng ( ! ), <5% xanh ( ✓ ). 15C
+7. Hàng bộ lọc & Tấm kéo     MTFilterBarPill &         Hàng lọc gom 1 nút tự giãn dòng (không cắt chữ), mở Bottom 02–06, 08–13, 15, 17,
+                             MTFilterSheet             Sheet .presentationDetents([.medium, .large]) ;             18
+                                                       chọn POS nào tự lọc nhân sự thuộc POS đó.
+8. Thanh chuyển nhanh        MTSegmentedControl        Chuyển 1 chạm giữa các khung con (như Bốn bộ phận | Số 02–06, 08, 09, 11, 12,
+Segmented                                              liệu & KH | Theo POS ), giữ nguyên bộ lọc đang chọn.        18
+9. Khung 5 trạng thái UX     MTStateContainerView      Hỗ trợ .redacted(reason: .placeholder) (Khung xương Toàn bộ 19 màn (Màn
+chuẩn                                                  đúng bố cục), Lỗi (4 nhóm lỗi kèm nút Thử lại), Trống kèm   18)
+                                                       hướng dẫn, Mất mạng và .refreshable .
+10. Thanh Tab 5 mục SF       MTRootTabView             5 tab cố định dùng SF Symbols: house.fill ,                 01 → 18
+Symbols                                                 shippingbox.fill , chart.bar.fill ,
+                                                        building.2.fill , ellipsis.circle.fill .
+
+
+
+
+                                                                                                                                Trang 4 / 6
+4. Bảng Tự Kiểm Toàn Diện (17 Tiêu Chí Phần 4 & Phần 5 × 19 Màn · ✓ = Đạt)
+Tiêu chí kiểm tra                                 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19
+1. HIG, SwiftUI iOS 17, 390×844pt, Safe Area & SF ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓
+Symbols
+2. Vùng bấm ≥ 44×44pt, các nút cách nhau ≥ 8pt         ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓
+3. Tương phản chữ đạt WCAG AA (≥ 4.5:1) cả Sáng        ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓
+& Tối
+4. Hỗ trợ Dynamic Type (Cỡ chữ lớn) không              ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓
+vỡ/chồng chữ
+5. Lưới 8pt, khoảng cách & bo góc thống nhất, tối      ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓
+đa 2 phông
+6. Dấu +/−, Tỷ lệ chốt Sale (<42% đỏ) & Hoàn/hủy       ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓
+(≥7% đỏ)
+7. Tiền canh phải, cùng đơn vị (tr ₫), thiếu số hiện   ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓
+“—”
+8. Trang không trượt ngang; bảng cuộn cố định          ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓
+cột đầu
+9. Không ô trống, giải thích dài cất trong nút (i)     ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓
+10. Đủ 5 trạng thái UX (Khung xương, Lỗi, Trống,       ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓
+Mạng, Đồng bộ)
+11. Phản hồi khi chạm (Scale + Haptic), nút quay lại   ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓
+rõ
+
+
+                                                                                                   Trang 5 / 6
+Tiêu chí kiểm tra                                    01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19
+12. Riêng tư: Ẩn SĐT/email khách, có nút con mắt     ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓
+ẩn tiền
+13. Đánh dấu luồng đi giữa các màn & giữ nguyên      ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓
+bộ lọc
+14. Không có chữ ghi chú thiết kế lọt vào màn hình   ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓
+app
+15. Không chữ nào bị cắt ở cỡ chữ thường và cỡ       ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓
+chữ lớn
+16. Số và nhãn không dính nhau, chữ ₫ không rớt      ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓
+dòng
+17. Bảng có cột ẩn thì có bóng mờ & dấu hiệu cuộn    ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓
+(⇄)
+
+
+
+
+                                                                                                       Trang 6 / 6
+
