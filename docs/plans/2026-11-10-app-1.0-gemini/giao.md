@@ -19,11 +19,11 @@ Tổ app viết, 10/11/2026. Người dùng duyệt plan ngày 10/11 ("đồng �
 
 - **Nhánh.** Worktree `C:\Users\PC\Projects\thp-app10`, nhánh máy `codex/app-1.0`. Kéo `origin/claude/project-thread-avd7td` về (fast-forward; đầu nhánh có file này, đã gộp `main` 68cc914). Đẩy fast-forward lên `claude/project-thread-avd7td`. Không đẩy nhánh khác, không force.
   - Nền code app: 0.11 cộng G1–G4 hướng A (`3cbfa28`). Lượt này làm tiếp trên nền đó, thay phần nhìn.
-- **Tám bước theo thứ tự:** `B1` → `B2` → … → `B8` (mục 3 đến 10). Mỗi bước một lần chạy Codex. Script commit từng bước riêng: `App iPhone 1.0.0 B<n>: <tên bước> (Codex viết trên PC, máy kiểm)`.
-- **B1 chỉ đọc và viết báo cáo**, commit có `[skip ci]`. B2 đến B8 không có `[skip ci]`: đẩy, rồi chờ **cả hai** workflow `iOS` và `iOS preview` trên đúng commit đó (PR #81 đang mở nên mỗi lần đẩy GitHub tự chạy).
+- **Chín bước theo thứ tự:** `B1` → `B1b` → `B2` → … → `B8` (mục 3, 3b, 4 đến 10). Mỗi bước một lần chạy Codex. Script commit từng bước riêng: `App iPhone 1.0.0 B<n>: <tên bước> (Codex viết trên PC, máy kiểm)`.
+- **B1 chỉ đọc và viết báo cáo**, commit có `[skip ci]`. B1b đến B8 không có `[skip ci]`: đẩy, rồi chờ **cả hai** workflow `iOS` và `iOS preview` trên đúng commit đó (PR #81 đang mở nên mỗi lần đẩy GitHub tự chạy).
   - Đỏ: lấy tên job, bước, annotation `::error::`, 40 dòng cuối log bước đỏ, đưa Codex một vòng sửa. **Tối đa 4 vòng mỗi bước.** Hết 4 vòng vẫn đỏ: dừng cả lượt, báo điều phối kèm commit và lỗi. Không chạy bước sau trên nền đỏ.
   - Annotation bắt đầu bằng `demo:` là lỗi máy chủ demo, không sửa code vì nó. `::warning::demo:` coi là xanh.
-- **B1 có câu hỏi dừng** (mục 3.3): dừng sau B1, báo điều phối, chờ tổ app trả lời rồi mới chạy B2.
+- **B1 có câu hỏi dừng** (mục 3.3): dừng sau B1, báo điều phối, chờ tổ app trả lời rồi mới chạy B1b.
 - **PC không có Xcode.** `iOS` trên GitHub là lần build thật. Máy kiểm (mục 12) chạy trước mỗi lần đẩy.
 - **Hạn mức:** tk1 hết thì tk2, tk2 hết thì chờ hồi rồi chạy tiếp, như các lượt trước. Không hỏi người dùng giữa chừng.
 - **Telegram:** báo bắt đầu, 20 phút một tin, xong hoặc dừng, bằng script như các lượt trước (mẫu `docs/plans/2026-10-15-api-cho-app/bao-tele-api.sh`). Không đọc khoá bot.
@@ -80,7 +80,7 @@ Không được:
 - Không có số kỳ trước: không vẽ thanh đôi so kỳ, không vẽ viên +/−.
 - Không có chuỗi: không vẽ đường. Không dựng chuỗi từ một tổng.
 - Vòng và thanh chia đoạn chỉ khi các phần cộng lại đúng bằng tổng.
-- **Máy chủ demo** (`demo.tonghopposmegatech.io.vn`, CI dùng) đang ở bản 31/10, chưa có `staff-profile`, `staff-tenure`, `kpi2`, `delivered-products`. Gọi các route này trên demo sẽ lỗi 404. App phải hiện khung "Chưa có trên máy chủ" (trạng thái Trống của `MTStateContainerView`, mục 4.4), **không** đỏ CI, **không** chặn màn khác tải. Không sửa web, không gộp nhánh demo.
+- **Máy chủ:** từ B1b lượt quay CI dùng web ảo chạy ngay trên máy GitHub (mục 3b), có đủ route mới. Dự phòng vẫn là demo (`demo.tonghopposmegatech.io.vn`, bản 31/10, chưa có `staff-profile`, `staff-tenure`, `kpi2`, `delivered-products`): route trả 404 thì app hiện khung "Chưa có trên máy chủ" (trạng thái Trống của `MTStateContainerView`, mục 4.4), **không** đỏ CI, **không** chặn màn khác tải. Không sửa web, không gộp nhánh demo.
 
 ### 2.4. Quy tắc nghiệp vụ (in trên màn)
 
@@ -144,6 +144,42 @@ Dừng sau B1, báo điều phối, chờ trả lời nếu:
 - Một route cần quyền khác quyền chủ hệ thống.
 
 Không có các trường hợp trên thì vẫn dừng sau B1 để tổ app duyệt bảng "Cần gọi thêm" (một lần), rồi chạy B2 đến B8 liền mạch.
+
+---
+
+## 3b. Bước B1b: web ảo chạy ngay trên máy GitHub cho lượt quay thử
+
+Người dùng duyệt 10/11 02:15Z ("Web ảo trên GitHub", rồi "đồng ý"). Lý do: máy chủ demo đang bản 31/10, thiếu route mới; người dùng cấm cập nhật demo vì tốn Cloudflare.
+
+### 3b.1. Việc
+
+- Script mới `scripts/ci/web-ao.sh` (bash, chạy trên `macos-latest`), bật web tổng chế độ demo bằng code của chính commit đang chạy:
+  1. `pnpm install --frozen-lockfile` (Node 22, `pnpm/action-setup` + `actions/setup-node` đặt ở workflow). Nếu tải `xlsx` từ `cdn.sheetjs.com` lỗi thì dừng với `::error::web-ao: cài gói`; **không** đổi `package.json`.
+  2. `pnpm build`, rồi `node scripts/deploy-demo.mjs --local` (chỉ ghi `dist/server/wrangler.demo.json`, không gọi Cloudflare).
+  3. Từ file đó tạo `dist/server/wrangler.ci.json`: bỏ `ai`, `routes`, cron (`triggers.crons = []`), `ratelimits`, `services` và binding nào cần Cloudflare thật; thêm biến `DEMO_MODE=1`, `LOCAL_DEV=1`. Tham khảo cách QA làm: `/mnt/project-files/qa/cho-test/dung-cho-test.sh` (Claude PC đọc giúp nếu Codex không thấy file này) và cách bản PC chạy `wrangler dev --local`.
+  4. `wrangler d1 migrations apply DB --local --persist-to "$RUNNER_TEMP/wstate"` với cấu hình chỉ có D1 (như script QA).
+  5. Chạy nền `pnpm exec wrangler dev --config dist/server/wrangler.ci.json --local --ip 127.0.0.1 --port 8788 --persist-to "$RUNNER_TEMP/wstate"`, log vào `$RUNNER_TEMP/web-ao.log`.
+  6. Chờ tối đa 180 giây tới khi `curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8788/api/auth/me` ra mã HTTP (bất kỳ, khác `000`). Hết giờ: in 60 dòng cuối log và `exit 1`.
+  7. Gọi một lần các route demo cần để có số (đăng nhập `chu@demo.megatech.vn` / mật khẩu demo công khai, rồi `GET /api/reports/overview`), để chế độ demo tự dựng người và đơn ảo. Nếu demo cần bước đồng bộ thì gọi đúng route web đang dùng cho việc đó ở chế độ demo (đọc `lib/demo/mode.ts`), không viết SQL tay.
+- `ios-preview.yml`:
+  - Thêm bước "Web ảo" trước bước "Phiên đăng nhập bản demo": cài Node 22 + pnpm, chạy `bash scripts/ci/web-ao.sh`. Thành công thì ghi `BASE=http://127.0.0.1:8788` vào `$GITHUB_ENV`.
+  - **Dự phòng:** bước "Web ảo" đặt `continue-on-error: true`. Hỏng thì giữ `BASE` cũ (demo), in `::warning::web-ao: không bật được, dùng demo`. Lượt quay vẫn chạy như trước.
+  - Bước đăng nhập demo dùng `$BASE` như cũ (đã dùng biến), không đổi gì khác.
+  - Cuối job (bước `if: always()`): dừng tiến trình `wrangler`, chép 200 dòng cuối `web-ao.log` vào thư mục ảnh đầu ra (đã lọc: không token, không cookie).
+  - Tăng `timeout-minutes` nếu cần (một dòng).
+- Máy ảo iOS gọi được `127.0.0.1` của máy GitHub; app đã cho phép mạng nội bộ (`NSAllowsLocalNetworking` trong `ios/Megatech/Info.plist`). Không sửa `Info.plist`.
+
+### 3b.2. Cấm
+
+- Không `wrangler deploy`, `wrangler login`, không `--remote`, không dùng `CLOUDFLARE_API_TOKEN` hay secret nào. Web ảo chỉ sống trong máy GitHub của lượt chạy.
+- Không sửa `app/**`, `lib/**`, `package.json`, `pnpm-lock.yaml`, `wrangler*.json*` gốc, `migrations/**`, `drizzle/**`, `deploy.yml`, `ios.yml`.
+
+### 3b.3. Xong khi
+
+- `iOS preview` trên commit B1b xanh, log có dòng `web-ao: sẵn sàng` và `BASE=http://127.0.0.1:8788`.
+- Ảnh các đoạn 12–14 có số (không phải màn lỗi tải).
+- Thử thêm một lần gọi `GET /api/reports/staff-profile` (tham số theo route) từ script: mã 200. Ghi kết quả vào tóm tắt.
+- Đỏ thì sửa tối đa 4 vòng như mọi bước. Hết 4 vòng: để nguyên phần dự phòng (dùng demo), ghi lý do vào tóm tắt, **đi tiếp B2**, báo điều phối một dòng.
 
 ---
 
@@ -312,6 +348,7 @@ Như `giao.md` 12.5 và 12.6 (chưa làm ở lượt trước). Mốc chụp, s�
 | Bước | Được sửa |
 |---|---|
 | B1 | `docs/plans/2026-11-10-app-1.0-gemini/doi-chieu.md` (mới) |
+| B1b | `scripts/ci/web-ao.sh` (mới), `.github/workflows/ios-preview.yml` (bước Web ảo, dự phòng, dọn cuối job, `timeout-minutes`) |
 | B2 | `M/Palette.swift`, `M/MTKit.swift` (mới), `M/MTTokens.swift` (mới, nếu tách), `M/Theme.swift`, `M/Kit.swift`, `M/Anim.swift`, `M/Tabs.swift` (chỉ `RootTabs` phần nhìn, `TabPage` nếu ở đây), `M/PeriodChips.swift`, `M/Pos.swift` (`PosChipRow`), `M/HrTeam.swift` (phần nhìn), `M/Shared.swift` (`StatusChip`, `StatusPill`), `M/Assets.xcassets/AccentColor.colorset/Contents.json`, `ios/Megatech/Megatech.xcodeproj/project.pbxproj` (chỉ thêm file mới) |
 | B3 | `M/HomeFeed.swift`, `M/Tabs.swift` (`AlertsPage`), `M/Kit.swift`, `M/MTKit.swift`, mọi file có `StateView`/lọc (chỉ chỗ gọi) |
 | B4 | `M/Home.swift`, `M/Departments.swift` (bảng bộ phận, `ShipTable`), `M/Pos.swift`, `M/DashboardView.swift`, `M/Metrics.swift` (`PancakeRefCard`, `RefCell`, `RefDelta`), `M/PipelineView.swift`, `M/Shared.swift`, `M/Search.swift`, `M/MoreViews.swift` (chỉ thẻ đơn), `M/Tabs.swift` (chỉ `DebugTour` nếu cần đổi segmented trước khi cuộn) |
@@ -344,6 +381,8 @@ Gốc so sánh: commit đầu bước (`git add -A && git diff --cached -U0 HEAD
 11. `API.swift`, `StaffAPI.swift`, `DecodeSelfTest.swift`, `ios-preview.yml`: chỉ dòng thêm (không dòng `-`), trừ dòng `timeout-minutes`.
 12. B8: `project.pbxproj` chỉ khác 8 dòng số bản (ngoài dòng thêm file mới ở B2).
 13. Không sửa `docs/plans/2026-11-10-app-1.0-gemini/thiet-ke/**`, `giao.md`.
+14. (B1b trở đi) `scripts/ci/**` và `ios-preview.yml` không có `wrangler deploy`, `wrangler login`, `--remote`, `CLOUDFLARE_`, `secrets.`(mới thêm).
+15. Mục 11 ở B1b: `ios-preview.yml` được có dòng `-` chỉ ở chỗ đặt `BASE` và `timeout-minutes`.
 
 Mục nào đỏ thì sửa trước khi đẩy; không đẩy khi máy kiểm đỏ.
 
