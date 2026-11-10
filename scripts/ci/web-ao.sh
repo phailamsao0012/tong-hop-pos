@@ -44,7 +44,29 @@ config.vars = { ...source.vars, DEMO_MODE: '1', LOCAL_DEV: '1' };
 writeFileSync('dist/server/wrangler.ci.json', JSON.stringify(config));
 writeFileSync('dist/server/wrangler.ci-d1.json', JSON.stringify({ name: config.name, compatibility_date: config.compatibility_date, d1_databases: config.d1_databases }));
 NODE
-pnpm exec wrangler d1 migrations apply DB --local --config dist/server/wrangler.ci-d1.json --persist-to "$RUNNER_TEMP/wstate"
+# Wrangler chỉ tạo DB; sqlite3 đọc nguyên file để giữ nguyên trigger CASE…END.
+pnpm exec wrangler d1 execute DB --local --command "select 1" --config dist/server/wrangler.ci-d1.json --persist-to "$RUNNER_TEMP/wstate"
+databases=()
+while IFS= read -r file; do
+  databases+=("$file")
+done < <(find "$RUNNER_TEMP/wstate/v3/d1/" -type f -name '*.sqlite')
+[ "${#databases[@]}" = 1 ] || { echo '::error::web-ao: không tìm được duy nhất một DB'; exit 1; }
+db=${databases[0]}
+sqlite3 -bail "$db" 'CREATE TABLE IF NOT EXISTS d1_migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL);'
+for file in drizzle/*.sql; do
+  name=${file##*/}
+  sql_name=${name//\'/\'\'}
+  applied=$(sqlite3 -bail "$db" "SELECT count(*) FROM d1_migrations WHERE name = '$sql_name';")
+  [ "$applied" = 0 ] || continue
+  if ! sqlite3 -bail "$db" < "$file" > "$work/migration.log" 2>&1; then
+    echo "::error::web-ao: $name"
+    exit 1
+  fi
+  if ! sqlite3 -bail "$db" "INSERT INTO d1_migrations (name) VALUES ('$sql_name');"; then
+    echo "::error::web-ao: $name"
+    exit 1
+  fi
+done
 # Wrapper và con cùng nhóm tiến trình, để bước cuối job dọn được cả workerd.
 python3 - "$RUNNER_TEMP" <<'PY'
 from subprocess import Popen, STDOUT
