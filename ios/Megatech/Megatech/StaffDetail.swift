@@ -50,6 +50,11 @@ extension API {
 }
 
 struct StaffDetailView: View {
+    @Environment(AuthModel.self) private var auth
+    @State private var profile: API.StaffProfileReport?
+    @State private var profileError: String?
+    @State private var profileMissing = false
+    @State private var profileLoading = false
     #if DEBUG
     @Environment(AppNav.self) private var tourNav: AppNav?
     #endif
@@ -65,17 +70,25 @@ struct StaffDetailView: View {
     }
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack { Avatar(name: query.name); VStack(alignment: .leading) { Text(query.name).bold(); Text(query.department).font(.caption) } }
+            VStack(alignment: .leading, spacing: MT.cardGap) {
+                HStack(spacing: MT.cardGap) {
+                    Avatar(name: query.name)
+                    VStack(alignment: .leading, spacing: MT.cellGap) {
+                        Text(query.name).font(MT.screenTitle)
+                        Text(query.department).mtFont(.caption).foregroundStyle(Palette.muted)
+                    }
+                }.frame(maxWidth: .infinity, alignment: .leading).padding(MT.cardPad).cardSurface()
                 ScopeLine(period: query.period, pos: query.pos, product: query.product)
                 if let data { content(data) }
                 else if loading { StateView(loading: StaffDetailTerms.loading) }
                 if let error { StateView(error: error, retry: { await load() }) }
                 if missing { NavigationLink(StaffDetailTerms.fallback, value: Route.orders(query.closedOrders)) }
-            }.padding()
+                if auth.me?.role == "owner" { profileContent }
+            }.padding(MT.gutter)
         }
         .background(Color.cream).navigationTitle(query.name).brandNav()
         .task { await load() }.refreshable { await load() }
+        .task(id: query) { if auth.me?.role == "owner" { await loadProfile() } }
         #if DEBUG
         .modifier(MktNvScroll())
         .onChange(of: DebugTap.shared.tick) { _, _ in
@@ -102,7 +115,61 @@ struct StaffDetailView: View {
         }
         #endif
     }
-    private func color(_ kind: String) -> Color { kind == "tag" ? .orange : kind == "note" ? .blue : .gray }
+    private func color(_ kind: String) -> Color { kind == "tag" ? Palette.warn : kind == "note" ? Palette.accent : Palette.muted }
+    @ViewBuilder private var profileContent: some View {
+        if let profile {
+            Panel {
+                Text("Hành trình làm việc").mtFont(.cardHeader)
+                if let t = profile.tenure {
+                    Text("T" + Fmt.int(Double(t.t))).mtFont(.cardMetric).foregroundStyle(Palette.good)
+                }
+                milestone("Ngày vào", profile.tenure?.joined)
+                milestone("Tài khoản POS", profile.posCreated)
+                milestone("Đơn đầu", profile.firstOrderDay)
+                if let definition = profile.definitions["joined"] { Text(definition).mtFont(.caption).foregroundStyle(Palette.muted) }
+            }
+            if !profile.badges.isEmpty {
+                Panel {
+                    Text("Huy hiệu").mtFont(.cardHeader)
+                    Text("Huy hiệu tính trên mọi POS").mtFont(.caption).foregroundStyle(Palette.muted)
+                    ForEach(profile.badges) { badge in
+                        Label {
+                            VStack(alignment: .leading, spacing: MT.cellGap) {
+                                Text(badge.label).mtFont(.cardHeader)
+                                Text(badge.note).mtFont(.caption)
+                            }
+                        } icon: { Image(systemName: "medal.fill").foregroundStyle(Palette.warn) }
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(MT.cellGap).tileSurface()
+                    }
+                }
+            }
+        } else if profileMissing {
+            StateView(empty: "Chưa có trên máy chủ")
+        } else if let profileError {
+            StateView(error: profileError) { await loadProfile() }
+        } else if profileLoading { StateView(loading: "Đang tải hành trình làm việc…") }
+    }
+    private func milestone(_ title: String, _ day: String?) -> some View {
+        HStack(alignment: .top, spacing: MT.cellGap) {
+            Image(systemName: "circle.inset.filled").foregroundStyle(Palette.accent)
+            Text(title).mtFont(.body)
+            Spacer()
+            Text(day.map(Fmt.day) ?? "—").mtFont(.body).monospacedDigit()
+        }.padding(.vertical, MT.cellGap).accessibilityElement(children: .combine)
+    }
+    @MainActor private func loadProfile() async {
+        profile = nil; profileError = nil; profileMissing = false; profileLoading = true
+        defer { profileLoading = false }
+        do {
+            let result = try await API.staffProfile(id: query.sellerId, pos: query.pos)
+            try Task.checkCancellation()
+            profile = result
+        } catch {
+            guard !Task.isCancelled else { return }
+            profileMissing = (error as? API.APIError)?.status == 404
+            if !profileMissing { profileError = LoadError.text(error) }
+        }
+    }
     private func statusColor(_ key: String) -> Color {
         StatusChip.tint(code: ["new": 0, "confirmed": 1, "shipping": 2, "delivered": 3, "returned": 4, "cancelled": 6][key])
     }
@@ -179,9 +246,12 @@ struct StaffDetailView: View {
         let s = d.summary, p = d.previousSummary
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())]) {
             VStack(alignment: .leading) {
-                KpiCard(icon: "percent", label: StaffDetailTerms.rate, value: Fmt.pct(s?.rate), delta: rateDelta(s?.rate, p?.rate))
+                Text(StaffDetailTerms.rate).mtFont(.caption).foregroundStyle(Palette.muted)
+                if query.team == "sale" || query.department.lowercased() == "sale" { MTRateBadge(rate: s?.rate, kind: .saleClose) }
+                else { Text(Fmt.pct(s?.rate)).mtFont(.cardMetric) }
+                if let delta = rateDelta(s?.rate, p?.rate) { Text(delta).mtFont(.caption) }
                 Text(StaffDetailTerms.fraction(s?.rateTop, s?.rateDen, assigned: d.rateBase == "assigned")).font(.caption)
-            }
+            }.frame(maxWidth: .infinity, alignment: .leading).padding(MT.cardPad).tileSurface()
             NavigationLink(value: Route.orders(query.closedOrders)) {
                 VStack(alignment: .leading) {
                     KpiCard(icon: "checkmark", label: StaffDetailTerms.closed, value: number(s?.closedOrders), delta: s.map { Fmt.delta($0.closedOrders, p?.closedOrders) } ?? nil)

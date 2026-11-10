@@ -315,9 +315,9 @@ struct CompareControls: View {
         let changeLabel: String = "\(change) \(StaffTerms.versus)"
         return VStack(alignment: .leading, spacing: 4) {
             Text(currentLabel).font(.caption).foregroundStyle(Color.inkSoft)
-            Text(currentValue).font(.title3.bold()).monospacedDigit()
+            Text(currentValue).mtFont(.heroNumber).lineLimit(1).minimumScaleFactor(0.6)
             Text(previousLabel).font(.caption).foregroundStyle(Color.inkSoft)
-            Text(previousValue).font(.title3.bold()).monospacedDigit()
+            Text(previousValue).mtFont(.cardMetric).lineLimit(1).minimumScaleFactor(0.6)
             Text(changeLabel)
                 .font(.caption.weight(.semibold)).foregroundStyle(compareColor(a, b, metric: metric))
             if let chart = summary.chart {

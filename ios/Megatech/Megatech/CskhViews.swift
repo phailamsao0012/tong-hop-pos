@@ -1,4 +1,5 @@
 import SwiftUI
+import Charts
 
 /// Kỳ báo cáo dùng chung: các mốc nhanh như web + khoảng tuỳ chọn.
 enum Period: Hashable, Identifiable {
@@ -126,8 +127,8 @@ extension VNDate {
 struct Embed<Content: View>: View {
     let embedded: Bool; let title: String; @ViewBuilder let content: Content
     var body: some View {
-        if embedded { VStack(alignment: .leading, spacing: 14) { content } }
-        else { ScrollView { VStack(alignment: .leading, spacing: 14) { content }.padding(16) }.navigationTitle(title).navigationBarTitleDisplayMode(.inline).brandNav() }
+        if embedded { VStack(alignment: .leading, spacing: MT.cardGap) { content } }
+        else { ScrollView { VStack(alignment: .leading, spacing: MT.cardGap) { content }.padding(MT.gutter) }.background(Palette.bg).navigationTitle(title).navigationBarTitleDisplayMode(.inline).brandNav() }
     }
 }
 
@@ -756,7 +757,7 @@ struct CompareView: View {
             }
             HStack(spacing: 8) {
                 Menu { Button("Tất cả bộ phận") { dept = "" }; ForEach(depts, id: \.self) { d in Button(d) { dept = d } } } label: { SelectBox(text: dept.isEmpty ? "Tất cả bộ phận" : dept, icon: "person.2") }
-                HStack(spacing: 6) { Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(Color.inkSoft); TextField("Tìm tên nhân viên", text: $q).font(.system(size: 12)) }.padding(.horizontal, 10).padding(.vertical, 9).background(Color.card, in: .rect(cornerRadius: 9)).overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.black.opacity(0.1)))
+                HStack(spacing: 6) { Image(systemName: "magnifyingglass").mtFont(.caption).foregroundStyle(Color.inkSoft); TextField("Tìm tên nhân viên", text: $q).mtFont(.body) }.padding(.horizontal, 10).padding(.vertical, 9).background(Color.card, in: .rect(cornerRadius: 9)).overlay(RoundedRectangle(cornerRadius: 9).stroke(Palette.mtCardBorder))
             }
             if let teamError { HrTeamErrorView(message: teamError) { nav?.hrUnit = nil } }
             else if let error, data == nil { StateView(error: error) { await load() } }
@@ -771,9 +772,18 @@ struct CompareView: View {
                 // Doanh thu chốt của một bộ phận trong kỳ (cùng số với dòng Sale / CSKH ở Trang chủ và bảng ở Tổng quan; không theo ô tìm,
                 // bộ phận con). "Tất cả" không hiện: số đó gồm cả người bán MKT và đơn chưa gán, không phải doanh thu một bộ phận (anh Vũ 10/10).
                 if let t = data?.current.total, effTeam != "all" {
-                    KpiCard(icon: "ic_m_revenue", tint: .teal, label: "Doanh thu chốt · bộ phận " + (effTeam == "cskh" ? "CSKH" : "Sale"),
-                            value: Fmt.vnd(t.closedNet), delta: Fmt.delta(t.closedNet, data?.compare?.total.closedNet),
-                            note: "\(Fmt.int(t.closedOrders)) đơn chốt" + (product == "all" ? "" : " · nhóm \(Fmt.productGroup(product))"))
+                    NavigationLink(value: Route.orders(OrderQuery.from(filters, group: "closed", basis: "confirmed", title: "Đơn chốt"))) {
+                        MTMetricHeroCard(label: "Doanh thu chốt · bộ phận " + (effTeam == "cskh" ? "CSKH" : "Sale"),
+                                         value: Fmt.shortMoney(t.closedNet), scope: "\(Fmt.int(t.closedOrders)) đơn chốt" + (product == "all" ? "" : " · nhóm \(Fmt.productGroup(product))"),
+                                         comparison: Fmt.delta(t.closedNet, data?.compare?.total.closedNet))
+                    }.buttonStyle(.plain)
+                    if let previous = data?.compare?.total.closedNet {
+                        MTComparisonBarRow(previous: previous, previousText: Fmt.shortMoney(previous), previousLabel: "Kỳ trước",
+                                           current: t.closedNet, currentText: Fmt.shortMoney(t.closedNet), currentLabel: "Kỳ này")
+                    }
+                }
+                if effTeam == "sale" {
+                    ProductGroupsBlock(period: period, pos: pos, product: product, hrTeam: applied?.id)
                 }
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                     KpiCard(icon: "ic_m_staff", tint: .good, label: "Tổng nhân sự", value: Fmt.int(Double(list.count)), note: "Có đơn chia hoặc đơn chốt trong kỳ")
@@ -784,40 +794,40 @@ struct CompareView: View {
                 if let b = best {
                     NavigationLink(value: Route.staffDetail(.of(b, in: filters, period: period, hrTeam: applied?.id))) {
                         HStack(spacing: 10) {
-                            Image(systemName: "trophy.fill").font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.good).frame(width: 34, height: 34).background(Color.brandSoft, in: .rect(cornerRadius: 9))
-                            VStack(alignment: .leading, spacing: 2) { Text("NHÂN VIÊN NỔI BẬT").font(.system(size: 9, weight: .bold)).tracking(0.6).foregroundStyle(Color.inkSoft); Text(Fmt.pct(b.shownRate)).font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(Color.ink); Text("\(b.name ?? "") · \(b.rateFrac)").font(.system(size: 11)).foregroundStyle(Color.inkSoft) }
-                            Spacer(); Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.inkSoft)
-                        }.padding(12).background(Color.card, in: .rect(cornerRadius: 14)).overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.good.opacity(0.35))).cardShadow()
+                            Image(systemName: "trophy.fill").mtFont(.cardHeader).foregroundStyle(Color.good).frame(width: 34, height: 34).background(Color.brandSoft, in: .rect(cornerRadius: 9))
+                            VStack(alignment: .leading, spacing: 2) { Text("NHÂN VIÊN NỔI BẬT").mtFont(.caption).tracking(0.6).foregroundStyle(Color.inkSoft); Group { if effTeam == "sale" { MTRateBadge(rate: b.shownRate, kind: .saleClose) } else { Text(Fmt.pct(b.shownRate)).mtFont(.cardMetric) } }; Text("\(b.name ?? "") · \(b.rateFrac)").mtFont(.caption).foregroundStyle(Color.inkSoft) }
+                            Spacer(); Image(systemName: "chevron.right").mtFont(.caption).foregroundStyle(Color.inkSoft)
+                        }.padding(12).background(Color.card, in: .rect(cornerRadius: MT.rCard)).overlay(RoundedRectangle(cornerRadius: MT.rCard).stroke(Color.good.opacity(0.35))).cardShadow()
                     }.buttonStyle(.plain)
                 }
                 // Hiệu suất đội ngũ
                 Panel {
-                    HStack { Text("Hiệu suất đội ngũ").font(.system(size: 15, weight: .bold)); Spacer(); Hint(text: "Vạch xám: trung vị · vạch xanh: mục tiêu \(Fmt.pct0(MetricPrefs.shared.goodRate))") }
-                    Text("Tỷ lệ chốt (%) của 15 nhân viên cao nhất").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                    HStack { Text("Hiệu suất đội ngũ").mtFont(.cardHeader); Spacer(); Hint(text: "Vạch xám: trung vị · vạch xanh: mục tiêu \(Fmt.pct0(MetricPrefs.shared.goodRate))") }
+                    Text("Tỷ lệ chốt (%) của 15 nhân viên cao nhất").mtFont(.caption).foregroundStyle(Color.inkSoft)
                     ForEach(Array(all.sorted { ($0.shownRate ?? -1) > ($1.shownRate ?? -1) }.prefix(15).enumerated()), id: \.element.id) { _, e in
                         NavigationLink(value: Route.staffDetail(.of(e, in: filters, period: period, hrTeam: applied?.id))) {
                             HStack(spacing: 8) {
-                                Text(e.name ?? "NV").font(.system(size: 11)).foregroundStyle(Color.ink).lineLimit(1).frame(width: 118, alignment: .trailing)
+                                Text(e.name ?? "NV").mtFont(.caption).foregroundStyle(Color.ink).lineLimit(1).frame(width: 118, alignment: .trailing)
                                 ZStack(alignment: .leading) {
                                     GeometryReader { g in
-                                        Capsule().fill(Color.black.opacity(0.05))
+                                        Capsule().fill(Palette.mtCardBorder)
                                         Capsule().fill(Fmt.rateTone(e.shownRate)).frame(width: g.size.width * CGFloat(min(1, (e.shownRate ?? 0) / 100)))
                                         if let m = med { Rectangle().fill(Color.inkSoft).frame(width: 1.5).offset(x: g.size.width * CGFloat(min(1, m / 100))) }
                                         Rectangle().fill(Color.good.opacity(0.6)).frame(width: 1.5).offset(x: g.size.width * CGFloat(MetricPrefs.shared.goodRate / 100))
                                     }
                                 }.frame(height: 10)
-                                Text(Fmt.pct(e.shownRate)).font(.system(size: 11, weight: .bold)).monospacedDigit().frame(width: 48, alignment: .trailing)
+                                Text(Fmt.pct(e.shownRate)).mtFont(.caption).monospacedDigit().frame(width: 48, alignment: .trailing)
                             }.padding(.vertical, 2).contentShape(.rect)
                         }.buttonStyle(.plain)
                     }
-                    HStack { Text("0%"); Spacer(); Text("25%"); Spacer(); Text("50%"); Spacer(); Text("75%"); Spacer(); Text("100%") }.font(.system(size: 8)).foregroundStyle(Color.inkSoft).padding(.leading, 126).padding(.trailing, 56)
+                    HStack { Text("0%"); Spacer(); Text("25%"); Spacer(); Text("50%"); Spacer(); Text("75%"); Spacer(); Text("100%") }.mtFont(.caption).foregroundStyle(Color.inkSoft).padding(.leading, 126).padding(.trailing, 56)
                 }
                 // Scatter
                 Panel {
-                    HStack { Text("Đơn chia vs. tỷ lệ chốt").font(.system(size: 15, weight: .bold)); Spacer(); Hint(text: "Mỗi chấm một người · cỡ theo doanh thu") }
+                    HStack { Text("Đơn chia vs. tỷ lệ chốt").mtFont(.cardHeader); Spacer(); Hint(text: "Mỗi chấm một người · cỡ theo doanh thu") }
                     Scatter(points: all.map { (x: $0.assignedOrders, y: $0.shownRate ?? 0, w: $0.closedNet, name: $0.name ?? "") })
-                    HStack { Text("Chốt tốt, cần thêm data").font(.system(size: 9)); Spacer(); Text("Hiệu suất cao").font(.system(size: 9)) }.foregroundStyle(Color.inkSoft)
-                    HStack { Text("Cần hỗ trợ, ưu tiên coaching").font(.system(size: 9)); Spacer(); Text("Cân bằng data").font(.system(size: 9)) }.foregroundStyle(Color.inkSoft)
+                    HStack { Text("Chốt tốt, cần thêm data").mtFont(.caption); Spacer(); Text("Hiệu suất cao").mtFont(.caption) }.foregroundStyle(Color.inkSoft)
+                    HStack { Text("Cần hỗ trợ, ưu tiên coaching").mtFont(.caption); Spacer(); Text("Cân bằng data").mtFont(.caption) }.foregroundStyle(Color.inkSoft)
                 }
                 // Nổi bật / cần hỗ trợ / cân bằng data
                 let top = rankedStaff(high: true).prefix(3)
@@ -828,24 +838,25 @@ struct CompareView: View {
                 RankBlock(title: "Cần hỗ trợ", sub: "Tỷ lệ thấp nhất, ≥ 10 đơn chia", icon: "person.2.fill", tone: .bad, rows: Array(low), prev: prevBy, filters: filters, period: period, hrTeam: applied?.id)
                 RankBlock(title: "Cân bằng data", sub: "Chốt tốt nhưng ít data, nên cấp thêm số", icon: "arrow.left.arrow.right", tone: .warn, rows: Array(balance), prev: prevBy, filters: filters, period: period, hrTeam: applied?.id)
                 // Bảng chi tiết
-                HStack { Text("So sánh chi tiết nhân viên (\(list.count) người)").font(.system(size: 15, weight: .bold)); Spacer(); ExportButton(view: "compare", filename: "so-sanh-nhan-vien-\(period.range.0)-\(period.range.1)", headers: ["Nhân viên", "Bộ phận", "Đơn chia", "Đơn chốt", "Tỷ lệ chốt", "Doanh thu", "AOV", "Tỷ lệ kỳ trước", "Doanh thu kỳ trước"]) { list.map { [$0.name ?? "", $0.department ?? "", Fmt.int($0.assignedOrders), Fmt.int($0.closedOrders), Fmt.pct($0.shownRate), Fmt.int($0.closedNet), Fmt.int($0.averageOrder ?? 0), Fmt.pct(prevBy[$0.sellerId]?.shownRate), Fmt.int(prevBy[$0.sellerId]?.closedNet ?? 0)] } }; Menu { Button("Theo doanh thu") { sort = "closedNet" }; Button("Theo đơn chốt") { sort = "closedOrders" }; Button("Theo tỷ lệ chốt") { sort = "rate" } } label: { HStack(spacing: 3) { Text(sort == "closedNet" ? "Doanh thu" : sort == "closedOrders" ? "Đơn chốt" : "Tỷ lệ chốt"); Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)) }.font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink) } }
-                VStack(spacing: 0) {
-                    ForEach(Array(list.prefix(60).enumerated()), id: \.element.id) { i, e in
-                        let p = prevBy[e.sellerId]
-                        NavigationLink(value: Route.staffDetail(.of(e, in: filters, period: period, hrTeam: applied?.id))) {
-                            HStack(spacing: 10) {
-                                Medal(rank: i + 1)
-                                Avatar(name: e.name ?? "?", size: 34)
-                                VStack(alignment: .leading, spacing: 1) { Text(e.name ?? "NV \(e.sellerId.prefix(8))").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1); Text("\(e.department ?? "—") · kỳ trước \(Fmt.pct(p?.shownRate)) · \(Fmt.shortMoney(p?.closedNet ?? 0))").font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1) }
-                                Spacer()
-                                VStack(alignment: .trailing, spacing: 1) { Text(Fmt.pct(e.shownRate)).font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink); Text(e.rateFrac).font(.system(size: 9)).foregroundStyle(Color.inkSoft) }.frame(width: 62)
-                                VStack(alignment: .trailing, spacing: 1) { Text(Fmt.short(e.closedNet)).font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink); Text("AOV \(Fmt.short(e.averageOrder ?? 0))").font(.system(size: 9)).foregroundStyle(Color.inkSoft) }.frame(width: 72)
-                            }.padding(10).contentShape(.rect)
-                        }.buttonStyle(.plain)
-                        if i < min(60, list.count) - 1 { Divider().padding(.leading, 40) }
-                    }
-                }.background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
-                Text("Cách tính: đơn chia = đơn có người bán được gán trong kỳ; đơn chốt theo ngày xác nhận lần đầu; tỷ lệ chốt = \(MetricPrefs.shared.rateShort) (đổi ở Thêm → Cách tính). Nổi bật và cần hỗ trợ chỉ xét người có từ 10 đơn chia.").font(.system(size: 9)).foregroundStyle(Color.inkSoft)
+                HStack { Text("So sánh chi tiết nhân viên (\(list.count) người)").mtFont(.cardHeader); Spacer(); ExportButton(view: "compare", filename: "so-sanh-nhan-vien-\(period.range.0)-\(period.range.1)", headers: ["Nhân viên", "Bộ phận", "Đơn chia", "Đơn chốt", "Tỷ lệ chốt", "Doanh thu", "AOV", "Tỷ lệ kỳ trước", "Doanh thu kỳ trước"]) { list.map { [$0.name ?? "", $0.department ?? "", Fmt.int($0.assignedOrders), Fmt.int($0.closedOrders), Fmt.pct($0.shownRate), Fmt.int($0.closedNet), Fmt.int($0.averageOrder ?? 0), Fmt.pct(prevBy[$0.sellerId]?.shownRate), Fmt.int(prevBy[$0.sellerId]?.closedNet ?? 0)] } }; Menu { Button("Theo doanh thu") { sort = "closedNet" }; Button("Theo đơn chốt") { sort = "closedOrders" }; Button("Theo tỷ lệ chốt") { sort = "rate" } } label: { HStack(spacing: 3) { Text(sort == "closedNet" ? "Doanh thu" : sort == "closedOrders" ? "Đơn chốt" : "Tỷ lệ chốt"); Image(systemName: "chevron.down").mtFont(.caption) }.mtFont(.caption).foregroundStyle(Color.ink) } }
+                MTStickyColumnTable(
+                    rows: Array(list.prefix(60)), total: nil, columns: ScoreColumn.allCases,
+                    title: { $0.title }, sort: { column in if let key = column.sortKey { sort = key } },
+                    firstTitle: "Nhân viên", columnWidth: 140, rowHeight: 96,
+                    selectedColumn: ScoreColumn.allCases.first { $0.sortKey == sort }
+                ) { employee in
+                    NavigationLink(value: Route.staffDetail(.of(employee, in: filters, period: period, hrTeam: applied?.id))) {
+                        VStack(alignment: .leading, spacing: MT.cellGap) {
+                            Text(employee.name ?? "NV").mtFont(.body)
+                            Text(employee.department ?? "—").mtFont(.caption).foregroundStyle(Palette.muted)
+                        }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    }.buttonStyle(.plain)
+                } cell: { employee, column in
+                    NavigationLink(value: Route.staffDetail(.of(employee, in: filters, period: period, hrTeam: applied?.id))) {
+                        scoreCell(employee, column: column)
+                    }.buttonStyle(.plain)
+                }
+                Text("Cách tính: đơn chia = đơn có người bán được gán trong kỳ; đơn chốt theo ngày xác nhận lần đầu; tỷ lệ chốt = \(MetricPrefs.shared.rateShort) (đổi ở Thêm → Cách tính). Nổi bật và cần hỗ trợ chỉ xét người có từ 10 đơn chia.").mtFont(.caption).foregroundStyle(Color.inkSoft)
             } else if error == nil { SkeletonGrid(tiles: 4); Skeleton(height: 220) }
         }
         .task(id: loadKey) { await load() }
@@ -859,6 +870,118 @@ struct CompareView: View {
             nav?.deptsPath.append(.staffDetail(.of(e, in: filters, period: period, hrTeam: applied?.id)))
         }
         #endif
+    }
+    private enum ScoreColumn: CaseIterable, Identifiable {
+        case revenue, rate, assigned, closed, average, previous
+        var id: Self { self }
+        var title: String {
+            switch self {
+            case .revenue: return "Doanh thu"
+            case .rate: return "Tỷ lệ chốt"
+            case .assigned: return "Đơn chia"
+            case .closed: return "Đơn chốt"
+            case .average: return "AOV"
+            case .previous: return "Kỳ trước"
+            }
+        }
+        var sortKey: String? {
+            switch self {
+            case .revenue: return "closedNet"
+            case .rate: return "rate"
+            case .closed: return "closedOrders"
+            default: return nil
+            }
+        }
+    }
+    @ViewBuilder private func scoreCell(_ employee: API.EmployeeRow, column: ScoreColumn) -> some View {
+        switch column {
+        case .revenue: Text(Fmt.shortMoney(employee.closedNet))
+        case .rate:
+            VStack(alignment: .trailing, spacing: MT.cellGap) {
+                if effTeam == "sale" { MTRateBadge(rate: employee.shownRate, kind: .saleClose) }
+                else { Text(Fmt.pct(employee.shownRate)) }
+                Text(employee.rateFrac).mtFont(.caption).foregroundStyle(Palette.muted)
+            }
+        case .assigned: Text(Fmt.int(employee.assignedOrders))
+        case .closed: Text(Fmt.int(employee.closedOrders))
+        case .average: Text(Fmt.shortVnd(employee.averageOrder))
+        case .previous:
+            VStack(alignment: .trailing, spacing: MT.cellGap) {
+                Text(Fmt.pct(prevBy[employee.sellerId]?.shownRate))
+                Text(Fmt.shortVnd(prevBy[employee.sellerId]?.closedNet))
+            }
+        }
+    }
+    private struct ProductGroupsBlock: View {
+        let period: Period
+        let pos: String
+        let product: String
+        let hrTeam: String?
+        @State private var report: API.ProductGroupsReport?
+        @State private var error: String?
+        @State private var missing = false
+        @State private var explanation: InfoText?
+        private var key: String { period.key + "|" + pos + "|" + (hrTeam ?? "") }
+        var body: some View {
+            VStack(alignment: .leading, spacing: MT.cardGap) {
+                if let report {
+                    ForEach(report.groups) { group in
+                        Panel {
+                            HStack(alignment: .top) {
+                                Text(group.label).mtFont(.cardHeader)
+                                Spacer()
+                                Button {
+                                    explain(group.label, closed: group.closed, net: group.closedNet, report: report)
+                                } label: {
+                                    Text(Fmt.shortMoney(group.closedNet)).mtFont(.cardMetric).lineLimit(1).minimumScaleFactor(0.6).frame(minHeight: 44)
+                                }.buttonStyle(.plain)
+                                InfoButton(InfoText(title: group.label, body: report.definitions["groups"] ?? ""))
+                            }
+                            Text(Fmt.int(group.closed) + " đơn chốt").mtFont(.caption).foregroundStyle(Palette.muted)
+                            ForEach(report.staff) { person in
+                                if let value = person.groups[group.label] {
+                                    Button { explain(person.name + " · " + group.label, closed: value.closed, net: value.closedNet, report: report) } label: {
+                                    HStack(alignment: .top, spacing: MT.cellGap) {
+                                        Text(person.name).mtFont(.body)
+                                        Spacer()
+                                        Text(Fmt.int(value.closed) + " · " + Fmt.shortMoney(value.closedNet)).mtFont(.body)
+                                    }.frame(minHeight: 44).accessibilityElement(children: .combine)
+                                    }.buttonStyle(.plain)
+                                }
+                            }
+                            HStack {
+                                Text("Tổng nhóm").mtFont(.cardHeader)
+                                Spacer()
+                                Text(Fmt.int(group.closed) + " · " + Fmt.shortMoney(group.closedNet)).mtFont(.body)
+                            }.padding(MT.cellGap).tileSurface()
+                        }
+                    }
+                    if let definition = report.definitions["groups"] {
+                        Text(definition).mtFont(.caption).foregroundStyle(Palette.muted)
+                    }
+                    if product != "all" { Text(StaffTerms.productUnfiltered).mtFont(.caption).foregroundStyle(Palette.warn) }
+                } else if missing { StateView(empty: "Chưa có trên máy chủ") }
+                else if let error { StateView(error: error) { await loadGroups() } }
+                else { StateView(loading: "Đang tải nhóm sản phẩm…") }
+            }.task(id: key) { await loadGroups() }
+                .sheet(item: $explanation) { InfoSheet(info: $0) }
+        }
+        private func explain(_ title: String, closed: Double, net: Double, report: API.ProductGroupsReport) {
+            let scope = Fmt.day(period.range.0) + " – " + Fmt.day(period.range.1) + " · " + (pos.isEmpty ? "Mọi POS" : PosBreakdown.short[pos] ?? pos) + " · " + (hrTeam == nil ? "Mọi team" : "Team đang chọn")
+            explanation = InfoText(title: title, body: scope + "\n" + Fmt.int(closed) + " đơn chốt · " + Fmt.shortMoney(net) + "\n\n" + (report.definitions["closed"] ?? "") + "\n\n" + (report.definitions["groups"] ?? ""))
+        }
+        @MainActor private func loadGroups() async {
+            report = nil; error = nil; missing = false
+            do {
+                let result = try await API.saleProductGroups(start: period.range.0, end: period.range.1, pos: pos, hrTeam: hrTeam)
+                try Task.checkCancellation()
+                report = result
+            } catch {
+                guard !Task.isCancelled else { return }
+                missing = (error as? API.APIError)?.status == 404
+                if !missing { self.error = LoadError.text(error) }
+            }
+        }
     }
     @MainActor private func load() async {
         let k = loadKey, ticket = UUID(), unit = applied
@@ -889,17 +1012,19 @@ struct RankBlock: View {
     let period: Period; let hrTeam: String?
     var body: some View {
         Panel {
-            HStack(spacing: 6) { Image(systemName: icon).foregroundStyle(tone); Text(title).font(.system(size: 14, weight: .bold)).foregroundStyle(Color.ink); Spacer() }
-            Text(sub).font(.system(size: 10)).foregroundStyle(Color.inkSoft)
-            if rows.isEmpty { Text("Chưa đủ dữ liệu.").font(.system(size: 11)).foregroundStyle(Color.inkSoft) }
+            HStack(spacing: 6) { Image(systemName: icon).foregroundStyle(tone); Text(title).mtFont(.cardHeader).foregroundStyle(Color.ink); Spacer() }
+            Text(sub).mtFont(.caption).foregroundStyle(Color.inkSoft)
+            if rows.isEmpty { Text("Chưa đủ dữ liệu.").mtFont(.caption).foregroundStyle(Color.inkSoft) }
             ForEach(Array(rows.enumerated()), id: \.element.id) { i, e in
                 NavigationLink(value: Route.staffDetail(.of(e, in: filters, period: period, hrTeam: hrTeam))) {
                     HStack(spacing: 8) {
-                        Text("\(i + 1)").font(.system(size: 10, weight: .bold)).foregroundStyle(tone).frame(width: 14)
-                        VStack(alignment: .leading, spacing: 1) { Text(e.name ?? "NV").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink); Text("Kỳ trước \(Fmt.pct(prev[e.sellerId]?.shownRate)) · \(Fmt.shortMoney(e.closedNet)) · \(e.department ?? "")").font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1) }
+                        Text("\(i + 1)").mtFont(.caption).foregroundStyle(tone).frame(width: 14)
+                        VStack(alignment: .leading, spacing: 1) { Text(e.name ?? "NV").mtFont(.body).foregroundStyle(Color.ink); Text("Kỳ trước \(Fmt.pct(prev[e.sellerId]?.shownRate)) · \(Fmt.shortMoney(e.closedNet)) · \(e.department ?? "")").mtFont(.caption).foregroundStyle(Color.inkSoft).lineLimit(1) }
                         Spacer()
-                        Text(Fmt.pct(e.shownRate)).font(.system(size: 13, weight: .bold)).foregroundStyle(tone); Text(e.rateFrac).font(.system(size: 10)).foregroundStyle(Color.inkSoft).monospacedDigit()
-                    }.padding(.vertical, 4).contentShape(.rect)
+                        if filters.team == "sale" { MTRateBadge(rate: e.shownRate, kind: .saleClose) }
+                        else { Text(Fmt.pct(e.shownRate)).mtFont(.body).foregroundStyle(tone) }
+                        Text(e.rateFrac).mtFont(.caption).foregroundStyle(Color.inkSoft).monospacedDigit()
+                    }.frame(minHeight: 44).padding(.vertical, 4).contentShape(.rect)
                 }.buttonStyle(.plain)
             }
         }
@@ -910,24 +1035,18 @@ struct RankBlock: View {
 struct Scatter: View {
     let points: [(x: Double, y: Double, w: Double, name: String)]
     var body: some View {
-        let maxX = max(1, points.map(\.x).max() ?? 1), maxW = max(1, points.map(\.w).max() ?? 1)
-        GeometryReader { g in
-            let w = g.size.width - 34, h = g.size.height - 18
-            ZStack(alignment: .topLeading) {
-                ForEach([0.0, 0.25, 0.5, 0.75, 1.0], id: \.self) { f in
-                    Path { p in p.move(to: CGPoint(x: 34, y: h * (1 - f))); p.addLine(to: CGPoint(x: 34 + w, y: h * (1 - f))) }.stroke(Color.black.opacity(0.06))
-                    Text(Fmt.pct0(f * 100)).font(.system(size: 8)).foregroundStyle(Color.inkSoft).position(x: 16, y: h * (1 - f))
-                }
-                Path { p in p.move(to: CGPoint(x: 34 + w / 2, y: 0)); p.addLine(to: CGPoint(x: 34 + w / 2, y: h)) }.stroke(Color.black.opacity(0.06))
-                ForEach(Array(points.enumerated()), id: \.offset) { _, pt in
-                    let r = 4 + 10 * CGFloat(pt.w / maxW)
-                    Circle().fill(Color.good.opacity(0.75)).frame(width: r * 2, height: r * 2).position(x: 34 + w * CGFloat(pt.x / maxX), y: h * CGFloat(1 - min(1, pt.y / 100)))
-                }
-                Text("Đơn chia →").font(.system(size: 8)).foregroundStyle(Color.inkSoft).position(x: 34 + w - 30, y: h + 10)
-                Text("0").font(.system(size: 8)).foregroundStyle(Color.inkSoft).position(x: 36, y: h + 10)
-                Text(Fmt.int(maxX)).font(.system(size: 8)).foregroundStyle(Color.inkSoft).position(x: 34 + w - 80, y: h + 10)
-            }
-        }.frame(height: 180)
+        Chart(Array(points.enumerated()), id: \.offset) { _, point in
+            PointMark(x: .value("Đơn chia", point.x), y: .value("Tỷ lệ chốt", point.y))
+                .symbolSize(by: .value("Doanh thu", point.w))
+                .foregroundStyle(Palette.good)
+                .accessibilityLabel(point.name)
+                .accessibilityValue(Fmt.int(point.x) + " đơn chia, " + Fmt.pct(point.y) + ", " + Fmt.shortMoney(point.w))
+        }
+        .chartXAxis { AxisMarks { axis in AxisGridLine(); AxisValueLabel { if let value = axis.as(Double.self) { Text(Fmt.int(value)) } } } }
+        .chartYAxis { AxisMarks { axis in AxisGridLine(); AxisValueLabel { if let value = axis.as(Double.self) { Text(Fmt.pct0(value)) } } } }
+        .chartYAxisLabel("Tỷ lệ chốt")
+        .chartXAxisLabel("Đơn chia")
+        .frame(height: 180)
     }
 }
 
@@ -949,18 +1068,14 @@ struct BatchesView: View {
             if let error, data == nil { StateView(error: error) { await load() } }
             if let d = data {
                 let all = d.batches, recv = all.reduce(0) { $0 + $1.received }, buy = all.reduce(0) { $0 + $1.buyers }
-                HStack(spacing: 10) {
-                    StatCard(icon: "iphone", tint: .good, label: "Tổng số điện thoại đã nhận", value: Fmt.int(recv), sub: "\(all.count) đợt")
-                    StatCard(icon: "target", tint: .good, label: "Tỷ lệ mua (toàn bộ)", value: Fmt.pct(recv > 0 ? buy / recv * 100 : nil), sub: "\(Fmt.int(buy)) SĐT đã mua")
-                }
+                MTMetricHeroCard(label: "Tổng số điện thoại đã nhận", value: Fmt.int(recv), scope: "\(all.count) đợt")
+                MTStatCell(label: "Tỷ lệ mua (toàn bộ)", value: Fmt.pct(recv > 0 ? buy / recv * 100 : nil), note: "\(Fmt.int(buy)) SĐT đã mua")
                 let months = Array(Set(all.map(\.month))).sorted(by: >)
                 let list = months.filter { filter == "all" || (filter == "active" ? $0 == thisMonth : $0 != thisMonth) }
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
+                MTFlowLayout(spacing: MT.cellGap) {
                         FilterChip(label: "Tất cả (\(months.count))", on: filter == "all") { filter = "all" }
                         FilterChip(label: "Đang triển khai (\(months.filter { $0 == thisMonth }.count))", on: filter == "active") { filter = "active" }
                         FilterChip(label: "Đã hoàn thành (\(months.filter { $0 != thisMonth }.count))", on: filter == "done") { filter = "done" }
-                    }
                 }
                 SectionHead(title: "Danh sách đợt", action: "Mới nhất")
                 VStack(spacing: 10) {
@@ -969,21 +1084,36 @@ struct BatchesView: View {
                         let r = rows.reduce(0) { $0 + $1.received }, b = rows.reduce(0) { $0 + $1.buyers }, net = rows.reduce(0) { $0 + $1.net }
                         NavigationLink(value: Route.orders(OrderQuery(start: m + "-01", end: VNDate.monthEnd(m), basis: "assigned", title: "Data tháng \(m.suffix(2))/\(m.prefix(4))"))) {
                             Panel(padding: 12) {
-                                HStack { Text("#BT\(m.replacingOccurrences(of: "-", with: ""))").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink); Spacer(); Tag(text: m == thisMonth ? "Đang triển khai" : "Đã hoàn thành", tone: m == thisMonth ? .green : .blue) }
-                                HStack(spacing: 14) {
-                                    HStack(spacing: 5) { Image(systemName: "iphone").font(.system(size: 10)); VStack(alignment: .leading, spacing: 0) { Text(Fmt.int(r)).font(.system(size: 12, weight: .bold)); Text("điện thoại").font(.system(size: 9)) } }
-                                    HStack(spacing: 5) { Image(systemName: "person.2").font(.system(size: 10)); VStack(alignment: .leading, spacing: 0) { Text("\(rows.count) nhân viên").font(.system(size: 12, weight: .bold)); Text("được giao").font(.system(size: 9)) } }
-                                    HStack(spacing: 5) { Image(systemName: "calendar").font(.system(size: 10)); VStack(alignment: .leading, spacing: 0) { Text("\(m.suffix(2))/\(m.prefix(4))").font(.system(size: 12, weight: .bold)); Text("tháng giao").font(.system(size: 9)) } }
+                                HStack { Text("#BT\(m.replacingOccurrences(of: "-", with: ""))").mtFont(.body).foregroundStyle(Color.ink); Spacer(); Tag(text: m == thisMonth ? "Đang triển khai" : "Đã hoàn thành", tone: m == thisMonth ? .green : .blue) }
+                                HStack(spacing: MT.cardGap) {
+                                    HStack(spacing: 5) { Image(systemName: "iphone").mtFont(.caption); VStack(alignment: .leading, spacing: 0) { Text(Fmt.int(r)).mtFont(.body); Text("điện thoại").mtFont(.caption) } }
+                                    HStack(spacing: 5) { Image(systemName: "person.2").mtFont(.caption); VStack(alignment: .leading, spacing: 0) { Text("\(rows.count) nhân viên").mtFont(.body); Text("được giao").mtFont(.caption) } }
+                                    HStack(spacing: 5) { Image(systemName: "calendar").mtFont(.caption); VStack(alignment: .leading, spacing: 0) { Text("\(m.suffix(2))/\(m.prefix(4))").mtFont(.body); Text("tháng giao").mtFont(.caption) } }
                                 }.foregroundStyle(Color.inkSoft).padding(.top, 6)
                                 HStack {
-                                    HStack(spacing: -6) { ForEach(rows.prefix(3)) { x in Avatar(name: x.sellerName, size: 24).overlay(Circle().stroke(Color.card, lineWidth: 2)) }; if rows.count > 3 { Text("+\(rows.count - 3)").font(.system(size: 9, weight: .bold)).foregroundStyle(Color.inkSoft).frame(width: 24, height: 24).background(Color.black.opacity(0.06), in: .circle).overlay(Circle().stroke(Color.card, lineWidth: 2)) } }
+                                    HStack(spacing: -6) { ForEach(rows.prefix(3)) { x in Avatar(name: x.sellerName, size: 24).overlay(Circle().stroke(Color.card, lineWidth: 2)) }; if rows.count > 3 { Text("+\(rows.count - 3)").mtFont(.caption).foregroundStyle(Color.inkSoft).frame(width: 24, height: 24).background(Palette.mtCardBorder, in: .circle).overlay(Circle().stroke(Color.card, lineWidth: 2)) } }
                                     Spacer()
-                                    Text("mua \(Fmt.pct(r > 0 ? b / r * 100 : nil)) · \(Fmt.shortMoney(net))").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.good)
+                                    Text("mua \(Fmt.pct(r > 0 ? b / r * 100 : nil)) · \(Fmt.shortMoney(net))").mtFont(.caption).foregroundStyle(Color.good)
                                 }.padding(.top, 8)
+                                ForEach(rows) { row in
+                                    HStack(alignment: .top, spacing: MT.cellGap) {
+                                        VStack(alignment: .leading, spacing: MT.cellGap) {
+                                            Text(row.sellerName).mtFont(.body)
+                                            Text(row.posName).mtFont(.caption).foregroundStyle(Palette.muted)
+                                            Text(Fmt.int(row.received) + " số · " + Fmt.int(row.buyers) + " đã mua").mtFont(.caption).foregroundStyle(Palette.muted)
+                                        }
+                                        Spacer()
+                                        VStack(alignment: .trailing, spacing: MT.cellGap) {
+                                            Text(Fmt.pct(row.buyRate)).mtFont(.body)
+                                            Text(Fmt.shortMoney(row.net)).mtFont(.body)
+                                        }
+                                    }.frame(minHeight: 44).padding(MT.cellGap).tileSurface()
+                                        .accessibilityElement(children: .combine)
+                                }
                             }
                         }.buttonStyle(.plain)
                     }
-                    if list.isEmpty { Panel { Text("Không có đợt nào trong kỳ.").font(.system(size: 12)).foregroundStyle(Color.inkSoft) } }
+                    if list.isEmpty { Panel { Text("Không có đợt nào trong kỳ.").mtFont(.body).foregroundStyle(Color.inkSoft) } }
                 }
             } else if error == nil { SkeletonGrid(tiles: 2); Skeleton(height: 120) }
         }

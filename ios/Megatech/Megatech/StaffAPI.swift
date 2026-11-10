@@ -1,5 +1,72 @@
 import Foundation
 
+extension API {
+    struct ProfileTenure: Decodable {
+        let joined: String
+        let source: String
+        let t: Int
+    }
+    struct StaffTenureReport: Decodable {
+        let today: String
+        let people: [String: ProfileTenure]
+    }
+    struct ProfileBadge: Decodable, Identifiable {
+        let key: String
+        let tier: String
+        let label: String
+        let note: String
+        let month: String?
+        var id: String { key }
+    }
+    struct ProfileMonth: Decodable, Identifiable {
+        let month: String
+        let net: Double
+        let closedOrders: Double
+        let rate: Double?
+        let rank: Int?
+        let of: Int
+        var id: String { month }
+    }
+    struct StaffProfileReport: Decodable {
+        let tenure: ProfileTenure?
+        let posCreated: String?
+        let firstOrderDay: String?
+        let months: [ProfileMonth]
+        let badges: [ProfileBadge]
+        let definitions: [String: String]
+    }
+    static func staffTenure() async throws -> StaffTenureReport {
+        try await request("/api/staff-tenure")
+    }
+    static func staffProfile(id: String, pos: String) async throws -> StaffProfileReport {
+        try await request("/api/reports/staff-profile?id=\(queryValue(id))&pos=\(queryValue(pos))")
+    }
+    struct ProductGroupCell: Decodable, Identifiable {
+        let label: String
+        let closed: Double
+        let closedNet: Double
+        var id: String { label }
+    }
+    struct ProductGroupStaff: Decodable, Identifiable {
+        let sellerId: String
+        let name: String
+        let groups: [String: ProductGroupValue]
+        var id: String { sellerId }
+    }
+    struct ProductGroupValue: Decodable {
+        let closed: Double
+        let closedNet: Double
+    }
+    struct ProductGroupsReport: Decodable {
+        let groups: [ProductGroupCell]
+        let staff: [ProductGroupStaff]
+        let definitions: [String: String]
+    }
+    static func saleProductGroups(start: String, end: String, pos: String, hrTeam: String?) async throws -> ProductGroupsReport {
+        try await request("/api/reports/product-groups?start=\(queryValue(start))&end=\(queryValue(end))&posIds=\(queryValue(pos))&team=sale&dim=main&basis=both&by=seller" + HrUnit.suffix(hrTeam))
+    }
+}
+
 /// Bộ lọc của danh sách cấu thành một ô; giữ nguyên kỳ, POS và team khi mở từ bảng (I3).
 struct StaffOrderQuery: Hashable {
     let team: String
@@ -26,6 +93,9 @@ extension API {
     struct StaffPeriod: Decodable { let start: String; let end: String }
     struct StaffDefinitions: Decodable { let packed: String?; let closed: String; let rate: String }
     struct StaffRow: Decodable, Identifiable {
+        let delivered: Double?
+        let deliveredNet: Double?
+        let paidNet: Double?
         let sellerId: String
         let name: String
         let department: String?
@@ -47,6 +117,9 @@ extension API {
         var id: String { sellerId }
     }
     struct StaffSum: Decodable {
+        let delivered: Double?
+        let deliveredNet: Double?
+        let paidNet: Double?
         let people: Double
         let created: Double
         let createdClosed: Double

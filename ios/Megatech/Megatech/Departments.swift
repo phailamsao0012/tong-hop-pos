@@ -501,7 +501,7 @@ struct DeptPage<Content: View>: View {
     @ViewBuilder let content: Content
     var body: some View {
         ScrollViewReader { proxy in
-            ScrollView { VStack(alignment: .leading, spacing: 14) { content }.padding(16).padding(.bottom, 24) }
+            ScrollView { VStack(alignment: .leading, spacing: MT.cardGap) { content }.padding(MT.gutter).padding(.bottom, 24) }
                 .refreshHost(outer: nil)
                 .background(Color.cream)
                 .navigationTitle(title).navigationBarTitleDisplayMode(.inline).brandNav()
@@ -555,7 +555,7 @@ struct SaleContent: View {
     private var pages: [WebPage] { SALE_PAGES.filter { auth.me?.canView($0.id) ?? false } }
     var body: some View {
         Group {
-            SubNav(selection: $page, pages: pages)
+            MTSegmentedControl(selection: $page, options: pages.map { ($0.id, $0.title) })
             if HrUnit.notice(for: page) { HrTeamNotice(applies: false, deptLabel: "Sale") }
             switch page {
             case "shift": ShiftView()

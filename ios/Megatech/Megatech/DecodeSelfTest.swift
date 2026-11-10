@@ -11,6 +11,7 @@ enum DecodeSelfTest {
         paths(&r)
         marketingRank(&r)
         staffDetail(&r)
+        appB5(&r)
         emit(r.failed == 0 ? "DECODE_TEST OK \(r.total) cases" : "DECODE_TEST FAILED \(r.failed)/\(r.total)")
         exit(r.failed == 0 ? 0 : 1)
     }
@@ -30,6 +31,37 @@ enum DecodeSelfTest {
                 // Không in JSON hay lỗi giải mã (có thể chứa giá trị); chỉ mã ca thử.
                 check(code, false)
                 return nil
+            }
+        }
+    }
+    private static func appB5(_ r: inout Run) {
+        if let d = r.decode("B5_TENURE", API.StaffTenureReport.self, #"{"today":"2026-11-10","people":{"staff-a":{"joined":"2026-10-10","source":"tay","t":1}}}"#) {
+            r.check("B5_TENURE_ID", d.people["staff-a"]?.t == 1 && d.people["staff-b"] == nil)
+        }
+        _ = r.decode("B5_TENURE_EMPTY", API.StaffTenureReport.self, #"{"today":"2026-11-10","people":{}}"#)
+        let month = #"{"month":"2026-10","net":30,"closedOrders":12,"rate":null,"rank":null,"of":1}"#
+        let badge = #"{"key":"badge-a","tier":"dong","label":"Mốc A","note":"Số giả"}"#
+        let tenure = #"{"joined":"2026-10-10","source":"tay","t":1}"#
+        if let d = r.decode("B5_PROFILE", API.StaffProfileReport.self, "{\"tenure\":\(tenure),\"posCreated\":\"2026-10-10\",\"firstOrderDay\":\"2026-10-12\",\"months\":[\(month)],\"badges\":[\(badge)],\"definitions\":{}}") {
+            r.check("B5_PROFILE_FIELDS", d.tenure?.source == "tay" && d.posCreated == "2026-10-10" && d.firstOrderDay == "2026-10-12" && d.months.first?.net == 30 && d.months.first?.rank == nil && d.badges.first?.label == "Mốc A" && d.badges.first?.tier == "dong")
+        }
+        if let d = r.decode("B5_PROFILE_EMPTY", API.StaffProfileReport.self, #"{"months":[],"badges":[],"definitions":{}}"#) {
+            r.check("B5_PROFILE_NIL", d.tenure == nil && d.posCreated == nil && d.firstOrderDay == nil)
+        }
+        let value = #"{"closed":12,"closedNet":30}"#
+        if let d = r.decode("B5_GROUPS", API.ProductGroupsReport.self, "{\"groups\":[{\"label\":\"Nhóm A\",\"closed\":12,\"closedNet\":30}],\"staff\":[{\"sellerId\":\"staff-a\",\"name\":\"NV A\",\"groups\":{\"Nhóm A\":\(value)}}],\"definitions\":{}}") {
+            r.check("B5_GROUP_CELL", d.groups.first?.label == "Nhóm A" && d.staff.first?.groups["Nhóm A"]?.closedNet == 30)
+        }
+        _ = r.decode("B5_GROUPS_EMPTY", API.ProductGroupsReport.self, #"{"groups":[],"staff":[],"definitions":{}}"#)
+        let base = #"""
+        "created":30,"createdClosed":12,"closed":12,"closedNet":30,"waiting":0
+        """#
+        for extra in ["", ",\"delivered\":12,\"deliveredNet\":30,\"paidNet\":12"] {
+            if let d = r.decode("B5_DELIVERY_ROW", API.StaffRow.self, "{\"sellerId\":\"staff-a\",\"name\":\"NV A\",\(base)\(extra)}") {
+                r.check("B5_DELIVERY_ROW_VALUES", extra.isEmpty ? d.delivered == nil && d.deliveredNet == nil && d.paidNet == nil : d.delivered == 12 && d.deliveredNet == 30 && d.paidNet == 12)
+            }
+            if let d = r.decode("B5_DELIVERY_TOTAL", API.StaffSum.self, "{\"people\":1,\(base)\(extra)}") {
+                r.check("B5_DELIVERY_TOTAL_VALUES", extra.isEmpty ? d.delivered == nil && d.deliveredNet == nil && d.paidNet == nil : d.delivered == 12 && d.deliveredNet == 30 && d.paidNet == 12)
             }
         }
     }

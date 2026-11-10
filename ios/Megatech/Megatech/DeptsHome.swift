@@ -66,7 +66,7 @@ struct DeptEntry: Identifiable {
             ]
             if me.canView("recruit") { subs.append(Sub(id: "recruit", title: "Tuyển dụng", icon: "person.badge.plus", route: .hr("recruit"))) }
             r.append(DeptEntry(id: "hr", title: "Nhân sự", caption: "Quân số, hồ sơ, sơ đồ tổ chức, duyệt thay đổi",
-                               icon: "person.crop.rectangle.stack.fill", tint: .purple, route: .hr(""), subs: subs, badge: hrBadge))
+                               icon: "person.crop.rectangle.stack.fill", tint: Palette.mtRolePurpleInk, route: .hr(""), subs: subs, badge: hrBadge))
         }
         return r
     }
@@ -78,21 +78,21 @@ struct DeptCard: View {
         VStack(alignment: .leading, spacing: 12) {
             NavigationLink(value: entry.route) {
                 HStack(spacing: 12) {
-                    MetricIcon(entry.icon, size: 19).foregroundStyle(.white)
+                    MetricIcon(entry.icon, size: 19).foregroundStyle(Palette.mtTextPrimary)
                         .frame(width: 46, height: 46)
-                        .background(LinearGradient(colors: [entry.tint.opacity(0.85), entry.tint], startPoint: .topLeading, endPoint: .bottomTrailing), in: .rect(cornerRadius: 14))
+                        .background(entry.tint.opacity(0.12), in: .rect(cornerRadius: MT.rCell))
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 6) {
-                            Text(entry.title).font(.system(size: 17, weight: .bold)).foregroundStyle(Color.ink)
+                            Text(entry.title).mtFont(.cardHeader).foregroundStyle(Color.ink)
                             if entry.badge > 0 {
-                                Text("\(entry.badge) chờ duyệt").font(.system(size: 10, weight: .bold)).foregroundStyle(.white)
+                                Text("\(entry.badge) chờ duyệt").mtFont(.caption).foregroundStyle(.white)
                                     .padding(.horizontal, 6).padding(.vertical, 2).background(Color.bad, in: .capsule)
                             }
                         }
-                        Text(entry.caption).font(.system(size: 11)).foregroundStyle(Color.inkSoft).lineLimit(2)
+                        Text(entry.caption).mtFont(.caption).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 4)
-                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(entry.tint)
+                    Image(systemName: "chevron.right").mtFont(.body).foregroundStyle(entry.tint)
                         .frame(width: 28, height: 28).background(entry.tint.opacity(0.12), in: .circle)
                 }.contentShape(.rect)
             }.buttonStyle(.plain)
@@ -102,13 +102,13 @@ struct DeptCard: View {
                         NavigationLink(value: s.route) {
                             HStack(spacing: 6) {
                                 MetricIcon(s.icon, size: 11).foregroundStyle(entry.tint).frame(width: 18)
-                                Text(s.title).font(.system(size: 12, weight: .medium)).foregroundStyle(Color.ink).lineLimit(1).minimumScaleFactor(0.85)
+                                Text(s.title).mtFont(.body).foregroundStyle(Color.ink).fixedSize(horizontal: false, vertical: true)
                                 Spacer(minLength: 0)
                                 if s.badge > 0 {
-                                    Text("\(s.badge)").font(.system(size: 9, weight: .bold)).foregroundStyle(.white).padding(.horizontal, 5).padding(.vertical, 1).background(Color.bad, in: .capsule)
+                                    Text("\(s.badge)").mtFont(.caption).foregroundStyle(.white).padding(.horizontal, 5).padding(.vertical, 1).background(Color.bad, in: .capsule)
                                 }
                             }
-                            .padding(.horizontal, 10).padding(.vertical, 9)
+                            .padding(.horizontal, 10).frame(minHeight: 44)
                             .background(entry.tint.opacity(0.07), in: .rect(cornerRadius: 10)).contentShape(.rect)
                         }.buttonStyle(.plain)
                     }
@@ -116,19 +116,16 @@ struct DeptCard: View {
             } else if let inside = entry.inside {
                 NavigationLink(value: entry.route) {
                     HStack(alignment: .top, spacing: 6) {
-                        Image(systemName: "square.text.square.fill").font(.system(size: 11)).foregroundStyle(entry.tint)
-                        Text(inside).font(.system(size: 11)).foregroundStyle(Color.inkSoft).multilineTextAlignment(.leading)
+                        Image(systemName: "square.text.square.fill").mtFont(.caption).foregroundStyle(entry.tint)
+                        Text(inside).mtFont(.caption).foregroundStyle(Color.inkSoft).multilineTextAlignment(.leading)
                         Spacer(minLength: 0)
                     }
-                    .padding(10).background(entry.tint.opacity(0.07), in: .rect(cornerRadius: 10)).contentShape(.rect)
+                    .frame(minHeight: 44).padding(10).background(entry.tint.opacity(0.07), in: .rect(cornerRadius: MT.rCell)).contentShape(.rect)
                 }.buttonStyle(.plain)
             }
         }
-        .padding(14)
-        .background(Color.card, in: .rect(cornerRadius: 18))
-        .overlay(alignment: .top) { UnevenRoundedRectangle(topLeadingRadius: 18, topTrailingRadius: 18).fill(entry.tint).frame(height: 3) }
-        .clipShape(.rect(cornerRadius: 18))
-        .cardShadow()
+        .padding(MT.cardPad)
+        .cardSurface()
     }
 }
 
