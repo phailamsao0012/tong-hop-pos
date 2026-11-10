@@ -662,7 +662,7 @@ struct VanDonView: View {
         .refreshable { await load() }
         .task(id: loadKey) { await load() }
         // Chưa có danh sách đơn theo ngày gửi hàng trên web: bảng giải thích không có nút xem đơn.
-        .sheet(item: $explain) { m in ExplainSheet(m: m) { _ in } }
+        .sheet(item: $explain) { m in MTFilterSheet(title: m.title, existingNavigation: true) { ExplainSheet(m: m) { _ in } } }
         #if DEBUG
         .onChange(of: DebugTap.shared.tick) { _, _ in
             // Lượt tự xem MEGATECH_TOUR=chamso "chạm" thẻ Đơn chuyển đi (máy ảo không chạm được), rồi đóng bảng giải thích.

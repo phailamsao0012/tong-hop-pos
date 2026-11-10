@@ -55,7 +55,7 @@ struct PeriodMenu: View {
             Divider()
             Button { custom = true } label: { Label("Khoảng tuỳ chọn…", systemImage: "calendar.badge.plus") }
         } label: { DatePill(text: prefix + period.title) }
-        .sheet(isPresented: $custom) { CustomRangeSheet(initial: period.range) { period = .custom($0, $1) } }
+        .sheet(isPresented: $custom) { MTFilterSheet(title: "Khoảng tuỳ chọn", existingNavigation: true) { CustomRangeSheet(initial: period.range) { period = .custom($0, $1) } } }
     }
 }
 

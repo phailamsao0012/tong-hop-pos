@@ -173,7 +173,7 @@ struct MarketingView: View {
             .task(id: key) { await load() }
             // Kéo để làm mới trang chứa (trang MKT).
             .pullToReload { rankRefresh += 1; await load() }
-            .sheet(item: $explain) { m in ExplainSheet(m: m) { _ in } }
+            .sheet(item: $explain) { m in MTFilterSheet(title: m.title, existingNavigation: true) { ExplainSheet(m: m) { _ in } } }
             #if DEBUG
             .onChange(of: DebugTap.shared.tick) { _, _ in tourTap(DebugTap.shared.target) }
             #endif

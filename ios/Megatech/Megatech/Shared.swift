@@ -154,7 +154,7 @@ struct OrderListView: View {
         .navigationTitle(active.title)
         .navigationBarTitleDisplayMode(.inline).brandNav()
         .toolbar { if filterable { ToolbarItem(placement: .primaryAction) { Button { showFilter = true } label: { Label("Lọc", systemImage: "line.3.horizontal.decrease.circle") } } } }
-        .sheet(isPresented: $showFilter) { OrderFilterSheet(query: active) { edited = $0 } }
+        .sheet(isPresented: $showFilter) { MTFilterSheet(title: "Lọc đơn", existingNavigation: true) { OrderFilterSheet(query: active) { edited = $0 } } }
         .searchable(text: $search, prompt: "Mã đơn, SĐT, tên khách")
         .onSubmit(of: .search) { Task { await load(next: false) } }
         .onChange(of: search) { _, v in if v.isEmpty { Task { await load(next: false) } } }

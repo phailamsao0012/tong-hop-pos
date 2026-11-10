@@ -188,14 +188,19 @@ struct AlertsPage: View {
         let age: Int = sync.age(pos)
         return age < 60 ? "\(age) phút" : "\(age / 60) giờ"
     }
+    private func syncSymbol(_ pos: API.SyncPos?) -> String {
+        guard let pos else { return "questionmark.circle" }
+        if pos.lastError != nil { return "exclamationmark.triangle.fill" }
+        return sync.age(pos) > 15 ? "clock.badge.exclamationmark" : "checkmark.circle.fill"
+    }
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: MT.cardGap) {
                     PageTitle(title: "Thông báo", subtitle: alerts.updatedAt.map { "Cập nhật lúc \(Fmt.hm($0))" } ?? "Đang kiểm tra…")
                     let items = alerts.items(sync: sync)
                     SectionHead(title: "Cần xử lý", count: items.isEmpty ? nil : items.count)
-                    if !alerts.loaded && items.isEmpty { ThinkingLoader() }
+                    if !alerts.loaded && items.isEmpty { StateView(loading: "Đang kiểm tra…") }
                     else if items.isEmpty { AlertsEmpty(failed: alerts.failed, text: alerts.failText) { await alerts.refresh(maxAge: 0, me: auth.me) } }
                     ForEach(items) { AlertLink(item: $0) }
                     let canShift = auth.me.map { $0.canView("shift") || $0.canView("center") } ?? false
@@ -228,11 +233,12 @@ struct AlertsPage: View {
                                 PosBadge(id: id, size: 20)
                                 VStack(alignment: .leading, spacing: 0) {
                                     Text(PosBreakdown.names[id] ?? id).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink)
-                                    Text(p?.lastError ?? "đồng bộ lúc \(Fmt.dateTime(p?.lastSyncAt))").font(.system(size: 10)).foregroundStyle(p?.lastError != nil ? Color.bad : Color.inkSoft).lineLimit(1)
+                                    Text(p?.lastError ?? "đồng bộ lúc \(Fmt.dateTime(p?.lastSyncAt))").mtFont(.caption).foregroundStyle(p?.lastError != nil ? Color.bad : Color.inkSoft).fixedSize(horizontal: false, vertical: true)
                                 }
                                 Spacer()
-                                Circle().fill(tone).frame(width: 8, height: 8)
-                                Text(syncAge(p)).font(.system(size: 10)).foregroundStyle(tone)
+                                Image(systemName: syncSymbol(p))
+                                    .foregroundStyle(tone).accessibilityHidden(true)
+                                Text(syncAge(p)).mtFont(.caption).foregroundStyle(tone)
                             }
                             .padding(.vertical, 2)
                         }

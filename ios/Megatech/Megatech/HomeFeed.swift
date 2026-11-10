@@ -39,11 +39,11 @@ struct HomeFeed: View {
         NavigationStack(path: $nav.homePath) {
             TabPage(title: "Hôm nay", greeting: "\(Self.hello()) \(auth.me?.displayName ?? "MEGATECH")", subtitle: Fmt.weekday()) {
                 hero
-                todo
                 if canMkt { mktRow }
                 if canVd { vdRow }
-                shiftCard
+                todo
                 if let me = auth.me { HomeShortcuts(me: me) }
+                shiftCard
             }
             .hrNotice(dept: "Tất cả")
             .appRoutes()
@@ -54,7 +54,7 @@ struct HomeFeed: View {
                 guard p == .active, let day = startedDay else { return }
                 if day != VNDate.string(.now) || (startedAt.map { Date.now.timeIntervalSince($0) > 600 } ?? true) { Task { await load(force: true) } }
             }
-            .sheet(item: $explain) { m in ExplainSheet(m: m) { q in nav.homePath.append(.orders(q)) } }
+            .sheet(item: $explain) { m in MTFilterSheet(title: m.title, existingNavigation: true) { ExplainSheet(m: m) { q in nav.homePath.append(.orders(q)) } } }
         }
     }
 
@@ -107,6 +107,7 @@ struct HomeFeed: View {
                 }
                 Text("Xem riêng, không cộng lại · so cùng giờ hôm qua").font(.footnote).foregroundStyle(Palette.muted)
                 if let error { StateView(error: error, compact: true) { await reload(force: true) } }
+                departmentCells
                 if showSale { teamRow(.sale, sale) }
                 if showCskh { teamRow(.cskh, cskh) }
                 if canMkt {
@@ -122,6 +123,19 @@ struct HomeFeed: View {
         }.environment(\.thinking, loading && (sale != nil || cskh != nil))
     }
 
+    private var departmentCells: some View {
+        Grid(horizontalSpacing: MT.cellGap, verticalSpacing: MT.cellGap) {
+            GridRow {
+                if showSale { opener(.sale) { MTStatCell(label: "Sale", value: sale.map { money($0.current.total.closedNet) } ?? "—", tone: Palette.sale) } }
+                if showCskh { opener(.cskh) { MTStatCell(label: "CSKH", value: cskh.map { money($0.current.total.closedNet) } ?? "—", tone: Palette.cskh) } }
+            }
+            GridRow {
+                if canMkt { opener(.mkt) { MTStatCell(label: "Marketing", value: mkt.map { money($0.current.net) } ?? "—", tone: Palette.mkt) } }
+                if canVd { opener(.vandon) { MTStatCell(label: "Doanh số chuyển đi", value: vd.map { money($0.total.sentNet) } ?? "—", tone: Palette.vandon) } }
+            }
+        }.accessibilityHint("Hôm nay, \(scopeLine). Xem riêng, không cộng lại")
+    }
+
     private var revenueHero: some View {
         let cur = ref.map { Self.refSum($0.current) }, prev = ref.map { Self.refSum($0.previous) }
         return VStack(alignment: .leading, spacing: 14) {
@@ -133,15 +147,14 @@ struct HomeFeed: View {
                 }
                 Button { hideMoney.toggle() } label: {
                     Image(systemName: hideMoney ? "eye.slash.fill" : "eye.fill")
-                        .frame(width: 40, height: 40).background(Palette.heroInk.opacity(0.08), in: .circle)
+                        .frame(width: 44, height: 44).background(Palette.heroInk.opacity(0.08), in: .circle)
                 }.buttonStyle(.plain).accessibilityLabel(hideMoney ? "Hiện số tiền" : "Ẩn số tiền")
             }
             if let cur, let ref {
                 let n = ref.current.count, w = cur.fromWeb
-                let total = VStack(spacing: 14) {
-                    OrbitArc(today: hideMoney ? 0 : cur.revenue, yesterday: hideMoney ? nil : prev?.revenue) {
-                        compactAmount(cur.revenue, size: 56, onHero: true)
-                    }.frame(maxWidth: .infinity)
+                let total = VStack(spacing: MT.cardGap) {
+                    MTMetricHeroCard(label: "Doanh thu hôm nay", value: Fmt.shortMoney(cur.revenue), scope: scopeLine,
+                                     isPrivacyMasked: hideMoney)
                     Text("\(Fmt.int(cur.orders)) đơn chốt · \(n) POS").font(.subheadline).foregroundStyle(Palette.heroMuted)
                     if let prev {
                         HStack { Text("Hôm qua cả ngày"); Spacer(); Text(hideMoney ? "••••" : Fmt.shortMoney(prev.revenue)).font(.headline) }
@@ -168,18 +181,15 @@ struct HomeFeed: View {
     private func metricInfo(_ title: String, onHero: Bool = false, make: @escaping () -> MetricExplain) -> some View {
         Button { explain = make() } label: {
             Image(systemName: "info.circle").font(.system(size: 18))
-                .frame(width: 40, height: 40)
+                .frame(width: 44, height: 44)
                 .background(onHero ? Palette.heroInk.opacity(0.08) : Palette.wash, in: .circle)
         }.buttonStyle(.plain).accessibilityLabel(title)
     }
 
     private func compactAmount(_ value: Double, size: CGFloat = 40, onHero: Bool = false) -> some View {
-        let pair = Fmt.compactMoney(value)
-        return HStack(alignment: .firstTextBaseline, spacing: 3) {
-            Text(hideMoney ? "••••" : pair.value).font(.system(size: size, weight: .heavy, design: .rounded))
-                .monospacedDigit().lineLimit(1).minimumScaleFactor(0.5).contentTransition(.numericText())
-            if !hideMoney { Text(pair.unit).font(.system(size: size == 56 ? 22 : 17, weight: .bold, design: .rounded)).foregroundStyle(onHero ? Palette.heroMuted : Palette.muted) }
-        }.foregroundStyle(onHero ? Palette.heroInk : Palette.ink)
+        return Text(hideMoney ? "••• tr ₫" : Fmt.shortMoney(value)).mtFont(.heroNumber)
+            .lineLimit(1).minimumScaleFactor(0.6).contentTransition(.numericText())
+            .foregroundStyle(onHero ? Palette.heroInk : Palette.ink)
         .accessibilityElement(children: .ignore).accessibilityLabel(hideMoney ? "Đã ẩn số tiền" : Fmt.money(value))
     }
 
@@ -205,8 +215,8 @@ struct HomeFeed: View {
                         if let net, let delta = Fmt.delta(net, prev), !hideMoney { DeltaPill(delta) }
                     }
                     if let net, let prev, !hideMoney {
-                        PairBars(prev: prev, prevText: Fmt.money(prev), prevLabel: previousLabel,
-                                 cur: net, curText: Fmt.money(net), curLabel: "Giờ này", tint: dept.tint)
+                        MTComparisonBarRow(previous: prev, previousText: Fmt.shortMoney(prev), previousLabel: previousLabel,
+                                           current: net, currentText: Fmt.shortMoney(net), currentLabel: "Giờ này", tint: dept.tint)
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -277,10 +287,10 @@ struct HomeFeed: View {
         case "CP / đơn": amount = posLimited ? nil : c?.costPerClosed
         default: amount = nil
         }
-        return StatTile(label: label, value: value ?? "—", money: hideMoney ? nil : amount, tint: Palette.mkt, note: note)
+        return MTStatCell(label: label, value: amount.map { money($0) } ?? value ?? "—", note: note, tone: Palette.mkt)
     }
     /// Tiền gọn trong ô nhỏ, theo nút con mắt.
-    private func money(_ n: Double) -> String { hideMoney ? "••••" : Fmt.shortVnd(n) }
+    private func money(_ n: Double) -> String { hideMoney ? "••• tr ₫" : Fmt.shortVnd(n) }
     /// Tiền đủ số trong bảng giải thích, cũng che khi bật con mắt.
     private func full(_ n: Double) -> String { hideMoney ? "••••••" : Fmt.money(n) }
     /// Tài khoản chỉ được xem một số POS: số đơn, số về chỉ của các POS đó nhưng chi phí quảng cáo là của mọi POS
@@ -494,15 +504,15 @@ struct AlertRow: View {
     let item: AlertCenter.Item
     var body: some View {
         HStack(spacing: 12) {
-            MetricIcon(item.icon, size: 14).foregroundStyle(item.tone.color).frame(width: 36, height: 36).background(item.tone.color.opacity(0.12), in: .rect(cornerRadius: 10))
+            MetricIcon(item.icon, size: 18).foregroundStyle(item.tone.color).frame(width: 44, height: 44).background(item.tone.color.opacity(0.12), in: .circle)
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.title).font(.subheadline.weight(.semibold)).foregroundStyle(Color.ink)
-                Text(item.sub).font(.caption).foregroundStyle(Color.inkSoft).lineLimit(2)
+                Text(item.title).mtFont(.cardHeader).foregroundStyle(Color.ink)
+                Text(item.sub).mtFont(.caption).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
             if item.route != nil { Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.inkSoft) }
         }
-        .padding(12).cardSurface(radius: 20)
+        .padding(MT.cardPad).cardSurface(radius: MT.rCard).accessibilityElement(children: .combine)
     }
 }
 

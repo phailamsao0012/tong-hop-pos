@@ -42,7 +42,7 @@ struct PeriodChips: View {
             }.id("other").accessibilityHint("Chọn khoảng ngày")
         } label: { Pill(title: period.title, icon: "calendar") }
         .accessibilityLabel("Kỳ: \(period.title)").sensoryFeedback(.selection, trigger: period)
-        .sheet(isPresented: $custom) { CustomRangeSheet(initial: period.range) { period = .custom($0, $1) } }
+        .sheet(isPresented: $custom) { MTFilterSheet(title: "Khoảng tuỳ chọn", existingNavigation: true) { CustomRangeSheet(initial: period.range) { period = .custom($0, $1) } } }
     }
 }
 

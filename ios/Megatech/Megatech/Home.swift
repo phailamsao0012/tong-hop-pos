@@ -277,7 +277,7 @@ struct OverviewView: View {
         // Kéo để làm mới: số của trang và khối Số tham chiếu Pancake tải lại cùng lúc.
         .refreshHost { await load() }
         .task(id: "\(preset.key)|\(pos ?? "")") { await load() }
-        .sheet(item: $explain) { m in ExplainSheet(m: m) { pushed = $0 } }
+        .sheet(item: $explain) { m in MTFilterSheet(title: m.title, existingNavigation: true) { ExplainSheet(m: m) { pushed = $0 } } }
     }
     private func byDay(_ s: [API.SeriesRow]) -> [(String, Double)] { var m: [String: Double] = [:]; for r in s { m[r.bucket, default: 0] += r.closedNet }; return m.keys.sorted().map { (String($0.suffix(2)), m[$0]!) } }
     private func reconcile(_ t: API.Metrics, _ r: API.Reconcile?) -> (ok: Bool, text: String)? {

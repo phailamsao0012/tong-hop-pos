@@ -251,13 +251,21 @@ struct MTFilterBarPill: View {
 
 struct MTFilterSheet<Content: View>: View {
     let title: String
+    // Existing sheets keep their navigation, toolbar and apply/dismiss actions.
+    var existingNavigation = false
     @ViewBuilder let content: Content
     @Environment(\.dismiss) private var dismiss
     var body: some View {
-        NavigationStack {
-            ScrollView { content.padding(MT.cardPad) }.background(Palette.bg)
-                .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Đóng") { dismiss() }.frame(minWidth: 44, minHeight: 44) } }
+        Group {
+            if existingNavigation {
+                content.scrollContentBackground(.hidden).background(Palette.bg)
+            } else {
+                NavigationStack {
+                    ScrollView { content.padding(MT.cardPad) }.background(Palette.bg)
+                        .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
+                        .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Đóng") { dismiss() }.frame(minWidth: 44, minHeight: 44) } }
+                }
+            }
         }.tint(Palette.accent).presentationDetents([.medium, .large])
             .presentationCornerRadius(MT.rSheet).presentationBackground(Palette.card).presentationDragIndicator(.visible)
     }
@@ -293,8 +301,14 @@ struct MTStateContainerView<Content: View>: View {
             switch state {
             case .content: content
             case .loading:
-                Skeleton(height: compact ? 44 : 72).redacted(reason: .placeholder).accessibilityHidden(true)
-                Text(text).mtFont(.body)
+                VStack(alignment: .leading, spacing: MT.cellGap) {
+                    Skeleton(height: 12).frame(maxWidth: 120)
+                    Skeleton(height: compact ? 44 : 72)
+                    if !compact {
+                        HStack(spacing: MT.cellGap) { Skeleton(height: 44); Skeleton(height: 44) }
+                    }
+                }.redacted(reason: .placeholder)
+                    .accessibilityElement(children: .ignore).accessibilityLabel(text)
             case .failed, .empty, .offline:
                 Image(systemName: state == .empty ? "tray" : state == .offline ? "wifi.slash" : "exclamationmark.triangle")
                     .font(.title2).foregroundStyle(state == .empty ? Palette.muted : Palette.warn).accessibilityHidden(true)
