@@ -791,6 +791,34 @@ jobs:
       - name: Dừng web ảo
         if: always()
         run: |
+          # Chỉ in route đã cho phép, mã HTTP và thời gian; không in query hay log thô.
+          python3 - "$RUNNER_TEMP/web-ao.log" <<'PY_NOTICE'
+          from re import search, sub
+          from pathlib import Path
+          from sys import argv
+          allowed = {
+              '/api/teams', '/api/reports/overview', '/api/reports/staff',
+              '/api/reports/staff-compare', '/api/reports/product-groups',
+              '/api/reports/van-don', '/api/reports/staff-profile',
+              '/api/staff-tenure', '/api/kpi2', '/api/marketing/analytics',
+              '/api/reports/cskh-badge', '/api/employees', '/api/targets',
+              '/api/reports/calls', '/api/reports/repurchase', '/api/reports/shift',
+              '/api/reports/batches', '/api/marketing-teams', '/api/staff-settings',
+          }
+          path = Path(argv[1])
+          rows = []
+          if path.is_file():
+              for line in path.read_text(errors='replace').splitlines():
+                  line = sub(r'\x1b\[[0-9;]*m', '', line)
+                  match = search(r'\b(?:GET|POST|HEAD) (/api/[^\s?]*)(?:\?\S*)? ([1-5][0-9]{2})[^\r\n]*?\(([0-9]+(?:\.[0-9]+)?)\s*(ms|s)\)', line)
+                  if not match:
+                      continue
+                  route, code, duration, unit = match.groups()
+                  milliseconds = float(duration) * (1000 if unit == 's' else 1)
+                  rows.append((milliseconds, route if route in allowed else '/api/<route-khac>', code))
+          for milliseconds, route, code in sorted(rows, reverse=True)[:8]:
+              print(f'::notice::web-ao: {route} {code} {milliseconds:g}ms')
+          PY_NOTICE
           python3 - "$RUNNER_TEMP/web-ao.pid" <<'PY'
           from os import killpg
           from signal import SIGTERM
