@@ -33,7 +33,7 @@ struct HrTeamChip: View {
         if allowed {
             MTFilterBarPill(title: nav?.hrUnit?.shortName ?? "Team", icon: "person.2", selected: nav?.hrUnit != nil) { open = true }
                 .buttonStyle(.plain).accessibilityLabel("Team: \(nav?.hrUnit?.shortName ?? "Team")")
-                .sheet(isPresented: $open) { MTFilterSheet(title: "Team", existingNavigation: true) { HrTeamSheet() } }
+                .sheet(isPresented: $open) { HrTeamSheet() }
                 #if DEBUG
                 .onChange(of: DebugTap.shared.tick) { _, _ in
                     if DebugTap.shared.target == "team-mo" { open = true }
