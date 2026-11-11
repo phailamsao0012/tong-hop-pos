@@ -165,7 +165,7 @@ export function MktSheetCheck({ start, end, posIds }: { start: string; end: stri
         <Tile label="Số điện thoại" sheet={t.sheet.phones} pos={t.created.phones} posLabel="POS (SĐT trên đơn tạo)" fmt={(n) => vi.format(n)} />
         <Tile label="Đơn chốt" sheet={t.sheet.orders} pos={pt.closed} posLabel={posLabel} fmt={(n) => vi.format(n)} />
         <Tile label="Doanh thu" sheet={t.sheet.revenue} pos={pt.net} posLabel={posLabel} fmt={shortMoney}
-          extra={<span className="num text-[12px] leading-snug text-ink-3">POS theo {BASIS_TEXT[basis]}: New <b className="font-semibold text-ink-2">{shortMoney(t[basis].sale)}</b> · CSKH <b className="font-semibold text-ink-2">{shortMoney(t[basis].cskh)}</b>{t[basis].other ? <> · người bán chưa có hậu tố {shortMoney(t[basis].other)}</> : null}</span>} />
+          extra={<span className="num text-[12px] leading-snug text-ink-3">POS theo {BASIS_TEXT[basis]}: DT New <b className="font-semibold text-ink-2">{shortMoney(t[basis].sale)}</b> · DT CSKH <b className="font-semibold text-ink-2">{shortMoney(t[basis].cskh)}</b>{t[basis].other ? <> · người bán chưa có hậu tố {shortMoney(t[basis].other)}</> : null}</span>} />
       </div>
       {(left.length > 0 || cutoff < data.period.end) && (
         <p className="text-[12px] leading-snug text-ink-3">
@@ -185,7 +185,7 @@ export function MktSheetCheck({ start, end, posIds }: { start: string; end: stri
         {!lines.length ? <EmptyState text="Không có số trên sheet hay đơn Marketing trong khoảng ngày này." /> : (
           <TableWrap stickyFirst><table className="tbl">
             <thead>
-              <tr><SortTh k="name" label={view === 'marketer' ? 'Marketer' : 'Ngày'} sort={sort} align="left" /><SortTh k="sPhones" label="SĐT sheet" sort={sort} /><SortTh k="pPhones" label="SĐT POS" sort={sort} /><SortTh k="sOrders" label="Đơn sheet" sort={sort} /><SortTh k="pOrders" label={`Đơn POS ${TARGET_LABEL[target]}`} sort={sort} /><SortTh k="sRev" label="DT sheet" sort={sort} /><SortTh k="pRev" label={`DT POS ${TARGET_LABEL[target]}`} sort={sort} /><SortTh k="gap" label="Lệch DT" sort={sort} /><SortTh k="sale" label="POS New" sort={sort} /><SortTh k="cskh" label="POS CSKH" sort={sort} /></tr>
+              <tr><SortTh k="name" label={view === 'marketer' ? 'Marketer' : 'Ngày'} sort={sort} align="left" /><SortTh k="sPhones" label="SĐT sheet" sort={sort} /><SortTh k="pPhones" label="SĐT POS" sort={sort} /><SortTh k="sOrders" label="Đơn sheet" sort={sort} /><SortTh k="pOrders" label={`Đơn POS ${TARGET_LABEL[target]}`} sort={sort} /><SortTh k="sRev" label="DT sheet" sort={sort} /><SortTh k="pRev" label={`DT POS ${TARGET_LABEL[target]}`} sort={sort} /><SortTh k="gap" label="Lệch DT" sort={sort} /><SortTh k="sale" label="DT New" sort={sort} /><SortTh k="cskh" label="DT CSKH" sort={sort} /></tr>
             </thead>
             <tbody>{shown.map((r) => {
               const p = r[basis], q = pick(p, target), g = gapOf(r.sheet.revenue, q.net), v = verdict(g.pct);
