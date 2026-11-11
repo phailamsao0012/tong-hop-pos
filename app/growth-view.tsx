@@ -12,7 +12,7 @@ import {
   GROWTH_DEPTS, GROWTH_DEPT_LABELS, JOIN_SOURCE_LABELS, MODES, cumulative, indexSeries, isSeries, peersFor, periodRows, summaries, tenureDays, workSpan,
   type Cmp, type GrowthData, type GrowthDept, type GrowthPerson, type Index, type Metric, type Mode,
 } from '@/lib/reports/growth-calc';
-import { ChartCard, Definitions, EmptyState, ErrorBox, PageHeader, SegmentedControl, SkeletonTable, SortTh, StatusChip, TableWrap, ThinkingLine, pct, short, toast, useMotionOK, useSort, vi } from './ui-kit';
+import { Th, ChartCard, Definitions, EmptyState, ErrorBox, PageHeader, SegmentedControl, SkeletonTable, SortTh, StatusChip, TableWrap, ThinkingLine, pct, short, toast, useMotionOK, useSort, vi } from './ui-kit';
 import { StaffPicker } from './staff-picker';
 import { useApi } from './use-api';
 import { usePosIds, usePosStaffFilter } from './pos-store';
@@ -222,7 +222,7 @@ function PeriodCard({ me, data, idx, metric, fmt, unitLabel }: { me: GrowthPerso
             </ChartContainer>
             <TableWrap className="mt-3" maxHeight="22rem" sticky>
               <table className="tbl">
-                <thead><tr><th className="text-left">Giai đoạn</th><th className="r text-right">Ngày làm</th><th className="r text-right">{unitLabel}</th><th className="r text-right">TB/ngày</th><th className="r text-right">{cmpName}</th><th className="r text-right">Chênh</th></tr></thead>
+                <thead><tr><Th className="text-left">Giai đoạn</Th><Th className="r text-right">Ngày làm</Th><Th className="r text-right">{unitLabel}</Th><Th className="r text-right">TB/ngày</Th><Th className="r text-right">{cmpName}</Th><Th className="r text-right">Chênh</Th></tr></thead>
                 <tbody>{rows.map((r) => (
                   <tr key={r.key}>
                     <td className="text-left font-medium">{r.label}</td>

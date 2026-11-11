@@ -22,7 +22,7 @@ import { PeriodToolbar, PosChips } from './overview-view';
 import { useTeam } from './team-store';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
-import {
+import { Th,
   BackfillNotice, ChartCard, Definitions, ErrorBox, EmptyState, HoverReveal, KpiCard, PageHeader, ProgressBar, SkeletonKpis, SkeletonTable, SortTh, Sparkline, StatusChip, TableWrap,
   dmy, dt, posVar, scrollToEl, short, timeOnly, toast, useMotionOK, vi, type SortState,
 } from './ui-kit';
@@ -214,16 +214,16 @@ export function CallsView({ canExport = false }: { canExport?: boolean }) {
                 <table className="tbl">
                   <thead>
                     <tr>
-                      <th className="w-8">#</th>
+                      <Th className="w-8">#</Th>
                       <SortTh k="name" label="Nhân viên" sort={staffSort} align="left" />
-                      <th>Bộ phận</th>
-                      <th className="n">Ngày có gọi</th>
+                      <Th>Bộ phận</Th>
+                      <Th className="n">Ngày có gọi</Th>
                       <SortTh k="notes" label="Cuộc gọi" sort={staffSort} />
                       <SortTh k="customers" label="Khách đã gọi" sort={staffSort} />
                       <SortTh k="perDay" label={`${metricLabel}/ngày`} sort={staffSort} />
-                      <th>Mức</th>
-                      {days.length > 1 && <th>Xu hướng</th>}
-                      {days.length <= 14 && days.map((d) => <th key={d} className="n">{dmy(d)}</th>)}
+                      <Th>Mức</Th>
+                      {days.length > 1 && <Th>Xu hướng</Th>}
+                      {days.length <= 14 && days.map((d) => <Th key={d} className="n">{dmy(d)}</Th>)}
                       {/* Data đang cầm để cuối bảng (30/09/2026): chụp gửi nhân viên thì cắt bỏ phần bên phải, không lộ. */}
                       {!hideData && <SortTh k="assigned" label="Data đang cầm" sort={staffSort} />}
                     </tr>
@@ -282,7 +282,7 @@ export function CallsView({ canExport = false }: { canExport?: boolean }) {
                     {history.items.length ? (
                       <TableWrap maxHeight="36rem" minWidth={760}>
                         <table className="tbl">
-                          <thead><tr><th>Giờ</th><th>Khách hàng</th><th>POS</th><th>Nội dung ghi chú</th></tr></thead>
+                          <thead><tr><Th>Giờ</Th><Th>Khách hàng</Th><Th>POS</Th><Th>Nội dung ghi chú</Th></tr></thead>
                           <tbody>
                             {history.items.map((it) => (
                               <tr key={it.id} className="[&>td]:align-top">

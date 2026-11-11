@@ -14,7 +14,7 @@ import { POS } from '@/lib/shared/report-model';
 import { PeriodFields } from './overview-view';
 import { useTeam } from './team-store';
 import { takeNavHint } from './nav-focus';
-import { ChartCard, ErrorBox, EmptyState, KpiCard, PageHeader, STATUS_VARS, SkeletonTable, StatusChip, TableWrap, orderStatusTone, Toolbar, dt, money, pct, posName, posVar, scrollToEl, timeOnly, toast, vi } from './ui-kit';
+import { Th, ChartCard, ErrorBox, EmptyState, KpiCard, PageHeader, STATUS_VARS, SkeletonTable, StatusChip, TableWrap, orderStatusTone, Toolbar, dt, money, pct, posName, posVar, scrollToEl, timeOnly, toast, vi } from './ui-kit';
 
 type SyncRow = { posId: string; records: number; withConfirmation: number; withSeller: number; withAssignmentTime: number; lastSyncAt: string | null; lastError: string | null; status: string; errors24h: number; backfillCursor: { month: string; completed?: boolean } | null; earliestCreatedAt: string | null; latestCreatedAt: string | null };
 type Order = { marketerId: string | null; marketerName: string | null; orderOrigin: 'self' | 'mkt'; id: string; orderId: string; posId: string; posName: string; phone: string | null; customer: string | null; createdAt: string | null; updatedAt: string | null; fetchedAt: string; statusCode: number | null; statusName: string; sellerName: string | null; sellerAssignedAt: string | null; currentTotal: number | null; net: number | null; firstConfirmedAt: string | null; closerName: string | null; deliveredAt: string | null; historyLimited: boolean; hasRaw: boolean; source: string | null };
@@ -180,7 +180,7 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
           {list && !list.orders.length && !loading ? <EmptyState text="Không có đơn phù hợp bộ lọc." /> : !list && loading ? <SkeletonTable rows={8} cols={8} /> : (
             <TableWrap minWidth={960} className="transition-opacity duration-[var(--dur)]">
               <table className="tbl" aria-busy={loading || undefined}>
-                <thead><tr><th className="n">#</th><th>Mã đơn</th><th>POS</th><th>Khách</th><th>Thời gian tạo</th><th>Nhân viên bán</th>{team === 'cskh' && <th>Nguồn / Marketer</th>}<th>Xác nhận lúc</th><th>Trạng thái</th><th className="n">Tổng tiền</th><th>Độ đầy đủ</th></tr></thead>
+                <thead><tr><Th className="n">#</Th><Th>Mã đơn</Th><Th>POS</Th><Th>Khách</Th><Th>Thời gian tạo</Th><Th>Nhân viên bán</Th>{team === 'cskh' && <Th>Nguồn / Marketer</Th>}<Th>Xác nhận lúc</Th><Th>Trạng thái</Th><Th className="n">Tổng tiền</Th><Th>Độ đầy đủ</Th></tr></thead>
                 <tbody>
                   {<GroupedRows rows={list?.orders ?? []} columns={team === 'cskh' ? 11 : 10} keyOf={groupBy ? o => groupBy === 'status' ? o.statusName : o.posName : undefined} summary={rows => <>{vi.format(rows.length)} đơn · {money(rows.reduce((sum, o) => sum + (o.net ?? 0), 0))}</>}>{(o, i) => {
                     const full = !!o.sellerAssignedAt && (!!o.firstConfirmedAt || groupOf(o.statusCode) === 'new' || groupOf(o.statusCode) === 'cancelled') && !o.historyLimited && o.hasRaw;

@@ -4,7 +4,7 @@
 import { useState, type ReactNode } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { LINE_LABEL, OTHER_LINE, PRODUCT_LINES, type LineKey, type ProductSplit, type SplitCell } from '@/lib/reports/mkt-product-split';
-import { shortMoney, vi } from './ui-kit';
+import { Th, shortMoney, vi } from './ui-kit';
 import { apiJson } from './api-fetch';
 
 type SplitBody = { byMarketer: ProductSplit; total: Partial<Record<LineKey, SplitCell>> };
@@ -44,7 +44,7 @@ export function ProductSplitHover({ url, marketerId, field, children }: { url: s
         <p className="font-semibold">Tách theo sản phẩm</p>
         {state.error ? <p className="text-bad">Chưa tải được, rê lại sau.</p> : !state.data ? <p className="text-ink-3">Đang tính…</p> : rows.length ? (
           <table className="w-full tabular-nums">
-            <thead><tr className="text-ink-3"><th className="py-1 text-left font-normal">Sản phẩm</th>{COLS.map((c) => <th key={c.key} className={`py-1 text-right font-normal ${c.key === field ? 'text-ink font-semibold' : ''}`}>{c.label}</th>)}</tr></thead>
+            <thead><tr className="text-ink-3"><Th className="py-1 text-left font-normal">Sản phẩm</Th>{COLS.map((c) => <Th key={c.key} className={`py-1 text-right font-normal ${c.key === field ? 'text-ink font-semibold' : ''}`}>{c.label}</Th>)}</tr></thead>
             <tbody>{rows.map((k) => {
               const c = state.data![k]!;
               return <tr key={k} className="border-t border-line"><td className="py-1 pr-2">{LINE_LABEL[k]}</td>{COLS.map((col) => <td key={col.key} className={`py-1 pl-2 text-right ${col.key === field ? 'font-semibold' : ''}`}>{col.key === 'revenue' ? shortMoney(c.revenue) : vi.format(c[col.key])}</td>)}</tr>;

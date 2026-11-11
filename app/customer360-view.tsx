@@ -13,7 +13,7 @@ import type { Customer360 } from '@/lib/reports/customer360';
 import { ICON } from './icons';
 import { PosChips } from './overview-view';
 import { useApi } from './use-api';
-import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, ThinkingLine, dt, pct, shortMoney, useSort, vi } from './ui-kit';
+import { Th, ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, ThinkingLine, dt, pct, shortMoney, useSort, vi } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
 
 const STAGE_COLORS: Record<string, string> = { new: 'var(--ai-3)', repeat: 'var(--primary)', loyal: 'var(--good)', risk: 'var(--warn)', sleep: 'var(--bad)', never: 'var(--ink-4)' };
@@ -104,13 +104,13 @@ export function Customer360View() {
                 <TableWrap minWidth={860} maxHeight="30rem" stickyFirst>
                   <table className="tbl">
                     <thead><tr>
-                      <th className="text-left">Khách</th>
-                      <th className="text-left">POS</th>
+                      <Th className="text-left">Khách</Th>
+                      <Th className="text-left">POS</Th>
                       <SortTh k="orders" label="Số lần mua" sort={sort} />
                       <SortTh k="net" label="Đã mua" sort={sort} />
                       <SortTh k="since" label="Lần gần nhất" sort={sort} />
                       <SortTh k="overdue" label="Hạn gọi" sort={sort} />
-                      <th className="text-left">Người bán</th>
+                      <Th className="text-left">Người bán</Th>
                     </tr></thead>
                     <tbody>{due.map((c) => (
                       <tr key={(c as { phoneRef?: string }).phoneRef ?? c.phone}>

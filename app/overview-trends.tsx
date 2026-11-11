@@ -15,7 +15,7 @@ import type { GroupKey } from '@/lib/reports/stats';
 import { useApi, useLazySeen } from './use-api';
 import { CountUp } from './ui/count-up';
 import { drawIn, useGlide, useInView, useTween } from './ui/chart-motion';
-import { EmptyState, ErrorBox, STATUS_LABELS, STATUS_VARS, SegmentedControl, Skeleton, TableWrap, dmy, dt, pct, short, vi } from './ui-kit';
+import { Th, EmptyState, ErrorBox, STATUS_LABELS, STATUS_VARS, SegmentedControl, Skeleton, TableWrap, dmy, dt, pct, short, vi } from './ui-kit';
 
 export type TrendsData = TrendReport & { definitions: Record<string, string> };
 type Metric = 'net' | 'n';
@@ -200,7 +200,7 @@ function HeatTable({ data, list, metric, dim }: { data: TrendReport; list: Trend
   return (
     <div>
       <TableWrap><table className="w-full min-w-[640px] border-separate border-spacing-0.5 text-[12px]">
-        <thead><tr><th className="px-1 text-left font-medium text-ink-3">{TREND_DIMS[dim]}</th>{Array.from({ length: TREND_WEEKS }, (_, w) => <th key={w} className="px-1 text-center font-medium text-ink-3">{dmy(weekStart(w))}</th>)}</tr></thead>
+        <thead><tr><Th className="px-1 text-left font-medium text-ink-3">{TREND_DIMS[dim]}</Th>{Array.from({ length: TREND_WEEKS }, (_, w) => <Th key={w} className="px-1 text-center font-medium text-ink-3">{dmy(weekStart(w))}</Th>)}</tr></thead>
         <tbody>
           {rows.map(({ s, w }) => (
             <tr key={s.key}>
@@ -612,7 +612,7 @@ function TrendOrderList({ url, title, onClose }: { url: string; title: string; o
   return <section className="mt-3 rounded-xl border border-line p-3" aria-label="Đơn tính ra số xu hướng">
     <header className="flex justify-between gap-2"><h3 className="font-semibold">{title} · Đơn trong kỳ và bộ lọc đang chọn</h3><button type="button" className="btn sm" onClick={onClose}>Đóng</button></header>
     {error ? <ErrorBox error={error} /> : !data ? <Skeleton className="h-20 w-full" /> : <>
-      <TableWrap><table className="w-full text-left text-[12px]"><thead><tr><th>Mã đơn</th><th>POS</th><th>Thời điểm (giờ Việt Nam)</th><th>Giá trị đơn</th></tr></thead><tbody>{data.rows.map((r) => <tr key={r.id}><td>{r.code}</td><td>{r.posId}</td><td>{dt(r.at, true)}</td><td className="num">{chartVal(r.net, 'money')}</td></tr>)}</tbody></table></TableWrap>
+      <TableWrap><table className="w-full text-left text-[12px]"><thead><tr><Th>Mã đơn</Th><Th>POS</Th><Th>Thời điểm (giờ Việt Nam)</Th><Th>Giá trị đơn</Th></tr></thead><tbody>{data.rows.map((r) => <tr key={r.id}><td>{r.code}</td><td>{r.posId}</td><td>{dt(r.at, true)}</td><td className="num">{chartVal(r.net, 'money')}</td></tr>)}</tbody></table></TableWrap>
       {!data.rows.length && <p className="text-[12px] text-ink-3">Không có đơn trong phạm vi này.</p>}
       <div className="mt-2 flex items-center gap-2"><button type="button" className="btn sm" disabled={page === 0} onClick={() => setPage(page - 1)}>Trước</button><span>Trang {page + 1}</span><button type="button" className="btn sm" disabled={!data.more} onClick={() => setPage(page + 1)}>Sau</button></div>
     </>}

@@ -37,7 +37,7 @@ import {
   seriesCut,
   useStaffCompare,
 } from './staff-compare';
-import {
+import { Th,
   ChartCard,
   EmptyState,
   ErrorBox,
@@ -329,12 +329,12 @@ export function CskhOriginBlock({
               <table className="tbl">
                 <thead>
                   <tr>
-                    <th className="text-left">Nhân viên CSKH</th>
+                    <Th className="text-left">Nhân viên CSKH</Th>
                     <SortTh k="customers" label="Khách" sort={sort} />
                     {labels.map((l) => (
                       <SortTh key={l} k={l} label={l} sort={sort} />
                     ))}
-                    <th>Tỷ trọng</th>
+                    <Th>Tỷ trọng</Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -985,12 +985,12 @@ export function SaleGroupBlock({
             <table className="tbl">
               <thead>
                 <tr>
-                  <th
+                  <Th
                     className="text-left"
                     style={{ background: 'var(--surface-2)', zIndex: 4 }}
                   >
                     Nhân viên
-                  </th>
+                  </Th>
                   <SortTh k="created" label="Số chia" sort={sort} />
                   <SortTh k="closed" label="Đơn chốt" sort={sort} />
                   {!noRate && <SortTh k="closeRate" label="Tỷ lệ chốt" sort={sort} />}
@@ -1494,11 +1494,11 @@ export function SaleGroupBlock({
                   <table className="tbl text-[12.5px]">
                     <thead>
                       <tr>
-                        <th className="text-left">Đơn</th>
-                        <th className="text-left">Khách</th>
-                        <th className="text-left">Sản phẩm</th>
-                        <th className="text-left">Nhóm</th>
-                        <th>Tiền</th>
+                        <Th className="text-left">Đơn</Th>
+                        <Th className="text-left">Khách</Th>
+                        <Th className="text-left">Sản phẩm</Th>
+                        <Th className="text-left">Nhóm</Th>
+                        <Th>Tiền</Th>
                       </tr>
                     </thead>
                     <tbody>

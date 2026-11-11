@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { todayVn } from '@/lib/shared/report-time';
 import { AUDIT_ACTIONS, AUDIT_GROUPS, auditLabel } from '@/lib/ops/audit-labels';
-import { ChartCard, EmptyState, ErrorBox, PageHeader, SkeletonTable, StatusChip, TableWrap, Toolbar, dt, toast, vi } from './ui-kit';
+import { Th, ChartCard, EmptyState, ErrorBox, PageHeader, SkeletonTable, StatusChip, TableWrap, Toolbar, dt, toast, vi } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
 
 type Item = { id: string; at: string; userId: string | null; email: string | null; name: string | null; action: string; target: string | null; detail: string | null; status: number | null; ip: string | null; device: string | null };
@@ -118,7 +118,7 @@ export function AuditView() {
           <TableWrap minWidth={880} className="transition-opacity duration-[var(--dur)]">
             <table className="tbl" aria-busy={loading || undefined}>
               <thead>
-                <tr><th>Thời gian</th><th>Người dùng</th><th>Hành động</th><th>Chi tiết</th><th>Kết quả</th><th>Thiết bị</th><th>IP</th></tr>
+                <tr><Th>Thời gian</Th><Th>Người dùng</Th><Th>Hành động</Th><Th>Chi tiết</Th><Th>Kết quả</Th><Th>Thiết bị</Th><Th>IP</Th></tr>
               </thead>
               <tbody>
                 {data.items.map((i) => (

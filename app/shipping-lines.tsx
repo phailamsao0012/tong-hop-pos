@@ -5,7 +5,7 @@
 import { useMemo, useState } from 'react';
 import { PackageX, Truck } from 'lucide-react';
 import { useApi } from './use-api';
-import { ChartCard, EmptyState, ErrorBox, SegmentedControl, SkeletonTable, TableWrap, money, pct, vi } from './ui-kit';
+import { Th, ChartCard, EmptyState, ErrorBox, SegmentedControl, SkeletonTable, TableWrap, money, pct, vi } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
 
 type Money = { orders: number; net: number };
@@ -42,8 +42,8 @@ function LineTable({ rows, total, totalLabel }: { rows: Row[]; total?: Stats; to
     <TableWrap minWidth={880} stickyFirst>
       <table className="tbl">
         <thead><tr>
-          <th>Dòng sản phẩm</th><th className="n">Đơn vào Chờ XN</th><th className="n">Đơn chuyển đi</th><th className="n">Đơn hoàn</th><th className="n">% hoàn (đơn)</th>
-          <th className="n">Doanh số chuyển đi</th><th className="n">Giá trị hoàn</th><th className="n">% hoàn (giá trị)</th><th className="n">Đã nhận</th><th className="n">Chưa gửi</th>
+          <Th>Dòng sản phẩm</Th><Th className="n">Đơn vào Chờ XN</Th><Th className="n">Đơn chuyển đi</Th><Th className="n">Đơn hoàn</Th><Th className="n">% hoàn (đơn)</Th>
+          <Th className="n">Doanh số chuyển đi</Th><Th className="n">Giá trị hoàn</Th><Th className="n">% hoàn (giá trị)</Th><Th className="n">Đã nhận</Th><Th className="n">Chưa gửi</Th>
         </tr></thead>
         <tbody>
           {rows.map((r) => line(r.line, r))}

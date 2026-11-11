@@ -15,7 +15,7 @@ import type { LucideIcon } from 'lucide-react';
 import { Area, Bar, BarChart, CartesianGrid, ComposedChart, LabelList, XAxis, YAxis } from 'recharts';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip } from '@/components/ui/chart';
 import { CountUp } from './ui/count-up';
-import { DeltaPill, EmptyState, StatusChip, orderStatusTone, SegmentedControl, SortTh, TableWrap, delta, dmy, money, short, shortMoney, useSort, vi } from './ui-kit';
+import { Th, DeltaPill, EmptyState, StatusChip, orderStatusTone, SegmentedControl, SortTh, TableWrap, delta, dmy, money, short, shortMoney, useSort, vi } from './ui-kit';
 import { useApi } from './use-api';
 import { useMotionOK } from './ui/motion';
 import { setTeam, useTeam, type Team as Seg } from './team-store';
@@ -169,7 +169,7 @@ function OrdersSheet({ pick, start, end, posIds, team, onClose }: { pick: { row:
         {!data && !error && <p className="text-[13px] text-ink-3">Đang tải đơn…</p>}
         {data && (data.orders.length ? <>
           <p className="mb-2 text-[12.5px] text-ink-2">{vi.format(data.orders.length)}{data.more ? '+' : ''} đơn · {money(sum)}{data.more ? ' (hiện 500 đơn mới nhất)' : ''}</p>
-          <TableWrap><table className="tbl"><thead><tr><th>Mã đơn</th><th>POS</th><th>SĐT</th>{(pick?.team || team) && <th>Marketer</th>}<th>Người chốt</th><th>Trạng thái</th><th className="n">Doanh thu</th></tr></thead>
+          <TableWrap><table className="tbl"><thead><tr><Th>Mã đơn</Th><Th>POS</Th><Th>SĐT</Th>{(pick?.team || team) && <Th>Marketer</Th>}<Th>Người chốt</Th><Th>Trạng thái</Th><Th className="n">Doanh thu</Th></tr></thead>
             <tbody>{data.orders.map((o) => <tr key={o.id}>
               <td className="font-medium">{o.orderId}<span className="block text-[11px] font-normal text-ink-3">{dmy(vnDay(o.confirmedAt))} {vnTime(o.confirmedAt)}</span></td>
               <td>{o.posName}</td><td className="num">{o.phone ?? '—'}</td>{(pick?.team || team) && <td>{o.marketer ?? '—'}</td>}<td>{o.seller ?? '—'}</td><td><StatusChip tone={orderStatusTone(o.statusCode)}>{o.status}</StatusChip></td><td className="n">{money(o.net)}</td>

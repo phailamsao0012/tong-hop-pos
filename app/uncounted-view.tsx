@@ -12,7 +12,7 @@ import { usePeriod } from './period-store';
 import { PeriodFields, PosChips } from './overview-view';
 import { PosBadge } from './pos-badge';
 import { useApi } from './use-api';
-import { EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonTable, StatusChip, TableWrap, Toolbar, dt, money, pct, posName, short, toast, vi } from './ui-kit';
+import { Th, EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonTable, StatusChip, TableWrap, Toolbar, dt, money, pct, posName, short, toast, vi } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
 
 type Role = 'seller' | 'marketer';
@@ -63,7 +63,7 @@ function OrdersOf({ p, start, end, posIds }: { p: Person; start: string; end: st
   return (
     <div className="max-h-[360px] overflow-auto rounded-lg border border-line">
       <TableWrap><table className="tbl compact">
-        <thead><tr><th>Mã đơn</th><th>POS</th><th>Khách</th><th>{p.role === 'seller' ? 'Chốt lúc' : 'Xác nhận lúc'}</th><th>Trạng thái</th><th className="n">Tiền</th></tr></thead>
+        <thead><tr><Th>Mã đơn</Th><Th>POS</Th><Th>Khách</Th><Th>{p.role === 'seller' ? 'Chốt lúc' : 'Xác nhận lúc'}</Th><Th>Trạng thái</Th><Th className="n">Tiền</Th></tr></thead>
         <tbody>{data.orders.map((o) => (
           <tr key={o.id}>
             <td className="num">{o.pancakeUrl ? <a className="inline-flex items-center gap-1 text-primary underline" href={o.pancakeUrl} target="_blank" rel="noreferrer">{o.orderId}<ExternalLink size={11} aria-hidden="true" /></a> : o.orderId}</td>
@@ -141,7 +141,7 @@ export function UncountedView() {
           {!rows.length ? <EmptyState text="Kỳ này không có đơn nào của người không có hậu tố." /> : (
             <TableWrap minWidth={900}>
               <table className="tbl">
-                <thead><tr><th>Tên trên Pancake · vai trò</th><th>POS</th><th className="n">Đơn</th><th className="n">Doanh thu</th><th>Gần nhất</th><th>Nguyên nhân</th><th><span className="sr-only">Thao tác</span></th></tr></thead>
+                <thead><tr><Th>Tên trên Pancake · vai trò</Th><Th>POS</Th><Th className="n">Đơn</Th><Th className="n">Doanh thu</Th><Th>Gần nhất</Th><Th>Nguyên nhân</Th><Th><span className="sr-only">Thao tác</span></Th></tr></thead>
                 <tbody>{rows.map((p) => {
                   const k = `${p.role}:${p.id}`;
                   return (

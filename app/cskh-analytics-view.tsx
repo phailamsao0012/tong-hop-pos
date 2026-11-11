@@ -13,7 +13,7 @@ import { ICON } from './icons';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';
-import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, ThinkingLine, dmy, money, pct, shortMoney, useSort, vi } from './ui-kit';
+import { Th, ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, ThinkingLine, dmy, money, pct, shortMoney, useSort, vi } from './ui-kit';
 
 const COLORS: Record<string, string> = { 'Kháng sinh': 'var(--ai-3)', 'Combo': 'var(--ai-5)', 'Khác': 'var(--ink-4)' };
 const num = (n: number | null | undefined, d = 1) => n === null || n === undefined ? '—' : n.toFixed(d).replace('.', ',');
@@ -183,7 +183,7 @@ export function CskhAnalyticsView() {
                 <TableWrap minWidth={880} maxHeight="30rem" stickyFirst>
                   <table className="tbl">
                     <thead><tr>
-                      <th className="text-left">Nhân viên</th>
+                      <Th className="text-left">Nhân viên</Th>
                       <SortTh k="net" label="Doanh thu" sort={sort} />
                       <SortTh k="customers" label="Khách" sort={sort} />
                       <SortTh k="orders" label="Đơn" sort={sort} />
@@ -191,7 +191,7 @@ export function CskhAnalyticsView() {
                       <SortTh k="ordersPerCustomer" label="Đơn/khách" sort={sort} />
                       <SortTh k="repeatShare" label="% mua lại" sort={sort} />
                       <SortTh k="avgGroups" label="Nhóm/khách" sort={sort} />
-                      <th className="text-left">Đường đi nhiều nhất</th>
+                      <Th className="text-left">Đường đi nhiều nhất</Th>
                     </tr></thead>
                     <tbody>{staff.map((s) => (
                       <tr key={s.staffId}>

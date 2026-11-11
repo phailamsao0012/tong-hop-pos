@@ -72,7 +72,7 @@ import { unitFor, useHrUnit, withUnit, useMktTeam } from './team-store';
 import { PeriodBars, TrendNotes } from './overview-trends';
 import { StaleChip } from './stale-chip';
 import { TeamKpiProgress } from './team-kpi-progress';
-import {
+import { Th,
   ChartCard,
   EmptyState,
   ErrorBox,
@@ -853,7 +853,7 @@ export function TeamOverviewView({
                 <table className="tbl">
                   <thead>
                     <tr>
-                      <th className="w-8">#</th>
+                      <Th className="w-8">#</Th>
                       <SortTh
                         k="name"
                         label="Nhân viên"
@@ -875,7 +875,7 @@ export function TeamOverviewView({
                       {team === 'sale' && <SortTh k="rate" label="Tỷ lệ chốt" sort={staffSort} />}
                       <SortTh k="ret" label="Hoàn" title="Đỏ từ 7%, vàng từ 5%, xanh dưới 5%" sort={staffSort} />
                       <SortTh k="cancel" label="Hủy" title="Đỏ từ 7%, vàng từ 5%, xanh dưới 5%" sort={staffSort} />
-                      <th>Tỷ trọng doanh thu</th>
+                      <Th>Tỷ trọng doanh thu</Th>
                     </tr>
                   </thead>
                   <tbody>

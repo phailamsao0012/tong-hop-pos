@@ -6,7 +6,7 @@ import { useState, useSyncExternalStore } from 'react';
 import { Calculator, Check } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DEFAULT_METRICS, RATE_BASES, RETURN_BASES, SUCCESS_BASES, type MetricSettings } from '@/lib/reports/metrics';
-import { TableWrap } from './ui-kit';
+import { Th, TableWrap } from './ui-kit';
 
 const KEY = 'thp_metric_settings';
 let current: MetricSettings = DEFAULT_METRICS;
@@ -114,7 +114,7 @@ export function MetricChangesCard() {
       </div>
       <TableWrap className="mt-3">
         <table className="w-full min-w-[640px] text-left text-[13px]">
-          <thead><tr className="border-b border-line text-[11.5px] text-ink-3"><th className="py-2 pr-3 font-medium">Chỉ số</th><th className="py-2 pr-3 font-medium">Trước</th><th className="py-2 font-medium">Bây giờ</th></tr></thead>
+          <thead><tr className="border-b border-line text-[11.5px] text-ink-3"><Th className="py-2 pr-3 font-medium">Chỉ số</Th><Th className="py-2 pr-3 font-medium">Trước</Th><Th className="py-2 font-medium">Bây giờ</Th></tr></thead>
           <tbody>{CHANGES.map((c) => (
             <tr key={c.metric} className="border-b border-line/60 align-top last:border-0">
               <td className="py-2 pr-3 font-semibold text-ink">{c.metric}</td><td className="py-2 pr-3 text-ink-3">{c.before}</td><td className="py-2 text-ink-2">{c.after}</td>

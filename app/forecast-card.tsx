@@ -7,7 +7,7 @@ import { addDays, todayVn } from '@/lib/shared/report-time';
 import type { forecastForDisplay } from '@/lib/kpi/forecast-run';
 import type { ReviewRecord } from '@/lib/kpi/forecast-review';
 import { useApi } from './use-api';
-import { money, ProgressBar, shortMoney, TableWrap } from './ui-kit';
+import { Th, money, ProgressBar, shortMoney, TableWrap } from './ui-kit';
 /** Chỉ đoạn, danh sách và chữ đậm; HTML luôn là nút chữ React được escape. */
 export function markdownBlocks(text: string) {
   return text.split(/\r?\n/).filter(line => line.trim()).map(line => ({
@@ -238,8 +238,8 @@ export function ForecastReview({ week, title = 'Hôm qua dự báo lệch bao nh
       <div className="rounded-xl border border-line bg-tint-2 p-3"><p className="mb-1 text-xs font-semibold text-ink-2">Claude giải thích</p>
         {r.status === 'batch' ? <p className="text-sm">Claude đang viết, có trước 7h sáng</p> : r.status === 'off' ? <p className="text-sm">Chưa gắn khoá Claude, biểu đồ số vẫn đúng{r.error ? ` · ${r.error}` : ''}</p> : r.status === 'error' ? <p role="alert" className="text-sm">{r.error || 'Không thể phân tích bằng Claude'}</p> : <AiMarkdown text={r.text ?? ''} />}</div>
       <details className="text-sm"><summary className="cursor-pointer text-xs text-ink-3">Xem bảng số</summary>
-        <TableWrap className="mt-2"><table className="tbl w-full"><thead><tr><th>Phần</th><th>Lệch</th></tr></thead><tbody>{waterfallSteps(d).filter(s => s.kind === 'part').map(s => <tr key={s.label}><td>{s.label}</td><td data-label="Lệch">{signed(s.to - s.from)}</td></tr>)}</tbody></table></TableWrap>
-        <TableWrap className="mt-2"><table className="tbl w-full"><thead><tr><th>Nhân viên</th><th>Tỷ lệ chốt</th><th>Giá trị đơn</th></tr></thead><tbody>{d.top.map(p => <tr key={p.id}><td><button className="link" onClick={() => onNavigate('compare')}>{nameOf(p.id)}</button></td><td data-label="Tỷ lệ chốt">{signed(p.tiLeChot)}</td><td data-label="Giá trị đơn">{signed(p.giaTriDon)}</td></tr>)}</tbody></table></TableWrap>
+        <TableWrap className="mt-2"><table className="tbl w-full"><thead><tr><Th>Phần</Th><Th>Lệch</Th></tr></thead><tbody>{waterfallSteps(d).filter(s => s.kind === 'part').map(s => <tr key={s.label}><td>{s.label}</td><td data-label="Lệch">{signed(s.to - s.from)}</td></tr>)}</tbody></table></TableWrap>
+        <TableWrap className="mt-2"><table className="tbl w-full"><thead><tr><Th>Nhân viên</Th><Th>Tỷ lệ chốt</Th><Th>Giá trị đơn</Th></tr></thead><tbody>{d.top.map(p => <tr key={p.id}><td><button className="link" onClick={() => onNavigate('compare')}>{nameOf(p.id)}</button></td><td data-label="Tỷ lệ chốt">{signed(p.tiLeChot)}</td><td data-label="Giá trị đơn">{signed(p.giaTriDon)}</td></tr>)}</tbody></table></TableWrap>
       </details>
     </>}
   </section>;

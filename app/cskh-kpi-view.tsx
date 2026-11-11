@@ -16,7 +16,7 @@ import { todayVn } from '@/lib/shared/report-time';
 import { kpiPace, parseRate, signedShort } from '@/lib/kpi/kpi-pace';
 import { closeRateOf, closeRateOfMany } from '@/lib/reports/metrics';
 import { useMetricSettings } from './metric-settings';
-import { ChartCard, ErrorBox, InfoTip, KpiCard, PageHeader, ProgressBar, SkeletonTable, TableWrap, Tooltip, money, pct, short, toast, vi } from './ui-kit';
+import { Th, ChartCard, ErrorBox, InfoTip, KpiCard, PageHeader, ProgressBar, SkeletonTable, TableWrap, Tooltip, money, pct, short, toast, vi } from './ui-kit';
 import { daysInMonth, parseMoney, type TargetItem } from './targets-panel';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
@@ -238,12 +238,12 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
           <TableWrap maxHeight="36rem" sticky minWidth={840}>
             <table className="tbl sticky-first">
               <thead><tr>
-                <th>Nhân viên</th><th className="n">KPI doanh thu</th>{isSale && <th className="n"><span className="inline-flex items-center gap-0.5">KPI tỉ lệ chốt<InfoTip text="Mục tiêu tỉ lệ chốt của tháng (%). Tỉ lệ thật tính theo Cách tính đang chọn (đơn lên hoặc data được chia)." /></span></th>}
-                <th className="n"><span className="inline-flex items-center gap-0.5">Ngày làm<InfoTip text="Số ngày làm việc trong tháng, dùng để chia KPI ngày. Bỏ trống = số ngày của tháng." /></span></th>
-                <th><span className="inline-flex items-center gap-0.5">Ca (giờ)<InfoTip text="Ca làm việc: giờ bắt đầu – giờ kết thúc (0–24). Dùng ở Trong ngày · chốt nóng, chế độ Ca cá nhân." /></span></th>
-                <th className="n">Đã đạt</th><th>% tháng</th><th className="n">KPI ngày</th>
-                <th className="n"><span className="inline-flex items-center gap-0.5">Hôm nay<InfoTip text="Doanh thu chốt hôm nay trừ KPI ngày: +3tr là vượt 3 triệu, −2tr là còn thiếu 2 triệu. Trang tự tải lại mỗi giờ." /></span></th>
-                <th className="n"><span className="inline-flex items-center gap-0.5">So tiến độ<InfoTip text="Đã đạt trong tháng trừ phần KPI phải có đến hôm nay (KPI ngày × số ngày đã qua, không quá số ngày làm)." /></span></th>
+                <Th>Nhân viên</Th><Th className="n">KPI doanh thu</Th>{isSale && <Th className="n"><span className="inline-flex items-center gap-0.5">KPI tỉ lệ chốt<InfoTip text="Mục tiêu tỉ lệ chốt của tháng (%). Tỉ lệ thật tính theo Cách tính đang chọn (đơn lên hoặc data được chia)." /></span></Th>}
+                <Th className="n"><span className="inline-flex items-center gap-0.5">Ngày làm<InfoTip text="Số ngày làm việc trong tháng, dùng để chia KPI ngày. Bỏ trống = số ngày của tháng." /></span></Th>
+                <Th><span className="inline-flex items-center gap-0.5">Ca (giờ)<InfoTip text="Ca làm việc: giờ bắt đầu – giờ kết thúc (0–24). Dùng ở Trong ngày · chốt nóng, chế độ Ca cá nhân." /></span></Th>
+                <Th className="n">Đã đạt</Th><Th>% tháng</Th><Th className="n">KPI ngày</Th>
+                <Th className="n"><span className="inline-flex items-center gap-0.5">Hôm nay<InfoTip text="Doanh thu chốt hôm nay trừ KPI ngày: +3tr là vượt 3 triệu, −2tr là còn thiếu 2 triệu. Trang tự tải lại mỗi giờ." /></span></Th>
+                <Th className="n"><span className="inline-flex items-center gap-0.5">So tiến độ<InfoTip text="Đã đạt trong tháng trừ phần KPI phải có đến hôm nay (KPI ngày × số ngày đã qua, không quá số ngày làm)." /></span></Th>
               </tr></thead>
               <tbody>
                 {staff.map((e) => {

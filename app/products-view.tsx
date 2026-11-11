@@ -13,7 +13,7 @@ import type { ProductsReport } from '@/lib/reports/products-report';
 import { ICON } from './icons';
 import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';
-import { ChartCard, Definitions, DeltaPill, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, delta, dmy, pct, shortMoney, useSort, vi } from './ui-kit';
+import { Th, ChartCard, Definitions, DeltaPill, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, delta, dmy, pct, shortMoney, useSort, vi } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
 import { DeliveredProductsBlock } from './delivered-products-block';
 
@@ -122,13 +122,13 @@ export function ProductsView() {
               <TableWrap minWidth={880} maxHeight="36rem" stickyFirst>
                 <table className="tbl">
                   <thead><tr>
-                    <th className="text-left">Sản phẩm</th>
+                    <Th className="text-left">Sản phẩm</Th>
                     <SortTh k="revenue" label="Tiền hàng" sort={sort} />
                     <SortTh k="growth" label="So kỳ trước" sort={sort} />
                     <SortTh k="qty" label="SL bán" sort={sort} />
                     <SortTh k="orders" label="Đơn" sort={sort} />
                     <SortTh k="returnRate" label="Hoàn (SL)" sort={sort} />
-                    <th>Theo ngày</th>
+                    <Th>Theo ngày</Th>
                   </tr></thead>
                   <tbody>{rows.map((x) => (
                     <tr key={x.name}>

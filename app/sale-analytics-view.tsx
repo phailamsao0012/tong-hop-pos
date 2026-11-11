@@ -16,7 +16,7 @@ import { WEEKDAYS, byWeekday, dayTotal, sumRows, vnDayHour, weekdayOf, type DayH
 import { ICON } from './icons';
 import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';
-import { ChartCard, CountUp, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, ThinkingLine, TipContent, dmy, pct, shortMoney, useSort, useTip, vi } from './ui-kit';
+import { Th, ChartCard, CountUp, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, ThinkingLine, TipContent, dmy, pct, shortMoney, useSort, useTip, vi } from './ui-kit';
 
 const WEEKDAY_FULL = ['Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy', 'Chủ nhật'];
 export const duration = (m: number | null | undefined) => m === null || m === undefined ? '—'
@@ -190,9 +190,9 @@ function HourBoard({ days, definition, asOf }: { days: DayHours[]; definition: s
         <div className="max-h-[30rem] overflow-auto rounded-lg">
           <table className="w-full border-separate border-spacing-[3px] text-[11px]" onMouseOver={onOver} onMouseLeave={onLeave} onClick={onPick}>
             <thead><tr>
-              <th className="sticky left-0 top-0 z-[3] bg-surface px-1.5 text-left text-[11px] font-medium text-ink-3" style={{ boxShadow: '0 0 0 3px var(--surface)' }}>{mode === 'week' && multi ? 'Thứ' : 'Ngày'}</th>
-              {HOURS.map((h) => <th key={h} className="sticky top-0 z-[2] bg-surface px-0 text-center num text-[10.5px] font-normal normal-case tracking-normal text-ink-3" style={{ boxShadow: '0 0 0 3px var(--surface)' }}>{h}h</th>)}
-              <th className="sticky top-0 z-[2] whitespace-nowrap bg-surface pl-2 text-right text-[11px] font-medium text-ink-3" style={{ boxShadow: '0 0 0 3px var(--surface)' }}>Cả ngày</th>
+              <Th className="sticky left-0 top-0 z-[3] bg-surface px-1.5 text-left text-[11px] font-medium text-ink-3" style={{ boxShadow: '0 0 0 3px var(--surface)' }}>{mode === 'week' && multi ? 'Thứ' : 'Ngày'}</Th>
+              {HOURS.map((h) => <Th key={h} className="sticky top-0 z-[2] bg-surface px-0 text-center num text-[10.5px] font-normal normal-case tracking-normal text-ink-3" style={{ boxShadow: '0 0 0 3px var(--surface)' }}>{h}h</Th>)}
+              <Th className="sticky top-0 z-[2] whitespace-nowrap bg-surface pl-2 text-right text-[11px] font-medium text-ink-3" style={{ boxShadow: '0 0 0 3px var(--surface)' }}>Cả ngày</Th>
             </tr></thead>
             <tbody>{body}</tbody>
             {multi && (
@@ -280,8 +280,8 @@ export function SaleAnalyticsView() {
               <TableWrap minWidth={960} maxHeight="34rem" stickyFirst>
                 <table className="tbl">
                   <thead><tr>
-                    <th className="w-8">#</th>
-                    <th className="text-left">Nhân viên</th>
+                    <Th className="w-8">#</Th>
+                    <Th className="text-left">Nhân viên</Th>
                     <SortTh k="net" label="Doanh thu" sort={sort} />
                     <SortTh k="closed" label="Đơn chốt" sort={sort} />
                     <SortTh k="aov" label="AOV" title="Doanh thu ÷ đơn chốt" sort={sort} />
@@ -334,7 +334,7 @@ export function PackedRevenue({ params, net }: { params: URLSearchParams; net: n
     <Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-h-[85vh] overflow-auto">
       <DialogHeader><DialogTitle>Đơn Sale · DT đóng hàng trở đi</DialogTitle><DialogDescription>{PACKED_HELP} Giữ kỳ, POS và team đã chọn.</DialogDescription></DialogHeader>
       {api.error && <ErrorBox error={api.error} onRetry={api.reload} />}
-      {api.loading ? <SkeletonTable rows={5} cols={3} /> : <TableWrap><table className="tbl"><thead><tr><th>Mã đơn</th><th>Trạng thái</th><th>Doanh thu</th></tr></thead><tbody>{api.data?.orders.map((o) => <tr key={o.id}><td>{o.code}</td><td>{STATUS_NAMES[o.status] ?? o.status}</td><td className="n">{shortMoney(o.net)}</td></tr>)}</tbody></table></TableWrap>}
+      {api.loading ? <SkeletonTable rows={5} cols={3} /> : <TableWrap><table className="tbl"><thead><tr><Th>Mã đơn</Th><Th>Trạng thái</Th><Th>Doanh thu</Th></tr></thead><tbody>{api.data?.orders.map((o) => <tr key={o.id}><td>{o.code}</td><td>{STATUS_NAMES[o.status] ?? o.status}</td><td className="n">{shortMoney(o.net)}</td></tr>)}</tbody></table></TableWrap>}
       {!api.loading && api.data?.orders.length === 0 && <EmptyState text="Không có đơn trong phạm vi này." />}
       <div className="flex items-center justify-between"><button className="btn sm" disabled={page === 0 || api.loading} onClick={() => setPage(page - 1)}>Trước</button><span>Trang {page + 1} · tối đa 100 đơn/trang</span><button className="btn sm" disabled={!api.data?.more || api.loading} onClick={() => setPage(page + 1)}>Sau</button></div>
     </DialogContent></Dialog>

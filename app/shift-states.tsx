@@ -4,7 +4,7 @@
 import { useMemo, useState } from 'react';
 import { ClipboardCheck } from 'lucide-react';
 import { PosBadge } from './pos-badge';
-import { ChartCard, EmptyState, StatusChip, TableWrap, money, pct, shortMoney, timeOnly, vi } from './ui-kit';
+import { Th, ChartCard, EmptyState, StatusChip, TableWrap, money, pct, shortMoney, timeOnly, vi } from './ui-kit';
 
 export type OrderStates = {
   total: { closed: number; open: number };
@@ -52,7 +52,7 @@ export function ShiftStatesCard({ data, hourly, info }: { data?: OrderStates; ho
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_26rem]">
             <TableWrap minWidth={520} maxHeight="30rem" stickyFirst>
               <table className="tbl">
-                <thead><tr><th className="text-left">Nhân viên</th><th>Đơn nhận</th><th>Đã chốt</th><th>Chưa chốt</th><th>% đã chốt</th><th>Doanh thu đã chốt</th></tr></thead>
+                <thead><tr><Th className="text-left">Nhân viên</Th><Th>Đơn nhận</Th><Th>Đã chốt</Th><Th>Chưa chốt</Th><Th>% đã chốt</Th><Th>Doanh thu đã chốt</Th></tr></thead>
                 <tbody>
                   {data.staff.map((s) => (
                     <tr key={s.sellerId || 'none'}>

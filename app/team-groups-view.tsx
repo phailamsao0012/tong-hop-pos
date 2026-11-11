@@ -27,7 +27,7 @@ import { StaleChip } from './stale-chip';
 import { daysInMonth, fetchTargets, parseMoney, type TargetItem } from './targets-panel';
 import { KpiInlineEditor } from './kpi-inline-editor';
 import { officeLabel, officeList } from '@/lib/teams/web-teams';
-import {
+import { Th,
   ChartCard, EmptyState, ErrorBox, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, delta, dmy, pct, shortMoney, toast, useSort, vi,
 } from './ui-kit';
 
@@ -210,8 +210,8 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
             <ChartCard icon={Building2} title="So sánh chi nhánh" subtitle="Cộng các team thuộc từng chi nhánh (văn phòng của team bên web nhân sự) · bấm để lọc">
               <TableWrap minWidth={isCare ? 860 : 620}>
                 <table className="tbl w-full">
-                  <thead><tr><th className="text-left">Chi nhánh</th><th className="r">Team</th><th className="r">Người có đơn</th><th className="r">Doanh thu</th><th className="r">% bộ phận</th><th className="r">Đơn chốt</th><th className="r">DT / người</th>
-                    {isCare && <><th className="r">Data cầm</th><th className="r">Cần note</th><th className="r">Note hôm nay</th><th className="r">DT tự chốt</th></>}</tr></thead>
+                  <thead><tr><Th className="text-left">Chi nhánh</Th><Th className="r">Team</Th><Th className="r">Người có đơn</Th><Th className="r">Doanh thu</Th><Th className="r">% bộ phận</Th><Th className="r">Đơn chốt</Th><Th className="r">DT / người</Th>
+                    {isCare && <><Th className="r">Data cầm</Th><Th className="r">Cần note</Th><Th className="r">Note hôm nay</Th><Th className="r">DT tự chốt</Th></>}</tr></thead>
                   <tbody>
                     {branches.map((b) => {
                       const d = b.prev ? delta(b.revenue, b.prev) : null;
@@ -246,7 +246,7 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
                     <SortTh k="closed" label="Đơn chốt" sort={sort} />
                     <SortTh k="aov" label="GTTB" sort={sort} />
                     <SortTh k="rate" label="Tỷ lệ chốt" sort={sort} />
-                    <SortTh k="perHead" label="DT / người" sort={sort} /><th className="r">KPI cá nhân tháng {kpiMonth}</th>
+                    <SortTh k="perHead" label="DT / người" sort={sort} /><Th className="r" full={`KPI cá nhân tháng ${kpiMonth}`} hint="KPI của cá nhân trong tháng hiển thị.">KPI NV {kpiMonth}</Th>
                     {isCare && <>
                       <SortTh k="data" label={<span title="Số khách đang được phân công cho người trong team (hiện tại, không theo kỳ)">Data cầm</span>} sort={sort} />
                       <SortTh k="need" label={<span title="Khách chưa note lần nào + khách quá 20 ngày chưa note (hiện tại)">Cần note</span>} sort={sort} />
@@ -389,7 +389,7 @@ function TeamKpi({ team, teams }: { team: Dept; teams: KpiTeam[] }) {
       {!items ? <SkeletonTable rows={4} cols={6} /> : teams.length ? (
         <TableWrap minWidth={820}>
           <table className="tbl w-full">
-            <thead><tr><th className="text-left">Team</th><th className="r">DT mục tiêu</th>{isSale && <th className="r">Tỉ lệ chốt mục tiêu</th>}<th className="r">Đã đạt</th><th className="r">Tiến độ</th><th className="r">Dự báo cuối tháng</th><th className="r">Tổng KPI cá nhân</th></tr></thead>
+            <thead><tr><Th className="text-left">Team</Th><Th className="r">DT mục tiêu</Th>{isSale && <Th className="r">Tỉ lệ chốt mục tiêu</Th>}<Th className="r">Đã đạt</Th><Th className="r">Tiến độ</Th><Th className="r">Dự báo cuối tháng</Th><Th className="r">Tổng KPI cá nhân</Th></tr></thead>
             <tbody>
               {teams.map((t) => {
                 const goal = parseMoney(val(t, 'revenue')), goalRate = isSale ? parseRate(val(t, 'rate')) : null, rate = isSale && monthApi.data ? teamRate(t) : null;

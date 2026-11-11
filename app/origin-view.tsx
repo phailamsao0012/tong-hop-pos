@@ -17,7 +17,7 @@ import { StatusFilter } from './status-filter';
 import { StaffPicker } from './staff-picker';
 import { parseStatus } from '@/lib/pancake/order-status';
 import { StaleChip } from './stale-chip';
-import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, dmy, dt, money, pct, scrollToEl, shortMoney, vi, type SortState } from './ui-kit';
+import { Th, ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, dmy, dt, money, pct, scrollToEl, shortMoney, vi, type SortState } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
 
 type Marketer = { marketerId: string; marketerName: string; orders: number; net: number };
@@ -174,15 +174,15 @@ export function OriginView() {
                   <table className="tbl">
                     <thead>
                       <tr>
-                        <th className="w-8">#</th>
+                        <Th className="w-8">#</Th>
                         <SortTh k="name" label="Nhân viên" sort={sortState} align="left" />
                         <SortTh k="self" label="Tự ups" sort={sortState} />
                         <SortTh k="mkt" label="Từ MKT" sort={sortState} />
                         <SortTh k="total" label="Tổng" sort={sortState} />
                         <SortTh k="selfShare" label="% tự ups" sort={sortState} />
-                        {labels.map((l) => <th key={l} className="whitespace-nowrap"><span className="inline-flex items-center gap-1"><i className="inline-block size-2 rounded-full" style={{ background: GROUP_DOT[l] }} />{l}</span></th>)}
-                        <th>Tỷ trọng</th>
-                        <th className="text-left">Marketer đưa về</th>
+                        {labels.map((l) => <Th key={l} className="whitespace-nowrap"><span className="inline-flex items-center gap-1"><i className="inline-block size-2 rounded-full" style={{ background: GROUP_DOT[l] }} />{l}</span></Th>)}
+                        <Th>Tỷ trọng</Th>
+                        <Th className="text-left">Marketer đưa về</Th>
                       </tr>
                     </thead>
                     <tbody>

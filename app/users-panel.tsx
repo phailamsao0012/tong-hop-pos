@@ -13,7 +13,7 @@ import { TEAM_LABELS, type Team } from '@/lib/teams/team';
 import { ownerField, teamsOwnedBy, teamsWithPerson, type PosPerson, type TeamChoice } from '@/lib/teams/account-from-pos';
 import type { SessionUser } from '@/lib/auth/auth';
 import type { TeamZaloState } from '@/lib/zalo/team-link';
-import { StatusChip, TableWrap, dt, scrollToEl, toast } from './ui-kit';
+import { Th, StatusChip, TableWrap, dt, scrollToEl, toast } from './ui-kit';
 import { ZaloButton, ZaloLinkGuide } from './zalo-link-guide';
 
 type User = { employeeId: string | null; id: string; email: string; name: string; role: Role; primary?: boolean; disabled: boolean; createdAt: string; lastLoginAt: string | null; title: string; managerId: string | null; views: string[]; posIds: string[]; team: Team };
@@ -278,7 +278,7 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
       {owner && users.length > 0 && (
         <TableWrap className="mt-5" minWidth={960}>
           <table className="tbl">
-            <thead><tr><th>Tên</th><th>Email</th><th>Vai trò · chức vụ</th><th>Quản lý</th><th className="n">Trang</th><th>POS</th><th>Nhóm</th><th>Đăng nhập gần nhất</th><th className="n">Thao tác</th></tr></thead>
+            <thead><tr><Th>Tên</Th><Th>Email</Th><Th>Vai trò · chức vụ</Th><Th>Quản lý</Th><Th className="n">Trang</Th><Th>POS</Th><Th>Nhóm</Th><Th>Đăng nhập gần nhất</Th><Th className="n">Thao tác</Th></tr></thead>
             <tbody>
               {users.map((u) => {
                 const me = u.id === currentUser.userId;

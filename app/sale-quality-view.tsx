@@ -15,7 +15,7 @@ import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';
 import { LadderMembers, LadderTable, ladderExtras, type LadderLine, type LadderPick } from './ladder-table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, ThinkingLine, dmy, money, pct, shortMoney, useSort, vi } from './ui-kit';
+import { Th, ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, ThinkingLine, dmy, money, pct, shortMoney, useSort, vi } from './ui-kit';
 
 type Row = SaleQuality['staff'][number];
 const days = (d: number | null) => d === null ? '—' : d < 1 ? 'dưới 1 ngày' : `${vi.format(Math.round(d))} ngày`;
@@ -77,17 +77,17 @@ export function SaleQualityView() {
               <TableWrap minWidth={1180} maxHeight="36rem" stickyFirst>
                 <table className="tbl">
                   <thead><tr>
-                    <th className="text-left">Sale</th>
+                    <Th className="text-left">Sale</Th>
                     <SortTh k="customers" label="Khách" sort={sort} />
                     <SortTh k="returnRate" label="Hoàn" sort={sort} />
-                    <SortTh k="repeatRateMature" label={`Mua lại qua CSKH (đủ ${r.matureDays} ngày)`} sort={sort} />
+                    <SortTh k="repeatRateMature" label="TL mua lại CS" full={`Mua lại qua CSKH (đủ ${r.matureDays} ngày)`} hint={`Số khách đủ ${r.matureDays} ngày đã mua lại qua CSKH chia tổng số khách đủ ${r.matureDays} ngày.`} sort={sort} />
                     <SortTh k="cskhOrders" label="Đơn CSKH" sort={sort} />
                     <SortTh k="cskhNet" label="Doanh thu CSKH" sort={sort} />
                     <SortTh k="cskhNetPerCustomer" label="DT CSKH / khách" sort={sort} />
                     <SortTh k="ordersPerRepeater" label="Đơn / khách mua lại" sort={sort} />
                     <SortTh k="avgDaysToRepeat" label="Quay lại sau" sort={sort} />
-                    <th className="text-left">Sale chốt gì</th>
-                    <th className="text-left">Khách mua lại gì</th>
+                    <Th className="text-left">Sale chốt gì</Th>
+                    <Th className="text-left">Khách mua lại gì</Th>
                   </tr></thead>
                   <tbody>
                     {staff.map((s) => (
@@ -127,7 +127,7 @@ export function SaleQualityView() {
               {detail.error ? <ErrorBox error={detail.error} onRetry={detail.reload} /> : !detail.data?.list ? <SkeletonTable rows={6} cols={6} /> : !detail.data.list.length ? <EmptyState text="Không có khách." /> : (
                 <TableWrap minWidth={1000} maxHeight="40rem">
                   <table className="tbl text-[12.5px]">
-                    <thead><tr><th className="text-left">Khách</th><th className="text-left">Đơn gốc (Sale chốt)</th><th>Tiền</th><th className="text-left">Mua lại qua CSKH</th><th>Tiền CSKH</th><th className="text-left">NV CSKH</th><th>Qua Sale</th></tr></thead>
+                    <thead><tr><Th className="text-left">Khách</Th><Th className="text-left">Đơn gốc (Sale chốt)</Th><Th>Tiền</Th><Th className="text-left">Mua lại qua CSKH</Th><Th>Tiền CSKH</Th><Th className="text-left">NV CSKH</Th><Th>Qua Sale</Th></tr></thead>
                     <tbody>{detail.data.list.map((c) => (
                       <tr key={`${c.phone}-${c.at}`}>
                         <td className="text-left"><b className="text-ink">{c.name || 'Khách'}</b><span className="block text-[11px] text-ink-3">{c.phone} · {c.posName}</span></td>

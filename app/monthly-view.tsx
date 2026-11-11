@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { POS } from '@/lib/shared/report-model';
 import { addDays, todayVn } from '@/lib/shared/report-time';
 import { GoalCell, PosChips, type OverviewReport } from './overview-view';
-import {
+import { Th,
   ChartCard, DeltaPill, ErrorBox, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SortTh, STATUS_VARS, StatusChip, TableWrap, Toolbar,
   delta, dmy, dt, money, pct, posColor, posName, posVar, short, shortMoney, toast, useMotionOK, useSort, vi, type TipRows,
 } from './ui-kit';
@@ -329,7 +329,7 @@ export function MonthlyView({ onNavigate }: { /** Mở trang khác (bấm cột 
           <ChartCard icon={PackageCheck} title="Theo POS" subtitle="So với tháng trước">
             <TableWrap minWidth={1040} stickyFirst>
               <table className="tbl">
-                <thead><tr><th>POS</th><th className="n">Đơn tạo</th><th className="n">Đơn chốt</th><th className="n">Doanh thu đơn chốt</th><th className="n">Giao TC</th><th className="n">Doanh thu giao TC</th><th>Tỷ trọng</th><th className="n">Hoàn</th><th className="n">Hủy</th><th>Mục tiêu tháng</th><th className="n">So với tháng trước</th></tr></thead>
+                <thead><tr><Th>POS</Th><Th className="n">Đơn tạo</Th><Th className="n">Đơn chốt</Th><Th className="n">Doanh thu đơn chốt</Th><Th className="n">Giao TC</Th><Th className="n">Doanh thu giao TC</Th><Th>Tỷ trọng</Th><Th className="n">Hoàn</Th><Th className="n">Hủy</Th><Th>Mục tiêu tháng</Th><Th className="n">So với tháng trước</Th></tr></thead>
                 <tbody>
                   {byPos.map(({ id, row, prev: p }, i) => (
                     <tr key={id}>
@@ -359,10 +359,10 @@ export function MonthlyView({ onNavigate }: { /** Mở trang khác (bấm cột 
               <table className="tbl">
                 <thead>
                   <tr>
-                    <SortTh k="name" label="Nhân viên" sort={sort} align="left" /><th>Bộ phận</th>
+                    <SortTh k="name" label="Nhân viên" sort={sort} align="left" /><Th>Bộ phận</Th>
                     {team !== 'cskh' && <><SortTh k="assignedOrders" label="Đơn chia" sort={sort} /><SortTh k="closedOrders" label="Đơn chốt" sort={sort} /><SortTh k="closeRate" label="Tỷ lệ chốt" sort={sort} /></>}
                     <SortTh k="closedNet" label="Doanh thu đơn chốt" sort={sort} /><SortTh k="averageOrder" label="GTTB (AOV)" sort={sort} /><SortTh k="deliveredOrders" label="Giao TC" sort={sort} /><SortTh k="deliveredNet" label="Doanh thu giao TC" sort={sort} /><SortTh k="returned" label="Hoàn / Hủy" sort={sort} />
-                    <th>Mục tiêu tháng</th><th className="n">So với tháng trước</th>
+                    <Th>Mục tiêu tháng</Th><Th className="n">So với tháng trước</Th>
                   </tr>
                 </thead>
                 <tbody>

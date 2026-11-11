@@ -17,7 +17,7 @@ import { ICON } from './icons';
 import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';
 import { SheetCostLink } from './sheet-cost-link';
-import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, dmy, money, pct, shortMoney, toast, useSort, vi } from './ui-kit';
+import { Th, ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, dmy, money, pct, shortMoney, toast, useSort, vi } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
 import { SegmentHintNote } from './segment-hint-note';
 
@@ -186,7 +186,7 @@ export function MktRoasView({ owner = false }: { owner?: boolean }) {
               <TableWrap minWidth={980} maxHeight="32rem" stickyFirst>
                 <table className="tbl">
                   <thead><tr>
-                    <th className="text-left">Marketer</th>
+                    <Th className="text-left">Marketer</Th>
                     <SortTh k="cost" label="Chi phí" sort={sort} />
                     <SortTh k="net" label={team === 'all' ? 'DT MKT (New + CSKH + Khác)' : team === 'sale' ? 'DT New' : 'DT CSKH'} sort={sort} />
                     {team === 'all' && <><SortTh k="newNet" label="DT New" sort={sort} /><SortTh k="cskhNet" label="DT CSKH" sort={sort} /></>}
@@ -225,7 +225,7 @@ export function MktRoasView({ owner = false }: { owner?: boolean }) {
             {r.entries.length ? (
               <TableWrap minWidth={640} maxHeight="24rem">
                 <table className="tbl text-[12.5px]">
-                  <thead><tr><th className="text-left">Ngày</th><th className="text-left">Marketer</th><th>Chi phí</th><th className="text-left">Chiến dịch · ghi chú</th><th /></tr></thead>
+                  <thead><tr><Th className="text-left">Ngày</Th><Th className="text-left">Marketer</Th><Th>Chi phí</Th><Th className="text-left">Chiến dịch · ghi chú</Th><th /></tr></thead>
                   <tbody>{r.entries.map((e) => (
                     <tr key={e.id}>
                       <td className="text-left num">{dmy(e.day)}</td>

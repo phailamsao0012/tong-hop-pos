@@ -23,7 +23,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { POS } from '@/lib/shared/report-model';
 import { addDays, comparePeriod, todayVn } from '@/lib/shared/report-time';
-import {
+import { Th,
   ChartCard, Definitions, DeltaPill, Donut, ErrorBox, HoverReveal, KpiCard, MiniStat, PageHeader, ProgressBar, SegmentedControl, SortTh, Sparkline,
   STATUS_COLORS, STATUS_LABELS, STATUS_VARS, TableWrap, Toolbar, Tooltip,
   delta, dmy, dt, money, pct, posColor, posName, posVar, short, shortMoney, timeOnly, toast, useMotionOK, vi, type SortState,
@@ -510,7 +510,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
               const n = rows.reduce((a, r) => a + r.closedOrders, 0), created = rows.reduce((a, r) => a + r.orders, 0), net = rows.reduce((a, r) => a + r.closedNet, 0);
               return <KpiCard key={source} icon={source === 'self' ? CheckCircle2 : BarChart3} tone={source === 'self' ? 'green' : 'blue'} label={ORDER_ORIGINS[source]} value={`${vi.format(n)} đơn chốt`} note={`${created} đơn tạo · tỷ lệ ${pct(created ? n / created * 100 : null)} · ${money(net)}`} active={orderOrigin === source} onClick={() => setOrderOrigin(source)} />;
             })}</div>
-            <TableWrap><table className="tbl mt-3"><thead><tr><th>Nguồn / Marketer</th><th className="n">Đơn tạo</th><th className="n">Đơn chốt</th><th className="n">Tỷ lệ chốt</th><th className="n">Doanh thu</th></tr></thead><tbody>{report.origins.map(r => <tr key={r.marketerId || 'self'}><td><button className="text-primary underline" onClick={() => setOrderOrigin(r.marketerId ? 'mkt' : 'self', r.marketerId)}>{r.marketerName}</button></td><td className="n">{vi.format(r.orders)}</td><td className="n">{vi.format(r.closedOrders)}</td><td className="n">{pct(closeRateOf(r, ms.rateBase))}</td><td className="n">{money(r.closedNet)}</td></tr>)}</tbody></table></TableWrap>
+            <TableWrap><table className="tbl mt-3"><thead><tr><Th>Nguồn / Marketer</Th><Th className="n">Đơn tạo</Th><Th className="n">Đơn chốt</Th><Th className="n">Tỷ lệ chốt</Th><Th className="n">Doanh thu</Th></tr></thead><tbody>{report.origins.map(r => <tr key={r.marketerId || 'self'}><td><button className="text-primary underline" onClick={() => setOrderOrigin(r.marketerId ? 'mkt' : 'self', r.marketerId)}>{r.marketerName}</button></td><td className="n">{vi.format(r.orders)}</td><td className="n">{vi.format(r.closedOrders)}</td><td className="n">{pct(closeRateOf(r, ms.rateBase))}</td><td className="n">{money(r.closedNet)}</td></tr>)}</tbody></table></TableWrap>
           </ChartCard>}
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-[repeat(auto-fit,minmax(228px,1fr))]">
             {(Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[]).map((k) => (
@@ -577,7 +577,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
             <TableWrap minWidth={980} stickyFirst>
               <table className="tbl compact">
                 <thead>
-                  <tr><th>POS</th><th className="n">Đơn tạo</th><th className="n">Đơn chốt</th><th className="n">Tỷ lệ</th><th className="n">Doanh thu</th><th className="n">AOV</th><th className="n">Khách</th><th className="n">Giao TC</th><th className="n">Hoàn / Hủy</th><th>7 kỳ</th>{targetMonth && <th>Mục tiêu</th>}<th className="n">± kỳ trước</th></tr>
+                  <tr><Th>POS</Th><Th className="n">Đơn tạo</Th><Th className="n">Đơn chốt</Th><Th className="n">Tỷ lệ</Th><Th className="n">Doanh thu</Th><Th className="n">AOV</Th><Th className="n">Khách</Th><Th className="n">Giao TC</Th><Th className="n">Hoàn / Hủy</Th><Th>7 kỳ</Th>{targetMonth && <Th>Mục tiêu</Th>}<Th className="n">± kỳ trước</Th></tr>
                 </thead>
                 <tbody>
                   {posRows.map(({ id, row, prev: p }, i) => row ? (
@@ -641,7 +641,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
               <table className="tbl">
                 <thead>
                   <tr>
-                    <th>Nhân viên{splitPos ? ' · POS' : ''}</th>
+                    <Th>Nhân viên{splitPos ? ' · POS' : ''}</Th>
                     {team === 'cskh' && <><SortTh k="closedOrders" label="Đơn chốt" sort={empSortState} /><SortTh k="closeRate" label="Tỷ lệ chốt" sort={empSortState} /></>}
                     {team !== 'cskh' && <><SortTh k="assignedOrders" label="Đơn chia" sort={empSortState} /><SortTh k="closedOrders" label="Đơn chốt" sort={empSortState} /><SortTh k="closeRate" label="Tỷ lệ chốt" sort={empSortState} /></>}
                     <SortTh k="closedNet" label="Doanh thu" sort={empSortState} /><SortTh k="averageOrder" label="AOV" sort={empSortState} /><SortTh k="closedQuantity" label="SL bán" sort={empSortState} /><SortTh k="delivered" label="Giao TC" sort={empSortState} /><SortTh k="returned" label="Hoàn / Hủy" sort={empSortState} />
@@ -688,7 +688,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
             action={<Button size="sm" variant="outline" onClick={() => setMergePos(!mergePos)} aria-pressed={mergePos}>{mergePos ? 'Tách theo POS' : 'Gộp POS'}</Button>}>
             <TableWrap minWidth={760} maxHeight="24rem" stickyFirst>
               <table className="tbl">
-                <thead><tr><th>Sản phẩm</th><th>POS</th><th className="n">Đơn</th><th className="n">SL bán thực</th><th className="n">Thành tiền</th><th>Tỷ trọng</th><th className="n">Giao TC</th><th className="n">SL hoàn</th></tr></thead>
+                <thead><tr><Th>Sản phẩm</Th><Th>POS</Th><Th className="n">Đơn</Th><Th className="n">SL bán thực</Th><Th className="n">Thành tiền</Th><Th>Tỷ trọng</Th><Th className="n">Giao TC</Th><Th className="n">SL hoàn</Th></tr></thead>
                 <tbody>
                   {(mergePos ? (() => {
                     const m = new Map<string, typeof report.current.byProduct[number] & { posCount: number }>();

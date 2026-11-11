@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { POS } from '@/lib/shared/report-model';
 import { todayVn } from '@/lib/shared/report-time';
-import { ChartCard, ErrorBox, InfoTip, SkeletonTable, TableWrap, Tooltip, money, pct, posVar, toast, vi } from './ui-kit';
+import { Th, ChartCard, ErrorBox, InfoTip, SkeletonTable, TableWrap, Tooltip, money, pct, posVar, toast, vi } from './ui-kit';
 import { parseRate } from '@/lib/kpi/kpi-pace';
 import { usePosIds, usePosStaffFilter } from './pos-store';
 // Nạp muộn để không vòng import (overview-view cũng import file này).
@@ -184,7 +184,7 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
           {!loaded ? <SkeletonTable rows={6} cols={3} /> : (
             <TableWrap minWidth={360}>
               <table className="tbl">
-                <thead><tr><th>POS</th><th className="n">Doanh thu (₫)</th><th className="n">Đơn chốt</th></tr></thead>
+                <thead><tr><Th>POS</Th><Th className="n">Doanh thu (₫)</Th><Th className="n">Đơn chốt</Th></tr></thead>
                 <tbody>
                   {POS.map((p) => (
                     <tr key={p.id}>
@@ -213,9 +213,9 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
             <TableWrap maxHeight="28rem" sticky minWidth={640}>
               <table className="tbl sticky-first">
                 <thead><tr>
-                  <th>Nhân viên</th><th>Bộ phận</th><th className="n">Doanh thu (₫)</th><th className="n">Tỉ lệ chốt</th>
-                  <th className="n"><span className="inline-flex items-center gap-0.5">Ngày làm<InfoTip text="Số ngày làm việc trong tháng, để chia KPI ngày. Bỏ trống = số ngày của tháng." /></span></th>
-                  <th><span className="inline-flex items-center gap-0.5">Ca (giờ)<InfoTip text="Ca làm việc: giờ bắt đầu – giờ kết thúc (0–24). Dùng ở Trong ngày · chốt nóng, chế độ Ca cá nhân." /></span></th>
+                  <Th>Nhân viên</Th><Th>Bộ phận</Th><Th className="n">Doanh thu (₫)</Th><Th className="n">Tỉ lệ chốt</Th>
+                  <Th className="n"><span className="inline-flex items-center gap-0.5">Ngày làm<InfoTip text="Số ngày làm việc trong tháng, để chia KPI ngày. Bỏ trống = số ngày của tháng." /></span></Th>
+                  <Th><span className="inline-flex items-center gap-0.5">Ca (giờ)<InfoTip text="Ca làm việc: giờ bắt đầu – giờ kết thúc (0–24). Dùng ở Trong ngày · chốt nóng, chế độ Ca cá nhân." /></span></Th>
                 </tr></thead>
                 <tbody>
                   {visibleEmployees.map((e) => (
@@ -239,7 +239,7 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
         </div>
       </div>
 
-      {canEdit && <div className="mt-5"><h4 className="mb-2 font-semibold">KPI team MKT · tháng {monthLabel}</h4><p className="text-xs text-ink-3">Doanh thu New và đơn New của team; chi phí trần là ngân sách quảng cáo tối đa trong tháng.</p><TableWrap minWidth={600}><table className="tbl"><thead><tr><th>Team</th><th>DT New (₫)</th><th>Đơn New</th><th>Chi phí trần (₫)</th></tr></thead><tbody>{mktTeams.map((t) => <tr key={t.id}><td>{t.name}</td><td>{moneyInput('team', t.id, t.name)}</td><td>{ordersInput('team', t.id, t.name)}</td><td><Input type="number" min={0} aria-label={`Chi phí trần ${t.name}`} value={items[key('team', t.id)]?.costCeiling ?? ''} onChange={(e) => set('team', t.id, 'costCeiling', Math.max(0, Number(e.target.value) || 0))} /></td></tr>)}</tbody></table></TableWrap></div>}
+      {canEdit && <div className="mt-5"><h4 className="mb-2 font-semibold">KPI team MKT · tháng {monthLabel}</h4><p className="text-xs text-ink-3">Doanh thu New và đơn New của team; chi phí trần là ngân sách quảng cáo tối đa trong tháng.</p><TableWrap minWidth={600}><table className="tbl"><thead><tr><Th>Team</Th><Th>DT New (₫)</Th><Th>Đơn New</Th><Th>Chi phí trần (₫)</Th></tr></thead><tbody>{mktTeams.map((t) => <tr key={t.id}><td>{t.name}</td><td>{moneyInput('team', t.id, t.name)}</td><td>{ordersInput('team', t.id, t.name)}</td><td><Input type="number" min={0} aria-label={`Chi phí trần ${t.name}`} value={items[key('team', t.id)]?.costCeiling ?? ''} onChange={(e) => set('team', t.id, 'costCeiling', Math.max(0, Number(e.target.value) || 0))} /></td></tr>)}</tbody></table></TableWrap></div>}
       <AlertDialog open={pendingMonth !== null} onOpenChange={(o) => { if (!o) setPendingMonth(null); }}>
         <AlertDialogContent size="sm">
           <AlertDialogHeader>

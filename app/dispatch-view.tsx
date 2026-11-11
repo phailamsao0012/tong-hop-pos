@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { MODE_LABELS, type DispatchMode } from '@/lib/zalo/dispatch-core';
 import { PancakeAssignCard } from './pancake-assign-card';
-import { ChartCard, EmptyState, ErrorBox, PageHeader, SkeletonTable, StatusChip, TableWrap, dt, posName, timeOnly, toast, vi, type Tone } from './ui-kit';
+import { Th, ChartCard, EmptyState, ErrorBox, PageHeader, SkeletonTable, StatusChip, TableWrap, dt, posName, timeOnly, toast, vi, type Tone } from './ui-kit';
 
 type Pos = { id: string; name: string; linked: boolean; mode: DispatchMode; since: string | null; lastRunAt: string | null; lastError: string | null; waiting: number; updatedBy: string | null };
 type Staff = { id: string; name: string; team: string; posIds: string[]; on: boolean; onSince: string | null; lastAssignedAt: string | null; today: { ok: number; dry: number } };
@@ -166,7 +166,7 @@ export function DispatchView() {
         {data && data.log.length > 0 && (
           <TableWrap minWidth={760} maxHeight={520} sticky>
             <table className="tbl">
-              <thead><tr><th>Lúc chia</th><th>POS</th><th>Đơn</th><th>Khách</th><th>Giao cho</th><th>Kết quả</th></tr></thead>
+              <thead><tr><Th>Lúc chia</Th><Th>POS</Th><Th>Đơn</Th><Th>Khách</Th><Th>Giao cho</Th><Th>Kết quả</Th></tr></thead>
               <tbody>
                 {data.log.map((l) => (
                   <tr key={`${l.at}:${l.order_id}`} className="align-top">

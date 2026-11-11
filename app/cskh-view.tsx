@@ -30,7 +30,7 @@ import { GroupOptions } from './product-group-blocks';
 import type { GroupBasis, GroupDim } from '@/lib/reports/product-groups';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
-import {
+import { Th,
   ChartCard, ContextLine, Definitions, Donut, ErrorBox, EmptyState, Funnel, HoverReveal, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, Toolbar, Tooltip, heat,
   dmy, dt, money, pct, posName, posVar, shortMoney, toast, useMotionOK, useSort, vi, type SortState,
 } from './ui-kit';
@@ -182,7 +182,7 @@ function CustomerDialog({ detail, loading, error, onClose, onRetry }: { detail: 
             {detail.orders.length ? (
               <TableWrap minWidth={880} className="mt-1">
                 <table className="tbl">
-                  <thead><tr><th>Ngày tạo</th><th>Mã đơn</th><th>Trạng thái</th><th>Lần mua</th><th>Người bán / chốt</th><th className="n">Doanh thu</th><th>Sản phẩm</th><th>Ghi chú</th></tr></thead>
+                  <thead><tr><Th>Ngày tạo</Th><Th>Mã đơn</Th><Th>Trạng thái</Th><Th>Lần mua</Th><Th>Người bán / chốt</Th><Th className="n">Doanh thu</Th><Th>Sản phẩm</Th><Th>Ghi chú</Th></tr></thead>
                   <tbody>
                     {detail.orders.map((o) => (
                       <tr key={o.id} className="[&>td]:align-top">
@@ -343,17 +343,17 @@ function ProfilesView({ initialQ }: { initialQ: string }) {
             <TableWrap minWidth={1120} stickyFirst>
               <table className="tbl">
                 <thead><tr>
-                  <th className="w-8">#</th>
-                  {canSort('name') ? <SortTh k="name" label="Khách" sort={listSort} align="left" /> : <th>Khách</th>}
-                  <th>POS</th><th>Phụ trách</th>
+                  <Th className="w-8">#</Th>
+                  {canSort('name') ? <SortTh k="name" label="Khách" sort={listSort} align="left" /> : <Th>Khách</Th>}
+                  <Th>POS</Th><Th>Phụ trách</Th>
                   <SortTh k="orders" label="Mua TC" sort={listSort} />
                   <SortTh k="spend" label="Tổng tiền mua" sort={listSort} />
-                  <th className="n">TB/đơn</th>
-                  {periodMode && <th className="n">Trọn đời</th>}
-                  <th className="n">Loại SP</th><th>Sản phẩm hay mua</th>
+                  <Th className="n">TB/đơn</Th>
+                  {periodMode && <Th className="n">Trọn đời</Th>}
+                  <Th className="n">Loại SP</Th><Th>Sản phẩm hay mua</Th>
                   <SortTh k="recent" label="Mua gần nhất" sort={listSort} align="left" />
-                  {canSort('dormant') ? <SortTh k="dormant" label="Chưa mua (ngày)" sort={listSort} /> : <th className="n">Chưa mua (ngày)</th>}
-                  <th className="n">Hoàn/Hủy</th>
+                  {canSort('dormant') ? <SortTh k="dormant" label="Chưa mua (ngày)" sort={listSort} /> : <Th className="n">Chưa mua (ngày)</Th>}
+                  <Th className="n">Hoàn/Hủy</Th>
                 </tr></thead>
                 <tbody>
                   {data.customers.map((c, i) => (
@@ -495,14 +495,14 @@ function DormantView({ canExport }: { canExport: boolean }) {
             <TableWrap minWidth={1040} stickyFirst>
               <table className="tbl">
                 <thead><tr>
-                  <th className="w-8">#</th>
+                  <Th className="w-8">#</Th>
                   <SortTh k="name" label="Tên khách hàng" sort={listSort} align="left" />
-                  <th>SĐT</th><th>POS</th>
+                  <Th>SĐT</Th><Th>POS</Th>
                   <SortTh k="recent" label="Lần mua gần nhất" sort={listSort} align="left" />
                   <SortTh k="dormant" label="Ngày chưa mua" sort={listSort} />
                   <SortTh k="spend" label="Giá trị đã mua" sort={listSort} />
                   <SortTh k="orders" label="Mua TC" sort={listSort} />
-                  <th>Sản phẩm hay mua</th><th>Nhân viên phụ trách</th><th>Ưu tiên</th>
+                  <Th>Sản phẩm hay mua</Th><Th>Nhân viên phụ trách</Th><Th>Ưu tiên</Th>
                 </tr></thead>
                 <tbody>
                   {data.customers.map((c, i) => {
@@ -661,7 +661,7 @@ export function RepurchaseView() {
               {data.cohorts.length ? (
                 <TableWrap minWidth={Math.max(420, 150 + maxT * 52)} stickyFirst>
                   <table className="tbl text-xs [&_td]:px-1.5 [&_td]:py-1 [&_th]:px-1.5">
-                    <thead><tr><th>Tháng đầu</th><th className="n">Khách</th>{Array.from({ length: maxT }, (_, i) => <th key={i} className="text-center">T{i}</th>)}</tr></thead>
+                    <thead><tr><Th>Tháng đầu</Th><Th className="n">Khách</Th>{Array.from({ length: maxT }, (_, i) => <Th key={i} className="text-center">T{i}</Th>)}</tr></thead>
                     <tbody>
                       {data.cohorts.map((c) => (
                         <tr key={c.month}>
@@ -703,7 +703,7 @@ export function RepurchaseView() {
             {tagRows.length ? (
               <TableWrap maxHeight="24rem" minWidth={640}>
                 <table className="tbl">
-                  <thead><tr><th>Thẻ</th><th className="n">Đơn có thẻ</th><th className="n">Khách</th><th className="n">Mua lần đầu (thẻ)</th><th className="n">Đơn mua lại</th><th className="n">Khách mua lại</th><th className="n">Tỷ lệ mua lại</th><th className="n">Doanh thu mua lại</th></tr></thead>
+                  <thead><tr><Th>Thẻ</Th><Th className="n">Đơn có thẻ</Th><Th className="n">Khách</Th><Th className="n">Mua lần đầu (thẻ)</Th><Th className="n">Đơn mua lại</Th><Th className="n">Khách mua lại</Th><Th className="n">Tỷ lệ mua lại</Th><Th className="n">Doanh thu mua lại</Th></tr></thead>
                   <tbody>{tagRows.map((t) => {
                     const on = tag === t.tag; const pick = () => setTag(on ? '' : t.tag);
                     return (
@@ -730,7 +730,7 @@ export function RepurchaseView() {
           <ChartCard icon={Layers} title="Theo POS" subtitle={data.definitions.upsell}>
             <TableWrap minWidth={720}>
               <table className="tbl">
-                <thead><tr><th>POS</th>{data.summary.levels.map((l) => <th key={l.level} className="n">{l.label}</th>)}<th className="n">Mua lại (gộp)</th></tr></thead>
+                <thead><tr><Th>POS</Th>{data.summary.levels.map((l) => <Th key={l.level} className="n">{l.label}</Th>)}<Th className="n">Mua lại (gộp)</Th></tr></thead>
                 <tbody>{data.byPos.map((p) => <tr key={p.posId}><td className="font-medium text-ink"><PosBadge posId={p.posId} size={16} className="mr-2" />{p.posName}</td>{levelCells(p.levels)}<td className="n">{vi.format(p.repurchase.customers)}<span className="font-normal tracking-normal text-ink-3"> khách · </span>{money(p.repurchase.net)}</td></tr>)}</tbody>
               </table>
             </TableWrap>
@@ -747,7 +747,7 @@ export function RepurchaseView() {
             {empRows.length ? (
               <TableWrap maxHeight="32rem" minWidth={800} stickyFirst>
                 <table className="tbl">
-                  <thead><tr><th className="w-8">#</th><SortTh k="name" label="Nhân viên" sort={empSort} align="left" />{data.summary.levels.map((l, i) => <SortTh key={l.level} k={`l${i}`} label={l.label} sort={empSort} />)}<SortTh k="rep" label="Mua lại (gộp)" sort={empSort} /></tr></thead>
+                  <thead><tr><Th className="w-8">#</Th><SortTh k="name" label="Nhân viên" sort={empSort} align="left" />{data.summary.levels.map((l, i) => <SortTh key={l.level} k={`l${i}`} label={l.label} sort={empSort} />)}<SortTh k="rep" label="Mua lại (gộp)" sort={empSort} /></tr></thead>
                   <tbody>{empRows.map((p, i) => <tr key={p.sellerId || 'none'}><td className="num text-[11px] text-ink-4">{i + 1}</td><td className="font-medium text-ink">{p.name}</td>{levelCells(p.levels)}<td className="n">{vi.format(p.repurchase.customers)}<span className="font-normal tracking-normal text-ink-3"> khách · </span>{money(p.repurchase.net)}</td></tr>)}</tbody>
                 </table>
               </TableWrap>
@@ -764,7 +764,7 @@ export function RepurchaseView() {
             {recRows.length ? (
               <TableWrap maxHeight="24rem" minWidth={900} stickyFirst>
                 <table className="tbl">
-                  <thead><tr><SortTh k="time" label="Ngày tạo" sort={recSort} align="left" /><th>POS</th><th>SĐT</th><SortTh k="prior" label="Lần" sort={recSort} align="left" /><th>Người bán</th><th>Bắt đầu bằng</th><th>Thẻ</th><SortTh k="net" label="Doanh thu" sort={recSort} /></tr></thead>
+                  <thead><tr><SortTh k="time" label="Ngày tạo" sort={recSort} align="left" /><Th>POS</Th><Th>SĐT</Th><SortTh k="prior" label="Lần" sort={recSort} align="left" /><Th>Người bán</Th><Th>Bắt đầu bằng</Th><Th>Thẻ</Th><SortTh k="net" label="Doanh thu" sort={recSort} /></tr></thead>
                   <tbody>{recRows.map((r, i) => <tr key={i} tabIndex={0} onClick={() => void open({ posId: r.posId, phone: r.phone, phoneRef: (r as { phoneRef?: string }).phoneRef })} onKeyDown={rowKeys(() => void open({ posId: r.posId, phone: r.phone, phoneRef: (r as { phoneRef?: string }).phoneRef }))} className={rowCls()}><td className="num"><span className="inline-flex items-center gap-2">{dt(r.createdAt, true)}<HoverReveal><span className="btn sm font-medium tracking-normal">Hồ sơ<ChevronRight size={12} /></span></HoverReveal></span></td><td className="text-xs"><PosBadge posId={r.posId} size={16} className="mr-1.5" />{r.posName}</td><td className="num">{r.phone}</td><td><StatusChip tone={r.prior >= 3 ? 'purple' : r.prior === 2 ? 'teal' : 'green'}>Upsell {r.prior}</StatusChip></td><td className="text-xs">{r.sellerName}</td><td className="text-xs font-medium text-ink">{(r.startGroups ?? []).join(', ') || '—'}</td><td><div className="flex flex-wrap gap-1">{(r.tags ?? []).map((t) => <span key={t} className={`rounded-[4px] border px-1.5 py-0.5 text-[10px] uppercase ${t === tag ? 'border-primary/40 bg-tint text-primary' : 'border-line-2 bg-surface-2 text-ink-2'}`}>{t}</span>)}</div></td><td className="n">{money(r.net)}</td></tr>)}</tbody>
                 </table>
               </TableWrap>
@@ -916,7 +916,7 @@ export function BatchesView() {
             {byEmployee.length ? (
               <TableWrap maxHeight="32rem" minWidth={960} stickyFirst>
                 <table className="tbl">
-                  <thead><tr><th className="w-8">#</th><SortTh k="name" label="Nhân viên" sort={empSortState} align="left" /><th>POS</th><SortTh k="received" label="Số được cấp" sort={empSortState} /><th>Khối lượng</th><SortTh k="buyers" label="Đã mua" sort={empSortState} /><SortTh k="buyRate" label="Tỷ lệ mua" sort={empSortState} /><SortTh k="repeat" label="Mua lại" sort={empSortState} /><SortTh k="orders" label="Đơn" sort={empSortState} /><SortTh k="net" label="Doanh thu" sort={empSortState} /><th>Trạng thái</th></tr></thead>
+                  <thead><tr><Th className="w-8">#</Th><SortTh k="name" label="Nhân viên" sort={empSortState} align="left" /><Th>POS</Th><SortTh k="received" label="Số được cấp" sort={empSortState} /><Th>Khối lượng</Th><SortTh k="buyers" label="Đã mua" sort={empSortState} /><SortTh k="buyRate" label="Tỷ lệ mua" sort={empSortState} /><SortTh k="repeat" label="Mua lại" sort={empSortState} /><SortTh k="orders" label="Đơn" sort={empSortState} /><SortTh k="net" label="Doanh thu" sort={empSortState} /><Th>Trạng thái</Th></tr></thead>
                   <tbody>
                     {byEmployee.map((e, i) => {
                       const rate = e.received ? e.buyers / e.received * 100 : null;
@@ -948,7 +948,7 @@ export function BatchesView() {
             {batchRows.length ? (
               <TableWrap maxHeight="32rem" minWidth={Math.max(1000, 760 + months.length * 120)} stickyFirst>
                 <table className="tbl">
-                  <thead><tr><SortTh k="month" label="Tháng giao" sort={batchSort} align="left" /><SortTh k="pos" label="POS" sort={batchSort} align="left" /><SortTh k="seller" label="Nhân viên" sort={batchSort} align="left" /><SortTh k="received" label="Số nhận" sort={batchSort} /><SortTh k="buyers" label="Đã mua" sort={batchSort} /><SortTh k="buyRate" label="Tỷ lệ" sort={batchSort} /><SortTh k="repeat" label="Mua lại" sort={batchSort} /><SortTh k="orders" label="Đơn" sort={batchSort} /><SortTh k="net" label="Doanh thu" sort={batchSort} />{months.map((m) => <th key={m} className="n">{m.slice(5)}/{m.slice(0, 4)}</th>)}</tr></thead>
+                  <thead><tr><SortTh k="month" label="Tháng giao" sort={batchSort} align="left" /><SortTh k="pos" label="POS" sort={batchSort} align="left" /><SortTh k="seller" label="Nhân viên" sort={batchSort} align="left" /><SortTh k="received" label="Số nhận" sort={batchSort} /><SortTh k="buyers" label="Đã mua" sort={batchSort} /><SortTh k="buyRate" label="Tỷ lệ" sort={batchSort} /><SortTh k="repeat" label="Mua lại" sort={batchSort} /><SortTh k="orders" label="Đơn" sort={batchSort} /><SortTh k="net" label="Doanh thu" sort={batchSort} />{months.map((m) => <Th key={m} className="n">{m.slice(5)}/{m.slice(0, 4)}</Th>)}</tr></thead>
                   <tbody>
                     {batchRows.map((b) => (
                       <tr key={`${b.posId}|${b.month}|${b.sellerId}`}>
@@ -995,7 +995,7 @@ function StartFlowCard({ flow, dim, basis, onDim, onBasis }: { flow: Repurchase[
           </div>
           <TableWrap minWidth={320 + flow.nows.length * 110} stickyFirst>
             <table className="tbl">
-              <thead><tr><th className="text-left">Bắt đầu bằng ↓ · Mua lại →</th>{flow.nows.map((n) => <th key={n}>{n}</th>)}</tr></thead>
+              <thead><tr><Th className="text-left">Bắt đầu bằng ↓ · Mua lại →</Th>{flow.nows.map((n) => <Th key={n}>{n}</Th>)}</tr></thead>
               <tbody>{flow.starts.map((st) => (
                 <tr key={st.label}><td className="text-left font-medium text-ink">{st.label}</td>
                   {flow.nows.map((n) => { const c = cell(st.label, n); const v = c?.[metric] ?? 0; return (

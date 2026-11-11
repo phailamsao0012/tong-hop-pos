@@ -6,7 +6,7 @@ import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { D1UsagePanel, type Usage } from './d1-usage-panel';
 import { POS } from '@/lib/shared/report-model';
-import { Skeleton, StatusChip, SyncPill, TableWrap, toast, vi } from './ui-kit';
+import { Th, Skeleton, StatusChip, SyncPill, TableWrap, toast, vi } from './ui-kit';
 
 type Status = {
   nextRunAt: number | null; lastRunAt: number | null; lastError: string | null; backfillPending: boolean | null;
@@ -104,7 +104,7 @@ export function SchedulerPanel({ Surface }: { Surface: SurfaceComponent }) {
       <TableWrap minWidth={760}>
         <table className="tbl">
           <thead>
-            <tr><th>POS</th><th className="n">Đơn đã lưu</th><th>Đơn cũ nhất</th><th>Đồng bộ gần nhất</th><th>Lịch sử</th><th className="n">NV</th><th className="n">SP</th><th>Lỗi</th></tr>
+            <tr><Th>POS</Th><Th className="n">Đơn đã lưu</Th><Th>Đơn cũ nhất</Th><Th>Đồng bộ gần nhất</Th><Th>Lịch sử</Th><Th className="n">NV</Th><Th className="n">SP</Th><Th>Lỗi</Th></tr>
           </thead>
           <tbody>
             {POS.map((p) => {

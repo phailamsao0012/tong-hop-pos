@@ -7,7 +7,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/
 import { trendChartRows, trendTile } from '@/lib/reports/mkt-trend-rows';
 import type { Bucket, mktTrend } from '@/lib/reports/mkt-trend';
 import { daysBetween } from '@/lib/shared/report-time';
-import { ChartCard, ErrorBox, SegmentedControl, TableWrap, money, pct, short, shortMoney, vi } from './ui-kit';
+import { Th, ChartCard, ErrorBox, SegmentedControl, TableWrap, money, pct, short, shortMoney, vi } from './ui-kit';
 import { useApi } from './use-api';
 import { useTeam } from './team-store';
 
@@ -71,7 +71,7 @@ export function MktTrendPanel({ start, end, posIds, marketerId, teamId }: { star
       </div>; })()}
       <p className="mt-2 text-[11px] text-ink-3">Số về tính một lần trong kỳ theo từng marketer; đoạn đang chạy nét đứt; chi phí từ sheet CPQC Daily theo giờ.</p>
       {data.notes.length > 0 && <ul className="my-3 list-disc pl-5 text-sm">{data.notes.map(n => <li key={n}>{n}</li>)}</ul>}
-      <details className="mt-3"><summary className="cursor-pointer text-sm text-ink-2">Bảng từng {word}</summary><TableWrap><table className="tbl"><thead><tr><th>Đoạn bắt đầu</th>{columns.map(([key, label, tip]) => <th key={key} title={`Cách tính: ${tip}`} className="n">{label}</th>)}</tr></thead>
+      <details className="mt-3"><summary className="cursor-pointer text-sm text-ink-2">Bảng từng {word}</summary><TableWrap><table className="tbl"><thead><tr><Th>Đoạn bắt đầu</Th>{columns.map(([key, label, tip]) => <Th key={key} title={`Cách tính: ${tip}`} className="n">{label}</Th>)}</tr></thead>
         <tbody>{data.rows.map(r => <tr key={r.key}><td>{r.key}{r.partial && <span className="ml-1 text-xs text-ink-3">· đang chạy{r.cost === 0 ? " · chưa có chi phí" : ""}</span>}</td>{columns.map(([key, , tip, fn]) => <td className="n" key={key} title={`Cách tính: ${tip}`}>{r.partial && r.cost === 0 && (key === 'cost' || key === 'costPerLead' || key === 'roas' || key === 'costShare') ? 'chưa có chi phí' : format(r[key], fn)}</td>)}</tr>)}</tbody>
         <tfoot><tr><td>Tổng kỳ</td>{columns.map(([key, , tip, fn]) => <td key={key} className="n" title={`Cách tính: ${tip}`}>{format(data.total[key], fn)}</td>)}</tr></tfoot>
       </table></TableWrap></details>

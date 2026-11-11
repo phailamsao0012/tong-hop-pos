@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Network, RotateCw } from 'lucide-react';
-import { ChartCard, ErrorBox, TableWrap, toast } from './ui-kit';
+import { Th, ChartCard, ErrorBox, TableWrap, toast } from './ui-kit';
 
 type Row = { team: 'sale' | 'cskh'; pancakePeople: number; hrPeople: number; pancakeRevenue: number; hrRevenue: number };
 type Data = {
@@ -57,7 +57,7 @@ export function HrSyncPanel() {
         </span>
       </div>
       <TableWrap><table className="tbl">
-        <thead><tr><th>Team</th><th className="num">Người (Pancake)</th><th className="num">Người (nhân sự)</th><th className="num">Doanh thu tháng (Pancake)</th><th className="num">Doanh thu tháng (nhân sự)</th></tr></thead>
+        <thead><tr><Th>Team</Th><Th className="num">Người (Pancake)</Th><Th className="num">Người (nhân sự)</Th><Th className="num">Doanh thu tháng (Pancake)</Th><Th className="num">Doanh thu tháng (nhân sự)</Th></tr></thead>
         <tbody>{data.rows.map((r) => <tr key={r.team}>
           <td>{TEAM[r.team]}</td><td className="num">{r.pancakePeople}</td><td className="num">{r.hrPeople}</td>
           <td className="num">{money(r.pancakeRevenue)}</td><td className={`num ${r.hrRevenue !== r.pancakeRevenue ? 'text-bad font-semibold' : ''}`}>{money(r.hrRevenue)}</td>
@@ -67,7 +67,7 @@ export function HrSyncPanel() {
         ? 'Khớp: không ai đổi team, số báo cáo theo team giữ nguyên khi bật.'
         : `${data.mismatches.length} người có team khác Pancake. Sửa trên web nhân sự (hoặc chấp nhận nếu web nhân sự đúng) rồi kéo lại.`}</p>
       {!!data.mismatches.length && <TableWrap><table className="tbl">
-        <thead><tr><th>Người</th><th>Pancake</th><th>Web nhân sự</th><th className="num">Doanh thu tháng</th></tr></thead>
+        <thead><tr><Th>Người</Th><Th>Pancake</Th><Th>Web nhân sự</Th><Th className="num">Doanh thu tháng</Th></tr></thead>
         <tbody>{data.mismatches.map((m) => <tr key={m.id}><td>{m.name}</td><td>{m.pancake ? TEAM[m.pancake] : 'Không thuộc Sale/CSKH'}</td><td>{TEAM[m.hr]}{m.department ? ` · ${m.department}` : ''}</td><td className="num">{money(m.revenue)}</td></tr>)}</tbody>
       </table></TableWrap>}
       {data.unlinkedCount > 0 && <details className="text-sm">

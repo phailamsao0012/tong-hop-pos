@@ -12,7 +12,7 @@ import { CalendarDays } from 'lucide-react';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import type { OverviewReport } from './overview-view';
 import { setPeriodRange } from './period-store';
-import { ChartCard, SegmentedControl, TableWrap, delta, dmy, money, shortMoney, useMotionOK, vi } from './ui-kit';
+import { Th, ChartCard, SegmentedControl, TableWrap, delta, dmy, money, shortMoney, useMotionOK, vi } from './ui-kit';
 import { useApi } from './use-api';
 
 type MetricKey = 'deliveredNet' | 'closedNet' | 'deliveredOrders' | 'closedOrders';
@@ -140,7 +140,7 @@ export function MonthlyCompare({ month, end, posIds, team, onOpenRange }: {
           </ChartContainer>
           <TableWrap className="mt-2">
             <table className="tbl text-[12px]">
-              <thead><tr><th>Tuần</th><th className="n">{MONTH_NAMES(month)}</th><th className="n">So tuần trước</th><th className="n">{MONTH_NAMES(past[0])}</th><th className="n">So tháng trước</th>{past.slice(1).map((m) => <th key={m} className="n">{MONTH_NAMES(m)}</th>)}</tr></thead>
+              <thead><tr><Th>Tuần</Th><Th className="n">{MONTH_NAMES(month)}</Th><Th className="n">So tuần trước</Th><Th className="n">{MONTH_NAMES(past[0])}</Th><Th className="n">So tháng trước</Th>{past.slice(1).map((m) => <Th key={m} className="n">{MONTH_NAMES(m)}</Th>)}</tr></thead>
               <tbody>
                 {weekRows.map((r) => (
                   <tr key={String(r.label)} className={onOpenRange && r.cur !== null ? 'cursor-pointer hover:bg-surface-2' : ''} onClick={() => r.cur !== null && open(r.start, r.end)}>

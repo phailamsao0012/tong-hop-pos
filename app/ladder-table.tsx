@@ -6,7 +6,7 @@ import { useState, type ReactNode } from 'react';
 import { FileDown, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useApi } from './use-api';
-import { EmptyState, ErrorBox, SegmentedControl, SkeletonTable, TableWrap, TipContent, Tooltip, dt, money, pct, shortMoney, toast, vi } from './ui-kit';
+import { Th, EmptyState, ErrorBox, SegmentedControl, SkeletonTable, TableWrap, TipContent, Tooltip, dt, money, pct, shortMoney, toast, vi } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
 
 type Gap = { n: number; avg: number | null; median: number | null; p25: number | null; p75: number | null };
@@ -51,10 +51,10 @@ export function LadderTable({ rows, steps, first, extra = [], total, onPick, pic
           {extra.map((x) => <col key={x.head} style={{ width: 136 }} />)}
         </colgroup>
         <thead><tr>
-          <th className="text-left">{first}</th>
-          <th className="n">T0 · khách</th>
-          {Array.from({ length: steps }, (_, i) => <th key={i} className="n">T{i + 1}<span className="block text-[11px] font-normal normal-case tracking-normal text-ink-3">lần {i + 2}</span></th>)}
-          {extra.map((x) => <th key={x.head} className="n whitespace-normal">{x.head}</th>)}
+          <Th className="text-left">{first}</Th>
+          <Th className="n">T0 · khách</Th>
+          {Array.from({ length: steps }, (_, i) => <Th key={i} className="n">T{i + 1}<span className="block text-[11px] font-normal normal-case tracking-normal text-ink-3">lần {i + 2}</span></Th>)}
+          {extra.map((x) => <Th key={x.head} className="n whitespace-normal">{x.head}</Th>)}
         </tr></thead>
         <tbody>
           {rows.map((r) => (
@@ -122,7 +122,7 @@ export function LadderMembers({ baseUrl, pick, onClose, title }: { baseUrl: stri
       {api.error && !list ? <ErrorBox error={api.error} onRetry={api.reload} /> : !list ? <SkeletonTable rows={5} cols={7} /> : !list.length ? <EmptyState text="Không có khách nào." /> : (
         <TableWrap maxHeight="28rem" minWidth={860} sticky>
           <table className="tbl">
-            <thead><tr><th>Khách</th><th>Nhóm · POS</th><th className="n">Lần đã nhận</th><th>Ngày T0 · người bán</th><th>Lần nhận gần nhất</th><th className="n">Tổng đã nhận</th><th>Đang cầm</th></tr></thead>
+            <thead><tr><Th>Khách</Th><Th>Nhóm · POS</Th><Th className="n">Lần đã nhận</Th><Th>Ngày T0 · người bán</Th><Th>Lần nhận gần nhất</Th><Th className="n">Tổng đã nhận</Th><Th>Đang cầm</Th></tr></thead>
             <tbody>
               {list.map((c) => (
                 <tr key={c.phone}>

@@ -9,7 +9,7 @@ import { POS } from '@/lib/shared/report-model';
 import { usePosIds } from './pos-store';
 import { PosChips } from './overview-view';
 import { KpiInlineEditor } from './kpi-inline-editor';
-import { TableWrap } from './ui-kit';
+import { Th, TableWrap } from './ui-kit';
 
 const number = (value: number | null) => value === null ? '—' : new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 }).format(value);
 type Detail = { customer: MentorCustomer; notes: { id: string; at: string; message: string }[] };
@@ -88,7 +88,7 @@ export function MentorView() {
     {error && <p role="alert" className="text-danger">{error}</p>}
     {staff && <>
       <p className="text-xs text-ink-2" title="Cách tính">{staff.definitions}</p>
-      <div className="rounded-xl border border-line bg-surface"><TableWrap><table className="w-full text-sm"><thead><tr>{['Nhân viên', 'Doanh thu trong kỳ', 'Đơn chốt', 'AOV', 'Tỷ lệ chốt', 'Tỷ lệ hoàn', `KPI tháng ${staff.month}`].map((label) => <th className="whitespace-nowrap p-3 text-left" key={label}>{label}</th>)}</tr></thead>
+      <div className="rounded-xl border border-line bg-surface"><TableWrap><table className="w-full text-sm"><thead><tr>{['Nhân viên', 'Doanh thu trong kỳ', 'Đơn chốt', 'AOV', 'Tỷ lệ chốt', 'Tỷ lệ hoàn', `KPI tháng ${staff.month}`].map((label) => <Th className="whitespace-nowrap p-3 text-left" key={label}>{label}</Th>)}</tr></thead>
         <tbody>{staff.staff.map((person) => <tr key={person.id} className="border-t border-line"><td className="p-3"><button className="link" onClick={() => { setSellerId(person.id); reset(); }}>{person.name}</button></td>
           <td className="p-3"><button className="link" title="Cách tính: doanh thu đơn chốt trong kỳ; bấm xem đơn tạo ra số này" onClick={() => openOrders(person.id)}>{number(person.net)} ₫</button></td>
           <td className="p-3"><button className="link" title="Cách tính: đơn chốt trong kỳ" onClick={() => openOrders(person.id)}>{number(person.closedOrders)}</button></td><td className="p-3" title="Cách tính: doanh thu ÷ đơn chốt"><button className="link" onClick={() => openOrders(person.id)}>{number(person.aov)}</button></td>
@@ -100,11 +100,11 @@ export function MentorView() {
       </table></TableWrap>{!staff.staff.length && <p className="p-4 text-ink-2">Chưa có người trong phạm vi. Chủ hệ thống cần kiểm tra liên kết hồ sơ và ghế Mentor đang hiệu lực.</p>}</div>
     </>}
     {orders && <section className="space-y-3 rounded-xl border border-line bg-surface p-4"><h2 className="text-lg font-semibold">Đơn chốt tạo ra số của {staff?.staff.find((person) => person.id === orderSeller)?.name}</h2><p className="text-xs text-ink-2">Giữ nguyên kỳ {start} → {end} và POS đang chọn.</p>
-      <TableWrap><table className="w-full text-sm"><thead><tr><th className="p-2 text-left">Mã đơn</th><th className="p-2 text-left">Ngày chốt</th><th className="p-2 text-left">Doanh thu</th></tr></thead><tbody>{orders.orderRows?.map((order) => <tr key={order.id}><td className="p-2">{order.code}</td><td className="p-2">{order.at}</td><td className="p-2">{number(order.net)} ₫</td></tr>)}</tbody></table></TableWrap>
+      <TableWrap><table className="w-full text-sm"><thead><tr><Th className="p-2 text-left">Mã đơn</Th><Th className="p-2 text-left">Ngày chốt</Th><Th className="p-2 text-left">Doanh thu</Th></tr></thead><tbody>{orders.orderRows?.map((order) => <tr key={order.id}><td className="p-2">{order.code}</td><td className="p-2">{order.at}</td><td className="p-2">{number(order.net)} ₫</td></tr>)}</tbody></table></TableWrap>
       <div className="flex gap-3"><Button variant="outline" disabled={orderPage <= 1 || busy} onClick={() => setOrderPage(orderPage - 1)}>Trước</Button><span>Trang {orderPage}</span><Button variant="outline" disabled={!orders.hasMore || busy} onClick={() => setOrderPage(orderPage + 1)}>Tiếp</Button><Button variant="outline" onClick={() => setOrderSeller('')}>Đóng</Button></div>
     </section>}
     {customers && <section className="space-y-3"><Input aria-label="Tìm theo tên khách" placeholder="Tìm theo tên khách" value={q} onChange={(e) => { setQ(e.target.value); reset(); }} /><div className="flex items-center gap-3"><h2 className="text-lg font-semibold">Khách trong phạm vi{sellerId ? ` · ${staff?.staff.find((person) => person.id === sellerId)?.name ?? 'Nhân viên'}` : ''}</h2>{sellerId && <Button variant="outline" onClick={() => { setSellerId(''); reset(); }}>Cả team</Button>}</div>
-      <div className="rounded-xl border border-line bg-surface"><TableWrap><table className="w-full text-sm"><thead><tr>{['Khách', 'SĐT đã che', 'Đơn chốt trong kỳ', 'Doanh thu trong kỳ'].map((label) => <th key={label} className="p-3 text-left">{label}</th>)}</tr></thead><tbody>
+      <div className="rounded-xl border border-line bg-surface"><TableWrap><table className="w-full text-sm"><thead><tr>{['Khách', 'SĐT đã che', 'Đơn chốt trong kỳ', 'Doanh thu trong kỳ'].map((label) => <Th key={label} className="p-3 text-left">{label}</Th>)}</tr></thead><tbody>
         {customers.customers.map((customer) => <tr key={customer.id} className="border-t border-line"><td className="p-3"><button className="link" onClick={() => setCustomerId(customer.id)}>{customer.name || 'Khách'}</button></td><td className="p-3">{customer.phone ?? '—'}</td><td className="p-3">{number(customer.orders)}</td><td className="p-3">{number(customer.net)} ₫</td></tr>)}
       </tbody></table></TableWrap>{!customers.customers.length && <p className="p-4">Chưa có khách trong phạm vi đang chọn.</p>}</div>
       <div className="flex gap-3"><Button variant="outline" disabled={page <= 1 || busy} onClick={() => { setPage(page - 1); setCustomerId(''); }}>Trước</Button><span>Trang {page}</span><Button variant="outline" disabled={!customers.hasMore || busy} onClick={() => { setPage(page + 1); setCustomerId(''); }}>Tiếp</Button></div>

@@ -8,7 +8,7 @@ import { usePeriod } from './period-store';
 import { usePosIds } from './pos-store';
 import { useTeam } from './team-store';
 import { useApi } from './use-api';
-import { EmptyState, ErrorBox, PageHeader, SegmentedControl, Skeleton, TableWrap, money, posName, shortMoney, vi } from './ui-kit';
+import { Th, EmptyState, ErrorBox, PageHeader, SegmentedControl, Skeleton, TableWrap, money, posName, shortMoney, vi } from './ui-kit';
 
 type Dim = 'reasons' | 'byPos' | 'bySeller' | 'byProduct';
 const DIMS: { value: Dim; label: string }[] = [{ value: 'reasons', label: 'Lý do' }, { value: 'byPos', label: 'POS' }, { value: 'bySeller', label: 'Người lên đơn' }, { value: 'byProduct', label: 'Sản phẩm chính' }];
@@ -38,7 +38,7 @@ export function ReturnsView({ onOpen }: { onOpen: () => void }) {
         <SegmentedControl<Dim> size="sm" ariaLabel="Nhóm theo" value={dimension} onChange={setDimension} options={DIMS} />
       </header>
       {!data.total ? <EmptyState text="Không có đơn hoàn trong kỳ" /> : <TableWrap><table className="tbl">
-        <thead><tr><th className="text-left">{DIMS.find((d) => d.value === dimension)!.label}</th><th className="n">Số đơn</th><th className="text-left">Tỉ lệ</th><th className="n">Tiền hàng</th></tr></thead>
+        <thead><tr><Th className="text-left">{DIMS.find((d) => d.value === dimension)!.label}</Th><Th className="n">Số đơn</Th><Th className="text-left">Tỉ lệ</Th><Th className="n">Tiền hàng</Th></tr></thead>
         <tbody>{rows.map((row) => <tr key={row.label}>
           <td className="min-w-40 text-left">{dimension === 'reasons'
             ? <button type="button" aria-label={row.label} className="text-left font-semibold text-ink hover:text-primary hover:underline tap" title="Mở Đơn nguồn ở nhóm Hoàn" onClick={onOpen}>{row.label}</button>

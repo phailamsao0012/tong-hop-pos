@@ -16,7 +16,7 @@ import { useTeam } from './team-store';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import { ShippingLines } from './shipping-lines';
-import { ChartCard, ErrorBox, EmptyState, Funnel, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, dmy, money, pct, posName, posVar, shortMoney, toast, vi, type SortState } from './ui-kit';
+import { Th, ChartCard, ErrorBox, EmptyState, Funnel, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, dmy, money, pct, posName, posVar, shortMoney, toast, vi, type SortState } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
 
 type Bucket = { orders: number; net: number; gross: number };
@@ -195,7 +195,7 @@ export function PipelineView() {
             <ChartCard icon={PackageCheck} title="Theo POS" subtitle="Cùng bộ lọc kỳ và bộ phận (bộ phận áp cho bảng nhân viên)">
               <TableWrap minWidth={640}>
                 <table className="tbl">
-                  <thead><tr><th>POS</th><th className="n">Chốt</th><th className="n">Xuất đi</th><th className="n">Đã nhận</th><th className="n">% TC</th><th className="n">Hoàn</th><th className="n">% hoàn</th><th className="n">Hủy</th><th className="n">DT thành công</th></tr></thead>
+                  <thead><tr><Th>POS</Th><Th className="n">Chốt</Th><Th className="n">Xuất đi</Th><Th className="n">Đã nhận</Th><Th className="n">% TC</Th><Th className="n">Hoàn</Th><Th className="n">% hoàn</Th><Th className="n">Hủy</Th><Th className="n">DT thành công</Th></tr></thead>
                   <tbody>
                     {report.byPos.map((p) => (
                       <tr key={p.posId}>
@@ -234,8 +234,8 @@ export function PipelineView() {
                 <table className="tbl sticky-first">
                   <thead>
                     {/* Hàng nhóm cột không dính (tránh đè lên hàng tên cột khi cuộn); hàng tên cột dính đầu bảng. */}
-                    <tr className="[&>th]:static [&>th]:py-1"><th aria-hidden="true" /><th aria-hidden="true" />{headGroups.map((g, i) => <th key={i} colSpan={g.span} className={`text-center ${GROUP_META[g.group].cls}`}>{GROUP_META[g.group].label}</th>)}</tr>
-                    <tr><th>Họ và tên</th><th>Bộ phận</th>{shownCols.map((c) => <SortTh key={c.key} k={c.key} label={c.label} sort={sort} />)}</tr>
+                    <tr className="[&>th]:static [&>th]:py-1"><th aria-hidden="true" /><th aria-hidden="true" />{headGroups.map((g, i) => <Th key={i} colSpan={g.span} className={`text-center ${GROUP_META[g.group].cls}`}>{GROUP_META[g.group].label}</Th>)}</tr>
+                    <tr><Th>Họ và tên</Th><Th>Bộ phận</Th>{shownCols.map((c) => <SortTh key={c.key} k={c.key} label={c.label} sort={sort} />)}</tr>
                   </thead>
                   <tbody>
                     {rows.map((e, i) => (

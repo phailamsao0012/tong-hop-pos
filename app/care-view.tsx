@@ -19,7 +19,7 @@ import { CARE_BASKETS, parseCareBasket, type CareBasket } from '@/lib/reports/ca
 import { useApi } from './use-api';
 import { LadderMembers, LadderTable, ladderExtras, type LadderLine, type LadderPick } from './ladder-table';
 import { StaleChip } from './stale-chip';
-import {
+import { Th,
   Avatar, BackfillNotice, ChartCard, Definitions, EmptyState, ErrorBox, HoverReveal, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, Toolbar,
   dmy, dt, money, pct, posVar, scrollToEl, short, shortMoney, timeOnly, TipContent, toast, Tooltip, useSort, vi, type SortState,
 } from './ui-kit';
@@ -212,7 +212,7 @@ export function CareView() {
             <ChartCard icon={Users} title={`Theo nhân viên · ${staffRows.length} người`} subtitle="Bấm một dòng để lọc danh sách theo nhân viên đó · bấm tiêu đề cột để sắp xếp">
               <TableWrap maxHeight="18rem" minWidth={720}>
                 <table className="tbl">
-                  <thead><tr><SortTh k="name" label="Nhân viên" sort={staffSort} align="left" /><SortTh k="assigned" label="Data cầm" sort={staffSort} /><th className="text-left">Tình trạng note</th><SortTh k="need" label="Cần note" sort={staffSort} /><th className="n">Chưa note lần nào</th><SortTh k="notedToday" label="Note hôm nay" sort={staffSort} /><SortTh k="ownNet" label="DT tự chốt" sort={staffSort} /></tr></thead>
+                  <thead><tr><SortTh k="name" label="Nhân viên" sort={staffSort} align="left" /><SortTh k="assigned" label="Data cầm" sort={staffSort} /><Th className="text-left">Tình trạng note</Th><SortTh k="need" label="Cần note" sort={staffSort} /><Th className="n">Chưa note lần nào</Th><SortTh k="notedToday" label="Note hôm nay" sort={staffSort} /><SortTh k="ownNet" label="DT tự chốt" sort={staffSort} /></tr></thead>
                   <tbody>
                     {staffRows.map((s) => {
                       const on = assigned === s.id; const pick = () => setAssigned(on ? 'all' : s.id);
@@ -245,7 +245,7 @@ export function CareView() {
                   {/* 5 cột để vừa màn hình, không phải kéo ngang: Khách (tên · POS · SĐT) · Ghi chú (kèm thẻ) · Phân công · Mua hàng · Chưa note. */}
                   <table className="tbl table-fixed">
                     <colgroup><col className="w-[24%]" /><col /><col className={oneStaff ? 'w-0' : 'w-[13%]'} /><col className="w-[15%]" /><col className="w-[11%]" /></colgroup>
-                    <thead><tr><SortTh k="name" label="Khách hàng" sort={listSort} align="left" /><th>Ghi chú trao đổi</th>{!oneStaff && <th>Phân công</th>}<SortTh k="purchased" label="Mua hàng" sort={listSort} /><SortTh k="note" label="Chưa note" sort={listSort} /></tr></thead>
+                    <thead><tr><SortTh k="name" label="Khách hàng" sort={listSort} align="left" /><Th>Ghi chú trao đổi</Th>{!oneStaff && <Th>Phân công</Th>}<SortTh k="purchased" label="Mua hàng" sort={listSort} /><SortTh k="note" label="Chưa note" sort={listSort} /></tr></thead>
                     <tbody>
                       {report.rows.map((r) => {
                         const on = selected?.id === r.id;

@@ -19,7 +19,7 @@ import { POS } from '@/lib/shared/report-model';
 import { todayVn } from '@/lib/shared/report-time';
 import { PeriodToolbar, PosChips, type OverviewReport } from './overview-view';
 import { posName } from './ui-kit-pos';
-import { Avatar, ChartCard, ContextLine, Definitions, DeltaPill, ErrorBox, EmptyState, HoverReveal, KpiCard, PageHeader, ProgressBar, SkeletonKpis, SortTh, Sparkline, StatusChip, TableWrap, Toolbar, Tooltip, delta, dmy, money, pct, posVar, short, toast, useMotionOK, useSort, vi } from './ui-kit';
+import { Th, Avatar, ChartCard, ContextLine, Definitions, DeltaPill, ErrorBox, EmptyState, HoverReveal, KpiCard, PageHeader, ProgressBar, SkeletonKpis, SortTh, Sparkline, StatusChip, TableWrap, Toolbar, Tooltip, delta, dmy, money, pct, posVar, short, toast, useMotionOK, useSort, vi } from './ui-kit';
 import { daysInMonth, fetchTargets, type TargetItem } from './targets-panel';
 import { OrderOriginFilter, useOrderOrigin } from './order-origin-filter';
 import { useTeam } from './team-store';
@@ -371,7 +371,7 @@ export function CompareView() {
               <table className="tbl sticky-first">
                 <thead><tr>
                   <SortTh k="name" label="Nhân viên" sort={sort} align="left" />
-                  {splitPos && <th>POS</th>}
+                  {splitPos && <Th>POS</Th>}
                   <SortTh k="department" label="Bộ phận" sort={sort} align="left" />
                   {compact ? <>
                     <SortTh k="customers" label="Khách đã gọi" sort={sort} />
@@ -387,8 +387,8 @@ export function CompareView() {
                   <SortTh k="net" label="Doanh thu đơn chốt" sort={sort} />
                   <SortTh k="delivered" label="Giao TC" sort={sort} />
                   <SortTh k="returned" label="Hoàn / Hủy" sort={sort} />
-                  <th>7 ngày</th>
-                  {!compact && <>{!splitPos && <SortTh k="goal" label="Hoàn thành mục tiêu" sort={sort} align="left" />}<th>Nhận xét</th></>}
+                  <Th>7 ngày</Th>
+                  {!compact && <>{!splitPos && <SortTh k="goal" label="Hoàn thành mục tiêu" sort={sort} align="left" />}<Th>Nhận xét</Th></>}
                 </tr></thead>
                 <tbody>
                   {rows.map((r, i) => {

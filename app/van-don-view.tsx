@@ -17,7 +17,7 @@ import { StaleChip } from './stale-chip';
 import { useApi } from './use-api';
 import { TrendNotes } from './overview-trends';
 import { takeNavHint } from './nav-focus';
-import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, dmy, money, pct, shortMoney, toast, useSort, vi } from './ui-kit';
+import { Th, ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, dmy, money, pct, shortMoney, toast, useSort, vi } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
 import { SegmentHintNote } from './segment-hint-note';
 
@@ -70,7 +70,7 @@ function LineTable({ rows, cols, level, first }: { rows: VdLine[]; cols: Col[]; 
   return (
     <TableWrap maxHeight="32rem" sticky stickyFirst minWidth={level === 'person' ? 1080 : 900}>
       <table className="tbl sticky-first">
-        <thead><tr><th>{first}</th>{level === 'person' && <><th>Team</th><th>Bộ phận</th></>}{cols.map((c) => <SortTh key={c.key} k={c.key} label={<span title={c.title}>{c.label}</span>} sort={sort} />)}</tr></thead>
+        <thead><tr><Th>{first}</Th>{level === 'person' && <><Th>Team</Th><Th>Bộ phận</Th></>}{cols.map((c) => <SortTh key={c.key} k={c.key} label={<span title={c.title}>{c.label}</span>} sort={sort} />)}</tr></thead>
         <tbody>
           {sorted.map((r, i) => (
             <tr key={r.key}>
@@ -107,7 +107,7 @@ function DeptShipTable({ rows }: { rows: VdLine[] }) {
   return (
     <TableWrap maxHeight="32rem" sticky stickyFirst minWidth={900}>
       <table className="tbl sticky-first">
-        <thead><tr><th>Họ và tên</th><th>Team</th>
+        <thead><tr><Th>Họ và tên</Th><Th>Team</Th>
           <SortTh k="sent" label="Đơn chuyển đi" sort={sort} /><SortTh k="sentNet" label="Doanh số chuyển đi" sort={sort} />
           <SortTh k="returned" label="Số đơn hoàn" sort={sort} /><SortTh k="returnedNet" label="Giá trị hoàn" sort={sort} />
           <SortTh k="returnRate" label={<span title="Đơn hoàn ÷ đơn chuyển đi">% hoàn theo đơn</span>} sort={sort} />
@@ -294,7 +294,7 @@ export function VanDonView() {
           {card && <ChartCard title="Danh sách đơn tính ra số đã chọn" subtitle={period}>
             <Button onClick={() => setCard(null)}>Đóng</Button>
             {drill.error ? <ErrorBox error={drill.error} onRetry={drill.reload} /> : !drill.data ? <SkeletonTable rows={5} /> : <>
-              <TableWrap><table className="tbl"><thead><tr><th>Mã đơn</th><th>Trạng thái</th><th>Doanh số chuyển đi</th></tr></thead><tbody>{drill.data.orders.map((o) => <tr key={o.id}><td>{o.orderId}</td><td>{STATUS_NAMES[o.status] ?? 'Chưa rõ'}</td><td>{money(o.net)}</td></tr>)}</tbody></table></TableWrap>
+              <TableWrap><table className="tbl"><thead><tr><Th>Mã đơn</Th><Th>Trạng thái</Th><th>Doanh số chuyển đi</th></tr></thead><tbody>{drill.data.orders.map((o) => <tr key={o.id}><td>{o.orderId}</td><td>{STATUS_NAMES[o.status] ?? 'Chưa rõ'}</td><td>{money(o.net)}</td></tr>)}</tbody></table></TableWrap>
               {!drill.data.orders.length && <EmptyState text="Không có đơn" />}
               <Button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 100))}>Trước</Button><Button disabled={!drill.data.more} onClick={() => setOffset(offset + 100)}>Tiếp</Button>
             </>}

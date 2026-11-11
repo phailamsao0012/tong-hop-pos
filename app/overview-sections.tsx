@@ -20,7 +20,7 @@ import { focusAfterNav, setNavHint } from './nav-focus';
 import { segmentDrillHint } from '@/lib/shared/drill-hint';
 import { useApi } from './use-api';
 import { PeriodBars, useTrendCards, type NoteDept } from './overview-trends';
-import { DeltaPill, ErrorBox, InfoTip, SkeletonKpis, TableWrap, money, pct, shortMoney, vi } from './ui-kit';
+import { Th, DeltaPill, ErrorBox, InfoTip, SkeletonKpis, TableWrap, money, pct, shortMoney, vi } from './ui-kit';
 
 export type SectionsReport = Sections & { sale: Sections['sale'] & { packedNet?: number; packedOrders?: number }; mkt: Sections['mkt'] & { newNet?: number; cskhNet?: number; otherNet?: number }; definitions: Record<string, string>; syncedAt: string | null; period: { start: string; end: string };
   /** 'sent': Vận đơn theo ngày gửi hàng; thiếu (số lưu cũ) hoặc 'closed': trong các đơn vào Chờ XN. */ sentBasis?: 'sent' | 'closed' };
@@ -257,7 +257,7 @@ export function SectionsGrid({ data, onDrill, packedParams }: { data: SectionsRe
         {...hero('vd.sent')}>
         <TableWrap>
           <table className="tbl w-full text-[12px] [&_td]:py-1 [&_th]:py-1 [&_th]:whitespace-normal [&_th]:leading-tight [&_th]:tracking-normal">
-            <thead><tr><th className="text-left !whitespace-nowrap">Bộ phận</th><th className="n" title="Đơn chuyển đi"><Send size={11} className="mr-1 inline" aria-hidden="true" />Đơn chuyển đi</th><th className="n" title="Doanh số chuyển đi">Doanh số chuyển đi</th><th className="n"><Undo2 size={11} className="mr-1 inline" aria-hidden="true" />Hoàn</th><th className="n" title="Giá trị đơn hoàn">Giá trị hoàn</th><th className="n" title="% hoàn theo số đơn">% đơn</th><th className="n" title="% hoàn theo giá trị">% giá trị</th></tr></thead>
+            <thead><tr><Th className="text-left !whitespace-nowrap">Bộ phận</Th><Th className="n" title="Đơn chuyển đi"><Send size={11} className="mr-1 inline" aria-hidden="true" />Đơn chuyển đi</Th><Th className="n" title="Doanh số chuyển đi">Doanh số chuyển đi</Th><Th className="n"><Undo2 size={11} className="mr-1 inline" aria-hidden="true" />Hoàn</Th><Th className="n" title="Giá trị đơn hoàn">Giá trị hoàn</Th><Th className="n" title="% hoàn theo số đơn">% đơn</Th><Th className="n" title="% hoàn theo giá trị">% giá trị</Th></tr></thead>
             <tbody>
               {/* Vận đơn không bán, không chốt, không có doanh thu (anh Vũ 09–10/10/2026): số là Đơn chuyển đi, Doanh số chuyển đi, hoàn. */}
               {shipRows.map(({ label, s }) => (

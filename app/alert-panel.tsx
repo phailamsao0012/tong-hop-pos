@@ -6,7 +6,7 @@ import { Bot, Eye, Save, Send, ShieldCheck, UserCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
-import { StatusChip, TableWrap, toast, vi } from './ui-kit';
+import { Th, StatusChip, TableWrap, toast, vi } from './ui-kit';
 
 type SurfaceComponent = React.ComponentType<{ title: string; description?: string; children: React.ReactNode; action?: React.ReactNode }>;
 type Rule = {
@@ -271,7 +271,7 @@ export function AlertPanel({ Surface }: { Surface: SurfaceComponent }) {
               {run?.evaluations.length ? (
                 <TableWrap className="mt-2" minWidth={520}>
                   <table className="tbl text-xs">
-                    <thead><tr><th>Nhân viên</th><th className="n">Nhận</th><th className="n">Chốt</th><th className="n">Tỷ lệ</th><th className="n">Đơn · giá trị</th><th>Trạng thái</th></tr></thead>
+                    <thead><tr><Th>Nhân viên</Th><Th className="n">Nhận</Th><Th className="n">Chốt</Th><Th className="n">Tỷ lệ</Th><Th className="n">Đơn · giá trị</Th><Th>Trạng thái</Th></tr></thead>
                     <tbody>{run.evaluations.map((e) => (
                       <tr key={e.employeeId}><td>{e.name}</td><td className="n">{vi.format(e.received)}</td><td className="n">{vi.format(e.closed)}</td><td className={`n ${e.below ? 'text-bad' : ''}`}>{e.rate === null ? '—' : `${e.rate.toFixed(0)}%`}</td><td className="n">{vi.format(e.hotOrders)} · {vi.format(Math.round(e.hotValue))} ₫</td><td><StatusChip tone={e.below ? 'red' : e.eligible ? 'green' : 'gray'}>{e.below ? 'Sẽ cảnh báo' : e.eligible ? 'Đạt' : 'Chưa đủ số nhận'}</StatusChip></td></tr>
                     ))}</tbody>

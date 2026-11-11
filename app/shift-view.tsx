@@ -20,7 +20,7 @@ import { useTeam } from './team-store';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import { ShiftStatesCard, type OrderStates } from './shift-states';
-import { ChartCard, Definitions, ErrorBox, EmptyState, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, StatusChip, SyncPill, TableWrap, Toolbar, delta, dt, money, pct, posName, posVar, short, shortMoney, timeOnly, toast, useMotionOK, vi } from './ui-kit';
+import { Th, ChartCard, Definitions, ErrorBox, EmptyState, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, StatusChip, SyncPill, TableWrap, Toolbar, delta, dt, money, pct, posName, posVar, short, shortMoney, timeOnly, toast, useMotionOK, vi } from './ui-kit';
 
 type Staff = { employeeId: string; name: string; department: string | null; received: number; closed: number; rate: number | null; hotOrders: number; hotValue: number; activityOrders: number; activityValue: number; pending: number; posIds: string[]; yesterday: { received: number; closed: number; rate: number | null } | null; assignedHidden?: boolean; shiftHours?: string | null };
 type Shift = {
@@ -199,7 +199,7 @@ export function ShiftView() {
                 {staff.length ? (
                   <TableWrap maxHeight="30rem" sticky minWidth={720}>
                     <table className="tbl">
-                      <thead><tr><th className="n">#</th><th>Nhân viên</th><th>POS phụ trách</th><th className="n">Số đã nhận</th><th>Khối lượng</th><th className="n">Số đã chốt</th><th className="n">Tỷ lệ chốt</th><th className="n">Hôm qua</th><th className="n">Giá trị chốt</th><th className="n">Chưa chốt</th></tr></thead>
+                      <thead><tr><Th className="n">#</Th><Th>Nhân viên</Th><Th>POS phụ trách</Th><Th className="n">Số đã nhận</Th><Th>Khối lượng</Th><Th className="n">Số đã chốt</Th><Th className="n">Tỷ lệ chốt</Th><Th className="n">Hôm qua</Th><Th className="n">Giá trị chốt</Th><Th className="n">Chưa chốt</Th></tr></thead>
                       <tbody>
                         {staff.map((s, i) => (
                           <tr key={s.employeeId}>

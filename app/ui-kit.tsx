@@ -3,9 +3,10 @@
 // Bộ thành phần giao diện dùng chung v2 cho các trang báo cáo: thẻ chỉ số, thẻ biểu đồ, huy hiệu chênh lệch, sparkline,
 // vòng tròn trạng thái, phễu, bảng cohort, tooltip, đếm số, xương tải, toast, bộ chọn phân đoạn, viên đồng bộ.
 // Mọi màu lấy từ token trong globals.css (var(--…)); mọi chữ số dùng lớp .num (Be Vietnam Pro 600, tabular). Hướng dẫn: scratchpad/ui-apply/ui-kit-v2.md.
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
+import { Children, cloneElement, isValidElement, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { ArrowDown, ArrowDownRight, ArrowRight, ArrowUp, ArrowUpDown, ArrowUpRight, ChevronDown, Info, Monitor, Moon, RotateCw, Sun } from 'lucide-react';
+import { colLabel } from '@/lib/shared/column-labels';
 import { POS } from '@/lib/shared/report-model';
 import { TEAM_LABELS, setTeam, useTeamChoice, type Team } from './team-store';
 import { motionOK, scrollToEl, scrollTop, useMotionOK } from './ui/motion';
@@ -429,15 +430,48 @@ export function useSort<K extends string>(initial: K, initialDesc = true) {
 }
 export type SortState = { key: string; desc?: boolean; toggle: (k: never) => void; mark: (k: never) => string };
 /** Tiêu đề cột sắp xếp được: cả ô bấm được, nút bên trong nhận bàn phím; mũi tên hiện mờ khi rê chuột, rõ khi đang sắp xếp (không đổi bề rộng). */
-export function SortTh({ k, label, sort, align = 'right', className = '', title = 'Bấm để sắp xếp' }: { k: string; label: ReactNode; sort: SortState; align?: 'left' | 'right'; className?: string; title?: string }) {
+/** Đọc chữ và title có sẵn trong span; không lấy nội dung của nút giải thích làm tên cột. */
+function headerText(node: ReactNode): string {
+  return Children.toArray(node).map((part) => typeof part === 'string' || typeof part === 'number' ? String(part) : isValidElement<{ children?: ReactNode }>(part) && typeof part.type === 'string' ? headerText(part.props.children) : '').join('').trim();
+}
+function headerHints(node: ReactNode): string[] {
+  return Children.toArray(node).flatMap((part) => isValidElement<{ title?: string; text?: ReactNode; children?: ReactNode }>(part) ? [part.props.title ?? '', typeof part.props.text === 'string' ? part.props.text : '', ...headerHints(part.props.children)].filter(Boolean) : []);
+}
+function shortHeader(node: ReactNode, short: string): ReactNode {
+  if (typeof node === 'string') return short;
+  if (isValidElement<{ children?: ReactNode }>(node) && typeof node.type === 'string') {
+    const decorations = Children.toArray(node.props.children).filter((child) => isValidElement(child) && typeof child.type !== 'string');
+    return cloneElement(node, undefined, short, ...decorations);
+  }
+  return node;
+}
+function columnHeader(label: ReactNode, full?: string, hint?: string, title?: string) {
+  const text = headerText(label);
+  const entry = colLabel(full ?? text);
+  // Quy tắc của plan: hai âm tiết trở xuống giữ nguyên, dù từ điển có chữ tắt.
+  const abbreviate = entry.full.split(/\s+/).filter((word) => /[\p{L}\p{N}]/u.test(word)).length >= 3 && entry.short !== entry.full;
+  const name = full ?? entry.full;
+  const details = [...new Set([hint ?? entry.hint, ...headerHints(label), title ?? ''].filter(Boolean))];
+  return { name, label: !full && abbreviate ? shortHeader(label, entry.short) : label, title: [name, ...details].filter(Boolean).join('\n') };
+}
+
+export function SortTh({ k, label, full, hint, sort, align = 'right', className = '', title }: { k: string; label: ReactNode; full?: string; hint?: string; sort: SortState; align?: 'left' | 'right'; className?: string; title?: string }) {
   const on = sort.key === k;
   const asc = on && sort.desc === false;
   const Icon = !on ? ArrowUpDown : asc ? ArrowUp : ArrowDown;
+  const header = columnHeader(label, full, hint, title === 'Bấm để sắp xếp' ? undefined : title);
+  const tooltip = [header.title, 'Bấm để sắp xếp'].filter(Boolean).join('\n');
   return (
-    <th className={`sort select-none whitespace-nowrap ${align === 'right' ? 'r text-right' : 'text-left'} ${className}`} aria-sort={on ? (asc ? 'ascending' : 'descending') : undefined} onClick={() => sort.toggle(k as never)}>
-      <button type="button" title={title}>{label}<span className="ar" aria-hidden="true"><Icon size={12} /></span></button>
+    <th data-full={header.name || undefined} title={tooltip} className={`sort select-none whitespace-nowrap ${align === 'right' ? 'r text-right' : 'text-left'} ${className}`} aria-sort={on ? (asc ? 'ascending' : 'descending') : undefined} onClick={() => sort.toggle(k as never)}>
+      <button type="button" title={tooltip} aria-label={header.name || undefined}>{header.label}<span className="ar" aria-hidden="true"><Icon size={12} /></span></button>
     </th>
   );
+}
+
+/** Tiêu đề thường: cùng từ điển, giữ nguyên thuộc tính và nội dung tương tác có sẵn. */
+export function Th({ children, full, hint, title, ...props }: React.ComponentProps<'th'> & { full?: string; hint?: string }) {
+  const header = columnHeader(children, full, hint, title);
+  return <th {...props} data-full={header.name || undefined} aria-label={header.name || undefined} title={header.title || undefined}>{header.label}</th>;
 }
 
 /** Gắn tên cột vào ô hiện có để CSS hiển thị dạng thẻ, giữ nguyên nút và dữ liệu. */
@@ -456,7 +490,7 @@ function useTableCardLabels() {
             while (headers[rowIndex][column] !== undefined) column++;
             const copy = cell.cloneNode(true) as HTMLElement;
             copy.querySelectorAll('.ar, [aria-hidden="true"]').forEach((node) => node.remove());
-            const label = copy.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+            const label = cell.dataset.full ?? copy.textContent?.replace(/\s+/g, ' ').trim() ?? '';
             const rowSpan = cell.rowSpan || (table.tHead!.rows.length - rowIndex);
             for (let r = rowIndex; r < rowIndex + rowSpan; r++) {
               headers[r] ??= [];
@@ -486,7 +520,7 @@ function useTableCardLabels() {
     };
     update();
     const observer = typeof MutationObserver !== 'undefined' ? new MutationObserver(update) : null;
-    observer?.observe(el, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['colspan', 'rowspan'] });
+    observer?.observe(el, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['colspan', 'rowspan', 'data-full'] });
     return () => observer?.disconnect();
   }, []);
   return ref;

@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react';
 import { PackageCheck } from 'lucide-react';
 import type { ClosedDeliveredReport, DeliveredProductsReport, Pair } from '@/lib/reports/delivered-products';
 import { useApi } from './use-api';
-import { ChartCard, EmptyState, ErrorBox, SegmentedControl, SkeletonTable, TableWrap, dmy, shortMoney, vi } from './ui-kit';
+import { Th, ChartCard, EmptyState, ErrorBox, SegmentedControl, SkeletonTable, TableWrap, dmy, shortMoney, vi } from './ui-kit';
 
 const WEEKDAY = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 const weekday = (day: string) => WEEKDAY[new Date(`${day}T00:00:00Z`).getUTCDay()];
@@ -52,10 +52,10 @@ function ClosedTable({ r }: { r: ClosedDeliveredReport }) {
     <TableWrap minWidth={0} maxHeight="30rem">
       <table className="tbl">
         <thead><tr>
-          <th className="text-left">Ngày chốt</th>
-          <th title="Đơn khách đã nhận / đơn chốt trong ngày">Tổng</th>
-          {r.top.map((n) => <th key={n} className="max-w-[9rem]" title={n}><span className="line-clamp-2 normal-case">{n}</span></th>)}
-          <th title={`${vi.format(Math.max(0, r.products.length - r.top.length))} sản phẩm còn lại`}>SP khác</th>
+          <Th className="text-left">Ngày chốt</Th>
+          <Th title="Đơn khách đã nhận / đơn chốt trong ngày">Tổng</Th>
+          {r.top.map((n) => <Th key={n} className="max-w-[9rem]" title={n}><span className="line-clamp-2 normal-case">{n}</span></Th>)}
+          <Th title={`${vi.format(Math.max(0, r.products.length - r.top.length))} sản phẩm còn lại`}>SP khác</Th>
         </tr></thead>
         <tbody>{r.days.map((d) => (
           <tr key={d.day}>
@@ -83,10 +83,10 @@ function DeliveredTable({ r }: { r: DeliveredProductsReport }) {
     <TableWrap minWidth={0} maxHeight="30rem">
       <table className="tbl">
         <thead><tr>
-          <th className="text-left">Ngày nhận</th>
-          <th title="Số đơn khách đã nhận trong ngày (một đơn đếm một lần)">Tổng đơn</th>
-          {r.top.map((n) => <th key={n} className="max-w-[9rem]" title={n}><span className="line-clamp-2 normal-case">{n}</span></th>)}
-          <th title={`${vi.format(Math.max(0, r.products.length - r.top.length))} sản phẩm còn lại`}>SP khác</th>
+          <Th className="text-left">Ngày nhận</Th>
+          <Th title="Số đơn khách đã nhận trong ngày (một đơn đếm một lần)">Tổng đơn</Th>
+          {r.top.map((n) => <Th key={n} className="max-w-[9rem]" title={n}><span className="line-clamp-2 normal-case">{n}</span></Th>)}
+          <Th title={`${vi.format(Math.max(0, r.products.length - r.top.length))} sản phẩm còn lại`}>SP khác</Th>
         </tr></thead>
         <tbody>{r.days.map((d) => (
           <tr key={d.day}>

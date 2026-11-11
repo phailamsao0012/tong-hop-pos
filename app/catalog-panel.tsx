@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { POS } from '@/lib/shared/report-model';
-import { ChartCard, ErrorBox, SkeletonTable, StatusChip, TableWrap, dt, toast, vi, type Tone } from './ui-kit';
+import { Th, ChartCard, ErrorBox, SkeletonTable, StatusChip, TableWrap, dt, toast, vi, type Tone } from './ui-kit';
 
 type Result = { key: string; label: string; group: string; path: string; have: 'yes' | 'part' | 'no'; note?: string; status: 'available' | 'empty' | 'forbidden' | 'missing' | 'error'; httpStatus: number | null; count: number | null; fields: string[]; message: string | null; ms: number };
 type Catalog = { posId: string; shopId: string; checkedAt: string; sampleOrderId: string | null; results: Result[] };
@@ -74,7 +74,7 @@ export function CatalogPanel() {
           <p className="text-[13px] text-ink-2">Kiểm tra lúc <span className="num">{dt(catalog.checkedAt.slice(0, 19), true)}</span> · shop <span className="num">{catalog.shopId}</span> · <strong className="num text-ink">{available.length}</strong> nhóm lấy được, trong đó <strong className="num text-ink">{newAvailable.length}</strong> nhóm web chưa kéo về{newAvailable.length ? `: ${newAvailable.map((r) => r.label).join(', ')}` : ''}.</p>
           <TableWrap minWidth={880}>
             <table className="tbl">
-              <thead><tr><th>Dữ liệu</th><th>Kết quả</th><th className="n">Bản ghi</th><th>Web đã kéo</th><th>Trường dữ liệu mẫu</th><th>Ghi chú</th></tr></thead>
+              <thead><tr><Th>Dữ liệu</Th><Th>Kết quả</Th><Th className="n">Bản ghi</Th><Th>Web đã kéo</Th><Th>Trường dữ liệu mẫu</Th><Th>Ghi chú</Th></tr></thead>
               <tbody>
                 {groups.map((g) => (
                   <Fragment key={g}>

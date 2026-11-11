@@ -35,7 +35,7 @@ import { StaleChip } from './stale-chip';
 import { ReconcileLine } from './reconcile-line';
 import { TEAM_LABELS, useTeam } from './team-store';
 import { deptOf } from '@/lib/teams/team-sheet';
-import {
+import { Th,
   ChartCard, ContextLine, DeltaPill, Donut, ErrorBox, HoverReveal, KpiCard, PageHeader, STATUS_LABELS, STATUS_VARS, SkeletonKpis, StatusChip, TeamSwitch,
   delta, dmy, dt, money, pct, posName, posVar, short, shortMoney, timeOnly, toast, useMotionOK, vi, type TipRows, type Tone,
 } from './ui-kit';
@@ -127,7 +127,7 @@ function EmpTable({ rows, tone, compact = false, metric = 'rate', onNavigate: _o
   if (!rows.length) return <p className="empty px-2 py-4 text-[11.5px]">{metric === 'aov' ? 'Chưa đủ dữ liệu (cần ≥ 10 đơn chốt).' : 'Chưa đủ dữ liệu (cần ≥ 10 đơn chia).'}</p>;
   if (metric === 'aov') return (
     <table className="tbl w-full table-fixed [&_td]:px-1.5 [&_th]:px-1.5">
-      <thead><tr><th className="w-6">#</th><th>Nhân viên</th><th className="n w-24">AOV</th>{!compact && <th className="n w-14">Đơn</th>}</tr></thead>
+      <thead><tr><Th className="w-6">#</Th><Th>Nhân viên</Th><Th className="n w-24">AOV</Th>{!compact && <Th className="n w-14">Đơn</Th>}</tr></thead>
       <tbody>
         {rows.map((e, i) => (
           <tr key={e.sellerId}>
@@ -142,7 +142,7 @@ function EmpTable({ rows, tone, compact = false, metric = 'rate', onNavigate: _o
   );
   return (
     <table className={`tbl w-full table-fixed ${compact ? '[&_td]:px-1.5 [&_td]:py-1 [&_th]:px-1.5 [&_th]:py-1' : '[&_td]:px-1.5 [&_th]:px-1.5'}`}>
-      <thead><tr><th className="w-6">#</th><th>Nhân viên</th><th className="n w-16">Tỷ lệ</th>{!compact && <th className="n w-20">Chốt/chia</th>}</tr></thead>
+      <thead><tr><Th className="w-6">#</Th><Th>Nhân viên</Th><Th className="n w-16">Tỷ lệ</Th>{!compact && <Th className="n w-20">Chốt/chia</Th>}</tr></thead>
       <tbody>
         {rows.map((e, i) => (
           <tr key={e.sellerId}>

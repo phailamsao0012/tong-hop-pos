@@ -19,7 +19,7 @@ import { addDays, todayVn } from '@/lib/shared/report-time';
 import { useTeam } from './team-store';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
-import {
+import { Th,
   Avatar, ChartCard, Definitions, ErrorBox, EmptyState, HoverReveal, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, Toolbar,
   dt, money, pct, posVar, scrollToEl, short, shortMoney, toast, vi, type SortState, type Tone,
 } from './ui-kit';
@@ -279,7 +279,7 @@ export function CustomersPage({ initialQ = '', canExport = false }: { initialQ?:
           {data && data.customers.length > 0 && (
             <TableWrap maxHeight="44rem" minWidth={760} stickyFirst>
               <table className="tbl">
-                <thead><tr>{periodMode ? <th>Khách hàng</th> : <SortTh k="name" label="Khách hàng" sort={listSort} align="left" />}<th>POS</th><SortTh k="recent" label="Lần mua gần nhất" sort={listSort} align="left" /><SortTh k="orders" label="Số đơn" sort={listSort} /><SortTh k="spend" label={periodMode ? 'Trong kỳ' : 'LTV'} sort={listSort} /><th>Phân khúc</th><th>Quản lý</th></tr></thead>
+                <thead><tr>{periodMode ? <Th>Khách hàng</Th> : <SortTh k="name" label="Khách hàng" sort={listSort} align="left" />}<Th>POS</Th><SortTh k="recent" label="Lần mua gần nhất" sort={listSort} align="left" /><SortTh k="orders" label="Số đơn" sort={listSort} /><SortTh k="spend" label={periodMode ? 'Trong kỳ' : 'LTV'} sort={listSort} /><Th>Phân khúc</Th><Th>Quản lý</Th></tr></thead>
                 <tbody>
                   {<GroupedRows rows={data.customers} columns={7} keyOf={groupBy ? c => groupBy === 'pos' ? c.posName : c.sellerName : undefined} summary={rows => <>{vi.format(rows.length)} khách · {money(rows.reduce((sum, c) => sum + c.successNet, 0))}</>}>{(c) => {
                     const s = SEGMENTS[segmentOf(c, today)];
@@ -413,7 +413,7 @@ export function CustomersPage({ initialQ = '', canExport = false }: { initialQ?:
                   detail.stats?.products.length ? (
                     <TableWrap minWidth={480}>
                       <table className="tbl">
-                        <thead><tr><th>Sản phẩm</th><th className="n">Số lần</th><th className="n">Số lượng</th><th className="n">Tổng tiền</th><th>Tỷ trọng</th></tr></thead>
+                        <thead><tr><Th>Sản phẩm</Th><Th className="n">Số lần</Th><Th className="n">Số lượng</Th><Th className="n">Tổng tiền</Th><Th>Tỷ trọng</Th></tr></thead>
                         <tbody>{detail.stats.products.map((p) => { const max = detail.stats!.products[0]?.total || 1; return <tr key={p.name}><td className="whitespace-normal text-ink">{p.name}</td><td className="n">{p.orders}</td><td className="n">{vi.format(p.quantity)}</td><td className="n">{money(p.total)}</td><td><span className="pbar h-1.5 w-24" aria-hidden="true"><i style={{ width: `${p.total / max * 100}%` }} /></span> <span className="num text-xs text-ink-3">{pct(detail.stats!.successNet ? p.total / detail.stats!.successNet * 100 : null)}</span></td></tr>; })}</tbody>
                       </table>
                     </TableWrap>
