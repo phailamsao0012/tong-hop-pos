@@ -9,7 +9,7 @@
 # Đổi bản chạy: build bản mới ở thư mục khác, sửa $App, rồi khởi động lại task "THP Web". Tiến trình cũ chạy quyền hệ thống,
 # nên cần PowerShell quyền admin (Stop-Process) hoặc khởi động lại máy.
 param(
-  [string]$App = 'C:\thp\cutover-b',
+  [string]$App = 'C:\thp\cutover-c',
   [string]$Db = 'C:\thp\db\thp.sqlite',
   [string]$Vars = 'C:\thp\bi-mat\.dev.vars',
   [int]$Port = 8787
