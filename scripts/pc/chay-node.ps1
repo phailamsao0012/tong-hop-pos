@@ -3,7 +3,7 @@
 # (không cần task "THP Cron"). Bản build: trong $App chạy `pnpm build` rồi `pnpm build:pc` (ra dist\pc\server.js).
 # Quay lại wrangler: đổi action của "THP Web" về chay-web.ps1, bật lại "THP Cron", ghi "wrangler" vào C:\thp\che-do-web.txt.
 # 10/11/2026 CHUYỂN HẲN: web chính là posmegatech.com chạy ở đây (anh Vũ "ok chuyển ngay bây giờ").
-#   Bản build ở worktree C:\thp\cutover-b (nhánh claude/bo-xac-thuc-2-lop = main + công tắc THP_NO_MFA).
+#   Bản build ở worktree C:\thp\cutover-c (nhánh claude/bo-xac-thuc-2-lop = main + công tắc THP_NO_MFA).
 #   THP_READ_ONLY=0: mở quyền sửa (ghi đè giá trị 1 trong file khoá). THP_NO_MFA=1: bỏ mọi bước xác thực 2 lớp.
 #   Web cũ Cloudflare: tonghopposmegatech.io.vn chuyển hướng 307 sang posmegatech.com (Redirect Rule), dữ liệu D1 giữ 30 ngày.
 # Đổi bản chạy: build bản mới ở thư mục khác, sửa $App, rồi khởi động lại task "THP Web". Tiến trình cũ chạy quyền hệ thống,
