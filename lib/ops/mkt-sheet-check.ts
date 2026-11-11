@@ -9,13 +9,14 @@ import { COUNTED_STAFF, type Team, leadSellerFilter, teamFilter, teamSubquery } 
 import { bucketExpr, vnRangeUtc } from '@/lib/shared/report-time';
 
 export type PosSide = { orders: number; phones: number; closed: number; net: number; sale: number; cskh: number; other: number; saleClosed: number; cskhClosed: number };
-export type SheetSide = { phones: number; orders: number; revenue: number };
+/** cost: chi phí QC marketer ghi trên sheet báo cáo (ad_costs). Anh Vũ 11/11/2026 "cột chi phí lấy trên sheet báo cáo, tên cột là cp sheet". */
+export type SheetSide = { phones: number; orders: number; revenue: number; cost: number };
 export type CheckRow = { sheet: SheetSide; confirmed: PosSide; created: PosSide };
 
 const zeroPos = (): PosSide => ({ orders: 0, phones: 0, closed: 0, net: 0, sale: 0, cskh: 0, other: 0, saleClosed: 0, cskhClosed: 0 });
-const zeroRow = (): CheckRow => ({ sheet: { phones: 0, orders: 0, revenue: 0 }, confirmed: zeroPos(), created: zeroPos() });
+const zeroRow = (): CheckRow => ({ sheet: { phones: 0, orders: 0, revenue: 0, cost: 0 }, confirmed: zeroPos(), created: zeroPos() });
 const addRow = (a: CheckRow, b: CheckRow) => {
-  for (const k of ['phones', 'orders', 'revenue'] as const) a.sheet[k] += b.sheet[k];
+  for (const k of ['phones', 'orders', 'revenue', 'cost'] as const) a.sheet[k] += b.sheet[k];
   for (const side of ['confirmed', 'created'] as const) for (const k of Object.keys(a[side]) as (keyof PosSide)[]) a[side][k] += b[side][k];
 };
 
@@ -36,7 +37,7 @@ export async function mktSheetCheck(opts: { posIds: string[]; start: string; end
   // Số về, đơn tạo: mọi marketer, chỉ đơn chia cho Sale / CSKH theo nút (anh Vũ 04/11/2026, ý sếp); doanh thu, đơn chốt: chỉ marketer được tính doanh số.
   const base = `o.pos_id IN (${ph}) AND ${mk} IS NOT NULL`;
 
-  const [sheetRows, confRows, createdRows, nameRows, sources] = await db.batch([
+  const [sheetRows, confRows, createdRows, nameRows, sources, costRows] = await db.batch([
     db.prepare('SELECT marketer_id AS m, day AS d, SUM(phones) AS phones, SUM(orders) AS orders, SUM(revenue) AS revenue FROM sheet_mkt_stats WHERE day>=? AND day<=? GROUP BY 1,2')
       .bind(opts.start, opts.end),
     // Mốc ngày xác nhận lần đầu: đúng như ô Doanh thu MKT.
@@ -50,6 +51,9 @@ export async function mktSheetCheck(opts: { posIds: string[]; start: string; end
       .bind(...opts.posIds, cur.startUtc, cur.endUtc),
     db.prepare(`SELECT user_id, MAX(name) AS name, MAX(user_id IN ${COUNTED_STAFF}) AS counted FROM pos_users WHERE name<>'' GROUP BY user_id`),
     db.prepare("SELECT MAX(received_at) AS at, COUNT(*) AS n FROM sheet_cost_sources"),
+    // Chi phí QC từ sheet báo cáo (cùng bảng ad_costs mà ô Chi phí của trang Marketing đọc), theo marketer × ngày.
+    db.prepare('SELECT marketer_id AS m, day AS d, COALESCE(SUM(amount),0) AS cost FROM ad_costs WHERE day>=? AND day<=? GROUP BY 1,2')
+      .bind(opts.start, opts.end),
   ]);
 
   type R = Record<string, string | number | null>;
@@ -61,6 +65,7 @@ export async function mktSheetCheck(opts: { posIds: string[]; start: string; end
   const cells = new Map<string, CheckRow>();
   const cell = (m: string, d: string) => { const k = `${m}|${d}`; let x = cells.get(k); if (!x) { x = zeroRow(); cells.set(k, x); } return x; };
   for (const r of sheetRows.results as R[]) { const x = cell(String(r.m), String(r.d)); x.sheet.phones += n(r.phones); x.sheet.orders += n(r.orders); x.sheet.revenue += n(r.revenue); }
+  for (const r of costRows.results as R[]) cell(String(r.m), String(r.d)).sheet.cost += n(r.cost);
   const pos = (side: PosSide, r: R) => {
     side.orders += n(r.orders); side.phones += n(r.phones); side.closed += n(r.closed); side.net += n(r.net);
     side.sale += n(r.sale); side.cskh += n(r.cskh); side.other += n(r.net) - n(r.sale) - n(r.cskh);

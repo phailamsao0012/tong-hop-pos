@@ -11,7 +11,7 @@ import type { Tone } from './ui-kit';
 import { useApi } from './use-api';
 
 type PosSide = { orders: number; phones: number; closed: number; net: number; sale: number; cskh: number; other: number; saleClosed: number; cskhClosed: number };
-type CheckRow = { sheet: { phones: number; orders: number; revenue: number }; confirmed: PosSide; created: PosSide };
+type CheckRow = { sheet: { phones: number; orders: number; revenue: number; cost: number }; confirmed: PosSide; created: PosSide };
 type Data = {
   period: { start: string; end: string };
   sheet: { connected: boolean; receivedAt: string | null; hasStats: boolean };
@@ -22,7 +22,7 @@ type Data = {
 };
 type Basis = 'confirmed' | 'created';
 type View = 'marketer' | 'day';
-type SortKey = 'name' | 'sPhones' | 'pPhones' | 'sOrders' | 'pOrders' | 'sRev' | 'pRev' | 'gap' | 'sale' | 'cskh';
+type SortKey = 'name' | 'sCost' | 'sPhones' | 'pPhones' | 'sOrders' | 'pOrders' | 'sRev' | 'pRev' | 'gap' | 'sale' | 'cskh';
 type Target = 'net' | 'sale' | 'cskh';
 const TARGETS: Target[] = ['net', 'sale', 'cskh'];
 const TARGET_LABEL: Record<Target, string> = { net: 'Tổng', sale: 'New', cskh: 'CSKH' };
@@ -30,9 +30,9 @@ const TARGET_TEXT: Record<Target, string> = { net: 'tổng (mọi người bán)
 const TARGET_TITLE: Record<Target, string> = { net: 'Mọi đơn chốt trên data MKT', sale: 'Chỉ đơn Sale chốt (doanh thu New)', cskh: 'Chỉ đơn CSKH chốt' };
 const pick = (p: PosSide, k: Target) => k === 'sale' ? { net: p.sale, closed: p.saleClosed } : k === 'cskh' ? { net: p.cskh, closed: p.cskhClosed } : { net: p.net, closed: p.closed };
 const zeroPos = (): PosSide => ({ orders: 0, phones: 0, closed: 0, net: 0, sale: 0, cskh: 0, other: 0, saleClosed: 0, cskhClosed: 0 });
-const zeroRow = (): CheckRow => ({ sheet: { phones: 0, orders: 0, revenue: 0 }, confirmed: zeroPos(), created: zeroPos() });
+const zeroRow = (): CheckRow => ({ sheet: { phones: 0, orders: 0, revenue: 0, cost: 0 }, confirmed: zeroPos(), created: zeroPos() });
 const addRow = (a: CheckRow, b: CheckRow) => {
-  for (const k of ['phones', 'orders', 'revenue'] as const) a.sheet[k] += b.sheet[k];
+  for (const k of ['phones', 'orders', 'revenue', 'cost'] as const) a.sheet[k] += b.sheet[k] ?? 0;
   for (const side of ['confirmed', 'created'] as const) for (const k of Object.keys(a[side]) as (keyof PosSide)[]) a[side][k] += b[side][k] ?? 0;
 };
 
@@ -120,6 +120,7 @@ export function MktSheetCheck({ start, end, posIds }: { start: string; end: stri
     const p = r[basis], q = pick(p, target);
     switch (k) {
       case 'name': return view === 'day' ? r.id : r.name;
+      case 'sCost': return r.sheet.cost;
       case 'sPhones': return r.sheet.phones; case 'pPhones': return r.created.phones;
       case 'sOrders': return r.sheet.orders; case 'pOrders': return q.closed;
       case 'sRev': return r.sheet.revenue; case 'pRev': return q.net;
@@ -185,7 +186,7 @@ export function MktSheetCheck({ start, end, posIds }: { start: string; end: stri
         {!lines.length ? <EmptyState text="Không có số trên sheet hay đơn Marketing trong khoảng ngày này." /> : (
           <TableWrap stickyFirst><table className="tbl">
             <thead>
-              <tr><SortTh k="name" label={view === 'marketer' ? 'Marketer' : 'Ngày'} sort={sort} align="left" /><SortTh k="sPhones" label="SĐT sheet" sort={sort} /><SortTh k="pPhones" label="SĐT POS" sort={sort} /><SortTh k="sOrders" label="Đơn sheet" sort={sort} /><SortTh k="pOrders" label={`Đơn POS ${TARGET_LABEL[target]}`} sort={sort} /><SortTh k="sRev" label="DT sheet" sort={sort} /><SortTh k="pRev" label={`DT POS ${TARGET_LABEL[target]}`} sort={sort} /><SortTh k="gap" label="Lệch DT" sort={sort} /><SortTh k="sale" label="DT New" sort={sort} /><SortTh k="cskh" label="DT CSKH" sort={sort} /></tr>
+              <tr><SortTh k="name" label={view === 'marketer' ? 'Marketer' : 'Ngày'} sort={sort} align="left" /><SortTh k="sCost" label="CP sheet" sort={sort} /><SortTh k="sPhones" label="SĐT sheet" sort={sort} /><SortTh k="pPhones" label="SĐT POS" sort={sort} /><SortTh k="sOrders" label="Đơn sheet" sort={sort} /><SortTh k="pOrders" label={`Đơn POS ${TARGET_LABEL[target]}`} sort={sort} /><SortTh k="sRev" label="DT sheet" sort={sort} /><SortTh k="pRev" label={`DT POS ${TARGET_LABEL[target]}`} sort={sort} /><SortTh k="gap" label="Lệch DT" sort={sort} /><SortTh k="sale" label="DT New" sort={sort} /><SortTh k="cskh" label="DT CSKH" sort={sort} /></tr>
             </thead>
             <tbody>{shown.map((r) => {
               const p = r[basis], q = pick(p, target), g = gapOf(r.sheet.revenue, q.net), v = verdict(g.pct);
@@ -204,6 +205,7 @@ export function MktSheetCheck({ start, end, posIds }: { start: string; end: stri
                     {unmatched && <span className="block max-w-60 whitespace-normal text-[11px] font-normal leading-snug text-ink-3">Tên trên sheet chưa ghép với nhân viên POS (ghép ở trang Chi phí &amp; ROAS)</span>}
                     {notCounted && <span className="block max-w-60 whitespace-normal text-[11px] font-normal leading-snug text-warn">Tên POS chưa có hậu tố MKT nên POS không tính doanh thu (trang Doanh thu ngoài hậu tố)</span>}
                   </td>
+                  <td className="n">{money(r.sheet.cost)}</td>
                   <td className="n">{vi.format(r.sheet.phones)}</td>
                   <td className="n">{vi.format(r.created.phones)}</td>
                   <td className="n">{vi.format(r.sheet.orders)}</td>
