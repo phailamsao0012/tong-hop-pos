@@ -922,11 +922,12 @@ enum DebugTour {
         nav.overviewScroll = "dau:metrics"
         guard await loaded(["trung-tam"], since: t) else { return }
         await pause("tong-quan-so-lieu", seconds: 2)
+        // Khung 04: phần "Theo POS" của Tổng quan (cùng số trung-tam đã tải), chụp ở đầu trang.
         t = Date()
-        nav.overviewPath = [.overviewPos("")]
-        guard await loaded(["tong-quan-pos"], since: t) else { return }
+        nav.overviewScroll = "dau:pos"
+        guard await loaded(["trung-tam"], since: t) else { return }
         await pause("tong-quan-pos", seconds: 2)
-        nav.overviewPath = []
+        nav.overviewScroll = "dau:departments"
         t = Date()
         await play([(0.35, { nav.tab = .orders; nav.ordersPath = [] })])
         guard await loaded(["don-hang", "don-hang-danh-sach"], since: t) else { return }
