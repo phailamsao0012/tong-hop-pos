@@ -47,6 +47,25 @@
   - thong-bao-2: Trong ca, Đồng bộ Pancake.
   - `ios-preview.yml` chỉ sửa danh sách `ui_stages` ở đoạn 15. BASE 127.0.0.1 và bước "Chặn gọi demo" giữ nguyên.
 
+## Lượt iOS preview đỏ ở b040077 (đoạn 15, "[MKT] loi-tai khi chờ nhan-vien")
+- Nguyên nhân: tour 15 in mốc theo đồng hồ (chờ 8 giây), không chờ số của màn.
+  - Ở CSKH, mốc `cskh` in khi 6 request CSKH (tong-quan-cskh 2, kpi-cskh 4) chưa về. Ảnh CSKH chụp lúc chưa có số.
+  - Tour rời CSKH, app huỷ 6 request đó nhưng web ảo vẫn tính tiếp (một luồng). `/api/marketing/analytics` của trang Marketing xếp hàng sau, quá 45 giây, nên ra loi-tai.
+  - Các mốc khác cũng in theo đồng hồ: hom-nay, tong-quan, tong-quan-so-lieu, tong-quan-pos, don-hang, sale, cskh, van-don, thong-bao.
+- Sửa trong app:
+  1. `LoadBoard` (chỉ bản Debug) ghi lượt tải đang chạy, xong, lỗi theo tên màn (lấy từ LoadTrace có sẵn). Tour chờ số của màn về xong rồi mới in mốc `[UI]`:
+     - hom-nay: trang-chu, canh-bao;
+     - tong-quan: tong-quan; tong-quan-so-lieu: trung-tam; tong-quan-pos: tong-quan-pos;
+     - don-hang: don-hang, don-hang-danh-sach;
+     - sale, nhan-vien: nhan-vien, bang-nhan-vien, so-cung-ky; nhan-vien-mot: nhan-vien-chi-tiet;
+     - cskh: tong-quan-cskh, kpi-cskh; mkt: marketing, marketing-xep-hang; van-don: van-don; thong-bao: canh-bao.
+     - Màn có request lỗi thì in loi-tai.
+     - phong-ban, them, nhan-su không có lượt tải số nặng, giữ chờ theo giờ.
+  2. Gom request trùng:
+     - Thẻ KPI CSKH gọi lại `/api/reports/overview` tháng này (team CSKH), trùng số trang CSKH vừa tải khi đang xem Tháng này, mọi POS, mọi nhóm, không team. Nay dùng chung số đó: CSKH còn 5 request thay vì 6. Phạm vi khác thì vẫn tự tải.
+     - Tour mở trang Sale rồi mở lại cùng trang Nhân viên bằng route khác, nên tải bảng nhân viên 2 lần. Nay mở thẳng trang Nhân viên một lần cho cả mốc sale và nhan-vien. Hai ảnh này trước đây cũng là cùng một màn.
+- Không tăng thời gian chờ, không đổi workflow.
+
 ## Lượt iOS preview đỏ ở db478b0 (đoạn 13, "loi-tai khi chờ sale-trong-ca")
 - Mốc loi-tai đến từ `waitTeam` trong tour team. Vòng trang loi chú (thong-bao … cskh-cau-rieng) không chờ gì, nên app chạy trước workflow. Lần chờ hết hạn thật là chờ danh sách team (`TeamTourStatus.listReady`) sau lần chạm "team-mo" cuối, lúc đang ở trang Vận đơn. Workflow thấy dòng đó khi mới chờ tới mốc sale-trong-ca.
 - Lúc đó web ảo rất chậm: van-don 45 giây rồi lỗi; marketing/analytics 72 giây; route khác 17–30 giây. Request `/api/teams?list=1` xếp hàng sau các request nặng của hàng loạt trang vừa mở, không về kịp 40 giây.

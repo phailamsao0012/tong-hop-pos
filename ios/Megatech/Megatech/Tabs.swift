@@ -884,39 +884,72 @@ enum DebugTour {
             }
             mark("loi-tai"); return false
         }
+        /// Chờ số của màn về xong (LoadBoard) rồi mới in mốc: không chụp lúc còn khung xương, và màn sau không phải xếp hàng sau
+        /// request của màn trước trên web ảo. Lỗi tải thì in loi-tai.
+        func loaded(_ names: [String], since t: Date) async -> Bool {
+            if await LoadBoard.settle(names, since: t) { return true }
+            mark("loi-tai"); return false
+        }
+        var t = Date()
         await play([(0.35, { nav.tab = .home; nav.homePath = [] })])
-        await pause("hom-nay")
-        // Phần dưới Hôm nay (số đã hiện ở mốc trên): MKT + Vận đơn, rồi Cần xử lý + Lối tắt + Ca đang chạy; rồi về đầu trang.
+        guard await loaded(["trang-chu", "canh-bao"], since: t) else { return }
+        await pause("hom-nay", seconds: 2)
+        // Phần dưới Hôm nay: MKT + Vận đơn, rồi Cần xử lý + Lối tắt + Ca đang chạy; rồi về đầu trang.
         DebugTap.shared.tap("cuon:hom-nay-2"); await pause("hom-nay-2", seconds: 2)
         DebugTap.shared.tap("cuon:hom-nay-3"); await pause("hom-nay-3", seconds: 2)
         DebugTap.shared.tap("cuon:tab-dau")
         // Tổng quan chụp ở đầu trang (tiêu đề, pill lọc, segmented, khối đầu), không cuộn xuống.
+        t = Date()
         await play([(0.35, { nav.tab = .overview; nav.overviewPath = []; nav.overviewScroll = "dau:departments" })])
-        await pause("tong-quan")
-        nav.overviewScroll = "dau:metrics"; await pause("tong-quan-so-lieu", seconds: 4)
-        nav.overviewPath = [.overviewPos("")]; await pause("tong-quan-pos")
+        guard await loaded(["tong-quan"], since: t) else { return }
+        await pause("tong-quan", seconds: 2)
+        t = Date()
+        nav.overviewScroll = "dau:metrics"
+        guard await loaded(["trung-tam"], since: t) else { return }
+        await pause("tong-quan-so-lieu", seconds: 2)
+        t = Date()
+        nav.overviewPath = [.overviewPos("")]
+        guard await loaded(["tong-quan-pos"], since: t) else { return }
+        await pause("tong-quan-pos", seconds: 2)
         nav.overviewPath = []
+        t = Date()
         await play([(0.35, { nav.tab = .orders; nav.ordersPath = [] })])
-        await pause("don-hang")
+        guard await loaded(["don-hang", "don-hang-danh-sach"], since: t) else { return }
+        await pause("don-hang", seconds: 2)
         await play([(0.35, { nav.tab = .depts; nav.deptsPath = [] })])
         await pause("phong-ban", seconds: 4)
+        // Sale mở thẳng trang Nhân viên (cùng một màn cho mốc sale và nhan-vien, không mở lại để khỏi tải hai lần).
         MktNvTour.compare = false; MktNvTour.failed = false
-        nav.deptsPath = [.dept(.sale, period: .month)]
-        await pause("sale")
+        t = Date()
         nav.deptsPath = [.dept(.sale, period: .month, page: "compare")]
         guard await ready({ MktNvTour.compare }) else { return }
-        await pause("nhan-vien", seconds: 3)
+        guard await loaded(["nhan-vien", "bang-nhan-vien", "so-cung-ky"], since: t) else { return }
+        await pause("sale", seconds: 2)
+        await pause("nhan-vien", seconds: 1)
         MktNvTour.staff = false; DebugTap.shared.tap("nv-mo")
+        t = Date()
         guard await ready({ MktNvTour.staff }) else { return }
-        await pause("nhan-vien-mot", seconds: 3)
-        nav.deptsPath = [.dept(.cskh, period: .month)]; await pause("cskh")
+        guard await loaded(["nhan-vien-chi-tiet"], since: t) else { return }
+        await pause("nhan-vien-mot", seconds: 2)
+        t = Date()
+        nav.deptsPath = [.dept(.cskh, period: .month)]
+        guard await loaded(["tong-quan-cskh", "kpi-cskh"], since: t) else { return }
+        await pause("cskh", seconds: 2)
         MktNvTour.marketing = false
+        t = Date()
         nav.deptsPath = [.dept(.mkt, period: .month)]
         guard await ready({ MktNvTour.marketing }) else { return }
-        await pause("mkt", seconds: 3)
-        nav.deptsPath = [.dept(.vandon, period: .month)]; await pause("van-don")
+        guard await loaded(["marketing", "marketing-xep-hang"], since: t) else { return }
+        await pause("mkt", seconds: 2)
+        t = Date()
+        nav.deptsPath = [.dept(.vandon, period: .month)]
+        guard await loaded(["van-don"], since: t) else { return }
+        await pause("van-don", seconds: 2)
         // Thông báo thuộc tab Trang chủ (khung Gemini: tab Trang chủ sáng), như khi bấm chuông.
-        nav.tab = .home; nav.homePath = [.alerts]; await pause("thong-bao", seconds: 5)
+        t = Date()
+        nav.tab = .home; nav.homePath = [.alerts]
+        guard await loaded(["canh-bao"], since: t) else { return }
+        await pause("thong-bao", seconds: 2)
         DebugTap.shared.tap("cuon:thong-bao-2"); await pause("thong-bao-2", seconds: 2)
         await play([(0.35, { nav.tab = .more })])
         await pause("them", seconds: 4)

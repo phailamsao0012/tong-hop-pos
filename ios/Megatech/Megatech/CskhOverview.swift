@@ -29,6 +29,11 @@ struct CskhOverviewView: View {
     @State private var loading = false
     private var range: (String, String) { period.range }
     private var showKpi: Bool { auth.me?.canView("cskh-kpi") ?? false }
+    /// Trang đang xem đúng phạm vi thẻ KPI cần (từ đầu tháng tới hôm nay, mọi POS, mọi nhóm đơn, không lọc team).
+    private var sharesMonth: Bool {
+        let r = range, today = VNDate.string(.now)
+        return r.0 == String(today.prefix(7)) + "-01" && r.1 == today && pos.isEmpty && product == "all" && applied == nil
+    }
 
     var body: some View {
         Embed(embedded: embedded, title: "Tổng quan CSKH") {
@@ -37,7 +42,10 @@ struct CskhOverviewView: View {
             ScopeFilterPill(period: $period, team: true, fixedPos: pos, fixedProduct: product)
             HrTeamNotice(applies: applied != nil, deptLabel: "CSKH")
             if showKpi {
-                CskhKpiProgress().id("team-cskh-kpi")
+                // Kỳ Tháng này, mọi POS, mọi nhóm, không team: số tháng của trang chính chính là số tháng thẻ KPI cần, dùng chung
+                // (không gọi /api/reports/overview tháng này hai lần).
+                CskhKpiProgress(shared: sharesMonth ? data : nil, sharesMonth: sharesMonth, sharedFailed: sharesMonth && error != nil && data == nil)
+                    .id("team-cskh-kpi")
                 if applied != nil { Text("Khối tiến độ KPI chưa lọc theo team.").font(.caption).foregroundStyle(Color.inkSoft) }
             }
             if let teamError { HrTeamErrorView(message: teamError) { nav?.hrUnit = nil } }
@@ -140,6 +148,10 @@ struct CskhOverviewView: View {
 
 /// Thẻ tiến độ KPI tháng hiện tại của cả đội CSKH: đã đạt / KPI, vạch tiến độ chuẩn theo ngày, thiếu / vượt, cần mỗi ngày, hôm nay, số người đúng tiến độ.
 struct CskhKpiProgress: View {
+    /// Số tháng (đầu tháng tới hôm nay, team CSKH) trang chứa đã tải; sharesMonth: dùng số này, không tự hỏi lại.
+    var shared: API.Overview? = nil
+    var sharesMonth = false
+    var sharedFailed = false
     @AppStorage("thp_hide_money") private var hideMoney = false
     @State private var targets: API.Targets?
     @State private var month: API.Overview?
@@ -160,7 +172,7 @@ struct CskhKpiProgress: View {
                         HStack(spacing: 2) { Text("Từng người"); Image(systemName: "chevron.right").mtFont(.caption) }.mtFont(.body).foregroundStyle(Color.brand)
                     }
                     if let s = summary { content(s) }
-                    else if failText != nil { Text("Chưa tính được tiến độ KPI tháng này.").mtFont(.body).foregroundStyle(Color.inkSoft) }
+                    else if failText != nil || sharedFailed { Text("Chưa tính được tiến độ KPI tháng này.").mtFont(.body).foregroundStyle(Color.inkSoft) }
                     else { Skeleton(height: 120) }
                 }
             }
@@ -168,13 +180,13 @@ struct CskhKpiProgress: View {
             // Nút Thử lại nằm ngoài liên kết (chạm Thử lại không mở trang KPI).
             if let failText, summary == nil { StateView(error: failText, compact: true) { await load() } }
         }
-        .task { await load() }
+        .task(id: sharesMonth) { await load() }
         .pullToReload { await load() }
     }
 
     private struct Summary { let goal, goalOrders, done, doneOrders, todayNet, daily: Double; let withGoal, onTrack, day, dim: Int }
     private var summary: Summary? {
-        guard let targets, let month, let staff else { return nil }
+        guard let targets, let staff, let month = sharesMonth ? shared : month else { return nil }
         let goals: [String: API.Target] = Dictionary(targets.items.filter { $0.scope == "employee" }.map { ($0.refId, $0) }, uniquingKeysWith: { a, _ in a })
         let isSystem: (String) -> Bool = { n in n.range(of: #"api[_ ]?connection|^api\b|webhook|system"#, options: [.regularExpression, .caseInsensitive]) != nil }
         let list: [API.Employee] = staff.filter { !isSystem($0.name) && ($0.active != false || goals[$0.id] != nil) }
@@ -248,11 +260,11 @@ struct CskhKpiProgress: View {
 
     /// Bốn nguồn tải cùng lúc; nguồn lỗi giữ số đang có (không coi danh sách nhân viên lỗi là "chưa đặt KPI").
     @MainActor private func load() async {
-        let d = VNDate.string(.now), m = ym, needStaff = staff == nil
-        let trace = LoadTrace("kpi-cskh", requests: needStaff ? 4 : 3)
+        let d = VNDate.string(.now), m = ym, needStaff = staff == nil, needMonth = !sharesMonth
+        let trace = LoadTrace("kpi-cskh", requests: (needStaff ? 1 : 0) + (needMonth ? 1 : 0) + 2)
         async let sReq = attempt(needStaff, trace) { try await API.employees(team: "cskh") }
         async let tReq = attempt(true, trace) { try await API.targets(month: m) }
-        async let mReq = attempt(true, trace) { try await API.overview(start: m + "-01", end: d, team: "cskh", compare: "none") }
+        async let mReq = attempt(needMonth, trace) { try await API.overview(start: m + "-01", end: d, team: "cskh", compare: "none") }
         async let dReq = attempt(true, trace) { try await API.overview(start: d, end: d, team: "cskh", compare: "none") }
         let (sRes, tRes, mRes, dRes) = await (sReq, tReq, mReq, dReq)
         trace.end(cancelled: Task.isCancelled)
