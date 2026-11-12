@@ -708,21 +708,50 @@ jobs:
             done
             echo "::error::15-giao-dien: thiếu mốc $1"; tail -n 40 "$log" | grep -E '^\[(UI|MOC|MKT|NV)\]' || true; return 1
           }
+          # Đoạn 15 chạy sau gần 1 giờ máy ảo chạy liền: lệnh simctl có thể treo (2 lượt liền im 10–14 phút ở chỗ đổi sang nền tối,
+          # app đã hỏi Face ID nhưng không nhận được "khớp"). Mỗi lệnh simctl ở đây có hạn (perl alarm), có mốc trước / sau
+          # (moc-thoi-gian.txt và log job) để biết lệnh nào treo; lượt nền tối chạy trên máy ảo vừa tắt và bật lại.
+          m15() { mark "15-$1"; echo "15: $1 $(date +%H:%M:%S)"; }
+          sim() { local s="$1"; shift; perl -e 'alarm shift; exec @ARGV' "$s" xcrun simctl "$@"; }
+          # Face ID có hạn 20 giây mỗi lệnh (face_on_ask gọi hàm này).
+          face() { m15 "face-$1-truoc"; sim 20 spawn "$UDID" notifyutil -p "com.apple.BiometricKit_Sim.pearl.$1" || echo "::warning::15: lệnh Face ID $1 quá hạn"; m15 "face-$1-sau"; }
+          reboot_sim() {
+            m15 "shutdown-truoc"; sim 120 shutdown "$UDID" || echo "::warning::15: shutdown quá hạn"; m15 "shutdown-sau"
+            m15 "boot-truoc"; sim 180 boot "$UDID" || true
+            sim 300 bootstatus "$UDID" -b > /dev/null || { echo "::error::15: máy ảo không bật lại được"; return 1; }
+            m15 "boot-sau"
+            sim 30 status_bar "$UDID" override --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4 || true
+            sim 30 spawn "$UDID" notifyutil -s com.apple.BiometricKit.enrollmentChanged 1 || true
+            sim 30 spawn "$UDID" notifyutil -p com.apple.BiometricKit.enrollmentChanged || true
+            # Làm ấm như lúc mở máy ảo: lần mở đầu sau khi bật rất chậm, lệnh Face ID tới trễ.
+            # Chỉ trỏ vào web ảo ($BASE 127.0.0.1), không để app dùng địa chỉ mặc định.
+            m15 "lam-am-truoc"
+            SIMCTL_CHILD_MEGATECH_BASE="$BASE" perl -e 'alarm shift; exec @ARGV' 30 xcrun simctl launch "$UDID" "$BUNDLE" > /dev/null || true
+            sleep 20
+            sim 30 terminate "$UDID" "$BUNDLE" || true; m15 "lam-am-sau"
+          }
           for mode in sang toi; do
-            xcrun simctl terminate "$UDID" "$BUNDLE" || true
-            if [ "$mode" = toi ]; then xcrun simctl ui "$UDID" appearance dark; else xcrun simctl ui "$UDID" appearance light; fi
+            if [ "$mode" = toi ]; then reboot_sim || exit 1; fi
+            m15 "$mode-terminate-truoc"; sim 30 terminate "$UDID" "$BUNDLE" || true; m15 "$mode-terminate-sau"
+            m15 "$mode-giao-dien-truoc"
+            if [ "$mode" = toi ]; then look=dark; else look=light; fi
+            sim 60 ui "$UDID" appearance "$look" || { echo "::error::15: đổi giao diện $look quá hạn"; exit 1; }
+            m15 "$mode-giao-dien-sau"
             log15="$RUNNER_TEMP/ui-15-$mode.txt"
             vars15=(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
               SIMCTL_CHILD_MEGATECH_TOUR=giaodien SIMCTL_CHILD_MEGATECH_NAV_RESET=1)
-            env "${vars15[@]}" xcrun simctl launch --stdout="$log15" "$UDID" "$BUNDLE" > /dev/null
-            face_on_ask "$log15"
+            m15 "$mode-mo-app-truoc"
+            env "${vars15[@]}" perl -e 'alarm shift; exec @ARGV' 30 xcrun simctl launch --stdout="$log15" "$UDID" "$BUNDLE" > /dev/null \
+              || { echo "::error::15: mở app ($mode) quá hạn"; exit 1; }
+            m15 "$mode-mo-app-sau"
+            m15 "$mode-face-id-truoc"; face_on_ask "$log15"; m15 "$mode-face-id-sau"
             for stage in "${ui_stages[@]}"; do
               wait_ui "$stage" 90 "$log15"
-              xcrun simctl io "$UDID" screenshot "$OUT/15-$mode-$stage.png"
+              sim 30 io "$UDID" screenshot "$OUT/15-$mode-$stage.png" > /dev/null || echo "::warning::15: chụp $mode-$stage quá hạn"
             done
             wait_ui xong 30 "$log15"
           done
-          xcrun simctl ui "$UDID" appearance light
+          sim 60 ui "$UDID" appearance light || true
           n15=$(ls "$OUT"/15-*.png 2>/dev/null | wc -l | tr -d ' ')
           if [ "$n15" != "$(( ${#ui_stages[@]} * 2 ))" ]; then echo "::error::15-giao-dien: thiếu ảnh ($n15/$(( ${#ui_stages[@]} * 2 )))"; exit 1; fi
           grep -hE '^\[(UI|UIPOS)\]' "$RUNNER_TEMP"/ui-15-*.txt > "$OUT/15-giao-dien-app.txt" || true
