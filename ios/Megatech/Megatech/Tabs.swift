@@ -108,7 +108,24 @@ struct RootTabs: View {
     @ObservationIgnored private var me: API.Me?
 
     /// route nil: người dùng không mở được trang đích, dòng chỉ để biết.
-    struct Item: Identifiable { let id: String; let icon: String; let tone: Tone; let title: String; let sub: String; let route: Route? }
+    /// label / count: tên ngắn và số (hoặc tên POS) ở bên phải, cho hàng "Ưu tiên" ở trang Thông báo (khung 14).
+    struct Item: Identifiable {
+        let id: String; let icon: String; let tone: Tone; let title: String; let sub: String; let route: Route?
+        var label = ""; var count = ""
+    }
+    /// Nhóm việc cho thẻ "CẦN XỬ LÝ" (khung 14): tên nhóm, số, màu.
+    struct Group: Identifiable { let id: String; let title: String; let n: Int; let color: Color }
+    func groups(sync: SyncStatus) -> [Group] {
+        var out: [Group] = [Group(id: "don", title: "Đơn hàng", n: Int(unconfirmed), color: Palette.orange)]
+        if me?.canView("care") == true { out.append(Group(id: "cham", title: "Chăm sóc", n: Int(over20), color: Palette.cskh)) }
+        out.append(Group(id: "ns", title: "Nhân sự", n: hrPending, color: Palette.purple))
+        out.append(Group(id: "db", title: "Đồng bộ", n: Self.syncIssues(sync).count, color: Palette.warn))
+        return out
+    }
+    /// POS lỗi đồng bộ hoặc chậm quá 15 phút.
+    static func syncIssues(_ sync: SyncStatus) -> [API.SyncPos] {
+        sync.pos.filter { $0.lastError != nil || sync.age($0) > 15 }
+    }
 
     /// Bỏ qua nếu vừa hỏi chưa quá maxAge giây (0 = hỏi ngay). Quyền của người dùng quyết dòng nào hiện và dòng nào chạm được.
     @MainActor func refresh(maxAge: TimeInterval = 60, me: API.Me?) async {
@@ -147,19 +164,28 @@ struct RootTabs: View {
         // Số lấy từ nhóm "new" (trạng thái Mới trên Pancake) nên danh sách mở cùng nhóm đó cho khớp số.
         if unconfirmed > 0 {
             out.append(Item(id: "unconfirmed", icon: "clock.badge.exclamationmark", tone: .red, title: "\(Fmt.int(unconfirmed)) đơn mới chưa chốt", sub: "Tạo hôm nay · đang ở trạng thái Mới",
-                            route: me?.canView("raw-orders") == true ? .orders(HomeShortcuts.newOrders(today)) : nil))
-        }
-        for p in sync.pos where p.lastError != nil || sync.age(p) > 15 {
-            out.append(Item(id: "sync-\(p.posId)", icon: "exclamationmark.triangle.fill", tone: .orange, title: "\(PosBreakdown.short[p.posId] ?? p.posId) \(p.lastError != nil ? "lỗi đồng bộ" : "đang chậm")",
-                            sub: p.lastError ?? "Chưa đồng bộ \(sync.age(p)) phút · kiểm tra kết nối", route: me?.canView("config") == true ? .page("config") : nil))
+                            route: me?.canView("raw-orders") == true ? .orders(HomeShortcuts.newOrders(today)) : nil,
+                            label: "Đơn mới chưa chốt", count: Fmt.int(unconfirmed)))
         }
         if me?.canView("care") == true, over20 > 0 {
             out.append(Item(id: "over20", icon: "person.crop.circle.badge.exclamationmark", tone: .orange, title: "\(Fmt.int(over20)) khách quá 20 ngày chưa ghi chú",
-                            sub: "CSKH · hôm nay đã ghi \(Fmt.int(callsToday)) cuộc gọi", route: .page("care")))
+                            sub: "CSKH · hôm nay đã ghi \(Fmt.int(callsToday)) cuộc gọi", route: .page("care"),
+                            label: "Khách quá 20 ngày chưa ghi chú", count: Fmt.int(over20)))
         }
         if hrPending > 0 {
             out.append(Item(id: "hr", icon: "checkmark.seal.fill", tone: .purple, title: "\(hrPending) yêu cầu nhân sự chờ duyệt",
-                            sub: "Phòng Nhân sự · thêm, đổi chức vụ, đổi trạng thái", route: .hr("approvals")))
+                            sub: "Phòng Nhân sự · thêm, đổi chức vụ, đổi trạng thái", route: .hr("approvals"),
+                            label: "Yêu cầu nhân sự chờ duyệt", count: "\(hrPending)"))
+        }
+        // Các POS lỗi / chậm gom vào một hàng (khung 14); chi tiết từng POS ở khối Đồng bộ Pancake.
+        let issues = Self.syncIssues(sync)
+        if !issues.isEmpty {
+            let names = issues.map { PosBreakdown.short[$0.posId] ?? $0.posId }.joined(separator: ", ")
+            let anyError = issues.contains { $0.lastError != nil }
+            out.append(Item(id: "sync", icon: "exclamationmark.triangle.fill", tone: anyError ? .red : .orange,
+                            title: "Đồng bộ \(anyError ? "lỗi" : "chậm"): \(names)",
+                            sub: "Kiểm tra ở khối Đồng bộ Pancake", route: me?.canView("config") == true ? .page("config") : nil,
+                            label: "Đồng bộ lỗi / chậm", count: names))
         }
         return out
     }
@@ -193,50 +219,124 @@ struct AlertsPage: View {
         if pos.lastError != nil { return "exclamationmark.triangle.fill" }
         return sync.age(pos) > 15 ? "clock.badge.exclamationmark" : "checkmark.circle.fill"
     }
-    @ViewBuilder private var pendingSection: some View {
-        Text(alerts.updatedAt.map { "Cập nhật lúc \(Fmt.hm($0))" } ?? "Đang kiểm tra…").mtFont(.caption).foregroundStyle(Palette.muted)
-        let items = alerts.items(sync: sync)
-        SectionHead(title: "Cần xử lý", count: items.isEmpty ? nil : items.count)
-        if !alerts.loaded && items.isEmpty { StateView(loading: "Đang kiểm tra…") }
-        else if items.isEmpty { AlertsEmpty(failed: alerts.failed, text: alerts.failText) { await alerts.refresh(maxAge: 0, me: auth.me) } }
-        ForEach(items) { AlertLink(item: $0) }
+    private func syncState(_ pos: API.SyncPos?) -> String {
+        guard let pos else { return "Chưa có số" }
+        if pos.lastError != nil { return "Lỗi đồng bộ" }
+        return sync.age(pos) > 15 ? "Chậm" : "Đã cập nhật"
+    }
+    private func syncMark(_ pos: API.SyncPos?) -> String {
+        guard let pos else { return "?" }
+        if pos.lastError != nil { return "!" }
+        return sync.age(pos) > 15 ? "!" : "✓"
     }
 
-    @ViewBuilder private var shiftSection: some View {
+    /// Hero "CẦN XỬ LÝ" (khung 14): vòng "N nhóm", "N việc", 4 dòng đếm theo nhóm.
+    private var heroCard: some View {
+        let groups = alerts.groups(sync: sync)
+        let total = groups.reduce(0) { $0 + $1.n }
+        let active = groups.filter { $0.n > 0 }.count
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("CẦN XỬ LÝ").mtFont(.caption).fontWeight(.bold).foregroundStyle(Palette.muted)
+                Spacer()
+                Text(alerts.updatedAt.map { "Cập nhật \(Fmt.hm($0))" } ?? "Đang kiểm tra…").mtFont(.caption).foregroundStyle(Palette.muted)
+            }
+            if !alerts.loaded { Skeleton(height: 72) }
+            else {
+                HStack(alignment: .center, spacing: 14) {
+                    ShareRing(parts: groups.map { (value: Double($0.n), color: $0.color) }, center: "\(active) nhóm", size: 72)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("\(total) việc").mtFont(.heroNumber).foregroundStyle(Palette.heroInk)
+                        groupGrid(groups)
+                    }
+                }
+            }
+        }
+        .heroSurface()
+        .accessibilityElement(children: .combine)
+    }
+    private func groupGrid(_ groups: [AlertCenter.Group]) -> some View {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 6, alignment: .leading), GridItem(.flexible(), spacing: 6, alignment: .leading)], alignment: .leading, spacing: 4) {
+            ForEach(groups) { g in
+                HStack(spacing: 4) {
+                    Circle().fill(g.color).frame(width: 6, height: 6)
+                    Text("\(g.title): ").foregroundStyle(Palette.muted) + Text("\(g.n)").fontWeight(.bold).foregroundStyle(Palette.ink)
+                }.mtFont(.caption).lineLimit(1).minimumScaleFactor(0.8)
+            }
+        }
+    }
+
+    /// "Ưu tiên": mỗi việc một hàng (tên, dòng phụ, số ›); các POS lỗi / chậm gom vào một hàng.
+    private var priorityCard: some View {
+        let items = alerts.items(sync: sync)
+        return VStack(alignment: .leading, spacing: MT.cellGap) {
+            Text("Ưu tiên").mtFont(.cardHeader).foregroundStyle(Palette.ink)
+            if !alerts.loaded && items.isEmpty { StateView(loading: "Đang kiểm tra…", compact: true) }
+            else if items.isEmpty { AlertsEmpty(failed: alerts.failed, text: alerts.failText) { await alerts.refresh(maxAge: 0, me: auth.me) } }
+            ForEach(items) { PriorityLink(item: $0) }
+        }
+        .padding(MT.cardPad).frame(maxWidth: .infinity, alignment: .leading).cardSurface()
+    }
+
+    /// "Trong ca": % chốt nóng, số đã nhận / đã chốt, cảnh báo trong ca, nút "Điều hành trong ca ›".
+    private var shiftCard: some View {
         let canShift = auth.me.map { $0.canView("shift") || $0.canView("center") } ?? false
-        SectionHead(title: "Trong ca", action: canShift ? "Xem ca" : nil, route: canShift ? .page("shift") : nil, count: alerts.highShiftAlerts > 0 ? alerts.highShiftAlerts : nil).padding(.top, 6)
-        Panel {
+        return VStack(alignment: .leading, spacing: MT.cellGap) {
+            Text("Trong ca").mtFont(.cardHeader).foregroundStyle(Palette.ink)
             if let s = alerts.shift {
-                if s.alerts.isEmpty { Label("Không có cảnh báo trong ca.", systemImage: "checkmark.circle.fill").font(.system(size: 12)).foregroundStyle(Color.good) }
+                Text("\(Fmt.pct(s.total.rate)) chốt nóng").mtFont(.cardMetric).foregroundStyle(Palette.ink)
+                Text("Số đã nhận: \(Fmt.int(s.total.received)) · Đã chốt: \(Fmt.int(s.total.closed))").mtFont(.caption).foregroundStyle(Palette.muted)
+                if s.alerts.isEmpty {
+                    Label("Không có cảnh báo trong ca.", systemImage: "checkmark.circle.fill").mtFont(.caption).foregroundStyle(Color.good)
+                }
                 ForEach(Array(s.alerts.enumerated()), id: \.offset) { _, a in
                     ShiftAlertRow(title: a.title, detail: a.detail, high: a.level == "high")
                 }
             } else if alerts.loaded {
-                Text("Chưa đọc được số trong ca.").font(.system(size: 12)).foregroundStyle(Color.inkSoft)
+                Text("Chưa đọc được số trong ca.").mtFont(.caption).foregroundStyle(Color.inkSoft)
             } else { Skeleton(height: 60) }
-        }
-    }
-
-    @ViewBuilder private var syncSection: some View {
-        SectionHead(title: "Đồng bộ Pancake").padding(.top, 6).id(Self.syncAnchor)
-        Panel {
-            ForEach(PosBreakdown.order, id: \.self) { id in
-                let p = sync.pos.first { $0.posId == id }
-                let tone: Color = syncTone(p)
-                PancakeSyncRow(id: id, detail: p?.lastError ?? "đồng bộ lúc \(Fmt.dateTime(p?.lastSyncAt))",
-                               hasError: p?.lastError != nil, tone: tone, symbol: syncSymbol(p), age: syncAge(p))
+            if canShift {
+                NavigationLink(value: Route.page("shift")) {
+                    HStack(spacing: 4) { Text("Điều hành trong ca"); Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)) }
+                        .mtFont(.body).fontWeight(.semibold).foregroundStyle(Palette.ink)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(Palette.wash, in: .rect(cornerRadius: MT.rCell))
+                        .overlay { RoundedRectangle(cornerRadius: MT.rCell).strokeBorder(Palette.line, lineWidth: 1) }
+                }.buttonStyle(.plain)
             }
         }
+        .padding(MT.cardPad).frame(maxWidth: .infinity, alignment: .leading).cardSurface()
+    }
+
+    /// "Đồng bộ Pancake": mỗi POS một hàng ✓ / ! / ?, nút "Tải lại".
+    private var syncCard: some View {
+        VStack(alignment: .leading, spacing: MT.cellGap) {
+            Text("Đồng bộ Pancake").mtFont(.cardHeader).foregroundStyle(Palette.ink)
+            ForEach(PosBreakdown.order, id: \.self) { id in
+                let p = sync.pos.first { $0.posId == id }
+                PancakeSyncRow(title: "\(syncMark(p)) \(PosBreakdown.names[id] ?? id) · \(syncState(p))",
+                               detail: p?.lastError ?? "Đồng bộ lúc \(Fmt.dateTime(p?.lastSyncAt)) · \(syncAge(p)) trước",
+                               hasError: p?.lastError != nil, tone: syncTone(p))
+            }
+            Button { Task { await sync.refresh() } } label: {
+                Text("Tải lại").mtFont(.body).fontWeight(.bold).foregroundStyle(Color.white)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(Palette.mtBrandPrimary, in: .rect(cornerRadius: MT.rCell))
+            }.buttonStyle(MTPressStyle())
+        }
+        .padding(MT.cardPad).frame(maxWidth: .infinity, alignment: .leading).cardSurface()
+        .id(Self.syncAnchor)
     }
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: MT.cardGap) {
-                    ChildHeader(title: "Thông báo", eye: false)
-                    pendingSection
-                    shiftSection
-                    syncSection
+                    ChildHeader(title: "Thông báo", eye: false, refresh: { await refreshBoth() })
+                    heroCard
+                    priorityCard
+                    shiftCard
+                    syncCard
                 }.padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 24)
             }
             .task {
@@ -290,28 +390,50 @@ private struct ShiftAlertRow: View {
     }
 }
 
+/// Một POS trong khối Đồng bộ Pancake (khung 14): dòng trạng thái màu, dòng phụ giờ đồng bộ hoặc lỗi.
 private struct PancakeSyncRow: View {
-    let id: String
+    let title: String
     let detail: String
     let hasError: Bool
     let tone: Color
-    let symbol: String
-    let age: String
 
     var body: some View {
-        let detailTint: Color = hasError ? .bad : .inkSoft
-        HStack(spacing: 8) {
-            PosBadge(id: id, size: 20)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(PosBreakdown.names[id] ?? id).mtFont(.cardHeader).foregroundStyle(Color.ink)
-                Text(detail).mtFont(.caption).foregroundStyle(detailTint)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer()
-            Image(systemName: symbol).foregroundStyle(tone).accessibilityHidden(true)
-            Text(age).mtFont(.caption).foregroundStyle(tone)
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).mtFont(.body).fontWeight(.bold).foregroundStyle(tone)
+            Text(detail).mtFont(.caption).foregroundStyle(hasError ? Color.bad : Color.inkSoft)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.vertical, 2)
+        .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+        .background(Palette.wash, in: .rect(cornerRadius: MT.rCell))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Hàng "Ưu tiên" ở trang Thông báo (khung 14): tên việc, dòng phụ, số (hoặc tên POS) và "›".
+private struct PriorityLink: View {
+    let item: AlertCenter.Item
+    private var row: some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.label.isEmpty ? item.title : item.label).mtFont(.body).fontWeight(.semibold).foregroundStyle(Palette.ink)
+                Text(item.sub).mtFont(.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 6)
+            if !item.count.isEmpty {
+                Text(item.count).mtFont(.body).fontWeight(.bold)
+                    .foregroundStyle(item.id == "sync" ? item.tone.color : Palette.ink)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+            }
+            if item.route != nil { Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Palette.muted) }
+        }
+        .padding(12).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .background(Palette.wash, in: .rect(cornerRadius: MT.rCell))
+        .contentShape(.rect)
+        .accessibilityElement(children: .combine)
+    }
+    var body: some View {
+        if let r = item.route { NavigationLink(value: r) { row }.buttonStyle(.plain) }
+        else { row }
     }
 }
 
