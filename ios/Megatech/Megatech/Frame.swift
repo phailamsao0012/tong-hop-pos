@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import Charts
 
 // Khung chung giống thiết kế Gemini (plan 2026-11-12, R1): đầu trang có dòng nhỏ + tiêu đề lớn + nút vuông bo 12pt,
 // màn con có breadcrumb xanh thay nav bar, một pill lọc rộng hết màn mở bottom sheet, dải nền che vùng giờ/pin khi cuộn.
@@ -63,11 +64,58 @@ struct HeaderActions: OptionSet {
 }
 
 /// Dải nền phủ vùng giờ, pin, Dynamic Island: nội dung cuộn lên không đè lên thanh trạng thái.
+/// ScrollView tràn lên tận mép trên màn, nên lấy chiều cao vùng an toàn của cửa sổ rồi phủ một dải đúng chiều cao đó ở mép trên.
 struct StatusBarBackdrop: ViewModifier {
+    @MainActor private var topInset: CGFloat {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let window = scenes.flatMap(\.windows).first { $0.isKeyWindow } ?? scenes.first?.windows.first
+        return window?.safeAreaInsets.top ?? 0
+    }
     func body(content: Content) -> some View {
-        content.overlay(alignment: .top) {
-            Palette.bg.frame(height: 0).ignoresSafeArea(edges: .top).allowsHitTesting(false).accessibilityHidden(true)
+        content.overlay {
+            Palette.bg.frame(height: topInset)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .ignoresSafeArea(edges: .top)
+                .allowsHitTesting(false).accessibilityHidden(true)
         }
+    }
+}
+
+/// Vòng tỷ trọng gọn (không chú giải): chữ giữa vòng, dòng nhỏ dưới.
+struct ShareRing: View {
+    let parts: [(value: Double, color: Color)]
+    let center: String
+    var caption: String? = nil
+    var size: CGFloat = 76
+    private var shown: [(value: Double, color: Color)] { parts.filter { $0.value.isFinite && $0.value > 0 } }
+    var body: some View {
+        ZStack {
+            if shown.isEmpty {
+                Circle().stroke(Palette.wash, lineWidth: size * 0.13).padding(size * 0.065)
+            } else {
+                Chart(Array(shown.enumerated()), id: \.offset) { _, p in
+                    SectorMark(angle: .value("Phần", p.value), innerRadius: .ratio(0.74), angularInset: 1.5)
+                        .cornerRadius(3).foregroundStyle(p.color)
+                }
+            }
+            VStack(spacing: 0) {
+                Text(center).font(.system(size: size * 0.17, weight: .heavy, design: .rounded)).monospacedDigit()
+                    .lineLimit(1).minimumScaleFactor(0.5)
+                if let caption {
+                    Text(caption).font(.system(size: size * 0.12, weight: .medium)).foregroundStyle(Palette.muted)
+                        .lineLimit(1).minimumScaleFactor(0.5)
+                }
+            }.padding(size * 0.2)
+        }
+        .frame(width: size, height: size).foregroundStyle(Palette.ink)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Nút "›" vuông ở góc thẻ (mở trang chi tiết).
+struct ChevronSquare: View {
+    var body: some View {
+        Image(systemName: "chevron.right").modifier(HeaderSquare()).accessibilityHidden(true)
     }
 }
 
@@ -78,6 +126,9 @@ struct ChildHeader: View {
     var parent: String? = nil
     var info: InfoText? = nil
     var eye = true
+    /// Nút vuông làm mới bên phải (Thông báo).
+    var refresh: (() async -> Void)? = nil
+    @State private var refreshing = false
     @Environment(\.dismiss) private var dismiss
     @Environment(AppNav.self) private var nav: AppNav?
     private var crumb: String { parent ?? nav?.tab.crumb ?? "Quay lại" }
@@ -97,6 +148,16 @@ struct ChildHeader: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             if let info { InfoButton(info).modifier(HeaderSquare()) }
+            if let refresh {
+                Button {
+                    guard !refreshing else { return }
+                    refreshing = true
+                    Task { await refresh(); refreshing = false }
+                } label: {
+                    Image(systemName: "arrow.clockwise").modifier(HeaderSquare()).opacity(refreshing ? 0.5 : 1)
+                }
+                .buttonStyle(MTPressStyle()).accessibilityLabel("Làm mới")
+            }
             if eye { EyeButton() }
         }
     }

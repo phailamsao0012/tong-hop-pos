@@ -69,6 +69,12 @@ struct HomeView: View {
                         }
                         .onChange(of: nav.overviewScroll, initial: true) { _, id in
                             guard let id else { return }
+                            // "dau:<phần>" (lượt chụp giao diện): chọn phần, giữ đầu trang (tiêu đề, pill lọc, segmented), không cuộn.
+                            if id.hasPrefix("dau:") {
+                                overviewSegment = String(id.dropFirst(4))
+                                nav.overviewScroll = nil
+                                return
+                            }
                             overviewSegment = ["sale", "cskh", "mkt", "vandon"].contains(id) ? "departments" : "metrics"
                             Task { @MainActor in
                                 // Đợi SwiftUI cập nhật kích thước khung trước khi tìm neo.

@@ -724,9 +724,10 @@ enum DebugTour {
         }
         await play([(0.35, { nav.tab = .home; nav.homePath = [] })])
         await pause("hom-nay")
-        await play([(0.35, { nav.tab = .overview; nav.overviewPath = []; nav.overviewScroll = "sale" })])
+        // Tổng quan chụp ở đầu trang (tiêu đề, pill lọc, segmented, khối đầu), không cuộn xuống.
+        await play([(0.35, { nav.tab = .overview; nav.overviewPath = []; nav.overviewScroll = "dau:departments" })])
         await pause("tong-quan")
-        nav.overviewScroll = "center"; await pause("tong-quan-so-lieu", seconds: 4)
+        nav.overviewScroll = "dau:metrics"; await pause("tong-quan-so-lieu", seconds: 4)
         nav.overviewPath = [.overviewPos("")]; await pause("tong-quan-pos")
         nav.overviewPath = []
         await play([(0.35, { nav.tab = .orders; nav.ordersPath = [] })])
