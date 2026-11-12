@@ -136,7 +136,10 @@ struct Embed<Content: View>: View {
 
 struct CallsView: View {
     var team = "cskh"; var embedded = false
- (AppNav, kế hoạch 1.4), đổi riêng ở trang này được.
+    @Environment(AppNav.self) private var nav: AppNav?
+    /// R-POS: POS chung đang chọn (pill lọc); chọn POS nào chỉ tính POS đó.
+    private var posIds: [String] { let p = nav?.pos ?? ""; return p.isEmpty ? [] : [p] }
+    /// Mở theo kỳ chung (AppNav, kế hoạch 1.4), đổi riêng ở trang này được.
     @State private var period: Period = NavMemory.period
     @State private var data: API.Calls?
     @State private var prev: API.Calls?
@@ -287,6 +290,9 @@ struct CustomerCallList: View {
 
 struct CareView: View {
     var embedded = false
+    @Environment(AppNav.self) private var nav: AppNav?
+    /// R-POS: POS chung đang chọn (pill lọc); chọn POS nào chỉ tính POS đó.
+    private var posIds: [String] { let p = nav?.pos ?? ""; return p.isEmpty ? [] : [p] }
     @State private var data: API.Care?
     @State private var error: String?
     @State private var assigned = ""
@@ -392,6 +398,9 @@ struct PrioTile: View {
 
 struct RepurchaseView: View {
     var embedded = false
+    @Environment(AppNav.self) private var nav: AppNav?
+    /// R-POS: POS chung đang chọn (pill lọc); chọn POS nào chỉ tính POS đó.
+    private var posIds: [String] { let p = nav?.pos ?? ""; return p.isEmpty ? [] : [p] }
     @State private var period: Period = .d30
     @State private var data: API.Repurchase?
     @State private var prev: API.Repurchase?
@@ -499,6 +508,9 @@ struct ActionPill: View {
 
 struct DormantView: View {
     var embedded = false
+    @Environment(AppNav.self) private var nav: AppNav?
+    /// R-POS: POS chung đang chọn (pill lọc); chọn POS nào chỉ tính POS đó.
+    private var posIds: [String] { let p = nav?.pos ?? ""; return p.isEmpty ? [] : [p] }
     @State private var days = 30
     @State private var q = ""
     @State private var data: API.CustomerPage?
@@ -559,7 +571,10 @@ struct KpiView: View {
     @AppStorage("thp_hide_money") private var hideMoney = false
     var embedded = false
     @Environment(AuthModel.self) private var auth
-
+    @Environment(AppNav.self) private var nav: AppNav?
+    /// R-POS: POS chung đang chọn (pill lọc); chọn POS nào chỉ tính POS đó.
+    private var posIds: [String] { let p = nav?.pos ?? ""; return p.isEmpty ? [] : [p] }
+    @State private var mode = "person"
     @State private var month = String(VNDate.string(.now).prefix(7))
     @State private var targets: API.Targets?
     @State private var actual: API.Overview?
@@ -1074,7 +1089,10 @@ struct BatchesView: View {
     var embedded = false
     /// Kỳ chung nếu là Tháng này hoặc Tháng trước (kế hoạch 1.4), không thì 90 ngày như trước.
     @State private var period: Period = NavMemory.period(in: [.month, .last, .d90], else: .d90)
-
+    @Environment(AppNav.self) private var nav: AppNav?
+    /// R-POS: POS chung đang chọn (pill lọc); chọn POS nào chỉ tính POS đó.
+    private var posIds: [String] { let p = nav?.pos ?? ""; return p.isEmpty ? [] : [p] }
+    @State private var filter = "all"
     @State private var data: API.Batches?
     @State private var error: String?
     private var thisMonth: String { String(VNDate.string(.now).prefix(7)) }
