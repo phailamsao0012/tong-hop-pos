@@ -88,6 +88,23 @@ Bỏ: 3 khối Sale, CSKH, MKT kiểu cũ có 3 ô nhỏ.
 4. "Trong ca": % chốt nóng, nút "Điều hành trong ca ›".
 5. "Đồng bộ Pancake": mỗi POS một hàng ✓/!/↻, nút "Tải lại".
 
+### R-POS: chọn POS nào chỉ tính dữ liệu và nhân sự của POS đó (làm sau R2, trước R3)
+Anh duyệt 12/11/2026 12:34Z. Luật: chọn POS nào thì mọi số, mọi bảng, mọi danh sách người chỉ tính POS đó.
+
+1. Mọi lời gọi API đi theo POS đang chọn (`posIds`). Đã chọn POS thì không gửi rỗng.
+   - Đã thấy gửi rỗng hoặc thiếu:
+     - `API.swift`: marketing (~397), care (~444), calls (~453), customers (~478);
+     - `cskhBadge` (~429) chưa có tham số POS;
+     - `HomeFeed.swift` ~541: `mktAnalytics` không truyền `posIds`.
+   - Rà thêm mọi lời gọi có `posIds=` hoặc `posIds: []` cố định.
+2. Danh sách nhân viên / người bán chỉ hiện người thuộc POS đã chọn, theo `posIds` của nhân viên. Người làm 2 POS thì hiện ở cả hai.
+3. API `cskh-badge` do Tổ web tổng sửa để nhận `posIds`. Trước khi họ xong, app vẫn gửi `posIds`; máy chủ chưa nhận thì bỏ qua, không lỗi.
+4. Kiểm bằng web ảo:
+   - chọn một POS thì tổng ở CSKH, Marketing, Hôm nay nhỏ hơn "Mọi POS" và bằng số web cùng bộ lọc;
+   - thêm mốc tour chụp ảnh chọn một POS ở CSKH và MKT.
+
+Tiêu chí xong như các bước khác: CI xanh, ảnh đạt, ghi `ket-qua-R-POS.md`.
+
 ### R3: 02–04 Tổng quan
 1. Pill lọc rồi segmented "Bốn bộ phận | Số liệu & KH | Theo POS". **Mặc định mở Bốn bộ phận.**
 2. **Bốn bộ phận (02):**
