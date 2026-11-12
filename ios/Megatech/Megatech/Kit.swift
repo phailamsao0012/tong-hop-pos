@@ -817,11 +817,21 @@ struct TabPage<Content: View>: View {
     @ViewBuilder let content: Content
     @Environment(\.refresh) private var outer
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: MT.cardGap) {
-                TabHeader(title: title, greeting: greeting, subtitle: subtitle, actions: actions)
-                content
-            }.padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 24)
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: MT.cardGap) {
+                    TabHeader(title: title, greeting: greeting, subtitle: subtitle, actions: actions).id("tab-dau")
+                    content
+                }.padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 24)
+            }
+            #if DEBUG
+            // Lượt chụp giao diện (MEGATECH_TOUR=giaodien) "cuộn" tới một khối có id (máy ảo không vuốt được).
+            .onChange(of: DebugTap.shared.tick) { _, _ in
+                let target = DebugTap.shared.target
+                guard ProcessInfo.processInfo.environment["MEGATECH_TOUR"] == "giaodien", target.hasPrefix("cuon:") else { return }
+                withAnimation { proxy.scrollTo(String(target.dropFirst(5)), anchor: .top) }
+            }
+            #endif
         }.refreshHost(outer: outer).background(Palette.bg)
         .navigationTitle(title).toolbar(.hidden, for: .navigationBar)
         .modifier(StatusBarBackdrop())

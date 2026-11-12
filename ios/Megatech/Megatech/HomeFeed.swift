@@ -42,9 +42,10 @@ struct HomeFeed: View {
                 // Khung Gemini 01: dải phạm vi, thẻ doanh thu hôm nay, theo bộ phận, MKT, Vận đơn, cần xử lý, lối tắt, ca đang chạy.
                 scopePill
                 hero
-                if canMkt { mktRow }
-                if canVd { vdRow }
-                todo
+                // id "hom-nay-2", "hom-nay-3": chỗ lượt chụp giao diện cuộn tới.
+                if canMkt { mktRow.id("hom-nay-2") }
+                if canVd { vdRow.id(canMkt ? "hom-nay-vd" : "hom-nay-2") }
+                todo.id("hom-nay-3")
                 if let me = auth.me { HomeShortcuts(me: me) }
                 shiftCard
             }

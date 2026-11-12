@@ -30,6 +30,23 @@
 - Thẻ Trong ca ở Thông báo: khung có "Còn lại: N · Còn đơn cần liên hệ lại". API ca chưa trả số này nên không hiện, không tự tính.
 - Mọi khối khác dùng số API có sẵn. Thiếu số thì hiện "—" như trước.
 
+## Vòng sửa 1 (sau kiểm 84b60e9)
+- Thông báo · Trong ca:
+  - cảnh báo trong ca về đồng bộ không còn hiện thành thẻ to ở đây, vì từng POS đã có ở khối Đồng bộ Pancake;
+  - cảnh báo khác vẫn hiện;
+  - nút "Điều hành trong ca ›" ở cuối thẻ.
+- Thông báo · Đồng bộ Pancake: một thẻ riêng, mỗi POS một dòng gọn, cuối thẻ là nút đặc "Tải lại".
+  - "✓ POS · Đã cập nhật" xanh, dòng phụ: giờ · số bản ghi (· số lỗi trong ngày nếu có).
+  - "! POS · Chậm" cam, dòng phụ: giờ · chậm N phút.
+  - "! POS · Lỗi đồng bộ" đỏ, dòng phụ: câu lỗi.
+  - "↻ POS · Đang đồng bộ" khi máy chủ báo status pending.
+- Thông báo · Ưu tiên: luôn đủ 4 dòng (Đơn mới chưa chốt, Khách quá 20 ngày chưa ghi chú, Yêu cầu nhân sự chờ duyệt, Đồng bộ lỗi / chậm). Dòng chưa có việc hiện 0. Dòng Khách quá 20 ngày chỉ hiện với tài khoản xem được CSKH.
+- Tour 15 thêm ảnh cuộn, chụp sau mốc số của màn:
+  - hom-nay-2: MKT hôm nay, Vận đơn hôm nay;
+  - hom-nay-3: Cần xử lý, Lối tắt, Ca đang chạy;
+  - thong-bao-2: Trong ca, Đồng bộ Pancake.
+  - `ios-preview.yml` chỉ sửa danh sách `ui_stages` ở đoạn 15. BASE 127.0.0.1 và bước "Chặn gọi demo" giữ nguyên.
+
 ## Lượt iOS preview đỏ ở db478b0 (đoạn 13, "loi-tai khi chờ sale-trong-ca")
 - Mốc loi-tai đến từ `waitTeam` trong tour team. Vòng trang loi chú (thong-bao … cskh-cau-rieng) không chờ gì, nên app chạy trước workflow. Lần chờ hết hạn thật là chờ danh sách team (`TeamTourStatus.listReady`) sau lần chạm "team-mo" cuối, lúc đang ở trang Vận đơn. Workflow thấy dòng đó khi mới chờ tới mốc sale-trong-ca.
 - Lúc đó web ảo rất chậm: van-don 45 giây rồi lỗi; marketing/analytics 72 giây; route khác 17–30 giây. Request `/api/teams?list=1` xếp hàng sau các request nặng của hàng loạt trang vừa mở, không về kịp 40 giây.

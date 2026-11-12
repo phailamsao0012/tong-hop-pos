@@ -696,7 +696,7 @@ jobs:
           sys.exit(1 if failed else 0)
           PY14
           # 15. Giao diện 1.0: chụp các màn chính, sáng rồi tối (chỉ ảnh, không video).
-          ui_stages=(hom-nay tong-quan tong-quan-so-lieu tong-quan-pos don-hang phong-ban sale nhan-vien nhan-vien-mot cskh mkt van-don thong-bao them nhan-su)
+          ui_stages=(hom-nay hom-nay-2 hom-nay-3 tong-quan tong-quan-so-lieu tong-quan-pos don-hang phong-ban sale nhan-vien nhan-vien-mot cskh mkt van-don thong-bao thong-bao-2 them nhan-su)
           wait_ui() {
             local deadline=$((SECONDS + ${2:-90})) log="$3"
             while (( SECONDS < deadline )); do

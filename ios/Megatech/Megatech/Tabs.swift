@@ -189,6 +189,30 @@ struct RootTabs: View {
         }
         return out
     }
+    /// Hàng "Ưu tiên" ở trang Thông báo (khung 14): luôn đủ các dòng theo quyền, dòng chưa có việc hiện số 0.
+    func priority(sync: SyncStatus) -> [Item] {
+        let today = VNDate.string(.now)
+        var out: [Item] = [
+            Item(id: "unconfirmed", icon: "clock.badge.exclamationmark", tone: .red, title: "\(Fmt.int(unconfirmed)) đơn mới chưa chốt",
+                 sub: "Tính theo ngày tạo đơn", route: me?.canView("raw-orders") == true ? .orders(HomeShortcuts.newOrders(today)) : nil,
+                 label: "Đơn mới chưa chốt", count: Fmt.int(unconfirmed)),
+        ]
+        if me?.canView("care") == true {
+            out.append(Item(id: "over20", icon: "person.crop.circle.badge.exclamationmark", tone: .orange, title: "\(Fmt.int(over20)) khách quá 20 ngày chưa ghi chú",
+                            sub: "CSKH phụ trách · hôm nay đã ghi \(Fmt.int(callsToday)) cuộc gọi", route: .page("care"),
+                            label: "Khách quá 20 ngày chưa ghi chú", count: Fmt.int(over20)))
+        }
+        out.append(Item(id: "hr", icon: "checkmark.seal.fill", tone: .purple, title: "\(hrPending) yêu cầu nhân sự chờ duyệt",
+                        sub: "Đổi phòng / team, chức vụ, trạng thái", route: .hr("approvals"),
+                        label: "Yêu cầu nhân sự chờ duyệt", count: "\(hrPending)"))
+        let issues = Self.syncIssues(sync)
+        let names = issues.map { PosBreakdown.short[$0.posId] ?? $0.posId }.joined(separator: ", ")
+        out.append(Item(id: "sync", icon: "exclamationmark.triangle.fill", tone: issues.contains { $0.lastError != nil } ? .red : .orange,
+                        title: issues.isEmpty ? "Đồng bộ: không có POS lỗi / chậm" : "Đồng bộ lỗi / chậm: \(names)",
+                        sub: "Kiểm tra ở khối Đồng bộ Pancake bên dưới", route: me?.canView("config") == true ? .page("config") : nil,
+                        label: "Đồng bộ lỗi / chậm", count: issues.isEmpty ? "0" : names))
+        return out
+    }
     /// Số đỏ trên chuông: việc cần xử lý + cảnh báo đỏ trong ca.
     func count(sync: SyncStatus) -> Int { items(sync: sync).count + highShiftAlerts }
 }
@@ -219,16 +243,26 @@ struct AlertsPage: View {
         if pos.lastError != nil { return "exclamationmark.triangle.fill" }
         return sync.age(pos) > 15 ? "clock.badge.exclamationmark" : "checkmark.circle.fill"
     }
-    private func syncState(_ pos: API.SyncPos?) -> String {
-        guard let pos else { return "Chưa có số" }
-        if pos.lastError != nil { return "Lỗi đồng bộ" }
-        return sync.age(pos) > 15 ? "Chậm" : "Đã cập nhật"
+    /// Trạng thái gọn một POS (khung 14): dấu, chữ, màu, dòng phụ. "pending" là POS chưa xong lần đồng bộ (đang đồng bộ).
+    private func syncLine(_ id: String) -> (title: String, detail: String, tone: Color, error: Bool) {
+        let name = PosBreakdown.short[id] ?? id
+        guard let pos = sync.pos.first(where: { $0.posId == id }) else {
+            return ("? \(name) · Chưa có số", "Máy chủ chưa trả trạng thái POS này", Color.inkSoft, false)
+        }
+        let records = "\(Fmt.int(pos.records)) bản ghi"
+        let at = pos.lastSyncAt.flatMap(Fmt.parseISO).map(Fmt.hm) ?? "—"
+        let errors = pos.errors24h > 0 ? " · \(Fmt.int(pos.errors24h)) lỗi trong ngày" : ""
+        if let err = pos.lastError { return ("! \(name) · Lỗi đồng bộ", err, Color.bad, true) }
+        if pos.status == "pending" { return ("↻ \(name) · Đang đồng bộ", "Đang cập nhật bản ghi mới · \(records)", Palette.info, false) }
+        let age = sync.age(pos)
+        if age > 15 {
+            let late = age < 60 ? "\(age) phút" : "\(age / 60) giờ"
+            return ("! \(name) · Chậm", "\(at) · chậm \(late)\(errors)", Color.warn, false)
+        }
+        return ("✓ \(name) · Đã cập nhật", "\(at) · \(records)\(errors)", Color.good, false)
     }
-    private func syncMark(_ pos: API.SyncPos?) -> String {
-        guard let pos else { return "?" }
-        if pos.lastError != nil { return "!" }
-        return sync.age(pos) > 15 ? "!" : "✓"
-    }
+    /// Cảnh báo trong ca về đồng bộ đã có ở khối Đồng bộ Pancake (từng POS), không lặp ở Trong ca.
+    private func isSyncAlert(_ title: String) -> Bool { title.lowercased().contains("đồng bộ") }
 
     /// Hero "CẦN XỬ LÝ" (khung 14): vòng "N nhóm", "N việc", 4 dòng đếm theo nhóm.
     private var heroCard: some View {
@@ -268,12 +302,15 @@ struct AlertsPage: View {
 
     /// "Ưu tiên": mỗi việc một hàng (tên, dòng phụ, số ›); các POS lỗi / chậm gom vào một hàng.
     private var priorityCard: some View {
-        let items = alerts.items(sync: sync)
+        let items = alerts.priority(sync: sync)
         return VStack(alignment: .leading, spacing: MT.cellGap) {
             Text("Ưu tiên").mtFont(.cardHeader).foregroundStyle(Palette.ink)
-            if !alerts.loaded && items.isEmpty { StateView(loading: "Đang kiểm tra…", compact: true) }
-            else if items.isEmpty { AlertsEmpty(failed: alerts.failed, text: alerts.failText) { await alerts.refresh(maxAge: 0, me: auth.me) } }
-            ForEach(items) { PriorityLink(item: $0) }
+            if !alerts.loaded { StateView(loading: "Đang kiểm tra…", compact: true) }
+            else {
+                if alerts.failed { AlertsEmpty(failed: true, text: alerts.failText) { await alerts.refresh(maxAge: 0, me: auth.me) } }
+                // Khung 14: luôn đủ các dòng, dòng chưa có việc hiện số 0.
+                ForEach(items) { PriorityLink(item: $0) }
+            }
         }
         .padding(MT.cardPad).frame(maxWidth: .infinity, alignment: .leading).cardSurface()
     }
@@ -284,12 +321,10 @@ struct AlertsPage: View {
         return VStack(alignment: .leading, spacing: MT.cellGap) {
             Text("Trong ca").mtFont(.cardHeader).foregroundStyle(Palette.ink)
             if let s = alerts.shift {
+                let shiftAlerts = s.alerts.filter { !isSyncAlert($0.title) }
                 Text("\(Fmt.pct(s.total.rate)) chốt nóng").mtFont(.cardMetric).foregroundStyle(Palette.ink)
                 Text("Số đã nhận: \(Fmt.int(s.total.received)) · Đã chốt: \(Fmt.int(s.total.closed))").mtFont(.caption).foregroundStyle(Palette.muted)
-                if s.alerts.isEmpty {
-                    Label("Không có cảnh báo trong ca.", systemImage: "checkmark.circle.fill").mtFont(.caption).foregroundStyle(Color.good)
-                }
-                ForEach(Array(s.alerts.enumerated()), id: \.offset) { _, a in
+                ForEach(Array(shiftAlerts.enumerated()), id: \.offset) { _, a in
                     ShiftAlertRow(title: a.title, detail: a.detail, high: a.level == "high")
                 }
             } else if alerts.loaded {
@@ -313,10 +348,8 @@ struct AlertsPage: View {
         VStack(alignment: .leading, spacing: MT.cellGap) {
             Text("Đồng bộ Pancake").mtFont(.cardHeader).foregroundStyle(Palette.ink)
             ForEach(PosBreakdown.order, id: \.self) { id in
-                let p = sync.pos.first { $0.posId == id }
-                PancakeSyncRow(title: "\(syncMark(p)) \(PosBreakdown.names[id] ?? id) · \(syncState(p))",
-                               detail: p?.lastError ?? "Đồng bộ lúc \(Fmt.dateTime(p?.lastSyncAt)) · \(syncAge(p)) trước",
-                               hasError: p?.lastError != nil, tone: syncTone(p))
+                let line = syncLine(id)
+                PancakeSyncRow(title: line.title, detail: line.detail, hasError: line.error, tone: line.tone)
             }
             Button { Task { await sync.refresh() } } label: {
                 Text("Tải lại").mtFont(.body).fontWeight(.bold).foregroundStyle(Color.white)
@@ -335,7 +368,7 @@ struct AlertsPage: View {
                     ChildHeader(title: "Thông báo", eye: false, refresh: { await refreshBoth() })
                     heroCard
                     priorityCard
-                    shiftCard
+                    shiftCard.id("thong-bao-2")
                     syncCard
                 }.padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 24)
             }
@@ -343,6 +376,13 @@ struct AlertsPage: View {
                 guard focusSync, !scrolled else { return }
                 await scrollToSync(proxy)
             }
+            #if DEBUG
+            .onChange(of: DebugTap.shared.tick) { _, _ in
+                let target = DebugTap.shared.target
+                guard ProcessInfo.processInfo.environment["MEGATECH_TOUR"] == "giaodien", target.hasPrefix("cuon:") else { return }
+                withAnimation { proxy.scrollTo(String(target.dropFirst(5)), anchor: .top) }
+            }
+            #endif
         }
         .navigationTitle("Thông báo").navigationBarTitleDisplayMode(.inline).brandNav()
         .childChrome()
@@ -421,7 +461,7 @@ private struct PriorityLink: View {
             Spacer(minLength: 6)
             if !item.count.isEmpty {
                 Text(item.count).mtFont(.body).fontWeight(.bold)
-                    .foregroundStyle(item.id == "sync" ? item.tone.color : Palette.ink)
+                    .foregroundStyle(item.id == "sync" && item.count != "0" ? item.tone.color : Palette.ink)
                     .lineLimit(1).minimumScaleFactor(0.7)
             }
             if item.route != nil { Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Palette.muted) }
@@ -846,6 +886,10 @@ enum DebugTour {
         }
         await play([(0.35, { nav.tab = .home; nav.homePath = [] })])
         await pause("hom-nay")
+        // Phần dưới Hôm nay (số đã hiện ở mốc trên): MKT + Vận đơn, rồi Cần xử lý + Lối tắt + Ca đang chạy; rồi về đầu trang.
+        DebugTap.shared.tap("cuon:hom-nay-2"); await pause("hom-nay-2", seconds: 2)
+        DebugTap.shared.tap("cuon:hom-nay-3"); await pause("hom-nay-3", seconds: 2)
+        DebugTap.shared.tap("cuon:tab-dau")
         // Tổng quan chụp ở đầu trang (tiêu đề, pill lọc, segmented, khối đầu), không cuộn xuống.
         await play([(0.35, { nav.tab = .overview; nav.overviewPath = []; nav.overviewScroll = "dau:departments" })])
         await pause("tong-quan")
@@ -873,6 +917,7 @@ enum DebugTour {
         nav.deptsPath = [.dept(.vandon, period: .month)]; await pause("van-don")
         // Thông báo thuộc tab Trang chủ (khung Gemini: tab Trang chủ sáng), như khi bấm chuông.
         nav.tab = .home; nav.homePath = [.alerts]; await pause("thong-bao", seconds: 5)
+        DebugTap.shared.tap("cuon:thong-bao-2"); await pause("thong-bao-2", seconds: 2)
         await play([(0.35, { nav.tab = .more })])
         await pause("them", seconds: 4)
         nav.tab = .depts; nav.deptsPath = [.hr("overview")]; await pause("nhan-su")
