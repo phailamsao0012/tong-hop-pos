@@ -151,8 +151,7 @@ struct CallsView: View {
     var body: some View {
         Embed(embedded: embedded, title: isCskh ? "Cuộc gọi CSKH" : "Cuộc gọi & đơn chốt Sale") {
             PageTitle(title: isCskh ? "Cuộc gọi CSKH" : "Cuộc gọi Sale", subtitle: "Kết nối nhiều hơn. Khách hàng hài lòng hơn.", icon: "phone.fill")
-            PeriodChips(period: $period)
-            ScopeLine(period: period, pos: nil)
+            ScopeFilterPill(period: $period)
             if let error, data == nil { StateView(error: error) { await load() } }
             if let d = data {
                 let rows = staffRows
@@ -763,11 +762,8 @@ struct CompareView: View {
     var body: some View {
         Embed(embedded: embedded, title: "So sánh nhân viên") {
             PageTitle(title: "So sánh nhân viên", subtitle: "Tỷ lệ chốt = \(MetricPrefs.shared.rateShort) · so với kỳ liền trước")
-            PeriodChips(period: $period)
+            ScopeFilterPill(period: $period, pos: $pos, team: true, fixedProduct: product)
             if team == "all" && myTeam == "all" { Segmented(selection: $teamPick, options: [("sale", "Sale"), ("cskh", "CSKH"), ("all", "Tất cả")]) }
-            PosChipRow(selection: $pos, label: nil, allLabel: "Tất cả POS")
-            ScopeLine(period: period, pos: pos, product: product)
-            HStack { HrTeamChip(); Spacer() }
             HrTeamNotice(applies: applied != nil, deptLabel: effTeam == "sale" ? "Sale" : effTeam == "cskh" ? "CSKH" : "Tất cả")
             if effTeam == "sale", auth.me?.canView("sale-overview") == true {
                 StaffTableBlock(team: "sale", by: "seller", period: period, pos: pos, product: product, hrTeam: applied)
@@ -1080,8 +1076,7 @@ struct BatchesView: View {
     var body: some View {
         Embed(embedded: embedded, title: "Data được cấp") {
             PageTitle(title: "Data được cấp", subtitle: "Mỗi đợt số được giao, kết quả rõ ràng.")
-            PeriodChips(period: $period, options: [.month, .last, .d90])
-            ScopeLine(period: period, pos: nil)
+            ScopeFilterPill(period: $period, periodOptions: [.month, .last, .d90])
             if let error, data == nil { StateView(error: error) { await load() } }
             if let d = data {
                 let all = d.batches, recv = all.reduce(0) { $0 + $1.received }, buy = all.reduce(0) { $0 + $1.buyers }

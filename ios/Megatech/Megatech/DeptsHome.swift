@@ -9,8 +9,8 @@ struct DeptsHome: View {
     var body: some View {
         @Bindable var nav = nav
         NavigationStack(path: $nav.deptsPath) {
-            let list = auth.me.map { DeptEntry.all(for: $0, hrBadge: satellites.hrBadge) } ?? []
-            TabPage(title: "Phòng ban", subtitle: list.isEmpty ? nil : "\(list.count) phòng ban · chạm để vào phòng") {
+            // Khung Gemini 07: chỉ có tiêu đề, không nút ở đầu trang.
+            TabPage(title: "Phòng ban", actions: []) {
                 let list = auth.me.map { DeptEntry.all(for: $0, hrBadge: satellites.hrBadge) } ?? []
                 if list.isEmpty {
                     ContentUnavailableView("Chưa được cấp quyền", systemImage: "lock.fill", description: Text("Tài khoản này chưa được xem phòng ban nào."))

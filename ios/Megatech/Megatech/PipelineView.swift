@@ -47,6 +47,8 @@ struct PipelineView: View {
     var body: some View {
         Embed(embedded: embedded, title: "Vận hành đơn") {
             if !embedded { PageTitle(title: "Vận hành đơn", subtitle: "Theo dõi từng bước, giao đúng hẹn.") }
+            // Pill lọc (khung Gemini): kỳ và POS; bấm mở bảng chọn.
+            ScopeFilterPill(period: periodBinding, pos: Binding(get: { pos }, set: { setPos($0) }))
             // Ô tìm ở đầu trang (kế hoạch 1.5): SĐT tìm trong mọi đơn, mọi POS; mã đơn mọi POS (mọi ngày khi máy chủ tra mã theo khóa
             // chính, SearchText.codesByKey; chưa thì trong kỳ đang xem); tên khách trong kỳ và POS đang xem.
             HStack(spacing: 8) {
@@ -54,10 +56,7 @@ struct PipelineView: View {
                 NavigationLink(value: Route.orders(q(status, "Đơn hàng"))) { Image(systemName: "line.3.horizontal.decrease").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.ink).frame(width: 40, height: 40).background(Color.card, in: .rect(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.mtCardBorder)) }.buttonStyle(.plain)
             }
             searchResults
-            PeriodChips(period: periodBinding)
             Segmented(selection: $basis, options: [("confirmed", "Theo giờ chốt"), ("created", "Theo ngày tạo")])
-            // Số các bước, danh sách đơn và tìm tên khách theo kỳ và POS đang chọn (POS chọn ở dải lọc trên danh sách đơn).
-            ScopeLine(period: period, pos: pos)
             if let error, data == nil { StateView(error: error) { await reloadAll() } }
             if let d = data {
                 let T = d.total

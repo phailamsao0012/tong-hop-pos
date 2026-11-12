@@ -35,23 +35,17 @@ struct HomeView: View {
         @Bindable var nav = nav
         NavigationStack(path: $nav.overviewPath) {
             if !allowed {
-                TabPage(title: "Tổng quan", subtitle: "4 bộ phận") {
+                TabPage(title: "Tổng quan", greeting: period.kicker) {
                     ContentUnavailableView("Chưa được cấp quyền", systemImage: "lock.fill", description: Text("Tài khoản này chưa được xem Tổng quan POS. Các phần khác xem ở Hôm nay và Phòng ban."))
                 }
                 .appRoutes()
             } else {
-                TabPage(title: "Tổng quan", subtitle: "4 bộ phận · \(period.label)") {
+                TabPage(title: "Tổng quan", greeting: period.kicker) {
                     ScrollViewReader { proxy in
                         VStack(alignment: .leading, spacing: 14) {
-                            // Một bộ chọn kỳ cho cả trang (khối Số liệu theo kỳ bên dưới dùng cùng kỳ này), đổi bằng 1 chạm.
-                            FilterBar {
-                                PeriodChips(period: $nav.period)
-                                PosChipRow(selection: $nav.pos)
-                                ProductPill(selection: $nav.product)
-                                HrTeamChip()
-                            }
-                            ScopeLine(period: period, pos: pos)
-                            MTSegmentedControl(selection: $overviewSegment, options: [("departments", "Bốn bộ phận"), ("metrics", "Số liệu"), ("pos", "Theo POS")])
+                            // Một pill lọc cho cả trang (khung Gemini): bấm mở bảng chọn kỳ, POS, nhóm đơn, team.
+                            ScopeFilterPill(period: $nav.period, pos: $nav.pos, product: $nav.product, team: true)
+                            MTSegmentedControl(selection: $overviewSegment, options: [("departments", "Bốn bộ phận"), ("metrics", "Số liệu & KH"), ("pos", "Theo POS")])
                             VStack(alignment: .leading, spacing: MT.cardGap) {
                             if let error, sections == nil {
                                 StateView(error: error) { await load(force: true) }
@@ -224,12 +218,8 @@ struct OverviewView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                PageTitle(title: "Tổng quan POS", subtitle: "Hiệu suất bán hàng theo từng điểm", trailing: AnyView(Hint(text: "Số liệu Pancake")))
-                FilterBar {
-                    PeriodChips(period: $preset)
-                    PosChipRow(selection: Binding(get: { pos ?? "" }, set: { pos = $0.isEmpty ? nil : $0 }), label: nil)
-                }
-                ScopeLine(period: preset, pos: pos ?? "")
+                ChildHeader(title: "Theo POS")
+                ScopeFilterPill(period: $preset, pos: Binding(get: { pos ?? "" }, set: { pos = $0.isEmpty ? nil : $0 }))
                 if let error, data == nil { StateView(error: error) { await load() } }
                 if refFirst { PancakeRefCard(start: range.0, end: range.1, posIds: posIds) }
                 if let t = data?.current.total {
@@ -290,9 +280,10 @@ struct OverviewView: View {
                     if pos == nil { PosBreakdown(rows: data?.current.byPos ?? [], total: t.closedNet, pick: { pos = $0 }, prev: data?.compare?.byPos ?? []) }
                     if let synced = data?.syncedAt { Text("Đồng bộ Pancake lúc \(Fmt.dateTime(synced))").font(.caption).foregroundStyle(Color.inkSoft) }
                 } else if error == nil { SkeletonGrid(tiles: 4) }
-            }.padding(16)
+            }.padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 24)
         }
         .navigationTitle("Tổng quan POS").navigationBarTitleDisplayMode(.inline).brandNav()
+        .childChrome()
         .navigationDestination(item: $pushed) { OrderListView(query: $0) }
         // Kéo để làm mới: số của trang và khối Số tham chiếu Pancake tải lại cùng lúc.
         .refreshHost { await load() }

@@ -404,57 +404,77 @@ extension RankRow where Trailing == EmptyView {
 
 // Bộ thành phần giao diện theo bộ ảnh thiết kế MEGATECH. Mọi màn dùng chung để đồng bộ.
 
-/// Thanh đầu xanh đậm: MEGATECH + khẩu hiệu, ô trạng thái đồng bộ, chuông.
+/// Đầu tab gốc (khung Gemini): dòng nhỏ ("Chào buổi sáng, … · Thứ Hai 09/11", "Tháng 11/2026"), tiêu đề lớn,
+/// bên phải các nút vuông bo 12pt (làm mới / đồng bộ, mắt che số, chuông có số đỏ).
 struct TabHeader: View {
     let title: String
     var greeting: String? = nil
     var subtitle: String? = nil
+    var actions: HeaderActions = [.eye]
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: 10) {
-                VStack(alignment: .leading, spacing: 4) {
-                    if let greeting { Text(greeting).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.muted) }
-                    Text(title).font(MT.screenTitle).foregroundStyle(Palette.ink)
+            HStack(alignment: .bottom, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    if let greeting {
+                        Text(greeting).mtFont(.caption).fontWeight(.semibold).foregroundStyle(Palette.muted)
+                            .lineLimit(1).minimumScaleFactor(0.8)
+                    }
+                    Text(title).font(MT.screenTitle).foregroundStyle(Palette.ink).accessibilityAddTraits(.isHeader)
                 }.frame(maxWidth: .infinity, alignment: .leading)
-                SyncButton()
-                BellButton()
+                if actions.contains(.sync) { SyncButton() }
+                if actions.contains(.eye) { EyeButton() }
+                if actions.contains(.bell) { BellButton() }
             }
             if let subtitle { Text(subtitle).font(.subheadline).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true) }
         }
     }
 }
-private struct HeaderButtonSurface: ViewModifier {
-    func body(content: Content) -> some View {
-        content.foregroundStyle(Palette.ink).frame(width: 44, height: 44)
-            .background(Palette.wash, in: .circle)
-            .overlay { Circle().strokeBorder(Palette.line.opacity(0.5), lineWidth: 1) }
-    }
-}
+/// Ô đồng bộ ở đầu trang: mở Thông báo (tab Trang chủ) và cuộn tới Đồng bộ Pancake.
 struct SyncButton: View {
     @Environment(SyncStatus.self) private var sync
+    @Environment(AppNav.self) private var nav: AppNav?
+    private var icon: some View {
+        Image(systemName: "arrow.triangle.2.circlepath").modifier(HeaderSquare())
+            .overlay(alignment: .topTrailing) {
+                Circle().fill(sync.tone).frame(width: 9, height: 9)
+                    .overlay { Circle().strokeBorder(Palette.bg, lineWidth: 2) }
+                    .offset(x: 2, y: -2)
+            }
+    }
     var body: some View {
-        NavigationLink(value: Route.alertsSync) {
-            Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 18)).modifier(HeaderButtonSurface())
-                .overlay(alignment: .topTrailing) {
-                    Circle().fill(sync.tone).frame(width: 9, height: 9)
-                        .overlay { Circle().strokeBorder(Palette.bg, lineWidth: 2) }
-                }
-        }.buttonStyle(.plain).accessibilityLabel("\(sync.title), \(sync.subtitle)")
+        Group {
+            if let nav {
+                Button { nav.tab = .home; nav.homePath = [.alertsSync] } label: { icon }
+            } else {
+                NavigationLink(value: Route.alertsSync) { icon }
+            }
+        }
+        .buttonStyle(.plain).accessibilityLabel("\(sync.title), \(sync.subtitle)")
         .accessibilityHint("Mở Thông báo, phần Đồng bộ Pancake từng POS")
         .task { await sync.refresh(maxAge: Freshness.window) }
     }
 }
+/// Chuông: Thông báo thuộc tab Trang chủ (tab đó sáng khi mở Thông báo).
 struct BellButton: View {
     @Environment(SyncStatus.self) private var sync
     @Environment(AlertCenter.self) private var alerts: AlertCenter?
+    @Environment(AppNav.self) private var nav: AppNav?
+    private func icon(_ n: Int) -> some View {
+        Image(systemName: "bell").modifier(HeaderSquare())
+            .overlay(alignment: .topTrailing) {
+                if n > 0 { Text("\(n)").font(.caption2.weight(.bold)).foregroundStyle(.white).padding(.horizontal, 5).padding(.vertical, 2).background(Palette.badge, in: .capsule).offset(x: 4, y: -4) }
+            }
+    }
     var body: some View {
         let n = alerts?.count(sync: sync) ?? sync.alertCount
-        NavigationLink(value: Route.alerts) {
-            Image(systemName: "bell").font(.system(size: 18)).modifier(HeaderButtonSurface())
-                .overlay(alignment: .topTrailing) {
-                    if n > 0 { Text("\(n)").font(.caption2.weight(.bold)).foregroundStyle(.white).padding(3).background(Palette.badge, in: .capsule).offset(x: 2, y: -2) }
-                }
-        }.buttonStyle(.plain).accessibilityLabel("Thông báo").accessibilityValue("\(n) việc cần xử lý")
+        Group {
+            if let nav {
+                Button { nav.tab = .home; nav.homePath = [.alerts] } label: { icon(n) }
+            } else {
+                NavigationLink(value: Route.alerts) { icon(n) }
+            }
+        }
+        .buttonStyle(.plain).accessibilityLabel("Thông báo").accessibilityValue("\(n) việc cần xử lý")
     }
 }
 /// Trạng thái đồng bộ dùng cho thanh đầu và trang chủ.
@@ -793,16 +813,18 @@ struct TabPage<Content: View>: View {
     let title: String
     var greeting: String? = nil
     var subtitle: String? = nil
+    var actions: HeaderActions = [.eye]
     @ViewBuilder let content: Content
     @Environment(\.refresh) private var outer
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: MT.cardGap) {
-                TabHeader(title: title, greeting: greeting, subtitle: subtitle)
+                TabHeader(title: title, greeting: greeting, subtitle: subtitle, actions: actions)
                 content
             }.padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 24)
         }.refreshHost(outer: outer).background(Palette.bg)
         .navigationTitle(title).toolbar(.hidden, for: .navigationBar)
+        .modifier(StatusBarBackdrop())
     }
 }
 extension View {

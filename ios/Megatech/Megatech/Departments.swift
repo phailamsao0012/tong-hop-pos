@@ -502,10 +502,16 @@ struct DeptPage<Content: View>: View {
     @ViewBuilder let content: Content
     var body: some View {
         ScrollViewReader { proxy in
-            ScrollView { VStack(alignment: .leading, spacing: MT.cardGap) { content }.padding(MT.gutter).padding(.bottom, 24) }
+            ScrollView {
+                VStack(alignment: .leading, spacing: MT.cardGap) {
+                    ChildHeader(title: title)
+                    content
+                }.padding(.horizontal, MT.gutter).padding(.top, 8).padding(.bottom, 24)
+            }
                 .refreshHost(outer: nil)
                 .background(Color.cream)
                 .navigationTitle(title).navigationBarTitleDisplayMode(.inline).brandNav()
+                .childChrome()
                 #if DEBUG
                 .onChange(of: DebugTap.shared.tick) { _, _ in
                     let target = DebugTap.shared.target
@@ -640,16 +646,12 @@ struct VanDonView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: MT.cardGap) {
-                Text("Vận đơn").mtFont(.cardHeader).foregroundStyle(Palette.mtRolePurpleInk)
-                    .padding(MT.cellGap).background(Palette.mtRolePurpleBg, in: .capsule)
+                ChildHeader(title: "Vận đơn")
+                ScopeFilterPill(period: $period, pos: $pos, team: true)
                 Text("Tính riêng, không cộng vào tổng công ty").mtFont(.caption).foregroundStyle(Palette.muted)
                 // Cách tính theo số đang hiện; chưa có số thì như thiếu trường (cách cũ, chữ cũ).
                 Text(VdBasis(data?.sentBasis) == .sent ? "Chuyển đi, đã nhận, hoàn theo ngày gửi hàng" : "Đơn vào Chờ xác nhận trong kỳ, xét trạng thái hiện tại")
                     .mtFont(.caption).foregroundStyle(Color.inkSoft)
-                PeriodChips(period: $period)
-                PosChipRow(selection: $pos)
-                ScopeLine(period: period, pos: pos)
-                HStack { HrTeamChip(); Spacer() }
                 HrTeamNotice(applies: applied != nil, deptLabel: "Tất cả")
                 if let teamError { HrTeamErrorView(message: teamError) { nav?.hrUnit = nil } }
                 else if let error, data == nil { StateView(error: error) { await load() } }
@@ -670,11 +672,12 @@ struct VanDonView: View {
                     SkeletonGrid(tiles: 4)
                 }
             }
-            .padding(16).padding(.bottom, 24)
+            .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 24)
         }
         .background(Color.cream)
         .environment(\.thinking, loading && data != nil)
         .navigationTitle("Vận đơn").navigationBarTitleDisplayMode(.inline).brandNav()
+        .childChrome()
         .refreshable { await load() }
         .task(id: loadKey) { await load() }
         // Chưa có danh sách đơn theo ngày gửi hàng trên web: bảng giải thích không có nút xem đơn.

@@ -149,10 +149,7 @@ struct MarketingView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: MT.cardGap) {
-            PageTitle(title: "Marketing", subtitle: "Doanh thu, chi phí quảng cáo, số về")
-            PeriodChips(period: $period)
-            PosChipRow(selection: $pos, label: nil, allLabel: "Tất cả POS")
-            ScopeLine(period: period, pos: pos)
+            ScopeFilterPill(period: $period, pos: $pos)
             if let d = data {
                 if let error { StateView(error: error, compact: true) { await load() } }
                 filterLine(d)

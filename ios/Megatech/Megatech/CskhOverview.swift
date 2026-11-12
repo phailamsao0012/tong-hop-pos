@@ -33,9 +33,8 @@ struct CskhOverviewView: View {
     var body: some View {
         Embed(embedded: embedded, title: "Tổng quan CSKH") {
             PageTitle(title: "Tổng quan CSKH", subtitle: "Doanh thu và tiến độ KPI của đội CSKH.", icon: "chart.line.uptrend.xyaxis")
-            PeriodChips(period: $period)
-            ScopeLine(period: period, pos: pos, product: product)
-            HStack { HrTeamChip(); Spacer() }
+            // Pill lọc (khung Gemini): kỳ và team; POS, nhóm đơn theo bảng vừa bấm (ghi trong bảng lọc).
+            ScopeFilterPill(period: $period, team: true, fixedPos: pos, fixedProduct: product)
             HrTeamNotice(applies: applied != nil, deptLabel: "CSKH")
             if showKpi {
                 CskhKpiProgress().id("team-cskh-kpi")

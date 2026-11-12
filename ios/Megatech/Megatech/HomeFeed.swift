@@ -37,7 +37,8 @@ struct HomeFeed: View {
     var body: some View {
         @Bindable var nav = nav
         NavigationStack(path: $nav.homePath) {
-            TabPage(title: "Hôm nay", greeting: "\(Self.hello()) \(auth.me?.displayName ?? "MEGATECH")", subtitle: Fmt.weekday()) {
+            TabPage(title: "Hôm nay", greeting: "\(Self.hello()) \(auth.me?.displayName ?? "MEGATECH") · \(Fmt.weekday().replacingOccurrences(of: ",", with: ""))",
+                    actions: [.sync, .eye, .bell]) {
                 hero
                 if canMkt { mktRow }
                 if canVd { vdRow }

@@ -277,17 +277,30 @@ struct MTSegmentedControl<Value: Hashable>: View {
     @Binding var selection: Value
     let options: [(Value, String)]
     @Environment(\.accessibilityReduceMotion) private var reduce
+    @Environment(\.colorScheme) private var scheme
+    /// Khung Gemini: phần đang chọn tô đặc, xanh ở nền tối, trắng ở nền sáng; các phần rộng bằng nhau.
+    private var selectedFill: Color { scheme == .dark ? Palette.mtBrandPrimary : Palette.mtSurfaceCard }
+    private var selectedInk: Color { scheme == .dark ? Color.white : Palette.ink }
+    private func segment(_ value: Value, _ title: String) -> some View {
+        let on = selection == value
+        return Button { withAnimation(reduce ? nil : .easeOut(duration: 0.2)) { selection = value } } label: {
+            Text(title).mtFont(.body).fontWeight(.semibold).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, minHeight: 38).padding(.horizontal, 4)
+                .foregroundStyle(on ? selectedInk : Palette.muted)
+                .background {
+                    if on {
+                        RoundedRectangle(cornerRadius: MT.rSeg - 3).fill(selectedFill)
+                            .shadow(color: .black.opacity(scheme == .dark ? 0 : 0.08), radius: 3, y: 1)
+                    }
+                }
+                .contentShape(.rect)
+        }.buttonStyle(MTPressStyle()).accessibilityAddTraits(on ? .isSelected : [])
+    }
     var body: some View {
-        HStack(spacing: MT.cellGap) {
-            ForEach(options, id: \.0) { value, title in
-                Button { withAnimation(reduce ? nil : .easeOut(duration: 0.2)) { selection = value } } label: {
-                    Text(title).mtFont(.body).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, minHeight: 44).padding(.horizontal, 4)
-                        .foregroundStyle(selection == value ? Palette.ink : Palette.muted)
-                        .background(selection == value ? Palette.segSel : .clear, in: .rect(cornerRadius: MT.rSeg))
-                }.buttonStyle(MTPressStyle()).accessibilityAddTraits(selection == value ? .isSelected : [])
-            }
-        }.padding(4).background(Palette.wash, in: .rect(cornerRadius: MT.rSeg))
+        HStack(spacing: 3) {
+            ForEach(options, id: \.0) { value, title in segment(value, title) }
+        }.padding(3).background(Palette.wash, in: .rect(cornerRadius: MT.rSeg))
+            .overlay { RoundedRectangle(cornerRadius: MT.rSeg).strokeBorder(Palette.line, lineWidth: 1) }
             .sensoryFeedback(.selection, trigger: selection)
     }
 }

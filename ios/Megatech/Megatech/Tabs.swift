@@ -194,7 +194,7 @@ struct AlertsPage: View {
         return sync.age(pos) > 15 ? "clock.badge.exclamationmark" : "checkmark.circle.fill"
     }
     @ViewBuilder private var pendingSection: some View {
-        PageTitle(title: "Thông báo", subtitle: alerts.updatedAt.map { "Cập nhật lúc \(Fmt.hm($0))" } ?? "Đang kiểm tra…")
+        Text(alerts.updatedAt.map { "Cập nhật lúc \(Fmt.hm($0))" } ?? "Đang kiểm tra…").mtFont(.caption).foregroundStyle(Palette.muted)
         let items = alerts.items(sync: sync)
         SectionHead(title: "Cần xử lý", count: items.isEmpty ? nil : items.count)
         if !alerts.loaded && items.isEmpty { StateView(loading: "Đang kiểm tra…") }
@@ -233,10 +233,11 @@ struct AlertsPage: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: MT.cardGap) {
+                    ChildHeader(title: "Thông báo", eye: false)
                     pendingSection
                     shiftSection
                     syncSection
-                }.padding(16).padding(.bottom, 24)
+                }.padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 24)
             }
             .task {
                 guard focusSync, !scrolled else { return }
@@ -244,6 +245,7 @@ struct AlertsPage: View {
             }
         }
         .navigationTitle("Thông báo").navigationBarTitleDisplayMode(.inline).brandNav()
+        .childChrome()
         .refreshable { await refreshBoth() }
         .task { await alerts.refresh(maxAge: 30, me: auth.me) }
     }
@@ -321,7 +323,7 @@ struct OrdersHome: View {
     var body: some View {
         @Bindable var nav = nav
         NavigationStack(path: $nav.ordersPath) {
-            TabPage(title: "Đơn hàng", subtitle: "Theo dõi từng bước, giao đúng hẹn.") {
+            TabPage(title: "Đơn hàng", greeting: nav.period.kicker) {
                 if auth.me?.canView("pipeline") ?? false {
                     // Gốc tab Đơn hàng: kỳ và POS chung với Tổng quan (đổi ở đây là đổi cả ở Tổng quan).
                     PipelineView(embedded: true, followsShared: true)
@@ -413,6 +415,7 @@ struct PageDestination: View {
 /// Dải chip chuyển trang con trong một tab (như thanh dưới của từng bộ ảnh); badges: số đỏ trên chip theo id trang.
 struct SubNav: View {
     @Binding var selection: String; let pages: [WebPage]; var badges: [String: Int] = [:]
+    @Environment(\.colorScheme) private var scheme
     var body: some View {
         if pages.count <= 3 {
             HStack(spacing: 3) {
@@ -424,14 +427,18 @@ struct SubNav: View {
                                 Text("\(n)").font(.caption2.weight(.bold)).foregroundStyle(.white)
                                     .padding(3).background(Palette.badge, in: .capsule)
                             }
-                        }.frame(maxWidth: .infinity, minHeight: 36)
-                        .foregroundStyle(selection == p.id ? Palette.ink : Palette.muted)
+                        }.frame(maxWidth: .infinity, minHeight: 38)
+                        .foregroundStyle(selection == p.id ? (scheme == .dark ? Color.white : Palette.ink) : Palette.muted)
                         .background {
-                            if selection == p.id { RoundedRectangle(cornerRadius: 10).fill(Palette.card).shadow(color: .black.opacity(0.13), radius: 4, y: 2) }
+                            if selection == p.id {
+                                RoundedRectangle(cornerRadius: MT.rSeg - 3).fill(scheme == .dark ? Palette.mtBrandPrimary : Palette.mtSurfaceCard)
+                                    .shadow(color: .black.opacity(scheme == .dark ? 0 : 0.08), radius: 3, y: 1)
+                            }
                         }
                     }.buttonStyle(.plain).accessibilityAddTraits(selection == p.id ? .isSelected : []).id(p.id)
                 }
-            }.padding(3).background(Palette.wash, in: .rect(cornerRadius: 12))
+            }.padding(3).background(Palette.wash, in: .rect(cornerRadius: MT.rSeg))
+            .overlay { RoundedRectangle(cornerRadius: MT.rSeg).strokeBorder(Palette.line, lineWidth: 1) }
             .sensoryFeedback(.selection, trigger: selection)
         } else {
             // Mở sẵn trang con ở cuối dải (từ Phòng ban): cuộn cho chip đang chọn hiện ra.
@@ -489,7 +496,7 @@ struct MoreHome: View {
     #endif
     var body: some View {
         NavigationStack {
-            TabPage(title: "Thêm", subtitle: "Tài khoản, tiện ích, cài đặt") {
+            TabPage(title: "Thêm", actions: []) {
                 if let me = auth.me {
                     Panel {
                         VStack(spacing: MT.cellGap) {
@@ -741,7 +748,8 @@ enum DebugTour {
         guard await ready({ MktNvTour.marketing }) else { return }
         await pause("mkt", seconds: 3)
         nav.deptsPath = [.dept(.vandon, period: .month)]; await pause("van-don")
-        nav.deptsPath = [.alerts]; await pause("thong-bao", seconds: 5)
+        // Thông báo thuộc tab Trang chủ (khung Gemini: tab Trang chủ sáng), như khi bấm chuông.
+        nav.tab = .home; nav.homePath = [.alerts]; await pause("thong-bao", seconds: 5)
         await play([(0.35, { nav.tab = .more })])
         await pause("them", seconds: 4)
         nav.tab = .depts; nav.deptsPath = [.hr("overview")]; await pause("nhan-su")
