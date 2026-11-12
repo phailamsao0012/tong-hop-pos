@@ -393,8 +393,8 @@ enum API {
         var id: String { marketerId }
     }
     struct Marketing: Decodable { let summary: MktSummary; let byMarketer: [Marketer] }
-    static func marketing(start: String, end: String) async throws -> Marketing {
-        try await request("/api/reports/marketing?posIds=&start=\(start)&end=\(end)&basis=created&stage=all")
+    static func marketing(start: String, end: String, posIds: [String] = []) async throws -> Marketing {
+        try await request("/api/reports/marketing?posIds=\(posIds.joined(separator: ","))&start=\(start)&end=\(end)&basis=created&stage=all")
     }
 
     // MARK: Vận hành đơn
@@ -426,7 +426,8 @@ enum API {
     struct SyncPos: Decodable, Identifiable { let posId: String; let records: Double; let lastSyncAt: String?; let lastError: String?; let status: String; let errors24h: Double; var id: String { posId } }
     static func syncStatus() async throws -> [SyncPos] { try await request("/api/sync/pos") }
     struct CskhBadge: Decodable { let callsToday: Double; let over20: Double }
-    static func cskhBadge() async throws -> CskhBadge { try await request("/api/reports/cskh-badge") }
+    /// posIds: máy chủ chưa nhận tham số này (Tổ web tổng đang sửa) thì bỏ qua, trả số mọi POS như cũ.
+    static func cskhBadge(posIds: [String] = []) async throws -> CskhBadge { try await request("/api/reports/cskh-badge?posIds=\(posIds.joined(separator: ","))") }
     struct Employee: Decodable, Identifiable { let id: String; let name: String; let department: String?; let posIds: [String]?; let active: Bool? }
     static func employees() async throws -> [Employee] { try await request("/api/employees") }
 
@@ -440,8 +441,8 @@ enum API {
         let noteCount: Double; let lastNoteAt: String?; let daysSinceNote: Double?; let notes: [CareNote]
     }
     struct Care: Decodable { let total: Double; let summary: CareSummary; let staff: [CareStaff]; let rows: [CareRow] }
-    static func care(assigned: String, sort: String, minDays: Int, q: String, page: Int) async throws -> Care {
-        try await request("/api/reports/care?posIds=&assigned=\(assigned.isEmpty ? "all" : assigned)&sort=\(sort)&minDays=\(minDays)&q=\(q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")&page=\(page)&size=50")
+    static func care(assigned: String, sort: String, minDays: Int, q: String, page: Int, posIds: [String] = []) async throws -> Care {
+        try await request("/api/reports/care?posIds=\(posIds.joined(separator: ","))&assigned=\(assigned.isEmpty ? "all" : assigned)&sort=\(sort)&minDays=\(minDays)&q=\(q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")&page=\(page)&size=50")
     }
 
     // MARK: Cuộc gọi CSKH
@@ -450,7 +451,7 @@ enum API {
     struct CallCoverage: Decodable { let customers: Double; let notes: Double; let firstNote: String?; let lastFetch: String? }
     struct CallPeriod: Decodable { let days: [String] }
     struct Calls: Decodable { let staff: [CallStaff]; let coverage: CallCoverage?; let period: CallPeriod? }
-    static func calls(start: String, end: String, team: String = "cskh") async throws -> Calls { try await request("/api/reports/calls?posIds=&start=\(start)&end=\(end)&team=\(team)") }
+    static func calls(start: String, end: String, team: String = "cskh", posIds: [String] = []) async throws -> Calls { try await request("/api/reports/calls?posIds=\(posIds.joined(separator: ","))&start=\(start)&end=\(end)&team=\(team)") }
 
     // MARK: Mua lại & Upsell
     struct Level: Decodable { let level: Int; let label: String; let customers: Double; let orders: Double; let net: Double }
@@ -474,8 +475,8 @@ enum API {
         var id: String { posId + ":" + phone }
     }
     struct CustomerPage: Decodable { let page: Int; let hasMore: Bool; let total: Double; let segments: [String: Double]?; let groups: [String: Double]?; let groupNets: [String: Double]?; let customers: [CustomerRow] }
-    static func customers(segment: String, sort: String, q: String, page: Int, size: Int = 50) async throws -> CustomerPage {
-        try await request("/api/reports/customers?posIds=&segment=\(segment)&sort=\(sort)&q=\(q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")&page=\(page)&size=\(size)")
+    static func customers(segment: String, sort: String, q: String, page: Int, size: Int = 50, posIds: [String] = []) async throws -> CustomerPage {
+        try await request("/api/reports/customers?posIds=\(posIds.joined(separator: ","))&segment=\(segment)&sort=\(sort)&q=\(q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")&page=\(page)&size=\(size)")
     }
     /// Ô tìm Hồ sơ khách (kế hoạch 1.5): tìm trong bảng khách theo SĐT đã chuẩn hóa hoặc tên, tối đa 20 dòng, không lọc ngày.
     static func customerSearch(_ q: String, posIds: [String]) async throws -> CustomerPage {

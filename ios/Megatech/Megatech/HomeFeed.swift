@@ -25,6 +25,8 @@ struct HomeFeed: View {
     /// Lúc bắt đầu lần tải gần nhất và ngày của nó: mở lại app sang ngày khác hoặc sau 10 phút thì tải lại.
     @State private var startedAt: Date?
     @State private var startedDay: String?
+    /// Ngày|POS của số đang hiện (R-POS).
+    @State private var loadedKey = ""
     /// Lần tải mới nhất; lần cũ về sau không ghi đè.
     @State private var gen = 0
     /// Mở lại tab mà số hôm nay chưa quá 60 giây thì không tải lại (kéo để làm mới thì luôn tải).
@@ -46,13 +48,14 @@ struct HomeFeed: View {
                 if canMkt { mktRow.id("hom-nay-2") }
                 if canVd { vdRow.id(canMkt ? "hom-nay-vd" : "hom-nay-2") }
                 todo.id("hom-nay-3")
-                if let me = auth.me { HomeShortcuts(me: me) }
+                if let me = auth.me { HomeShortcuts(me: me, pos: nav.pos) }
                 shiftCard
             }
             .hrNotice(dept: "Tất cả")
             .appRoutes()
             .refreshable { await reload(force: true) }
-            .task { await load() }
+            // POS chung (pill lọc ở Tổng quan, Đơn hàng…): đổi POS thì Hôm nay tải lại chỉ số của POS đó (R-POS).
+            .task(id: nav.pos) { await load() }
             // Quay lại app (mở khoá Face ID) sang ngày mới hoặc số đã cũ hơn 10 phút: tải lại, không để số hôm qua dưới chữ "hôm nay".
             .onChange(of: phase) { _, p in
                 guard p == .active, let day = startedDay else { return }
@@ -80,9 +83,12 @@ struct HomeFeed: View {
     private var scopeLine: String { "\(posScope.prefix(1).uppercased() + posScope.dropFirst()) · từ 0h đến \(loadedAt.map(Fmt.hm) ?? "giờ này")" }
     /// Máy chủ tự thu hẹp về POS được cấp (lib/access.ts); chủ hệ thống và tài khoản không giới hạn POS xem mọi POS.
     private var posScope: String {
+        if !nav.pos.isEmpty { return "POS \(PosBreakdown.names[nav.pos] ?? nav.pos)" }
         let n = auth.me?.role == "owner" ? 0 : (auth.me?.posIds?.count ?? 0)
         return n == 0 ? "mọi POS" : "\(n) POS được cấp"
     }
+    /// POS đang chọn (R-POS: chọn POS nào chỉ tính POS đó); rỗng = mọi POS được xem.
+    private var posIds: [String] { nav.pos.isEmpty ? [] : [nav.pos] }
     /// Nguồn số được hỏi theo quyền (HomeSources, dùng chung với phần tải trước lúc hộp Face ID đang hiện).
     private var sources: HomeSources { HomeSources(auth.me) }
     private var canMkt: Bool { sources.mkt }
@@ -374,7 +380,7 @@ struct HomeFeed: View {
     private func full(_ n: Double) -> String { hideMoney ? "••••••" : Fmt.money(n) }
     /// Tài khoản chỉ được xem một số POS: số đơn, số về chỉ của các POS đó nhưng chi phí quảng cáo là của mọi POS
     /// (sheet không chia theo POS) nên không chia chi phí cho số về / đơn được.
-    private var posLimited: Bool { auth.me?.role != "owner" && !(auth.me?.posIds ?? []).isEmpty }
+    private var posLimited: Bool { !nav.pos.isEmpty || (auth.me?.role != "owner" && !(auth.me?.posIds ?? []).isEmpty) }
     /// Chạm mở trang bộ phận với kỳ Hôm nay (cùng số); không xem được trang đó thì chỉ để đọc.
     @ViewBuilder private func opener<Content: View>(_ dept: CompanyDept, @ViewBuilder _ content: () -> Content) -> some View {
         if dept.canOpen(auth.me) {
@@ -512,8 +518,11 @@ struct HomeFeed: View {
     /// force: kéo để làm mới / Thử lại / quay lại app sang ngày mới hoặc sau 10 phút. Không force (mở lại tab) mà số hôm nay
     /// chưa quá 60 giây thì không tải.
     @MainActor private func load(force: Bool = false) async {
-        let d = VNDate.string(.now)
-        if !force, loadedAt != nil, let age = fresh.age(d) { LoadTrace.skip("trang-chu", age: age); return }
+        let d = VNDate.string(.now), ids = posIds, k = d + "|" + ids.joined(separator: ",")
+        if !force, loadedAt != nil, loadedKey == k, let age = fresh.age(k) { LoadTrace.skip("trang-chu", age: age); return }
+        // Đổi POS: bỏ số của POS cũ ngay, không để số mọi POS nằm dưới tên POS vừa chọn.
+        if loadedKey != k { ref = nil; refLoaded = false; sale = nil; cskh = nil; mkt = nil; vd = nil; loadedAt = nil }
+        loadedKey = k
         gen += 1; let g = gen
         loading = true; defer { if g == gen { loading = false } }
         let started = Date.now
@@ -536,11 +545,11 @@ struct HomeFeed: View {
             case vd(Result<API.VanDon, Error>?)
         }
         let done = await withTaskGroup(of: Part.self, returning: Bool.self) { group in
-            group.addTask { .ref(await attempt(wantRef, trace) { try await API.pancakeRef(start: d, end: d) }) }
-            group.addTask { .sale(await attempt(wantSale, trace) { try await API.overview(start: d, end: d, team: "sale") }) }
-            group.addTask { .cskh(await attempt(wantCskh, trace) { try await API.overview(start: d, end: d, team: "cskh") }) }
-            group.addTask { .mkt(await attempt(wantMkt, trace) { try await API.mktAnalytics(start: d, end: d, marketerId: nil, teamId: nil, product: nil) }) }
-            group.addTask { .vd(await attempt(wantVd, trace) { try await API.vanDon(start: d, end: d) }) }
+            group.addTask { .ref(await attempt(wantRef, trace) { try await API.pancakeRef(start: d, end: d, posIds: ids) }) }
+            group.addTask { .sale(await attempt(wantSale, trace) { try await API.overview(start: d, end: d, posIds: ids, team: "sale") }) }
+            group.addTask { .cskh(await attempt(wantCskh, trace) { try await API.overview(start: d, end: d, posIds: ids, team: "cskh") }) }
+            group.addTask { .mkt(await attempt(wantMkt, trace) { try await API.mktAnalytics(start: d, end: d, posIds: ids, marketerId: nil, teamId: nil, product: nil) }) }
+            group.addTask { .vd(await attempt(wantVd, trace) { try await API.vanDon(start: d, end: d, posIds: ids) }) }
             for await part in group {
                 let kept: Bool
                 switch part {
@@ -560,7 +569,7 @@ struct HomeFeed: View {
         if ok { loadedAt = started }
         loadedDay = d
         self.error = failed.flatMap { LoadError.text($0) }
-        if failed == nil { fresh.stamp(d) } else { fresh.clear() }
+        if failed == nil { fresh.stamp(k) } else { fresh.clear() }
     }
     /// Kéo để làm mới / Thử lại: số hôm nay, trạng thái đồng bộ và việc cần xử lý tải lại cùng lúc.
     @MainActor private func reload(force: Bool) async {
@@ -637,14 +646,16 @@ struct AlertRow: View {
 /// Lối tắt chức năng kiểu app ngân hàng: lưới 4 cột, icon trong ô màu, theo quyền của người dùng.
 struct HomeShortcuts: View {
     let me: API.Me
+    /// POS chung đang chọn: lối tắt Đơn mới mở danh sách của POS đó.
+    var pos = ""
     struct Item: Identifiable { let id: String; let title: String; let icon: String; let tint: Color; let route: Route }
     /// Đơn tạo trong ngày đang ở trạng thái Mới (nhóm "new"), cùng nhóm với số đơn mới ở mục Cần xử lý.
-    static func newOrders(_ day: String) -> OrderQuery { OrderQuery(start: day, end: day, group: "new", basis: "created", title: "Đơn mới chưa chốt") }
+    static func newOrders(_ day: String, pos: String = "") -> OrderQuery { OrderQuery(start: day, end: day, posIds: pos.isEmpty ? [] : [pos], group: "new", basis: "created", title: "Đơn mới chưa chốt") }
     private var items: [Item] {
         let d = VNDate.string(.now)
         var r: [Item] = []
         if me.canView("shift") { r.append(Item(id: "shift", title: "Trong ca", icon: "clock.fill", tint: Palette.good, route: .page("shift"))) }
-        if me.canView("raw-orders") { r.append(Item(id: "new", title: "Đơn mới chưa chốt", icon: "hourglass", tint: Palette.orange, route: .orders(Self.newOrders(d)))) }
+        if me.canView("raw-orders") { r.append(Item(id: "new", title: "Đơn mới chưa chốt", icon: "hourglass", tint: Palette.orange, route: .orders(Self.newOrders(d, pos: pos)))) }
         if me.canView("customers") { r.append(Item(id: "customers", title: "Tra khách", icon: "person.text.rectangle.fill", tint: Palette.info, route: .page("customers"))) }
         if me.canView("overview") { r.append(Item(id: "pos", title: "Theo từng POS", icon: "building.2.fill", tint: Palette.accent, route: .overview)) }
         if me.canView("calls") { r.append(Item(id: "calls", title: "Cuộc gọi CSKH", icon: "phone.fill", tint: Palette.teal, route: .dept(.cskh, page: "calls"))) }
@@ -699,13 +710,15 @@ struct HomeSources {
         vd = me.canView("van-don")
     }
     /// Đường dẫn các request HomeFeed.load gọi cho ngày d (giờ VN), cùng tham số.
-    func paths(day d: String) -> [String] {
+    /// pos: POS chung đang chọn ("" = mọi POS), như HomeFeed.load.
+    func paths(day d: String, pos: String = "") -> [String] {
+        let ids = pos.isEmpty ? [] : [pos]
         var out: [String] = []
-        if ref { out.append(API.pancakeRefPath(start: d, end: d)) }
-        if sale { out.append(API.overviewPath(start: d, end: d, team: "sale")) }
-        if cskh { out.append(API.overviewPath(start: d, end: d, team: "cskh")) }
-        if mkt { out.append(API.mktAnalyticsPath(start: d, end: d, marketerId: nil, teamId: nil, product: nil)) }
-        if vd { out.append(API.vanDonPath(start: d, end: d)) }
+        if ref { out.append(API.pancakeRefPath(start: d, end: d, posIds: ids)) }
+        if sale { out.append(API.overviewPath(start: d, end: d, posIds: ids, team: "sale")) }
+        if cskh { out.append(API.overviewPath(start: d, end: d, posIds: ids, team: "cskh")) }
+        if mkt { out.append(API.mktAnalyticsPath(start: d, end: d, posIds: ids, marketerId: nil, teamId: nil, product: nil)) }
+        if vd { out.append(API.vanDonPath(start: d, end: d, posIds: ids)) }
         return out
     }
 }

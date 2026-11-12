@@ -71,6 +71,12 @@ struct RootTabs: View {
         .task { await refreshBadges(maxAge: 0) }
         .onChange(of: phase) { _, p in if p == .active { Task { await MetricPrefs.shared.load(); await refreshBadges(maxAge: 60) } } }
         .onChange(of: satellites.hrBadge, initial: true) { _, n in alerts.hrPending = n }
+        // R-POS: việc cần xử lý (đơn mới, khách quá 20 ngày, ca, đồng bộ) theo POS chung đang chọn; đổi POS thì hỏi lại ngay.
+        .onChange(of: nav.pos, initial: true) { _, p in
+            guard alerts.pos != p else { return }
+            alerts.pos = p
+            if alerts.loaded { let me = auth.me; Task { await alerts.refresh(maxAge: 0, me: me) } }
+        }
         // Chưa được xem Tổng quan POS: mở app vào Trang chủ thay vì trang báo chưa cấp quyền.
         // Cùng quy tắc với UnlockPrefetch.firstTabPaths (tải trước số của tab mở app lúc hộp Face ID đang hiện): đổi ở đây thì sửa cả ở đó.
         .onAppear { if nav.tab == .overview && !(auth.me?.canView("overview") ?? false) { nav.tab = .home } }
@@ -106,6 +112,11 @@ struct RootTabs: View {
     var hrPending = 0
     @ObservationIgnored private var lastAt: Date?
     @ObservationIgnored private var me: API.Me?
+    /// POS chung đang chọn (RootTabs gán theo AppNav.pos; R-POS: chọn POS nào chỉ tính POS đó). "" = mọi POS được xem.
+    var pos = ""
+    private var posIds: [String] { pos.isEmpty ? [] : [pos] }
+    /// POS của lần hỏi gần nhất: đổi POS thì hỏi lại ngay, không chờ maxAge.
+    @ObservationIgnored private var askedPos = ""
 
     /// route nil: người dùng không mở được trang đích, dòng chỉ để biết.
     /// label / count: tên ngắn và số (hoặc tên POS) ở bên phải, cho hàng "Ưu tiên" ở trang Thông báo (khung 14).
@@ -119,26 +130,28 @@ struct RootTabs: View {
         var out: [Group] = [Group(id: "don", title: "Đơn hàng", n: Int(unconfirmed), color: Palette.orange)]
         if me?.canView("care") == true { out.append(Group(id: "cham", title: "Chăm sóc", n: Int(over20), color: Palette.cskh)) }
         out.append(Group(id: "ns", title: "Nhân sự", n: hrPending, color: Palette.purple))
-        out.append(Group(id: "db", title: "Đồng bộ", n: Self.syncIssues(sync).count, color: Palette.warn))
+        out.append(Group(id: "db", title: "Đồng bộ", n: syncIssues(sync).count, color: Palette.warn))
         return out
     }
-    /// POS lỗi đồng bộ hoặc chậm quá 15 phút.
-    static func syncIssues(_ sync: SyncStatus) -> [API.SyncPos] {
-        sync.pos.filter { $0.lastError != nil || sync.age($0) > 15 }
+    /// POS lỗi đồng bộ hoặc chậm quá 15 phút (đã chọn POS thì chỉ POS đó).
+    func syncIssues(_ sync: SyncStatus) -> [API.SyncPos] {
+        sync.pos.filter { (pos.isEmpty || $0.posId == pos) && ($0.lastError != nil || sync.age($0) > 15) }
     }
 
     /// Bỏ qua nếu vừa hỏi chưa quá maxAge giây (0 = hỏi ngay). Quyền của người dùng quyết dòng nào hiện và dòng nào chạm được.
     @MainActor func refresh(maxAge: TimeInterval = 60, me: API.Me?) async {
-        if let t = lastAt, Date.now.timeIntervalSince(t) < maxAge { return }
+        if let t = lastAt, Date.now.timeIntervalSince(t) < maxAge, askedPos == pos { return }
         lastAt = .now
         self.me = me
+        let p = pos, ids = posIds
+        askedPos = p
         let canCare = me?.canView("care") == true
         let today = VNDate.string(.now)
         // Ba nguồn hỏi cùng lúc.
         let trace = LoadTrace("canh-bao", requests: canCare ? 3 : 2)
-        async let oReq = attempt(true, trace) { try await API.overview(start: today, end: today, compare: "none") }
-        async let sReq = attempt(true, trace) { try await API.shift(date: today, shift: "auto") }
-        async let bReq = attempt(canCare, trace) { try await API.cskhBadge() }
+        async let oReq = attempt(true, trace) { try await API.overview(start: today, end: today, posIds: ids, compare: "none") }
+        async let sReq = attempt(true, trace) { try await API.shift(date: today, shift: "auto", posIds: ids) }
+        async let bReq = attempt(canCare, trace) { try await API.cskhBadge(posIds: ids) }
         let (oRes, sRes, bRes) = await (oReq, sReq, bReq)
         trace.end(cancelled: Task.isCancelled)
         let o = try? oRes?.get(), s = try? sRes?.get(), b = try? bRes?.get()
@@ -147,6 +160,8 @@ struct RootTabs: View {
         let got = o != nil || s != nil || b != nil
         // Bị huỷ giữa chừng (rời tab) mà chưa đọc được gì: lần sau hỏi lại ngay, không đổi trạng thái.
         if Task.isCancelled && !got { lastAt = nil; return }
+        // Đã đổi POS trong lúc hỏi: bỏ số của POS cũ, lần sau hỏi lại.
+        guard p == pos else { lastAt = nil; return }
         if let o { unconfirmed = o.current.total.groups["new"]?.orders ?? 0 }
         if let s { shift = s }
         if let b { over20 = b.over20; callsToday = b.callsToday } else if !canCare { over20 = 0 }
@@ -164,7 +179,7 @@ struct RootTabs: View {
         // Số lấy từ nhóm "new" (trạng thái Mới trên Pancake) nên danh sách mở cùng nhóm đó cho khớp số.
         if unconfirmed > 0 {
             out.append(Item(id: "unconfirmed", icon: "clock.badge.exclamationmark", tone: .red, title: "\(Fmt.int(unconfirmed)) đơn mới chưa chốt", sub: "Tạo hôm nay · đang ở trạng thái Mới",
-                            route: me?.canView("raw-orders") == true ? .orders(HomeShortcuts.newOrders(today)) : nil,
+                            route: me?.canView("raw-orders") == true ? .orders(HomeShortcuts.newOrders(today, pos: pos)) : nil,
                             label: "Đơn mới chưa chốt", count: Fmt.int(unconfirmed)))
         }
         if me?.canView("care") == true, over20 > 0 {
@@ -178,7 +193,7 @@ struct RootTabs: View {
                             label: "Yêu cầu nhân sự chờ duyệt", count: "\(hrPending)"))
         }
         // Các POS lỗi / chậm gom vào một hàng (khung 14); chi tiết từng POS ở khối Đồng bộ Pancake.
-        let issues = Self.syncIssues(sync)
+        let issues = syncIssues(sync)
         if !issues.isEmpty {
             let names = issues.map { PosBreakdown.short[$0.posId] ?? $0.posId }.joined(separator: ", ")
             let anyError = issues.contains { $0.lastError != nil }
@@ -194,7 +209,7 @@ struct RootTabs: View {
         let today = VNDate.string(.now)
         var out: [Item] = [
             Item(id: "unconfirmed", icon: "clock.badge.exclamationmark", tone: .red, title: "\(Fmt.int(unconfirmed)) đơn mới chưa chốt",
-                 sub: "Tính theo ngày tạo đơn", route: me?.canView("raw-orders") == true ? .orders(HomeShortcuts.newOrders(today)) : nil,
+                 sub: "Tính theo ngày tạo đơn", route: me?.canView("raw-orders") == true ? .orders(HomeShortcuts.newOrders(today, pos: pos)) : nil,
                  label: "Đơn mới chưa chốt", count: Fmt.int(unconfirmed)),
         ]
         if me?.canView("care") == true {
@@ -205,7 +220,7 @@ struct RootTabs: View {
         out.append(Item(id: "hr", icon: "checkmark.seal.fill", tone: .purple, title: "\(hrPending) yêu cầu nhân sự chờ duyệt",
                         sub: "Đổi phòng / team, chức vụ, trạng thái", route: .hr("approvals"),
                         label: "Yêu cầu nhân sự chờ duyệt", count: "\(hrPending)"))
-        let issues = Self.syncIssues(sync)
+        let issues = syncIssues(sync)
         let names = issues.map { PosBreakdown.short[$0.posId] ?? $0.posId }.joined(separator: ", ")
         out.append(Item(id: "sync", icon: "exclamationmark.triangle.fill", tone: issues.contains { $0.lastError != nil } ? .red : .orange,
                         title: issues.isEmpty ? "Đồng bộ: không có POS lỗi / chậm" : "Đồng bộ lỗi / chậm: \(names)",
@@ -941,6 +956,18 @@ enum DebugTour {
         guard await ready({ MktNvTour.marketing }) else { return }
         guard await loaded(["marketing", "marketing-xep-hang"], since: t) else { return }
         await pause("mkt", seconds: 2)
+        // R-POS: chọn một POS (POS đầu danh sách) ở CSKH và MKT; dòng [UIPOS] ghi tổng để so với Mọi POS.
+        let onePos = PosBreakdown.order.first ?? ""
+        t = Date()
+        nav.deptsPath = [.dept(.cskh, period: .month, pos: onePos)]
+        guard await loaded(["tong-quan-cskh", "kpi-cskh"], since: t) else { return }
+        await pause("cskh-mot-pos", seconds: 2)
+        MktNvTour.marketing = false
+        t = Date()
+        nav.deptsPath = [.dept(.mkt, period: .month, pos: onePos)]
+        guard await ready({ MktNvTour.marketing }) else { return }
+        guard await loaded(["marketing", "marketing-xep-hang"], since: t) else { return }
+        await pause("mkt-mot-pos", seconds: 2)
         t = Date()
         nav.deptsPath = [.dept(.vandon, period: .month)]
         guard await loaded(["van-don"], since: t) else { return }

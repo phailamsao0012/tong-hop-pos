@@ -8,9 +8,12 @@ struct ShiftView: View {
     @State private var data: API.Shift?
     @State private var error: String?
     @State private var showAll = false
+    @Environment(AppNav.self) private var nav: AppNav?
+    /// R-POS: POS chung đang chọn; chọn POS nào chỉ tính POS đó.
+    private var posIds: [String] { let p = nav?.pos ?? ""; return p.isEmpty ? [] : [p] }
     private var day: String { VNDate.string(date) }
     private func staffQuery(_ s: API.ShiftStaff, closed: Bool) -> OrderQuery {
-        OrderQuery(start: day, end: day, posIds: [], group: closed ? "closed" : "", sellerId: s.employeeId, basis: closed ? "confirmed" : "assigned", title: s.name)
+        OrderQuery(start: day, end: day, posIds: posIds, group: closed ? "closed" : "", sellerId: s.employeeId, basis: closed ? "confirmed" : "assigned", title: s.name)
     }
     private var progress: (Double, String) {
         guard let d = data, d.isToday else { return (1, "Đã kết thúc") }
@@ -123,18 +126,18 @@ struct ShiftView: View {
                 if let s = d.syncedAt { Text("Đồng bộ Pancake lúc \(Fmt.dateTime(s))").font(.caption).foregroundStyle(Color.inkSoft) }
             } else if error == nil { Skeleton(height: 100); SkeletonGrid(tiles: 4) }
         }
-        .task(id: "\(day)|\(shift)") { await load() }
+        .task(id: "\(day)|\(shift)|\(posIds.joined())") { await load() }
         // Kéo để làm mới trang chứa (trang Sale, trang Điều hành trong ca).
         .pullToReload { await load() }
     }
     private func rateColor(_ r: Double?) -> Color { Fmt.rateTone(r) }
     private func rateLabel(_ r: Double?) -> String { Fmt.rateWord(r) }
     private func alertRoute(_ a: API.ShiftAlert, in d: API.Shift) -> Route {
-        if let s = d.staff.first(where: { a.detail.hasPrefix($0.name) }) { return .orders(OrderQuery(start: day, end: day, group: a.title.contains("quá tải") ? "unconfirmed" : "", sellerId: s.employeeId, basis: "assigned", title: s.name)) }
+        if let s = d.staff.first(where: { a.detail.hasPrefix($0.name) }) { return .orders(OrderQuery(start: day, end: day, posIds: posIds, group: a.title.contains("quá tải") ? "unconfirmed" : "", sellerId: s.employeeId, basis: "assigned", title: s.name)) }
         return .page("config")
     }
     @MainActor func load() async {
-        do { data = try await API.shift(date: day, shift: shift); error = nil }
+        do { data = try await API.shift(date: day, shift: shift, posIds: posIds); error = nil }
         catch { if let text = LoadError.text(error) { self.error = text } }
     }
 }

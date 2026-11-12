@@ -696,7 +696,7 @@ jobs:
           sys.exit(1 if failed else 0)
           PY14
           # 15. Giao diện 1.0: chụp các màn chính, sáng rồi tối (chỉ ảnh, không video).
-          ui_stages=(hom-nay hom-nay-2 hom-nay-3 tong-quan tong-quan-so-lieu tong-quan-pos don-hang phong-ban sale nhan-vien nhan-vien-mot cskh mkt van-don thong-bao thong-bao-2 them nhan-su)
+          ui_stages=(hom-nay hom-nay-2 hom-nay-3 tong-quan tong-quan-so-lieu tong-quan-pos don-hang phong-ban sale nhan-vien nhan-vien-mot cskh mkt cskh-mot-pos mkt-mot-pos van-don thong-bao thong-bao-2 them nhan-su)
           wait_ui() {
             local deadline=$((SECONDS + ${2:-90})) log="$3"
             while (( SECONDS < deadline )); do
@@ -725,7 +725,7 @@ jobs:
           xcrun simctl ui "$UDID" appearance light
           n15=$(ls "$OUT"/15-*.png 2>/dev/null | wc -l | tr -d ' ')
           if [ "$n15" != "$(( ${#ui_stages[@]} * 2 ))" ]; then echo "::error::15-giao-dien: thiếu ảnh ($n15/$(( ${#ui_stages[@]} * 2 )))"; exit 1; fi
-          grep -hE '^\[UI\]' "$RUNNER_TEMP"/ui-15-*.txt > "$OUT/15-giao-dien-app.txt" || true
+          grep -hE '^\[(UI|UIPOS)\]' "$RUNNER_TEMP"/ui-15-*.txt > "$OUT/15-giao-dien-app.txt" || true
           mark "het-15"
           # Cờ Face ID mỗi lần vào app ở đoạn 7–11: lúc Face ID đúng, lúc vào app, lúc app active lại, có chạm trần giữ cờ hay không
           # (chỉ tên mốc và mili giây) ở co-face-id.txt, để soi chỗ màn che chớp lên ngay sau Face ID.

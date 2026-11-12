@@ -469,6 +469,8 @@ struct MarketingView: View {
             if MktNvTour.active {
                 print("[MKTQ] path=\(API.mktAnalyticsPath(start: r.0, end: r.1, posIds: ids, marketerId: mid, teamId: tid, product: prod))")
                 MktNvTour.marketing = true; MktNvTour.done = true; tourNumbers()
+                // R-POS: tổng doanh thu MKT của POS đang xem, để so chọn một POS với Mọi POS.
+                print("[UIPOS] mkt pos=\(p.isEmpty ? "tat-ca" : p) dt=\(Fmt.int(d.current.net)) don=\(Fmt.int(d.current.closed))")
             }
             #endif
         } catch {

@@ -307,7 +307,7 @@ struct OverviewView: View {
         let r = range, ids = posIds, oneDay = r.0 == r.1
         let trace = LoadTrace("tong-quan-pos", requests: oneDay ? 2 : 1)
         // Số theo giờ (chỉ khi xem một ngày) tải cùng lúc với số chính.
-        async let hReq = attempt(oneDay, trace) { try await API.shift(date: r.0, shift: "day") }
+        async let hReq = attempt(oneDay, trace) { try await API.shift(date: r.0, shift: "day", posIds: ids) }
         do {
             data = try await trace.run { try await API.overview(start: r.0, end: r.1, posIds: ids) }
             error = nil
@@ -666,7 +666,7 @@ struct CenterBlocks: View {
             group.addTask { .pipeline(await attempt(true, trace) { try await API.pipeline(start: r.0, end: r.1, basis: "confirmed", posIds: ids, team: tm, product: prod) }) }
             group.addTask { .targets(await attempt(true, trace) { try await API.targets(month: month) }) }
             group.addTask { .trend(await attempt(true, trace) { try await API.overview(start: trendStart, end: today, posIds: ids, team: tm, compare: "none", product: prod, hrTeam: unit?.id) }) }
-            group.addTask { .customers(await attempt(wantCustomers, trace) { try await API.customers(segment: "", sort: "spend", q: "", page: 1, size: 1) }) }
+            group.addTask { .customers(await attempt(wantCustomers, trace) { try await API.customers(segment: "", sort: "spend", q: "", page: 1, size: 1, posIds: ids) }) }
             group.addTask { .repurchase(await attempt(true, trace) { try await API.repurchase(start: r.0, end: r.1, posIds: ids, team: tm, product: prod) }) }
             group.addTask { .batches(await attempt(true, trace) { try await API.batches(start: r.0, end: r.1, posIds: ids, team: tm) }) }
             for await part in group {

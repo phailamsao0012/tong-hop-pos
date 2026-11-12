@@ -136,7 +136,7 @@ struct Embed<Content: View>: View {
 
 struct CallsView: View {
     var team = "cskh"; var embedded = false
-    /// Mở theo kỳ chung (AppNav, kế hoạch 1.4), đổi riêng ở trang này được.
+ (AppNav, kế hoạch 1.4), đổi riêng ở trang này được.
     @State private var period: Period = NavMemory.period
     @State private var data: API.Calls?
     @State private var prev: API.Calls?
@@ -234,19 +234,19 @@ struct CallsView: View {
                 Text("Cuộc gọi = một ghi chú nhân viên viết trên hồ sơ khách ở Pancake. Đơn chốt tính theo người bán trên đơn, ngày xác nhận lần đầu.").mtFont(.caption).foregroundStyle(Color.inkSoft)
             } else if error == nil { SkeletonGrid(tiles: 2); Skeleton(height: 200) }
         }
-        .task(id: "\(period.key)|\(filter)|\(staffPick)") { await load() }
+        .task(id: "\(period.key)|\(filter)|\(staffPick)|\(posIds.joined())") { await load() }
         .pullToReload { await load() }
     }
     /// Kỳ này, kỳ trước và danh sách khách (khi lọc) tải cùng lúc.
     @MainActor private func load() async {
-        let cur = period.range, pre = period.previous, tm = team, pickId = staffPick
+        let cur = period.range, pre = period.previous, tm = team, pickId = staffPick, ids = posIds
         let wantCare = filter != "all" && isCskh, order = filter == "todo" ? "note_old" : "note_new"
         let trace = LoadTrace("cuoc-goi", requests: wantCare ? 3 : 2)
-        async let pReq = attempt(true, trace) { try await API.calls(start: pre.0, end: pre.1, team: tm) }
-        async let cReq = attempt(wantCare, trace) { try await API.care(assigned: pickId, sort: order, minDays: 0, q: "", page: 1) }
+        async let pReq = attempt(true, trace) { try await API.calls(start: pre.0, end: pre.1, team: tm, posIds: ids) }
+        async let cReq = attempt(wantCare, trace) { try await API.care(assigned: pickId, sort: order, minDays: 0, q: "", page: 1, posIds: ids) }
         var ok = false
         do {
-            data = try await trace.run { try await API.calls(start: cur.0, end: cur.1, team: tm) }
+            data = try await trace.run { try await API.calls(start: cur.0, end: cur.1, team: tm, posIds: ids) }
             error = nil; ok = true
         } catch {
             if let text = LoadError.text(error) { self.error = text }
@@ -361,7 +361,7 @@ struct CareView: View {
                 }
             } else if error == nil { Skeleton(height: 70); Skeleton(height: 80); SkeletonGrid(tiles: 4) }
         }
-        .task(id: "\(assigned)|\(sort)|\(minDays)|\(prio)") { await load() }
+        .task(id: "\(assigned)|\(sort)|\(minDays)|\(prio)|\(posIds.joined())") { await load() }
         .pullToReload { await load() }
     }
     private func label(_ r: API.CareRow) -> String { guard let d = r.daysSinceNote else { return "Cần chăm sóc" }; return d > 20 ? "Cần chăm sóc" : d > 7 ? "Có nguy cơ rời" : r.succeedOrders > 0 ? "Ổn định" : "Tiềm năng" }
@@ -369,7 +369,7 @@ struct CareView: View {
     private func tint(_ r: API.CareRow) -> Color { tone(r).color }
     @MainActor private func load() async {
         do {
-            var d = try await API.care(assigned: assigned, sort: sort, minDays: minDays, q: q, page: 1)
+            var d = try await API.care(assigned: assigned, sort: sort, minDays: minDays, q: q, page: 1, posIds: posIds)
             if prio == "never" { d = API.Care(total: Double(d.rows.filter { $0.lastNoteAt == nil }.count), summary: d.summary, staff: d.staff, rows: d.rows.filter { $0.lastNoteAt == nil }) }
             if prio == "today" { d = API.Care(total: Double(d.rows.filter { ($0.daysSinceNote ?? 99) < 1 }.count), summary: d.summary, staff: d.staff, rows: d.rows.filter { ($0.daysSinceNote ?? 99) < 1 }) }
             data = d; error = nil
@@ -466,17 +466,17 @@ struct RepurchaseView: View {
                 }
             } else if error == nil { SkeletonGrid(tiles: 2); Skeleton(height: 150) }
         }
-        .task(id: "\(period.key)|\(sellerId)") { await load() }
+        .task(id: "\(period.key)|\(sellerId)|\(posIds.joined())") { await load() }
         .pullToReload { await load() }
     }
     /// Kỳ này và kỳ trước tải cùng lúc.
     @MainActor private func load() async {
-        let cur = period.range, pre = period.previous, sid = sellerId
+        let cur = period.range, pre = period.previous, sid = sellerId, ids = posIds
         let trace = LoadTrace("mua-lai", requests: 2)
-        async let pReq = attempt(true, trace) { try await API.repurchase(start: pre.0, end: pre.1, sellerId: sid) }
+        async let pReq = attempt(true, trace) { try await API.repurchase(start: pre.0, end: pre.1, sellerId: sid, posIds: ids) }
         var ok = false
         do {
-            data = try await trace.run { try await API.repurchase(start: cur.0, end: cur.1, sellerId: sid) }
+            data = try await trace.run { try await API.repurchase(start: cur.0, end: cur.1, sellerId: sid, posIds: ids) }
             error = nil; ok = true
         } catch {
             if let text = LoadError.text(error) { self.error = text }
@@ -542,12 +542,12 @@ struct DormantView: View {
                 }
             } else if error == nil { Skeleton(height: 80); Skeleton(height: 200) }
         }
-        .task(id: days) { await load(next: false) }
+        .task(id: "\(days)|\(posIds.joined())") { await load(next: false) }
         .pullToReload { await load(next: false) }
     }
     @MainActor private func load(next: Bool) async {
         do {
-            let p = try await API.customers(segment: segment, sort: "dormant", q: q, page: next ? (data?.page ?? 0) + 1 : 1)
+            let p = try await API.customers(segment: segment, sort: "dormant", q: q, page: next ? (data?.page ?? 0) + 1 : 1, posIds: posIds)
             rows = next ? rows + p.customers : p.customers; data = p; error = nil
         } catch { if let text = LoadError.text(error) { self.error = text } }
     }
@@ -559,7 +559,7 @@ struct KpiView: View {
     @AppStorage("thp_hide_money") private var hideMoney = false
     var embedded = false
     @Environment(AuthModel.self) private var auth
-    @State private var mode = "person"
+
     @State private var month = String(VNDate.string(.now).prefix(7))
     @State private var targets: API.Targets?
     @State private var actual: API.Overview?
@@ -577,7 +577,8 @@ struct KpiView: View {
         Embed(embedded: embedded, title: "KPI CSKH") {
             PageTitle(title: "KPI CSKH", subtitle: "Mục tiêu rõ, tiến độ rõ.", icon: "target", trailing: AnyView(Menu { Button("Tháng này") { month = String(VNDate.string(.now).prefix(7)) }; Button("Tháng trước") { month = VNDate.shiftMonth(String(VNDate.string(.now).prefix(7)), -1) } } label: { DatePill(text: "Tháng \(Int(month.suffix(2)) ?? 0)/\(month.prefix(4))") }))
             MTSegmentedControl(selection: $mode, options: [("person", "Cá nhân"), ("team", "Đội nhóm")])
-            let list = staff.filter { $0.active != false }
+            // R-POS: chỉ người thuộc POS đang chọn (người làm 2 POS hiện ở cả hai).
+            let list = staff.filter { $0.active != false && CskhKpiProgress.inPos($0, nav?.pos ?? "") }
             let cur = list.first { $0.id == pick }
             if mode == "person" {
                 Menu { ForEach(list) { e in Button(e.name) { pick = e.id } } } label: {
@@ -655,20 +656,24 @@ struct KpiView: View {
             else { SkeletonGrid(tiles: 4) }
         }
         .sheet(item: $editing) { e in TargetEditor(employee: e, current: targets?.items.first { $0.scope == "employee" && $0.refId == e.id }, month: month) { Task { await load() } } }
-        .task(id: "\(month)|\(pick)|\(mode)") { await load() }
+        .task(id: "\(month)|\(pick)|\(mode)|\(posIds.joined())") { await load() }
         .pullToReload { await load() }
     }
     /// Danh sách nhân viên (một lần) rồi mục tiêu, số tháng, khách, số 6 tháng tải cùng lúc.
     @MainActor private func load() async {
-        if staff.isEmpty { staff = (try? await API.employees(team: "cskh")) ?? []; if pick.isEmpty { pick = staff.first { $0.active != false }?.id ?? "" } }
-        let m = month, person = mode == "person", pk = pick
+        if staff.isEmpty { staff = (try? await API.employees(team: "cskh")) ?? [] }
+        let posId = nav?.pos ?? ""
+        // Người đang chọn không thuộc POS vừa chọn: chuyển sang người đầu tiên của POS đó.
+        let inPos = staff.filter { $0.active != false && CskhKpiProgress.inPos($0, posId) }
+        if pick.isEmpty || !inPos.contains(where: { $0.id == pick }) { pick = inPos.first?.id ?? "" }
+        let m = month, person = mode == "person", pk = pick, pids = posIds
         let end = min(VNDate.monthEnd(m), VNDate.string(.now)), start = VNDate.shiftMonth(m, -5) + "-01"
         let ids = (person ? [pk] : []).filter { !$0.isEmpty }
         let trace = LoadTrace("kpi", requests: 4)
         async let tReq = attempt(true, trace) { try await API.targets(month: m) }
-        async let aReq = attempt(true, trace) { try await API.overview(start: m + "-01", end: end, team: "cskh", compare: "none") }
-        async let cReq = attempt(true, trace) { try await API.care(assigned: person ? pk : "", sort: "note_old", minDays: 0, q: "", page: 1) }
-        async let hReq = attempt(true, trace) { try await API.overview(start: start, end: end, groupBy: "month", team: "cskh", compare: "none", employeeIds: ids) }
+        async let aReq = attempt(true, trace) { try await API.overview(start: m + "-01", end: end, posIds: pids, team: "cskh", compare: "none") }
+        async let cReq = attempt(true, trace) { try await API.care(assigned: person ? pk : "", sort: "note_old", minDays: 0, q: "", page: 1, posIds: pids) }
+        async let hReq = attempt(true, trace) { try await API.overview(start: start, end: end, posIds: pids, groupBy: "month", team: "cskh", compare: "none", employeeIds: ids) }
         let (tRes, aRes, cRes, hRes) = await (tReq, aReq, cReq, hReq)
         trace.end(cancelled: Task.isCancelled)
         guard !Task.isCancelled else { return }
@@ -1069,7 +1074,7 @@ struct BatchesView: View {
     var embedded = false
     /// Kỳ chung nếu là Tháng này hoặc Tháng trước (kế hoạch 1.4), không thì 90 ngày như trước.
     @State private var period: Period = NavMemory.period(in: [.month, .last, .d90], else: .d90)
-    @State private var filter = "all"
+
     @State private var data: API.Batches?
     @State private var error: String?
     private var thisMonth: String { String(VNDate.string(.now).prefix(7)) }
@@ -1129,11 +1134,11 @@ struct BatchesView: View {
                 }
             } else if error == nil { SkeletonGrid(tiles: 2); Skeleton(height: 120) }
         }
-        .task(id: period.key) { await load() }
+        .task(id: "\(period.key)|\(posIds.joined())") { await load() }
         .pullToReload { await load() }
     }
     @MainActor private func load() async {
-        do { data = try await API.batches(start: period.range.0, end: period.range.1); error = nil }
+        do { data = try await API.batches(start: period.range.0, end: period.range.1, posIds: posIds); error = nil }
         catch { if let text = LoadError.text(error) { self.error = text } }
     }
 }
