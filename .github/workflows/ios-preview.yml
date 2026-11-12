@@ -34,7 +34,8 @@ jobs:
         shell: bash
     env:
       OUT: ${{ github.workspace }}/preview
-      BASE: https://demo.tonghopposmegatech.io.vn
+      # 12/11/2026: Cloudflare về gói miễn phí, lượt chụp chỉ dùng web ảo trên máy GitHub, không gọi demo.
+      BASE: http://127.0.0.1:8788
       BUNDLE: vn.megatech.tonghoppos
     steps:
       - uses: actions/checkout@v4
@@ -105,14 +106,12 @@ jobs:
 
       - name: Cài pnpm cho web ảo
         id: web-ao-pnpm
-        continue-on-error: true
         uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4
         with:
           version: '10'
 
       - name: Cài Node cho web ảo
         id: web-ao-node
-        continue-on-error: true
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
@@ -120,13 +119,11 @@ jobs:
       - name: Web ảo
         id: web-ao
         timeout-minutes: 18
-        continue-on-error: true
         run: bash scripts/ci/web-ao.sh
 
-      - name: Dự phòng web demo
-        if: steps.web-ao.outcome != 'success'
+      - name: Chặn gọi demo
         run: |
-          echo '::warning::web-ao: không bật được, dùng demo'
+          case "$BASE" in http://127.0.0.1:*) echo "web-ao: chỉ dùng $BASE";; *) echo "::error::BASE không phải web ảo: không được gọi demo hay web thật"; exit 1;; esac
 
       - name: Phiên đăng nhập bản demo
         run: |
