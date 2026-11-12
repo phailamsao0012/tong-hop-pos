@@ -109,7 +109,7 @@ struct HrTeamSheet: View {
             .navigationTitle("Team").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Đóng") { dismiss() } } }
             .task { await load() }
-            .refreshable { await load() }
+            .refreshable { await load(force: true) }
             #if DEBUG
             .onChange(of: DebugTap.shared.tick) { _, _ in
                 let target = DebugTap.shared.target
@@ -127,11 +127,11 @@ struct HrTeamSheet: View {
         #endif
         dismiss()
     }
-    @MainActor private func load() async {
+    @MainActor private func load(force: Bool = false) async {
         loading = true; error = nil
         defer { loading = false }
         do {
-            let result = try await API.hrTeams()
+            let result = try await HrTeamCache.list(force: force)
             try Task.checkCancellation()
             teams = result
             // Cập nhật tên team đang chọn ngay khi mở lại danh sách.
@@ -146,6 +146,27 @@ struct HrTeamSheet: View {
             }
             #endif
         } catch { if let text = LoadError.text(error) { self.error = text } }
+    }
+}
+
+/// Danh sách team dùng chung trong lần đăng nhập: mở lại bảng Team không hỏi lại máy chủ trong 5 phút, và nhiều bảng Team mở
+/// cùng lúc (pill lọc ở trang gốc và trang con cùng nghe một lần chạm) chờ chung một request. Kéo để làm mới thì hỏi lại.
+@MainActor enum HrTeamCache {
+    private static var value: [API.HrTeamItem]?
+    private static var at: Date?
+    private static var owner: String?
+    private static var running: Task<[API.HrTeamItem], Error>?
+    static func list(force: Bool = false) async throws -> [API.HrTeamItem] {
+        let who = SessionStore.token ?? ""
+        if owner != who { value = nil; at = nil; running = nil; owner = who }
+        if !force, let value, let at, Date.now.timeIntervalSince(at) < 300 { return value }
+        if let running { return try await running.value }
+        let task = Task { try await API.hrTeams() }
+        running = task
+        defer { if running == task { running = nil } }
+        let result = try await task.value
+        if owner == who { value = result; at = .now }
+        return result
     }
 }
 
