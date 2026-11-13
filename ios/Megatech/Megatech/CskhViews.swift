@@ -915,7 +915,9 @@ struct CompareView: View {
                 let best = qualified.max { ($0.shownRate ?? -1) < ($1.shownRate ?? -1) }
                 // Doanh thu chốt của một bộ phận trong kỳ (cùng số với dòng Sale / CSKH ở Trang chủ và bảng ở Tổng quan; không theo ô tìm,
                 // bộ phận con). "Tất cả" không hiện: số đó gồm cả người bán MKT và đơn chưa gán, không phải doanh thu một bộ phận (anh Vũ 10/10).
-                if let t = data?.current.total, effTeam != "all" {
+                // Khung 09A1: hero gọn (2 thanh Kỳ trước / Kỳ này nằm trong thẻ) rồi bảng ngay dưới.
+                if mode == .table, let d = data, effTeam != "all" { saleHero(d) }
+                else if let t = data?.current.total, effTeam != "all" {
                     NavigationLink(value: Route.orders(OrderQuery.from(filters, group: "closed", basis: "confirmed", title: "Đơn chốt"))) {
                         MTMetricHeroCard(label: "Doanh thu chốt · bộ phận " + (effTeam == "cskh" ? "CSKH" : "Sale"),
                                          value: Fmt.shortMoney(t.closedNet), scope: "\(Fmt.int(t.closedOrders)) đơn chốt" + (product == "all" ? "" : " · nhóm \(Fmt.productGroup(product))"),
@@ -930,6 +932,8 @@ struct CompareView: View {
                 if mode == .full, effTeam == "sale" {
                     ProductGroupsBlock(period: period, pos: pos, product: product, hrTeam: applied?.id)
                 }
+                // Trang "Từng nhân viên" (09A1) chỉ có hero và bảng; các khối phân tích giữ ở bố cục cũ (CSKH, Tất cả).
+                if mode != .table {
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                     KpiCard(icon: "ic_m_staff", tint: .good, label: "Tổng nhân sự", value: Fmt.int(Double(list.count)), note: "Có đơn chia hoặc đơn chốt trong kỳ")
                     KpiCard(icon: "ic_m_orders", tint: Palette.info, label: "Tổng đơn chia", value: Fmt.int(assigned), delta: Fmt.delta(assigned, pAssigned), note: "Trung bình \(Fmt.int(assigned / Double(max(1, list.count)))) đơn/người")
@@ -982,6 +986,7 @@ struct CompareView: View {
                 RankBlock(title: "Nhân viên nổi bật", sub: "Tỷ lệ cao nhất, ≥ 10 đơn chia", icon: "crown.fill", tone: .good, rows: Array(top), prev: prevBy, filters: filters, period: period, hrTeam: applied?.id)
                 RankBlock(title: "Cần hỗ trợ", sub: "Tỷ lệ thấp nhất, ≥ 10 đơn chia", icon: "person.2.fill", tone: .bad, rows: Array(low), prev: prevBy, filters: filters, period: period, hrTeam: applied?.id)
                 RankBlock(title: "Cân bằng data", sub: "Chốt tốt nhưng ít data, nên cấp thêm số", icon: "arrow.left.arrow.right", tone: .warn, rows: Array(balance), prev: prevBy, filters: filters, period: period, hrTeam: applied?.id)
+                }
                 // Bảng chi tiết
                 HStack { Text("So sánh chi tiết nhân viên (\(list.count) người)").mtFont(.cardHeader); Spacer(); ExportButton(view: "compare", filename: "so-sanh-nhan-vien-\(period.range.0)-\(period.range.1)", headers: ["Nhân viên", "Bộ phận", "Đơn chia", "Đơn chốt", "Tỷ lệ chốt", "Doanh thu", "AOV", "Tỷ lệ kỳ trước", "Doanh thu kỳ trước"]) { list.map { [$0.name ?? "", $0.department ?? "", Fmt.int($0.assignedOrders), Fmt.int($0.closedOrders), Fmt.pct($0.shownRate), Fmt.int($0.closedNet), Fmt.int($0.averageOrder ?? 0), Fmt.pct(prevBy[$0.sellerId]?.shownRate), Fmt.int(prevBy[$0.sellerId]?.closedNet ?? 0)] } }; Menu { Button("Theo doanh thu") { sort = "closedNet" }; Button("Theo đơn chốt") { sort = "closedOrders" }; Button("Theo tỷ lệ chốt") { sort = "rate" } } label: { HStack(spacing: 3) { Text(sort == "closedNet" ? "Doanh thu" : sort == "closedOrders" ? "Đơn chốt" : "Tỷ lệ chốt"); Image(systemName: "chevron.down").mtFont(.caption) }.mtFont(.caption).foregroundStyle(Color.ink) } }
                 MTStickyColumnTable(

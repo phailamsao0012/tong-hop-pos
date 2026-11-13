@@ -83,6 +83,8 @@ extension API {
         let name: String
         let groups: [String: ProductGroupValue]
         var id: String { sellerId }
+        // Máy chủ trả số theo nhóm của từng người ở khoá byGroup (lib/reports/product-groups-report.ts).
+        enum CodingKeys: String, CodingKey { case sellerId, name, groups = "byGroup" }
     }
     struct ProductGroupValue: Decodable {
         let closed: Double
