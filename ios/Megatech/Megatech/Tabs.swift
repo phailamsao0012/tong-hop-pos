@@ -959,6 +959,9 @@ enum DebugTour {
         guard await ready({ MktNvTour.staff }) else { return }
         guard await loaded(["nhan-vien-chi-tiet"], since: t) else { return }
         await pause("nhan-vien-mot", seconds: 2)
+        // Từ ngăn sâu 3 lớp (Sale › Từng nhân viên › một người) đổi thẳng sang CSKH làm SwiftUI dựng lại trang Sale rồi huỷ mọi lượt tải
+        // của CSKH (lượt chụp 3f941b4, 13/11). Về gốc Phòng ban trước rồi mới mở CSKH.
+        await play([(0.3, { nav.deptsPath = [] }), (1.5, {})])
         t = Date()
         nav.deptsPath = [.dept(.cskh, period: .month)]
         guard await loaded(["tong-quan-cskh", "kpi-cskh"], since: t) else { return }
