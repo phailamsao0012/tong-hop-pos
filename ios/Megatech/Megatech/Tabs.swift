@@ -771,7 +771,7 @@ struct MoreButtonLabel: View {
             Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold))
         }
         .mtFont(.caption).fontWeight(.semibold)
-        .foregroundStyle(danger ? Color.bad : accent ? Color.mtBrandPrimary : Color.mtTextPrimary)
+        .foregroundStyle(danger ? Color.bad : accent ? Palette.accent : Color.mtTextPrimary)
         .frame(maxWidth: .infinity, minHeight: 40).padding(.horizontal, 8)
         .background(Palette.wash, in: .rect(cornerRadius: MT.rCell))
         .overlay { RoundedRectangle(cornerRadius: MT.rCell).strokeBorder(Palette.line, lineWidth: 1) }
