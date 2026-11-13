@@ -390,7 +390,7 @@ jobs:
             xnk_notice_seen=$index
           }
           wait_xnk() {
-            local deadline=$((SECONDS + ${2:-60})) reason
+            local deadline=$((SECONDS + ${2:-260})) reason
             while (( SECONDS < deadline )); do
               xnk_notices
               if grep -q '^\[XNK\] moc=loi-tai-so$' "$RUNNER_TEMP/xnk-12.txt"; then

@@ -1344,7 +1344,8 @@ enum DebugTour {
         await playCompare(steps, nav: nav)
     }
 
-    @MainActor private static func playCompare(_ steps: [(Double, () -> Void)], nav: AppNav, readyTimeout: Duration = .seconds(40)) async {
+    // Web ảo trên máy Mac chậm (13/11): số so kỳ có lúc trả sau hơn 40 giây, nên chờ tới 120 giây rồi thử lại thêm 120 giây.
+    @MainActor private static func playCompare(_ steps: [(Double, () -> Void)], nav: AppNav, readyTimeout: Duration = .seconds(120)) async {
         var retried = false
         for step in steps {
             await play([step])
@@ -1363,7 +1364,7 @@ enum DebugTour {
                     print("[XNK] thu-lai=1 ly-do=\(reason)")
                     fflush(stdout)
                     DebugTap.shared.tap("xnk-thu-lai")
-                    let retryDeadline = ContinuousClock.now.advanced(by: .seconds(60))
+                    let retryDeadline = ContinuousClock.now.advanced(by: .seconds(120))
                     while ContinuousClock.now < retryDeadline {
                         if CompareTourStatus.ready || Task.isCancelled { break }
                         try? await Task.sleep(for: .milliseconds(250))
