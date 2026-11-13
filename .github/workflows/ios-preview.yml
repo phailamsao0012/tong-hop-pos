@@ -773,6 +773,10 @@ jobs:
             log15="$RUNNER_TEMP/ui-15-$mode.txt"
             vars15=(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
               SIMCTL_CHILD_MEGATECH_TOUR=giaodien SIMCTL_CHILD_MEGATECH_NAV_RESET=1 SIMCTL_CHILD_MEGATECH_SKIP_FACEID=1)
+            # Máy ảo vừa bật lại có lúc mở app xong, Face ID đúng mà 3 phút không tới mốc hom-nay (13/11 lượt nền tối,
+            # web ảo trả chậm 8–145 giây): tắt app, mở lại một lần rồi chờ lại.
+            for try15 in 1 2; do
+            rm -f "$log15"
             m15 "$mode-mo-app-truoc"
             # Sau khi bật lại máy ảo, lần mở đầu có lúc quá 30 giây (13/11 lượt nền tối): tắt app, mở lại một lần với hạn 90 giây.
             if ! env "${vars15[@]}" perl -e 'alarm shift; exec @ARGV' 30 xcrun simctl launch --stdout="$log15" "$UDID" "$BUNDLE" > /dev/null; then
@@ -783,8 +787,13 @@ jobs:
             fi
             m15 "$mode-mo-app-sau"
             m15 "$mode-face-id-truoc"; face_on_ask "$log15"; m15 "$mode-face-id-sau"
+            if wait_ui hom-nay 180 "$log15"; then break; fi
+            if [ "$try15" = 2 ]; then exit 1; fi
+            echo "::warning::15: lượt $mode chưa tới mốc hom-nay, mở lại app"
+            sim 30 terminate "$UDID" "$BUNDLE" || true; sleep 5
+            done
             for stage in "${ui_stages[@]}"; do
-              wait_ui "$stage" 180 "$log15"
+              if [ "$stage" != hom-nay ]; then wait_ui "$stage" 180 "$log15"; fi
               sim 30 io "$UDID" screenshot "$OUT/15-$mode-$stage.png" > /dev/null || echo "::warning::15: chụp $mode-$stage quá hạn"
             done
             wait_ui xong 30 "$log15"
