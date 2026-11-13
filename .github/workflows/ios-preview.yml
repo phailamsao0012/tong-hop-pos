@@ -364,7 +364,7 @@ jobs:
           xcrun simctl terminate "$UDID" "$BUNDLE" || true; sleep 1
           rec 12-xn-kho
           vars12=(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
-            SIMCTL_CHILD_MEGATECH_CLOCK=1 SIMCTL_CHILD_MEGATECH_TOUR=xnkho SIMCTL_CHILD_MEGATECH_NAV_RESET=1)
+            SIMCTL_CHILD_MEGATECH_CLOCK=1 SIMCTL_CHILD_MEGATECH_TOUR=xnkho SIMCTL_CHILD_MEGATECH_NAV_RESET=1 SIMCTL_CHILD_MEGATECH_SKIP_FACEID=1)
           env "${vars12[@]}" xcrun simctl launch --stdout="$RUNNER_TEMP/xnk-12.txt" "$UDID" "$BUNDLE" > /dev/null
           face_on_ask "$RUNNER_TEMP/xnk-12.txt"
           tour_log_tail() {
@@ -519,7 +519,7 @@ jobs:
           xcrun simctl terminate "$UDID" "$BUNDLE" || true
           rec 13-team
           vars13=(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
-            SIMCTL_CHILD_MEGATECH_CLOCK=1 SIMCTL_CHILD_MEGATECH_TOUR=team SIMCTL_CHILD_MEGATECH_NAV_RESET=1)
+            SIMCTL_CHILD_MEGATECH_CLOCK=1 SIMCTL_CHILD_MEGATECH_TOUR=team SIMCTL_CHILD_MEGATECH_NAV_RESET=1 SIMCTL_CHILD_MEGATECH_SKIP_FACEID=1)
           env "${vars13[@]}" xcrun simctl launch --stdout="$RUNNER_TEMP/team-13.txt" "$UDID" "$BUNDLE" > /dev/null
           face_on_ask "$RUNNER_TEMP/team-13.txt"
           wait_team() {
@@ -583,7 +583,7 @@ jobs:
           xcrun simctl terminate "$UDID" "$BUNDLE" || true
           rec 14-mkt-nv
           vars14=(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
-            SIMCTL_CHILD_MEGATECH_TOUR=mktnv SIMCTL_CHILD_MEGATECH_NV="$NV" SIMCTL_CHILD_MEGATECH_CLOCK=1 SIMCTL_CHILD_MEGATECH_NAV_RESET=1)
+            SIMCTL_CHILD_MEGATECH_TOUR=mktnv SIMCTL_CHILD_MEGATECH_NV="$NV" SIMCTL_CHILD_MEGATECH_CLOCK=1 SIMCTL_CHILD_MEGATECH_NAV_RESET=1 SIMCTL_CHILD_MEGATECH_SKIP_FACEID=1)
           env "${vars14[@]}" xcrun simctl launch --stdout="$RUNNER_TEMP/mktnv-14.txt" "$UDID" "$BUNDLE" > /dev/null
           face_on_ask "$RUNNER_TEMP/mktnv-14.txt"
           # Chỉ mở rộng hàm chẩn đoán trong đoạn 14, giữ nguyên đoạn 12/13.
@@ -767,7 +767,7 @@ jobs:
             m15 "$mode-giao-dien-sau"
             log15="$RUNNER_TEMP/ui-15-$mode.txt"
             vars15=(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
-              SIMCTL_CHILD_MEGATECH_TOUR=giaodien SIMCTL_CHILD_MEGATECH_NAV_RESET=1)
+              SIMCTL_CHILD_MEGATECH_TOUR=giaodien SIMCTL_CHILD_MEGATECH_NAV_RESET=1 SIMCTL_CHILD_MEGATECH_SKIP_FACEID=1)
             m15 "$mode-mo-app-truoc"
             # Sau khi bật lại máy ảo, lần mở đầu có lúc quá 30 giây (13/11 lượt nền tối): tắt app, mở lại một lần với hạn 90 giây.
             if ! env "${vars15[@]}" perl -e 'alarm shift; exec @ARGV' 30 xcrun simctl launch --stdout="$log15" "$UDID" "$BUNDLE" > /dev/null; then

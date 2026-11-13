@@ -171,6 +171,17 @@ enum Biometric {
     static var hasPasscode: Bool { LAContext().canEvaluatePolicy(.deviceOwnerAuthentication, error: nil) }
 
     @MainActor static func check(_ reason: String) async -> Outcome {
+        #if DEBUG
+        // Lượt chụp CI đoạn 12–15 (MEGATECH_SKIP_FACEID=1): máy ảo chậm làm lệnh giả lập Face ID kẹt, nên coi như khớp ngay,
+        // vẫn ghi đủ mốc hoi-face-id / face-id-dung để workflow chờ như cũ. Bản phát hành không có đoạn này.
+        if ProcessInfo.processInfo.environment["MEGATECH_SKIP_FACEID"] == "1" {
+            BiometricPrompt.shared.begin()
+            LaunchClock.mark("hoi-face-id")
+            LaunchClock.mark("face-id-dung")
+            BiometricPrompt.shared.end(ok: true)
+            return .ok
+        }
+        #endif
         let ctx = LAContext(); ctx.localizedCancelTitle = "Để sau"; ctx.localizedFallbackTitle = ""
         var err: NSError?
         guard ctx.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &err) else {
