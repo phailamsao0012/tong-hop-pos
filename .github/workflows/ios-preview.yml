@@ -244,11 +244,14 @@ jobs:
           face_on_ask() {
             local i n
             for i in $(seq 1 100); do grep -q 'hoi-face-id' "$1" 2> /dev/null && break; sleep 0.2; done
+            # Đoạn 12–15 (MEGATECH_SKIP_FACEID): app tự ghi face-id-dung, không gửi lệnh giả lập (13/11: notifyutil kẹt 20 giây mỗi lần).
+            for i in $(seq 1 25); do grep -q 'face-id-dung' "$1" 2> /dev/null && return 0; sleep 0.2; done
             if ! grep -q 'hoi-face-id' "$1" 2> /dev/null; then
               mark "face-id-khop-gio-co-dinh"; face match; sleep 5; face match; return 0
             fi
             # Máy ảo chậm có lúc bỏ qua lệnh "khớp" (13/11: kẹt ở hoi-face-id, đoạn 12 thiếu mốc). Gửi lại mỗi 3 giây tới 15 lần.
             for n in $(seq 1 15); do
+              grep -q 'face-id-dung' "$1" 2> /dev/null && return 0
               sleep 1; mark "face-id-khop-$n"; face match
               for i in $(seq 1 10); do grep -q 'face-id-dung' "$1" 2> /dev/null && return 0; sleep 0.2; done
             done
@@ -588,7 +591,8 @@ jobs:
           face_on_ask "$RUNNER_TEMP/mktnv-14.txt"
           # Chỉ mở rộng hàm chẩn đoán trong đoạn 14, giữ nguyên đoạn 12/13.
           tour_log_tail() {
-            grep -E '^\[(XNK|TEAM|MKT|NV)\]' "$1" | tail -n 40 || true
+            grep -E '^\[(XNK|TEAM|MKT|NV|MOC)\]' "$1" | tail -n 40 || true
+            echo "(log đoạn 14: $(wc -l < "$1" 2> /dev/null || echo 0) dòng)"
           }
           wait_mktnv() {
             local deadline=$((SECONDS + ${2:-90})) log="$RUNNER_TEMP/mktnv-14.txt"
@@ -613,7 +617,8 @@ jobs:
           pids14=()
           labels14=()
           for stage in "${stages14[@]}"; do
-            wait_mktnv "$stage"
+            # Mốc đầu chờ lâu hơn: máy Mac chậm có lúc mở app mất hơn 2 phút (13/11, a9f14e9).
+            if [[ "$stage" == mkt-mo ]]; then wait_mktnv "$stage" 240; else wait_mktnv "$stage"; fi
             xcrun simctl io "$UDID" screenshot "$OUT/14-$stage.png"
             # Lưu từng request mới theo số dòng log, không đưa đường dẫn/JSON vào artifact.
             while IFS= read -r entry; do
