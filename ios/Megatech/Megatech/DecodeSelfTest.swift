@@ -104,7 +104,7 @@ enum DecodeSelfTest {
             r.check("B5_PROFILE_NIL", d.tenure == nil && d.posCreated == nil && d.firstOrderDay == nil)
         }
         let value = #"{"closed":12,"closedNet":30}"#
-        if let d = r.decode("B5_GROUPS", API.ProductGroupsReport.self, "{\"groups\":[{\"label\":\"Nhóm A\",\"closed\":12,\"closedNet\":30}],\"staff\":[{\"sellerId\":\"staff-a\",\"name\":\"NV A\",\"groups\":{\"Nhóm A\":\(value)}}],\"definitions\":{}}") {
+        if let d = r.decode("B5_GROUPS", API.ProductGroupsReport.self, "{\"groups\":[{\"label\":\"Nhóm A\",\"closed\":12,\"closedNet\":30}],\"staff\":[{\"sellerId\":\"staff-a\",\"name\":\"NV A\",\"byGroup\":{\"Nhóm A\":\(value)}}],\"definitions\":{}}") {
             r.check("B5_GROUP_CELL", d.groups.first?.label == "Nhóm A" && d.staff.first?.groups["Nhóm A"]?.closedNet == 30)
         }
         _ = r.decode("B5_GROUPS_EMPTY", API.ProductGroupsReport.self, #"{"groups":[],"staff":[],"definitions":{}}"#)
