@@ -26,7 +26,7 @@ concurrency:
 jobs:
   preview:
     runs-on: macos-latest
-    timeout-minutes: 100
+    timeout-minutes: 130
     permissions:
       contents: write
     defaults:
@@ -724,6 +724,7 @@ jobs:
           PY14
           # 15. Giao diện 1.0: chụp các màn chính, sáng rồi tối (chỉ ảnh, không video).
           ui_stages=(hom-nay hom-nay-2 hom-nay-3 tong-quan tong-quan-so-lieu tong-quan-pos don-hang phong-ban sale nhan-vien nhan-vien-mot cskh mkt cskh-mot-pos mkt-mot-pos van-don thong-bao thong-bao-2 them nhan-su)
+          # Mốc chờ 180 giây (13/11): app khi chạy tour chờ mỗi request tới 120 giây và tải lại màn lỗi một lần (c9161ff).
           wait_ui() {
             local deadline=$((SECONDS + ${2:-90})) log="$3"
             while (( SECONDS < deadline )); do
@@ -773,7 +774,7 @@ jobs:
             m15 "$mode-mo-app-sau"
             m15 "$mode-face-id-truoc"; face_on_ask "$log15"; m15 "$mode-face-id-sau"
             for stage in "${ui_stages[@]}"; do
-              wait_ui "$stage" 90 "$log15"
+              wait_ui "$stage" 180 "$log15"
               sim 30 io "$UDID" screenshot "$OUT/15-$mode-$stage.png" > /dev/null || echo "::warning::15: chụp $mode-$stage quá hạn"
             done
             wait_ui xong 30 "$log15"
