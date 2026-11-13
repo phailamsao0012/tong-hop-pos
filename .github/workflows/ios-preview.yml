@@ -563,11 +563,17 @@ jobs:
           grep '\[TEAM\]' "$RUNNER_TEMP/team-13.txt" > "$OUT/13-team-app.txt"
           # 6.3.7: team còn được chọn trước terminate; lần launch mới phải ap=khong.
           xcrun simctl terminate "$UDID" "$BUNDLE"
-          : > "$RUNNER_TEMP/team-13-reopen.txt"
-          env "${vars13[@]}" SIMCTL_CHILD_MEGATECH_TEAM_CASE=reopen \
-            xcrun simctl launch --stdout="$RUNNER_TEMP/team-13-reopen.txt" "$UDID" "$BUNDLE" > /dev/null
-          face_on_ask "$RUNNER_TEMP/team-13-reopen.txt"
-          wait_team mo-lai 120 "$RUNNER_TEMP/team-13-reopen.txt"
+          # 13/11: máy ảo chậm, app mở lại qua Face ID mà 3 phút chưa tới mốc mo-lai: chờ 240 giây, chưa tới thì tắt, mở lại một lần.
+          for try13 in 1 2; do
+            : > "$RUNNER_TEMP/team-13-reopen.txt"
+            env "${vars13[@]}" SIMCTL_CHILD_MEGATECH_TEAM_CASE=reopen \
+              xcrun simctl launch --stdout="$RUNNER_TEMP/team-13-reopen.txt" "$UDID" "$BUNDLE" > /dev/null
+            face_on_ask "$RUNNER_TEMP/team-13-reopen.txt"
+            if wait_team mo-lai 240 "$RUNNER_TEMP/team-13-reopen.txt"; then break; fi
+            if [ "$try13" = 2 ]; then exit 1; fi
+            echo "::warning::13: chưa tới mốc mo-lai, mở lại app"
+            xcrun simctl terminate "$UDID" "$BUNDLE" || true; sleep 5
+          done
           grep '\[TEAM\] dept=' "$RUNNER_TEMP/team-13-reopen.txt" | head -1 | grep 'ap=khong trang=mo-app' > "$OUT/13-team-mo-lai-app.txt"
           grep '\[TEAM\]' "$RUNNER_TEMP/team-13-reopen.txt" >> "$OUT/13-team-app.txt"
           xcrun simctl io "$UDID" screenshot "$OUT/13-team-mo-lai.png"
