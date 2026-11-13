@@ -830,8 +830,9 @@ jobs:
           if-no-files-found: ignore
 
       # Đẩy video lên nhánh ios-preview (ghi đè mỗi lần) để xem được cả ở nơi không tải được artifact.
+      # always(): lượt đỏ giữa chừng vẫn đẩy ảnh đã chụp (13/11, nơi xem không tải được artifact).
       - name: Đẩy video lên nhánh ios-preview
-        if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+        if: always() && (github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
