@@ -772,6 +772,10 @@ jobs:
           for mode in sang toi; do
             if [ "$mode" = toi ]; then reboot_sim || exit 1; fi
             m15 "$mode-terminate-truoc"; sim 30 terminate "$UDID" "$BUNDLE" || true; m15 "$mode-terminate-sau"
+            # 13/11: máy ảo tự tắt sau khi bật lại (đổi nền báo "current state: Shutdown"): còn tắt thì bật lại một lần nữa.
+            if ! sim 30 list devices booted | grep -q "$UDID"; then
+              echo "::warning::15: máy ảo đang tắt trước lượt $mode, bật lại"; reboot_sim || exit 1
+            fi
             m15 "$mode-giao-dien-truoc"
             if [ "$mode" = toi ]; then look=dark; else look=light; fi
             sim 60 ui "$UDID" appearance "$look" || { echo "::error::15: đổi giao diện $look quá hạn"; exit 1; }
