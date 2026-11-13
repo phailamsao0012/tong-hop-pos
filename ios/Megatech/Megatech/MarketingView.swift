@@ -154,16 +154,15 @@ struct MarketingView: View {
                 if let error { StateView(error: error, compact: true) { await load() } }
                 filterLine(d)
                 hero(d).environment(\.thinking, loading)
-                if d.timeline.count > 1 {
-                    Panel {
-                        Text("Doanh thu MKT theo kỳ").mtFont(.cardHeader)
-                        MTTrendChart(points: d.timeline.map { (Fmt.bucketLabel($0.key, d.bucket), $0.m.net) },
-                                     value: Fmt.shortMoney, scope: periodLabel(d))
-                    }
-                }
                 MktChart(points: d.timeline, bucket: d.bucket, blocked: posLimited)
                 breakdown(d)
                 if auth.me?.canView("marketing") == true {
+                    Button { PageScroll.shared.go("mkt-hang") } label: {
+                        HStack(spacing: 4) { Text("Xếp hạng marketer / team"); Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)) }
+                            .mtFont(.body).fontWeight(.bold).foregroundStyle(Color.white)
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                            .background(Palette.mtBrandPrimary, in: .rect(cornerRadius: MT.rCell))
+                    }.buttonStyle(MTPressStyle())
                     MarketingRank(period: period, pos: pos, teamId: teamId, marketerId: marketerId,
                                   productFiltered: product != nil, refresh: rankRefresh) { id, isTeam in
                         if isTeam { marketerId = nil; teamId = id }
@@ -200,8 +199,6 @@ struct MarketingView: View {
                     Button { marketerId = nil; teamId = nil; product = nil; pos = "" } label: { Text("Bỏ lọc").mtFont(.body).foregroundStyle(Color.inkSoft).underline() }.buttonStyle(.plain)
                 }
             }
-        } else {
-            Text("Toàn bộ Marketing, \(posScope). Chạm một marketer, team hoặc sản phẩm ở bảng dưới để xem riêng.").mtFont(.caption).foregroundStyle(Color.inkSoft)
         }
     }
     private func chip(_ icon: String, _ text: String, clear: @escaping () -> Void) -> some View {
@@ -218,42 +215,60 @@ struct MarketingView: View {
     /// số về, đơn chốt, chi phí mỗi số, chi phí mỗi đơn chốt (ROAS ghi kèm doanh thu).
     private func hero(_ d: API.MktAnalytics) -> some View {
         let c = d.current, p = d.prev
-        return VStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: MT.cardGap) {
-                MktBig(icon: "banknote.fill", tint: .good, label: "Doanh thu MKT", value: Fmt.shortVnd(c.net),
-                       delta: Fmt.delta(c.net, p.net), upIsGood: true, sub: "\(Fmt.int(c.closed)) đơn chốt" + (posLimited ? "" : " · ROAS \(Fmt.roas(c.roas))")) {
-                    explain = MetricExplain(title: "Doanh thu MKT", value: Fmt.money(c.net),
+        // Khung 12A: hero Doanh thu MKT (badge so kỳ trước, đường theo kỳ), thẻ "Hiệu quả quảng cáo" 3×2, rồi thành phần doanh thu.
+        return VStack(alignment: .leading, spacing: MT.cardGap) {
+            Button {
+                explain = MetricExplain(title: "Doanh thu MKT", value: Fmt.money(c.net),
                         definition: "Tiền các đơn có Marketer đã xác nhận trên Pancake trong kỳ (theo ngày xác nhận lần đầu), sau giảm giá và quà tặng, không cộng phí ship. Không tính đơn mới, chờ xác nhận, huỷ, xoá. \(scopeText).\nĐơn MKT do Sale hoặc CSKH gọi chốt nên cũng có trong doanh thu bộ phận đó; doanh thu Sale, CSKH, MKT xem riêng, không cộng lại.\n" + (posLimited ? "Không tính ROAS khi chỉ xem một số POS: chi phí quảng cáo là của mọi POS." : "ROAS = doanh thu ÷ chi phí quảng cáo, chỉ tính marketer có chi phí\(c.partial ? " (kỳ này \(Fmt.money(c.coveredNet ?? 0)) trên \(Fmt.money(c.net)))" : ""): kỳ này \(Fmt.roas(c.roas)), kỳ trước \(Fmt.roas(p.roas)).") ,
                         period: periodLabel(d), previous: ("Kỳ trước", Fmt.money(p.net)))
-                }
-                MktBig(icon: "wallet.pass.fill", tint: Palette.mtWarningInk, label: "Chi phí quảng cáo", value: Fmt.shortVnd(c.cost),
-                       delta: Fmt.delta(c.cost, p.cost), upIsGood: false,
-                       sub: c.cost > 0 ? "\(Fmt.int(c.marketers ?? 0)) marketer có chi phí\(posLimited ? " · mọi POS" : "") · kỳ trước \(Fmt.short(p.cost))" : "Chưa có chi phí trong kỳ (sheet chưa gửi hoặc chưa nhập)") {
-                    explain = MetricExplain(title: "Chi phí quảng cáo", value: Fmt.money(c.cost),
+            } label: {
+                MTDeptHero(label: "Doanh thu MKT", value: Fmt.shortVnd(c.net), delta: Fmt.delta(c.net, p.net),
+                           sub: "\(Fmt.int(c.closed)) đơn chốt" + (posLimited ? "" : " · ROAS \(Fmt.roas(c.roas))"),
+                           points: d.timeline.map { (Fmt.bucketLabel($0.key, d.bucket), $0.m.net) }, masked: hideMoney)
+            }.buttonStyle(.plain)
+            VStack(alignment: .leading, spacing: MT.cellGap) {
+                Text("Hiệu quả quảng cáo").mtFont(.cardHeader).foregroundStyle(Palette.ink)
+                Grid(horizontalSpacing: MT.cellGap, verticalSpacing: MT.cellGap) {
+                    GridRow {
+                        adCell("Chi phí quảng cáo", hideMoney ? "•••" : Fmt.shortVnd(c.cost), note: posLimited ? "mọi POS" : nil) {
+                            explain = MetricExplain(title: "Chi phí quảng cáo", value: Fmt.money(c.cost),
                         definition: "Tổng chi phí quảng cáo của marketer trong kỳ, lấy từ Google Sheet CPQC Daily (cột Chi phí QC Tổng, sheet tự gửi lên web mỗi giờ) và chi phí nhập tay ở trang Chi phí & ROAS trên web. Chi phí tính cho mọi POS. Ngày hôm nay thường chưa có cho tới khi marketer ghi vào sheet.",
                         period: periodLabel(d), previous: ("Kỳ trước", Fmt.money(p.cost)))
-                }
-            }
-            .fixedSize(horizontal: false, vertical: true)
-            revenueSplit(c, scope: periodLabel(d))
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                Button { explain = MetricExplain(title: "Số về", value: "\(Fmt.int(c.phones)) số", definition: "Số điện thoại khác nhau trên các đơn có Marketer được tạo trong kỳ (số MKT đưa về cho Sale, CSKH gọi). Kỳ này có \(Fmt.int(c.orders)) đơn có Marketer được tạo. Không tính đơn đã xoá. \(scopeText).", period: periodLabel(d), previous: ("Kỳ trước", "\(Fmt.int(p.phones)) số")) } label: {
-                    KpiCard(icon: "phone.fill", tint: Palette.teal, label: "Số về", value: Fmt.int(c.phones), delta: Fmt.delta(c.phones, p.phones), note: "\(Fmt.int(c.orders)) đơn lên")
-                }.buttonStyle(.plain)
-                Button { explain = MetricExplain(title: "Đơn chốt", value: Fmt.int(c.closed), definition: "Số đơn có Marketer đã xác nhận trên Pancake trong kỳ (theo ngày xác nhận lần đầu): số MKT đưa về đã thành đơn. Không tính đơn mới, chờ xác nhận, huỷ, xoá. \(scopeText).", period: periodLabel(d), previous: ("Kỳ trước", Fmt.int(p.closed))) } label: {
-                    KpiCard(icon: "ic_m_closed", tint: .good, label: "Đơn chốt", value: Fmt.int(c.closed), delta: Fmt.delta(c.closed, p.closed))
-                }.buttonStyle(.plain)
-            }
-            CostCard(now: c, prev: p, blocked: posLimited) {
-                explain = MetricExplain(title: "Chi phí mỗi số", value: Fmt.shortVnd(posLimited ? nil : c.costPerLead),
+                        }
+                        adCell("Số về", "\(Fmt.int(c.phones)) số", note: "\(Fmt.int(c.orders)) đơn lên") {
+                            explain = MetricExplain(title: "Số về", value: "\(Fmt.int(c.phones)) số", definition: "Số điện thoại khác nhau trên các đơn có Marketer được tạo trong kỳ (số MKT đưa về cho Sale, CSKH gọi). Kỳ này có \(Fmt.int(c.orders)) đơn có Marketer được tạo. Không tính đơn đã xoá. \(scopeText).", period: periodLabel(d), previous: ("Kỳ trước", "\(Fmt.int(p.phones)) số"))
+                        }
+                    }
+                    GridRow {
+                        adCell("Đơn chốt (đã XN)", "\(Fmt.int(c.closed)) đơn") {
+                            explain = MetricExplain(title: "Đơn chốt", value: Fmt.int(c.closed), definition: "Số đơn có Marketer đã xác nhận trên Pancake trong kỳ (theo ngày xác nhận lần đầu): số MKT đưa về đã thành đơn. Không tính đơn mới, chờ xác nhận, huỷ, xoá. \(scopeText).", period: periodLabel(d), previous: ("Kỳ trước", Fmt.int(p.closed)))
+                        }
+                        adCell("ROAS", posLimited ? "—" : Fmt.roas(c.roas), note: posLimited ? "chi phí không chia POS" : nil) {
+                            explain = MetricExplain(title: "Doanh thu MKT", value: Fmt.money(c.net),
+                        definition: "Tiền các đơn có Marketer đã xác nhận trên Pancake trong kỳ (theo ngày xác nhận lần đầu), sau giảm giá và quà tặng, không cộng phí ship. Không tính đơn mới, chờ xác nhận, huỷ, xoá. \(scopeText).\nĐơn MKT do Sale hoặc CSKH gọi chốt nên cũng có trong doanh thu bộ phận đó; doanh thu Sale, CSKH, MKT xem riêng, không cộng lại.\n" + (posLimited ? "Không tính ROAS khi chỉ xem một số POS: chi phí quảng cáo là của mọi POS." : "ROAS = doanh thu ÷ chi phí quảng cáo, chỉ tính marketer có chi phí\(c.partial ? " (kỳ này \(Fmt.money(c.coveredNet ?? 0)) trên \(Fmt.money(c.net)))" : ""): kỳ này \(Fmt.roas(c.roas)), kỳ trước \(Fmt.roas(p.roas)).") ,
+                        period: periodLabel(d), previous: ("Kỳ trước", Fmt.money(p.net)))
+                        }
+                    }
+                    GridRow {
+                        adCell("Chi phí mỗi số", hideMoney ? "•••" : Fmt.shortVnd(posLimited ? nil : c.costPerLead)) {
+                            explain = MetricExplain(title: "Chi phí mỗi số", value: Fmt.shortVnd(posLimited ? nil : c.costPerLead),
                     definition: (posLimited ? "Đang xem \(posScope): chi phí quảng cáo là của mọi POS (sheet không chia theo POS) nên không chia cho số về được, xem ở mọi POS.\n" : "") + "Chi phí quảng cáo ÷ số về. Chỉ tính marketer có chi phí trong kỳ, để người chưa ghi chi phí không làm số này thấp giả" + (c.coveredPhones.map { ": kỳ này \(Fmt.int($0)) trên \(Fmt.int(c.phones)) số" } ?? "") + ". Càng thấp càng tốt.",
                     period: periodLabel(d), previous: posLimited ? nil : (label: "Kỳ trước", value: Fmt.shortVnd(p.costPerLead)))
-            } closed: {
-                explain = MetricExplain(title: "Chi phí mỗi đơn chốt", value: Fmt.shortVnd(posLimited ? nil : c.costPerClosed),
+                        }
+                        adCell("Chi phí mỗi đơn chốt", hideMoney ? "•••" : Fmt.shortVnd(posLimited ? nil : c.costPerClosed)) {
+                            explain = MetricExplain(title: "Chi phí mỗi đơn chốt", value: Fmt.shortVnd(posLimited ? nil : c.costPerClosed),
                     definition: (posLimited ? "Đang xem \(posScope): chi phí quảng cáo là của mọi POS (sheet không chia theo POS) nên không chia cho đơn được, xem ở mọi POS.\n" : "") + "Chi phí quảng cáo ÷ đơn chốt (đơn có Marketer đã xác nhận trong kỳ). Chỉ tính marketer có chi phí trong kỳ" + (c.coveredClosed.map { ": kỳ này \(Fmt.int($0)) trên \(Fmt.int(c.closed)) đơn" } ?? "") + ". Càng thấp càng tốt.",
                     period: periodLabel(d), previous: posLimited ? nil : (label: "Kỳ trước", value: Fmt.shortVnd(p.costPerClosed)))
+                        }
+                    }
+                }
             }
+            .padding(MT.cardPad).frame(maxWidth: .infinity, alignment: .leading).cardSurface()
+            revenueSplit(c, scope: periodLabel(d))
         }
+    }
+    private func adCell(_ label: String, _ value: String, note: String? = nil, tap: @escaping () -> Void) -> some View {
+        Button(action: tap) { BoardCell(label: label, value: value, note: note) }.buttonStyle(.plain)
     }
 
     // MARK: Tách theo

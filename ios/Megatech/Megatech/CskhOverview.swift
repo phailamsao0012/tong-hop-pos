@@ -37,53 +37,58 @@ struct CskhOverviewView: View {
 
     var body: some View {
         Embed(embedded: embedded, title: "Tổng quan CSKH") {
-            PageTitle(title: "Tổng quan CSKH", subtitle: "Doanh thu và tiến độ KPI của đội CSKH.", icon: "chart.line.uptrend.xyaxis")
+            if !embedded { PageTitle(title: "Tổng quan CSKH", subtitle: "Doanh thu và tiến độ KPI của đội CSKH.", icon: "chart.line.uptrend.xyaxis") }
             // Pill lọc (khung Gemini): kỳ và team; POS, nhóm đơn theo bảng vừa bấm (ghi trong bảng lọc).
             ScopeFilterPill(period: $period, team: true, fixedPos: pos, fixedProduct: product)
             HrTeamNotice(applies: applied != nil, deptLabel: "CSKH")
-            if showKpi {
-                // Kỳ Tháng này, mọi POS, mọi nhóm, không team: số tháng của trang chính chính là số tháng thẻ KPI cần, dùng chung
-                // (không gọi /api/reports/overview tháng này hai lần).
-                CskhKpiProgress(pos: pos, shared: sharesMonth ? data : nil, sharesMonth: sharesMonth, sharedFailed: sharesMonth && error != nil && data == nil)
-                    .id("team-cskh-kpi")
-                if applied != nil { Text("Khối tiến độ KPI chưa lọc theo team.").font(.caption).foregroundStyle(Color.inkSoft) }
-            }
             if let teamError { HrTeamErrorView(message: teamError) { nav?.hrUnit = nil } }
             else if let error, data == nil { StateView(error: error) { await load() } }
             if let t = data?.current.total {
                 let p = data?.compare?.total
                 let closed = OrderQuery(start: range.0, end: range.1, posIds: pos.isEmpty ? [] : [pos], group: "closed", basis: "confirmed", title: "Đơn chốt CSKH", team: "cskh", product: product)
+                let scope = "\(period.title) · \(pos.isEmpty ? "Mọi POS" : (PosBreakdown.names[pos] ?? pos)) · CSKH" + (product == "all" ? "" : " · nhóm \(Fmt.productGroup(product))")
+                // Khung 11A: hero Doanh thu CSKH (badge so kỳ trước, đường theo ngày), rồi thẻ "Đơn chốt CSKH" 2×2 và nút KPI từng người.
                 NavigationLink(value: Route.orders(closed)) {
-                    MTMetricHeroCard(label: "Doanh thu CSKH", value: Fmt.shortMoney(t.closedNet),
-                                     scope: "\(period.title) · \(pos.isEmpty ? "Mọi POS" : (PosBreakdown.names[pos] ?? pos)) · CSKH",
-                                     comparison: Fmt.delta(t.closedNet, p?.closedNet), isPrivacyMasked: hideMoney)
+                    MTDeptHero(label: "Doanh thu CSKH", value: Fmt.shortMoney(t.closedNet), delta: Fmt.delta(t.closedNet, p?.closedNet),
+                               sub: scope, points: (data?.current.series).map(byDay) ?? [], masked: hideMoney)
                 }.buttonStyle(.plain)
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: MT.cellGap), GridItem(.flexible(), spacing: MT.cellGap)], spacing: MT.cellGap) {
-                    NavigationLink(value: Route.orders(closed)) { MTStatCell(label: "Đơn chốt CSKH", value: Fmt.int(t.closedOrders)) }
-                    MTStatCell(label: "Giá trị TB đơn", value: t.averageOrder.map { Fmt.shortMoney($0) } ?? "—")
-                }
-                .buttonStyle(.plain)
-                .environment(\.thinking, loading)
-                Text("\(period.title)\(pos.isEmpty ? "" : " · POS \(PosBreakdown.names[pos] ?? pos)")\(product == "all" ? "" : " · nhóm \(Fmt.productGroup(product))") · so với kỳ liền trước · đơn do nhân viên CSKH phụ trách").mtFont(.caption).foregroundStyle(Color.inkSoft).padding(.top, -8)
-                if let s = data?.current.series, Set(s.map(\.bucket)).count > 1 {
-                    Panel {
-                        HStack { Text("Doanh thu theo ngày").mtFont(.cardHeader); Spacer(); Hint(text: "Đơn chốt CSKH") }
-                        MTTrendChart(points: byDay(s), value: Fmt.shortMoney, scope: "\(period.title) · CSKH")
+                VStack(alignment: .leading, spacing: MT.cellGap) {
+                    Text("Đơn chốt CSKH").mtFont(.cardHeader).foregroundStyle(Palette.ink)
+                    Grid(horizontalSpacing: MT.cellGap, verticalSpacing: MT.cellGap) {
+                        GridRow {
+                            NavigationLink(value: Route.orders(closed)) { BoardCell(label: "Đơn chốt", value: "\(Fmt.int(t.closedOrders)) đơn") }.buttonStyle(.plain)
+                            BoardCell(label: "Doanh thu CSKH", value: hideMoney ? "•••" : Fmt.shortVnd(t.closedNet))
+                        }
+                        GridRow {
+                            BoardCell(label: "Giá trị TB đơn", value: hideMoney ? "•••" : (t.averageOrder.map { Fmt.shortVnd($0) } ?? "—"))
+                            NavigationLink(value: Route.page("calls")) {
+                                BoardCell(label: "Hôm nay đã gọi", value: badge.map { "\(Fmt.int($0.callsToday)) cuộc" } ?? "—",
+                                          note: badge.map { $0.over20 > 0 ? "\(Fmt.int($0.over20)) khách quá 20 ngày" : "không khách quá 20 ngày" })
+                            }.buttonStyle(.plain)
+                        }
+                    }
+                    .environment(\.thinking, loading)
+                    if showKpi {
+                        NavigationLink(value: Route.page("cskh-kpi")) {
+                            HStack(spacing: 4) { Text("Xem KPI từng nhân viên CSKH"); Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)) }
+                                .mtFont(.body).fontWeight(.bold).foregroundStyle(Color.white)
+                                .frame(maxWidth: .infinity, minHeight: 48)
+                                .background(Palette.mtBrandPrimary, in: .rect(cornerRadius: MT.rCell))
+                        }.buttonStyle(MTPressStyle())
                     }
                 }
-                if let b = badge {
-                    NavigationLink(value: Route.page("calls")) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "phone.fill").mtFont(.cardHeader).foregroundStyle(Color.good).frame(width: 36, height: 36).background(Color.brandSoft, in: .rect(cornerRadius: 10))
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Hôm nay có \(Fmt.int(b.callsToday)) ghi chú").mtFont(.cardHeader).foregroundStyle(Color.ink)
-                                Text(b.over20 > 0 ? "\(Fmt.int(b.over20)) khách quá 20 ngày chưa ghi chú" : "Không có khách quá 20 ngày chưa ghi chú").mtFont(.caption).foregroundStyle(b.over20 > 0 ? Color.warn : Color.inkSoft)
-                            }
-                            Spacer(); Image(systemName: "chevron.right").mtFont(.caption).foregroundStyle(Color.inkSoft)
-                        }.padding(12).background(Color.card, in: .rect(cornerRadius: 12)).cardShadow()
-                    }.buttonStyle(.plain).id("team-cskh-calls")
-                    if applied != nil { Text("Cuộc gọi hôm nay chưa lọc theo team.").font(.caption).foregroundStyle(Color.inkSoft) }
-                }
+                .padding(MT.cardPad).frame(maxWidth: .infinity, alignment: .leading).cardSurface()
+                .id("team-cskh-calls")
+                if applied != nil, badge != nil { Text("Cuộc gọi hôm nay chưa lọc theo team.").font(.caption).foregroundStyle(Color.inkSoft) }
+            } else if error == nil { SkeletonGrid(tiles: 4) }
+            if showKpi {
+            // Kỳ Tháng này, mọi POS, mọi nhóm, không team: số tháng của trang chính chính là số tháng thẻ KPI cần, dùng chung
+            // (không gọi /api/reports/overview tháng này hai lần).
+            CskhKpiProgress(pos: pos, shared: sharesMonth ? data : nil, sharesMonth: sharesMonth, sharedFailed: sharesMonth && error != nil && data == nil)
+                .id("team-cskh-kpi")
+            if applied != nil { Text("Khối tiến độ KPI chưa lọc theo team.").font(.caption).foregroundStyle(Color.inkSoft) }
+            }
+            if let t = data?.current.total {
                 let staff = (data?.current.byEmployee ?? []).filter { !$0.sellerId.isEmpty && ($0.closedNet > 0 || $0.closedOrders > 0) }.sorted { $0.closedNet > $1.closedNet }
                 if !staff.isEmpty {
                     SectionHead(title: "Doanh thu theo nhân viên", action: "So sánh", route: .compare(team: "cskh"))
@@ -103,7 +108,7 @@ struct CskhOverviewView: View {
                         }
                     }.background(Color.card, in: .rect(cornerRadius: MT.rCard)).cardShadow()
                 }
-            } else if error == nil { SkeletonGrid(tiles: 4) }
+            }
             if auth.me?.canView("cskh-overview") == true {
                 StaffTableBlock(team: "cskh", by: "care", period: period, pos: pos, product: product, hrTeam: applied)
             }

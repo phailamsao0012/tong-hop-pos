@@ -1040,7 +1040,7 @@ struct CompareView: View {
     }
     private func compactRow(_ name: String, assigned: Double, closed: Double, rate: Double?, total: Bool = false) -> some View {
         HStack(spacing: MT.cellGap) {
-            Text(name).lineLimit(1).minimumScaleFactor(0.75).frame(maxWidth: .infinity, alignment: .leading)
+            Text(name).lineLimit(1).truncationMode(.tail).frame(maxWidth: .infinity, alignment: .leading)
             Text(Fmt.int(assigned)).frame(width: 56, alignment: .trailing)
             Text(Fmt.int(closed)).frame(width: 64, alignment: .trailing)
             Group {

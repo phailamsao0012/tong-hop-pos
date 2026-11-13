@@ -116,6 +116,31 @@ struct MTTrendChart: View {
     }
 }
 
+/// Hero phòng ban (khung 11A CSKH, 12A Marketing): nhãn in hoa, badge so kỳ trước, số lớn, dòng phạm vi, đường theo ngày.
+struct MTDeptHero: View {
+    let label: String
+    let value: String
+    var delta: String? = nil
+    var sub: String? = nil
+    var points: [(String, Double)] = []
+    var masked = false
+    var valueText: (Double) -> String = Fmt.shortMoney
+    var body: some View {
+        VStack(alignment: .leading, spacing: MT.cellGap) {
+            HStack(alignment: .top) {
+                Text(label.uppercased()).mtFont(.caption).fontWeight(.bold).foregroundStyle(Palette.muted)
+                Spacer(minLength: 6)
+                if let delta, !masked { DeltaPill(delta) }
+            }
+            Text(masked ? "••• tr ₫" : value).mtFont(.heroNumber).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
+            if let sub { Text(sub).mtFont(.caption).foregroundStyle(Palette.muted) }
+            if points.count > 1, !masked { MTTrendChart(points: points, height: 120, value: valueText) }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading).contentShape(.rect)
+        .heroSurface()
+    }
+}
+
 struct MTDonutChart: View {
     let parts: [(label: String, value: Double, valueText: String, color: Color)]
     let total: Double
