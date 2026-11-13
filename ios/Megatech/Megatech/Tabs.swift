@@ -903,6 +903,13 @@ enum DebugTour {
         /// request của màn trước trên web ảo. Lỗi tải thì in loi-tai.
         func loaded(_ names: [String], since t: Date) async -> Bool {
             if await LoadBoard.settle(names, since: t) { return true }
+            // Lỗi tải (web ảo nghẽn): tải lại màn đang hiện một lần như kéo để làm mới, và bấm mọi nút Thử lại đang hiện;
+            // chờ xong lượt mới rồi mới in mốc. Lần hai vẫn lỗi mới in loi-tai.
+            print("[UI] tai-lai \(names.joined(separator: ","))"); fflush(stdout)
+            let again = Date()
+            DebugReload.shared.tick += 1
+            DebugRetry.shared.tick += 1
+            if await LoadBoard.settle(names, since: again, fresh: true) { return true }
             mark("loi-tai"); return false
         }
         var t = Date()

@@ -996,6 +996,11 @@ struct StateView: View {
     static let shared = DebugRetry()
     var tick = 0
 }
+/// Bản Debug: lượt chụp giao diện tăng tick để trang đang hiện (RefreshHost) tải lại như kéo để làm mới.
+@Observable final class DebugReload {
+    static let shared = DebugReload()
+    var tick = 0
+}
 #endif
 
 /// Tuổi số của một tab gốc: mở lại tab mà số vừa tải chưa quá 60 giây thì không tải lại (kéo để làm mới thì luôn tải lại).
@@ -1047,10 +1052,21 @@ struct RefreshHost: ViewModifier {
     var outer: RefreshAction?
     var action: (() async -> Void)?
     @State private var relay = RefreshRelay()
+    #if DEBUG
+    @State private var visible = false
+    #endif
     func body(content: Content) -> some View {
         content
             .environment(\.refreshRelay, relay)
             .refreshable { await pull() }
+            #if DEBUG
+            // Lượt chụp giao diện: màn đang hiện báo lỗi tải thì "kéo để làm mới" một lần (chỉ trang đang hiện).
+            .onAppear { visible = true }
+            .onDisappear { visible = false }
+            .onChange(of: DebugReload.shared.tick) { _, _ in
+                if visible { Task { await pull() } }
+            }
+            #endif
     }
     @MainActor private func pull() async {
         var jobs = relay.jobs

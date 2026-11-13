@@ -49,6 +49,16 @@ Bỏ: ô icon, dòng mô tả, mũi tên › trên thẻ (vẫn chạm cả th�
 - Bản ảo: đã có KPI team mẫu cho Sale, CSKH. Thêm KPI mẫu cho 2 team MKT ảo (Hà Nội, Thái Nguyên) ở `lib/demo/mode.ts`, từ doanh thu đơn có marketer của team, chỉ dữ liệu ảo.
 - Tour 15 mốc `tong-quan` chờ thêm lượt tải `tien-do-thang`.
 
+## Lượt iOS preview đỏ ở 72ae0a8 (đoạn 15, Tổng quan)
+- Nguyên nhân: từ R3, Tổng quan gọi cùng lúc tong-quan (2), trung-tam (8), tien-do-thang (2), lại thêm canh-bao (3) và trang-chu (5) còn chạy, lên một web ảo wrangler một luồng.
+  - Báo cáo overview / shift / marketing analytics mất 86–89 giây, quá hạn 45 giây của app.
+  - App báo lỗi tải, tour in loi-tai.
+- Sửa, chỉ bản Debug khi chạy tour, bản phát hành không đổi:
+  1. Hạn mỗi request 120 giây khi có MEGATECH_TOUR (`API.requestTimeout`).
+  2. Màn nào lỗi tải thì tour tải lại màn đó một lần: "kéo để làm mới" trang đang hiện (`DebugReload`) và bấm mọi nút Thử lại đang hiện. Chờ lượt mới xong rồi mới in mốc; lần hai vẫn lỗi mới in loi-tai. Log có dòng `[UI] tai-lai …`.
+  3. Ở Tổng quan, khối Tiến độ tháng chỉ tải sau khi tong-quan và trung-tam xong, chỉ trong tour giaodien.
+- Không đổi thời gian chờ của workflow, không sửa máy chủ.
+
 ## Khối còn "—" vì máy chủ chưa có số
 - Doanh thu · Sale: badge so kỳ trước, vì `/api/reports/sections` chưa trả kỳ trước. AOV của Sale cũng chưa có, ô AOV ghi "—".
 - CSKH, Marketing: badge so kỳ trước (cùng lý do).

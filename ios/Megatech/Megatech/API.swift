@@ -22,11 +22,19 @@ enum API {
         #endif
         return URL(string: "https://tonghopposmegatech.io.vn")!
     }()
+    /// Hạn mỗi request: 45 giây; bản Debug khi chạy lượt tự xem (MEGATECH_TOUR) 120 giây, vì web ảo một luồng trên máy CI có lúc
+    /// trả một báo cáo mất gần 90 giây. Bản phát hành không đổi.
+    static let requestTimeout: TimeInterval = {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["MEGATECH_TOUR"]?.isEmpty == false { return 120 }
+        #endif
+        return 45
+    }()
     static let session: URLSession = {
         let c = URLSessionConfiguration.default
         c.httpCookieStorage = nil
         c.httpShouldSetCookies = false
-        c.timeoutIntervalForRequest = 45
+        c.timeoutIntervalForRequest = requestTimeout
         return URLSession(configuration: c)
     }()
     /// Như `session` nhưng không có bộ nhớ đệm phản hồi (không ghi gì xuống máy, kể cả Cache.db): phần tải trước lúc hộp Face ID
@@ -37,7 +45,7 @@ enum API {
         c.httpShouldSetCookies = false
         c.urlCache = nil
         c.requestCachePolicy = .reloadIgnoringLocalCacheData
-        c.timeoutIntervalForRequest = 45
+        c.timeoutIntervalForRequest = requestTimeout
         return URLSession(configuration: c)
     }()
 

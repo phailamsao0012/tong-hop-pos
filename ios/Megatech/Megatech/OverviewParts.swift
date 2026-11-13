@@ -180,6 +180,18 @@ struct DeptProgressCard: View {
     }
     /// KPI tháng này (mọi scope) và danh sách team (dùng chung HrTeamCache). Đang chọn POS: thêm danh sách nhân viên (một lần).
     @MainActor private func load(force: Bool = false) async {
+        #if DEBUG
+        // Lượt chụp giao diện: tải sau khi số Tổng quan (tong-quan, trung-tam) xong, không bắn cùng lúc lên web ảo một luồng.
+        if ProcessInfo.processInfo.environment["MEGATECH_TOUR"] == "giaodien" {
+            try? await Task.sleep(for: .milliseconds(1500))
+            var waited = 0
+            while waited < 600, LoadBoard.shared.isRunning(["tong-quan", "trung-tam"]) {
+                if Task.isCancelled { return }
+                try? await Task.sleep(for: .milliseconds(250))
+                waited += 1
+            }
+        }
+        #endif
         let m = ym, needStaff = !pos.isEmpty && (force || saleStaff == nil || cskhStaff == nil || allStaff == nil)
         let trace = LoadTrace("tien-do-thang", requests: needStaff ? 5 : 2)
         async let tReq = attempt(true, trace) { try await API.targets(month: m) }

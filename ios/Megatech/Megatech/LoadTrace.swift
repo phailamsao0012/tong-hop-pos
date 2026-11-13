@@ -128,8 +128,15 @@ final class LoadBoard: @unchecked Sendable {
         }
     }
 
-    /// Chờ các màn names tải xong kể từ t (tối đa limit giây). false: có lượt lỗi, hoặc hết giờ.
-    @MainActor static func settle(_ names: [String], since t: Date, limit: Double = 80) async -> Bool {
+    /// Còn lượt nào của các màn names đang chạy.
+    func isRunning(_ names: [String]) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        return names.contains { (running[$0] ?? 0) > 0 }
+    }
+
+    /// Chờ các màn names tải xong kể từ t (tối đa limit giây; mặc định hơn hạn một request khi chạy tour). false: có lượt lỗi,
+    /// hoặc hết giờ. fresh: mọi màn phải có lượt tải xong kể từ t (dùng khi vừa bấm tải lại; "chưa tải" không tính là xong).
+    @MainActor static func settle(_ names: [String], since t: Date, limit: Double = API.requestTimeout + 30, fresh: Bool = false) async -> Bool {
         // Cho màn vừa mở kịp bắt đầu lượt tải.
         try? await Task.sleep(for: .milliseconds(1200))
         let deadline = Date().addingTimeInterval(limit)
@@ -143,7 +150,7 @@ final class LoadBoard: @unchecked Sendable {
                 if failedAt == nil { failedAt = Date() }
             } else {
                 failedAt = nil
-                if states.allSatisfy({ $0 == .done || $0 == .idle }) { return true }
+                if states.allSatisfy({ $0 == .done || (!fresh && $0 == .idle) }) { return true }
             }
             try? await Task.sleep(for: .milliseconds(250))
         }
