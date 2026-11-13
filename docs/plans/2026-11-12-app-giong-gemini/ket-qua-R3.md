@@ -24,12 +24,22 @@ Bỏ: ô icon, dòng mô tả, mũi tên › trên thẻ (vẫn chạm cả th�
 1. Hero "DOANH THU THEO POS": badge so kỳ trước, số lớn, mỗi POS một hàng "POS · N chốt / M đơn … tiền". Chạm một hàng để lọc riêng POS đó.
 2. "Trong kỳ": biểu đồ đường.
 
+## Tiến độ tháng: cộng KPI team (anh Vũ chọn 13/11/2026)
+- KPI tháng của Sale, CSKH, Marketing = tổng KPI các team thuộc bộ phận đó.
+  - Nguồn KPI: `/api/targets?month=` (scope `team`, refId = mã team).
+  - Bộ phận của team: trường `dept` (sale / cskh / mkt) ở `/api/teams?list=1`, dùng chung bộ nhớ của bảng Team.
+  - Không sửa máy chủ, không thêm migration.
+- Số đã đạt: số tháng của bảng bộ phận (`/api/reports/sections`, MKT theo `/api/marketing/analytics`), khi đang xem kỳ Tháng này. Kỳ khác thì ghi "Chọn kỳ Tháng này…" và chỉ hiện KPI.
+- Tiến độ = đã đạt ÷ KPI cộng, có thanh.
+- Mốc tới hôm nay tính như web (`lib/kpi/kpi-pace.ts`): mỗi team KPI ngày = KPI ÷ số ngày làm (trống = số ngày của tháng), nhân số ngày đã qua, rồi cộng các team.
+  - Đạt mốc thì "✓ Đúng tiến độ", chưa đạt thì "▼ Chậm tiến độ".
+- Bộ phận không có KPI team nào: "—" và chữ nhỏ "Chưa giao KPI".
+- Theo POS: team chưa gắn POS (`/api/teams` không có trường POS), nên KPI vẫn cộng theo bộ phận. Khi đang chọn 1 POS, khối ghi rõ đang so số của POS đó với KPI cả bộ phận.
+  - **Câu hỏi:** team có gắn POS không, và gắn ở đâu (web nhân sự hay Chia team), để lọc KPI team theo POS.
+- Bản ảo: đã có KPI team mẫu cho Sale, CSKH. Thêm KPI mẫu cho 2 team MKT ảo (Hà Nội, Thái Nguyên) ở `lib/demo/mode.ts`, từ doanh thu đơn có marketer của team, chỉ dữ liệu ảo.
+- Tour 15 mốc `tong-quan` chờ thêm lượt tải `tien-do-thang`.
+
 ## Khối còn "—" vì máy chủ chưa có số
-- Tiến độ tháng · Ba bộ phận: máy chủ chưa có KPI theo bộ phận, mới có KPI theo POS, nhân viên, team. Vì vậy:
-  - KPI ghi "—";
-  - "Mốc tới hôm nay: —";
-  - không có thanh tiến độ, không có "✓ Đúng tiến độ".
-  - App không tự cộng KPI nhân viên hay team thành KPI bộ phận. Cần anh chốt nguồn KPI bộ phận.
 - Doanh thu · Sale: badge so kỳ trước, vì `/api/reports/sections` chưa trả kỳ trước. AOV của Sale cũng chưa có, ô AOV ghi "—".
 - CSKH, Marketing: badge so kỳ trước (cùng lý do).
 - CSKH: tỷ trọng % Tự upsell / Từ MKT chưa có từ máy chủ, chỉ ghi số đơn và tiền.

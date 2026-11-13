@@ -18,27 +18,86 @@ struct TeamNotFilteredBanner: View {
     }
 }
 
-/// "Tiến độ tháng · Ba bộ phận theo tháng" (khung 02): mỗi bộ phận số đã đạt trong kỳ.
-/// Máy chủ chưa có KPI tháng theo bộ phận (mới có KPI theo POS, nhân viên, team) nên KPI, thanh tiến độ, mốc tới hôm nay ghi "—",
-/// app không tự cộng KPI từ nơi khác.
+/// KPI tháng của một bộ phận = cộng KPI các team thuộc bộ phận đó (anh Vũ chọn 13/11/2026), từ /api/targets (scope "team") và
+/// danh sách team (/api/teams?list=1, trường dept: sale / cskh / mkt). Mốc tới hôm nay như web (lib/kpi/kpi-pace.ts): mỗi team
+/// KPI ngày = KPI ÷ số ngày làm (trống = số ngày của tháng), nhân số ngày đã qua (không quá số ngày làm), rồi cộng các team.
+struct DeptKpi: Equatable {
+    let goal: Double
+    let pace: Double
+    let teams: Int
+    static func build(targets: [API.Target], teams: [API.HrTeamItem], dept: String, day: Int, daysInMonth: Int) -> DeptKpi? {
+        let ids = Set(teams.filter { $0.dept == dept }.map(\.id))
+        let mine = targets.filter { $0.scope == "team" && ids.contains($0.refId) && $0.revenue > 0 }
+        guard !mine.isEmpty else { return nil }
+        var goal = 0.0, pace = 0.0
+        for t in mine {
+            let days = Double((t.workingDays ?? 0) > 0 ? Int(t.workingDays!) : daysInMonth)
+            goal += t.revenue
+            pace += t.revenue / days * min(Double(day), days)
+        }
+        return DeptKpi(goal: goal, pace: pace, teams: mine.count)
+    }
+}
+
+/// "Tiến độ tháng · Ba bộ phận theo tháng" (khung 02): mỗi bộ phận số đã đạt trong tháng / KPI cộng từ các team, thanh tiến độ,
+/// mốc tới hôm nay, ✓ Đúng tiến độ / ▼ Chậm tiến độ. Bộ phận chưa có KPI team nào: "—" và "Chưa giao KPI".
 struct DeptProgressCard: View {
     let data: API.Sections?
     var mkt: API.RoasMetrics? = nil
     let period: Period
+    /// POS đang chọn: KPI team chưa gắn POS nên vẫn là KPI cả bộ phận (ghi rõ dưới khối).
+    var pos = ""
     @AppStorage("thp_hide_money") private var hideMoney = false
     @Environment(\.thinking) private var thinking
+    @State private var targets: [API.Target]?
+    @State private var teams: [API.HrTeamItem]?
+    @State private var failText: String?
+    private var today: String { VNDate.string(.now) }
+    private var ym: String { String(today.prefix(7)) }
+    private var day: Int { Int(today.suffix(2)) ?? 1 }
+    private var daysInMonth: Int { Int(VNDate.monthEnd(ym).suffix(2)) ?? 30 }
+    /// Số đã đạt chỉ là số tháng này khi đang xem kỳ Tháng này.
+    private var monthView: Bool { period == .month }
     private func money(_ v: Double) -> String { hideMoney ? "••• tr ₫" : Fmt.shortVnd(v) }
-    private func row(_ dept: CompanyDept, _ count: String, _ net: Double) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+    private func kpi(_ dept: String) -> DeptKpi? {
+        guard let targets, let teams else { return nil }
+        return DeptKpi.build(targets: targets, teams: teams, dept: dept, day: day, daysInMonth: daysInMonth)
+    }
+    private func amounts(_ net: Double, _ k: DeptKpi?) -> String {
+        let done = monthView ? money(net) : "—"
+        guard let k else { return "\(done) / —" }
+        guard monthView else { return "— / \(money(k.goal))" }
+        return "\(done) / \(money(k.goal)) (\(Fmt.pct0(net / k.goal * 100)))"
+    }
+    @ViewBuilder private func status(_ net: Double, _ k: DeptKpi?) -> some View {
+        if let k, monthView {
+            if net >= k.pace {
+                Label("Đúng tiến độ", systemImage: "checkmark").labelStyle(.titleAndIcon).foregroundStyle(Palette.good)
+            } else {
+                Label("Chậm tiến độ", systemImage: "arrowtriangle.down.fill").labelStyle(.titleAndIcon).foregroundStyle(Palette.bad)
+            }
+        } else if k == nil, targets != nil, teams != nil {
+            Text("Chưa giao KPI").foregroundStyle(Palette.muted)
+        }
+    }
+    private func row(_ dept: CompanyDept, _ key: String, _ count: String, _ net: Double) -> some View {
+        let k = kpi(key)
+        return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Circle().fill(dept.tint).frame(width: 8, height: 8)
                 Text("\(dept.pageTitle) · \(count)").mtFont(.body).fontWeight(.bold).foregroundStyle(Palette.ink)
                     .lineLimit(1).minimumScaleFactor(0.8)
                 Spacer(minLength: 6)
-                Text("\(money(net)) / — KPI").mtFont(.body).fontWeight(.bold).foregroundStyle(Palette.ink)
-                    .lineLimit(1).minimumScaleFactor(0.7).loadingPlaceholder(thinking)
+                Text(amounts(net, k)).mtFont(.body).fontWeight(.bold).foregroundStyle(Palette.ink)
+                    .lineLimit(1).minimumScaleFactor(0.6).loadingPlaceholder(thinking)
             }
-            Text("Mốc tới hôm nay: —").mtFont(.caption).foregroundStyle(Palette.muted)
+            if let k, monthView { Bar(value: min(1, net / k.goal), tint: dept.tint, height: 6) }
+            HStack {
+                Text("Mốc tới hôm nay: \(k.map { money($0.pace) } ?? "—")")
+                Spacer(minLength: 6)
+                status(net, k)
+            }
+            .mtFont(.caption).foregroundStyle(Palette.muted)
         }
         .padding(10).frame(maxWidth: .infinity, alignment: .leading)
         .background(Palette.wash, in: .rect(cornerRadius: MT.rCell))
@@ -47,20 +106,42 @@ struct DeptProgressCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: MT.cellGap) {
             Text("Tiến độ tháng · Ba bộ phận theo tháng").mtFont(.cardHeader).foregroundStyle(Palette.ink)
-            if period != .month {
-                Text("Đang xem \(period.title): số đã đạt là số của kỳ này.").mtFont(.caption).foregroundStyle(Palette.muted)
+            if !monthView {
+                Text("Chọn kỳ Tháng này để so số đã đạt với KPI tháng.").mtFont(.caption).foregroundStyle(Palette.muted)
             }
             if let d = data {
-                row(.sale, "\(Fmt.int(d.sale.orders)) đơn chốt", d.sale.net)
-                row(.cskh, "\(Fmt.int(d.cskh.orders)) đơn chốt", d.cskh.net)
-                row(.mkt, "\(Fmt.int(mkt?.closed ?? d.mkt.orders)) đơn XN", mkt?.net ?? d.mkt.net)
-                Text("KPI tháng theo bộ phận chưa có trên máy chủ nên chưa có thanh tiến độ và mốc tới hôm nay.")
-                    .mtFont(.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                row(.sale, "sale", "\(Fmt.int(d.sale.orders)) đơn chốt", d.sale.net)
+                row(.cskh, "cskh", "\(Fmt.int(d.cskh.orders)) đơn chốt", d.cskh.net)
+                row(.mkt, "mkt", "\(Fmt.int(mkt?.closed ?? d.mkt.orders)) đơn XN", mkt?.net ?? d.mkt.net)
+                if !pos.isEmpty {
+                    Text("KPI team chưa gắn POS: đang so số của POS đang chọn với KPI cả bộ phận.")
+                        .mtFont(.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                }
+                if let failText {
+                    Text("Chưa tải được KPI team: \(failText)").mtFont(.caption).foregroundStyle(Palette.warn)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             } else {
                 Skeleton(height: 44); Skeleton(height: 44); Skeleton(height: 44)
             }
         }
         .padding(MT.cardPad).frame(maxWidth: .infinity, alignment: .leading).cardSurface()
+        .task(id: ym) { await load() }
+        .pullToReload { await load(force: true) }
+    }
+    /// KPI tháng này (mọi scope, lọc team ở trên) và danh sách team (dùng chung HrTeamCache, không hỏi lại trong 5 phút).
+    @MainActor private func load(force: Bool = false) async {
+        let m = ym
+        let trace = LoadTrace("tien-do-thang", requests: 2)
+        async let tReq = attempt(true, trace) { try await API.targets(month: m) }
+        async let lReq = attempt(true, trace) { try await HrTeamCache.list(force: force) }
+        let (tRes, lRes) = await (tReq, lReq)
+        trace.end(cancelled: Task.isCancelled)
+        guard !Task.isCancelled else { return }
+        var errors: [Error] = []
+        switch tRes { case .success(let v)?: targets = v.items; case .failure(let e)?: errors.append(e); case nil: break }
+        switch lRes { case .success(let v)?: teams = v; case .failure(let e)?: errors.append(e); case nil: break }
+        failText = errors.compactMap { LoadError.text($0) }.first
     }
 }
 

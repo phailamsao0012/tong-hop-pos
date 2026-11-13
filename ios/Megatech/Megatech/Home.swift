@@ -52,7 +52,7 @@ struct HomeView: View {
                             if let error, sections == nil {
                                 StateView(error: error) { await load(force: true) }
                             }
-                            DeptProgressCard(data: sections, mkt: mkt?.current, period: period)
+                            DeptProgressCard(data: sections, mkt: mkt?.current, period: period, pos: pos)
                             DeptBoards(data: sections, mkt: mkt?.current, mktRatios: !posLimited, mktNote: product == "all" ? nil : "MKT chưa lọc được theo nhóm đơn: số của mọi sản phẩm.",
                                        period: period, pos: pos, product: product, me: auth.me, failed: error != nil)
                                 .environment(\.thinking, loading && sections != nil)

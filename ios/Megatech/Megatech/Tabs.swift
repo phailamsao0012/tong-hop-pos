@@ -916,7 +916,7 @@ enum DebugTour {
         // Tổng quan chụp ở đầu trang (tiêu đề, pill lọc, segmented, khối đầu), không cuộn xuống.
         t = Date()
         await play([(0.35, { nav.tab = .overview; nav.overviewPath = []; nav.overviewScroll = "dau:departments" })])
-        guard await loaded(["tong-quan"], since: t) else { return }
+        guard await loaded(["tong-quan", "tien-do-thang"], since: t) else { return }
         await pause("tong-quan", seconds: 2)
         t = Date()
         nav.overviewScroll = "dau:metrics"
