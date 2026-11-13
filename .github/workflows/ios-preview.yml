@@ -800,7 +800,10 @@ jobs:
             done
             for stage in "${ui_stages[@]}"; do
               if [ "$stage" != hom-nay ]; then wait_ui "$stage" 180 "$log15"; fi
-              sim 30 io "$UDID" screenshot "$OUT/15-$mode-$stage.png" > /dev/null || echo "::warning::15: chụp $mode-$stage quá hạn"
+              # 13/11: một lệnh chụp nền tối treo quá 30 giây (thiếu ảnh 39/40): chụp lại một lần.
+              sim 30 io "$UDID" screenshot "$OUT/15-$mode-$stage.png" > /dev/null \
+                || { echo "::warning::15: chụp $mode-$stage quá hạn, chụp lại"; sim 45 io "$UDID" screenshot "$OUT/15-$mode-$stage.png" > /dev/null; } \
+                || echo "::warning::15: chụp lại $mode-$stage vẫn quá hạn"
             done
             wait_ui xong 30 "$log15"
           done
