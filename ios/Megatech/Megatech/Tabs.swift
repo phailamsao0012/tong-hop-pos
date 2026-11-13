@@ -675,31 +675,43 @@ struct MoreHome: View {
         NavigationStack {
             TabPage(title: "Thêm", actions: []) {
                 if let me = auth.me {
-                    Panel {
-                        VStack(spacing: MT.cellGap) {
-                            Avatar(name: me.displayName, size: 48)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(me.displayName).mtFont(.cardHeader).foregroundStyle(Color.mtTextPrimary)
-                                Text(me.title?.isEmpty == false ? me.title! : roleTitle(me.role)).mtFont(.caption).foregroundStyle(Color.mtTextSecondary)
-                            }
-                            Tag(text: roleTitle(me.role), tone: .green)
-                            ScanLoginRow()
-                        }
-                        .frame(maxWidth: .infinity)
+                    // Khung 15A: thẻ người dùng có nút xanh "Quét đăng nhập máy tính", rồi ba thẻ nút: Báo cáo & KPI,
+                    // Vận hành & Nhân sự, Tài khoản & hệ thống (Đăng xuất cuối thẻ). Nút nào không có quyền thì ẩn.
+                    VStack(spacing: MT.cellGap) {
+                        Avatar(name: me.displayName, size: 48)
+                        VStack(spacing: 2) {
+                            Text(me.displayName).mtFont(.cardHeader).foregroundStyle(Color.mtTextPrimary)
+                            Text(me.title?.isEmpty == false ? me.title! : roleTitle(me.role)).mtFont(.caption).foregroundStyle(Color.mtTextSecondary)
+                        }.multilineTextAlignment(.center)
+                        ScanLoginButton()
                     }
-                    ForEach(MORE_GROUPS, id: \.0) { title, pages in MoreGroup(title: title, rows: Self.rows(title, pages, me)) }
-                    if me.canView("sale-kpi") {
-                        NavigationLink { SaleKpiReadView() } label: {
-                            Label("KPI Sale & Team", systemImage: "target")
-                                .mtFont(.cardHeader).frame(maxWidth: .infinity, minHeight: 44)
-                                .foregroundStyle(Color.mtBrandPrimary).tileSurface()
-                        }.buttonStyle(MTPressStyle())
+                    .padding(MT.cardPad).frame(maxWidth: .infinity).heroSurface()
+                    MoreCard(title: "Báo cáo & KPI \(roleTitle(me.role))") {
+                        let reports = Self.pick(["monthly", "custom", "customers", "raw-orders"], me)
+                        LazyVGrid(columns: [GridItem(.flexible(), spacing: MT.cellGap), GridItem(.flexible(), spacing: MT.cellGap)], spacing: MT.cellGap) {
+                            ForEach(reports) { x in MoreButton(title: x.title, route: x.route) }
+                        }
+                        if me.canView("sale-kpi") {
+                            NavigationLink { SaleKpiReadView() } label: { MoreButtonLabel(title: "KPI Sale (Doanh số + Tỷ lệ) & Chia KPI Team", accent: true) }
+                                .buttonStyle(MTPressStyle())
+                        }
+                    }
+                    MoreCard(title: "Vận hành & Nhân sự") {
+                        if me.canView("pipeline") { MoreButton(title: "Vận hành đơn", route: .page("pipeline")) }
+                        if me.canView("shift") { MoreButton(title: "Điều hành trong ca", route: .page("shift")) }
+                        if me.canView("overview") { MoreButton(title: "Tổng quan theo từng POS", route: .overview) }
+                        if me.canView("people") { MoreButton(title: "Nhân sự · Web vệ tinh", route: .hr("")) }
                     }
                     SatelliteSection(me: me)
+                    MoreCard(title: "Tài khoản & hệ thống") {
+                        ForEach(Self.pick(["security", "metrics", "config", "audit"], me)) { x in MoreButton(title: x.title, route: x.route) }
+                        MoreButton(title: "Cài đặt trên máy này", route: .page("app-settings"))
+                        if WidgetProbeBridge.installed { WidgetDiagnosticsRow() }
+                        Button { Task { await auth.logout() } } label: { MoreButtonLabel(title: "Đăng xuất", danger: true) }
+                            .buttonStyle(MTPressStyle())
+                    }
                 }
                 PrivacyRow()
-                if WidgetProbeBridge.installed { WidgetDiagnosticsRow() }
-                PrimaryButton(title: "Đăng xuất", icon: "rectangle.portrait.and.arrow.right", tint: .bad) { Task { await auth.logout() } }.padding(.top, 8)
                 Text(versionLabel).font(.system(size: 10)).foregroundStyle(Color.inkSoft).frame(maxWidth: .infinity)
             }
             .appRoutes()
@@ -720,6 +732,12 @@ struct MoreHome: View {
             .task { await satellites.refresh(maxAge: 10) }
         }
     }
+    /// Nút trang theo id (giữ thứ tự), chỉ những trang người này được xem.
+    static func pick(_ ids: [String], _ me: API.Me) -> [MoreRow] {
+        let pages = MORE_GROUPS.flatMap(\.1)
+        return ids.compactMap { id in pages.first { $0.id == id } }.filter { me.canView($0.id) }
+            .map { MoreRow(id: $0.id, title: $0.title, icon: $0.icon, route: .web($0)) }
+    }
     /// Dòng của một nhóm theo quyền; Tiện ích có thêm Tổng quan theo từng POS (số từng POS riêng lẻ, trước ở trang chủ);
     /// Cài đặt có thêm "Cài đặt trên máy này" (lựa chọn chỉ lưu trên iPhone này, ai cũng mở được).
     static func rows(_ title: String, _ pages: [WebPage], _ me: API.Me) -> [MoreRow] {
@@ -728,6 +746,41 @@ struct MoreHome: View {
         if title == "Cài đặt" { r.append(MoreRow(id: "app-settings", title: "Cài đặt trên máy này", icon: "iphone", route: .page("app-settings"))) }
         return r
     }
+}
+
+/// Thẻ một nhóm nút ở tab Thêm (khung 15A).
+struct MoreCard<Content: View>: View {
+    let title: String
+    @ViewBuilder var content: Content
+    var body: some View {
+        VStack(alignment: .leading, spacing: MT.cellGap) {
+            Text(title).mtFont(.cardHeader).foregroundStyle(Color.mtTextPrimary)
+            content
+        }
+        .padding(MT.cardPad).frame(maxWidth: .infinity, alignment: .leading).cardSurface()
+    }
+}
+/// Nút dạng viên trong thẻ ở tab Thêm: chữ giữa, mũi tên nhỏ.
+struct MoreButtonLabel: View {
+    let title: String
+    var accent = false
+    var danger = false
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(title).multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.8)
+            Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold))
+        }
+        .mtFont(.caption).fontWeight(.semibold)
+        .foregroundStyle(danger ? Color.bad : accent ? Color.mtBrandPrimary : Color.mtTextPrimary)
+        .frame(maxWidth: .infinity, minHeight: 40).padding(.horizontal, 8)
+        .background(Palette.wash, in: .rect(cornerRadius: MT.rCell))
+        .overlay { RoundedRectangle(cornerRadius: MT.rCell).strokeBorder(Palette.line, lineWidth: 1) }
+        .contentShape(.rect)
+    }
+}
+struct MoreButton: View {
+    let title: String; let route: Route
+    var body: some View { NavigationLink(value: route) { MoreButtonLabel(title: title) }.buttonStyle(MTPressStyle()) }
 }
 
 struct MoreRow: Identifiable { let id: String; let title: String; let icon: String; let route: Route }

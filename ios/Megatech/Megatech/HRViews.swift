@@ -212,17 +212,17 @@ struct HROverviewView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                PageTitle(title: "Tổng quan nhân sự", subtitle: periodLabel, trailing: AnyView(periodMenu))
+                HStack { Text(periodLabel).mtFont(.body).foregroundStyle(Color.inkSoft); Spacer(); periodMenu }
                 // Tải kỳ mới lỗi: chỉ báo lỗi, không để số của kỳ trước hiện dưới tên và ngày của kỳ mới.
                 let stale = store.overviewError != nil && store.overviewKey != store.periodKey
                 if let e = store.overviewError, store.overview == nil || stale {
                     Label(stale ? "Không tải được số \(store.period.title.lowercased()). \(e)" : e, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad).font(.subheadline)
                 }
                 if let d = store.overview, !stale {
-                    if (d.unplaced ?? 0) > 0 { unplaced(d.unplaced ?? 0) }
+                    // Khung 17A: hero Quân số (2 ô Vào / Nghỉ, Tỉ lệ nghỉ / Thử việc), thẻ "Theo chi nhánh / phòng ban"
+                    // có nút Danh sách nhân sự; biểu đồ và người vào / nghỉ ở dưới.
                     kpis(d)
-                    if !d.offices.isEmpty { offices(d) }
-                    if !d.departments.isEmpty { departments(d) }
+                    breakdown(d)
                     if !d.series.isEmpty { chart(d) }
                     flows("Người mới vào", d.joined, leaving: false, all: $allJoined)
                     flows("Người nghỉ việc", d.left, leaving: true, all: $allLeft)
@@ -257,46 +257,59 @@ struct HROverviewView: View {
     private func kpis(_ d: API.HR.Overview) -> some View {
         let t = d.total
         let change = (t.end ?? 0) - (t.start ?? 0)
-        let changeText: String? = change == 0 ? nil : (change > 0 ? "+\(change)" : "\(change)") + " người"
-        return VStack(spacing: MT.cardGap) {
-            MTMetricHeroCard(label: "Quân số", value: t.end.map { Fmt.int(Double($0)) + " người" } ?? "—",
-                scope: periodLabel + " · Mọi chi nhánh · Cuối kỳ", comparison: changeText,
-                comparisonGood: change >= 0, action: { store.filter(); go("list") })
-            LazyVGrid(columns: Self.grid, spacing: MT.cellGap) {
-            KpiCard(icon: "person.badge.plus", tint: Palette.info, label: "Vào", value: HRText.num(t.joined), note: "Người mới trong kỳ")
-            KpiCard(icon: "person.badge.minus", tint: .bad, label: "Nghỉ", value: HRText.num(t.left), note: "Nghỉ việc trong kỳ")
-            KpiCard(icon: "ic_m_rate", tint: Palette.mtRolePurpleInk, label: "Tỉ lệ nghỉ", value: Fmt.pct(t.turnover), note: "Số nghỉ / quân số bình quân")
-            Button { store.filter(status: "thu_viec"); go("list") } label: { KpiCard(icon: "hourglass", tint: .warn, label: "Thử việc", value: HRText.num(d.probation), note: "Đang thử việc · chạm để xem") }.buttonStyle(.plain)
-            Button { go("approvals") } label: { KpiCard(icon: "checkmark.seal.fill", tint: store.decidable > 0 ? .bad : .good, label: "Chờ duyệt", value: Fmt.int(Double(store.decidable)), note: store.decidable > 0 ? "Bạn duyệt được · chạm để xem" : "Không có việc chờ") }.buttonStyle(.plain)
+        return Button { store.filter(); go("list") } label: {
+            VStack(alignment: .leading, spacing: MT.cellGap) {
+                HStack(alignment: .top) {
+                    Text("QUÂN SỐ").mtFont(.caption).fontWeight(.bold).foregroundStyle(Palette.muted)
+                    Spacer(minLength: 6)
+                    if change != 0 { DeltaPill((change > 0 ? "+\(change)" : "\(change)") + " người", good: change > 0) }
+                }
+                Text(t.end.map { Fmt.int(Double($0)) + " người" } ?? "—").mtFont(.heroNumber).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
+                    .loadingPlaceholder(store.overviewLoading)
+                Grid(horizontalSpacing: MT.cellGap, verticalSpacing: MT.cellGap) {
+                    GridRow {
+                        BoardCell(label: "Vào / Nghỉ", value: "\(HRText.num(t.joined)) vào · \(HRText.num(t.left)) nghỉ")
+                        BoardCell(label: "Tỉ lệ nghỉ / Thử việc", value: "\(Fmt.pct(t.turnover)) · \(HRText.num(d.probation)) thử việc")
+                    }
+                }
+                Text(periodLabel + " · Mọi chi nhánh · Cuối kỳ").mtFont(.caption).foregroundStyle(Palette.muted)
             }
+            .frame(maxWidth: .infinity, alignment: .leading).contentShape(.rect).heroSurface()
         }
+        .buttonStyle(.plain)
         .environment(\.thinking, store.overviewLoading)
     }
-    private func offices(_ d: API.HR.Overview) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionHead(title: "Theo chi nhánh", action: "Chạm để xem người")
-            LazyVGrid(columns: Self.grid, spacing: 10) {
-                ForEach(d.offices) { o in
-                    let none = o.id == "__none"
-                    Button { store.filter(office: o.id); go("list") } label: {
-                        VStack(alignment: .leading, spacing: 5) {
-                            HStack(spacing: 6) {
-                                Image(systemName: none ? "questionmark.circle.fill" : "building.2.fill").mtFont(.body).foregroundStyle(none ? Color.warn : Color.brand)
-                                Text(o.name).mtFont(.body).foregroundStyle(Color.ink).lineLimit(1)
-                            }
-                            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                                Text(HRText.num(o.headcount)).font(.system(size: 22, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).monospacedDigit()
-                                Text("người").mtFont(.caption).foregroundStyle(Color.inkSoft)
-                            }
-                            Text("+\(HRText.num(o.joined)) vào · \(HRText.num(o.left)) nghỉ").mtFont(.caption).foregroundStyle(Color.inkSoft)
-                            Text((o.probation ?? 0) > 0 ? "\(HRText.num(o.probation)) đang thử việc" : "Không ai thử việc").mtFont(.caption).foregroundStyle((o.probation ?? 0) > 0 ? Color.warn : Color.inkSoft)
-                        }
-                        .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.card, in: .rect(cornerRadius: MT.rCard)).cardShadow()
-                    }.buttonStyle(.plain)
-                }
+    /// Thẻ "Theo chi nhánh / phòng ban": mỗi chi nhánh, mỗi phòng gốc một dòng (chạm mở Danh sách đã lọc), dòng Chưa xếp phòng,
+    /// nút Danh sách nhân sự.
+    private func breakdown(_ d: API.HR.Overview) -> some View {
+        let ids = Set(d.departments.map(\.id))
+        let roots = d.departments.filter { x in x.parent_id.map { !ids.contains($0) } ?? true }
+        return VStack(alignment: .leading, spacing: MT.cellGap) {
+            Text("Theo chi nhánh / phòng ban").mtFont(.cardHeader).foregroundStyle(Palette.ink)
+            ForEach(d.offices) { o in
+                row(o.name, o.headcount, warn: o.id == "__none") { store.filter(office: o.id); go("list") }
             }
+            ForEach(roots) { x in row(x.name, x.headcount) { store.filter(dept: x.id); go("list") } }
+            if (d.unplaced ?? 0) > 0 { row("Chưa xếp phòng", d.unplaced, warn: true) { store.filter(dept: "__none"); go("list") } }
+            Button { store.filter(); go("list") } label: {
+                HStack(spacing: 4) { Text("Danh sách nhân sự (\(HRText.num(d.total.end)))"); Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)) }
+                    .mtFont(.body).fontWeight(.bold).foregroundStyle(Color.white)
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .background(Palette.mtBrandPrimary, in: .rect(cornerRadius: MT.rCell))
+            }.buttonStyle(MTPressStyle())
         }
+        .padding(MT.cardPad).frame(maxWidth: .infinity, alignment: .leading).cardSurface()
+    }
+    private func row(_ name: String, _ n: Int?, warn: Bool = false, tap: @escaping () -> Void) -> some View {
+        Button(action: tap) {
+            HStack {
+                Text(name).mtFont(.body).foregroundStyle(warn ? Color.warn : Palette.ink).lineLimit(1)
+                Spacer(minLength: 6)
+                Text("\(HRText.num(n)) người").mtFont(.body).fontWeight(.bold).foregroundStyle(Palette.ink).monospacedDigit()
+            }
+            .padding(.horizontal, 12).frame(minHeight: 44)
+            .background(Palette.wash, in: .rect(cornerRadius: MT.rCell)).contentShape(.rect)
+        }.buttonStyle(.plain)
     }
     private func departments(_ d: API.HR.Overview) -> some View {
         let depth = HRText.depths(d.departments.map { ($0.id, $0.parent_id) })

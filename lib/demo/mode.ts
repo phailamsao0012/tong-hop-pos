@@ -7,12 +7,13 @@ import { ALL_VIEWS } from '@/lib/auth/access';
 import { ensureAdCostSchema } from '@/lib/ops/ad-costs';
 import { POS } from '@/lib/shared/report-model';
 import { NET } from '@/lib/reports/stats';
-import { vnRangeUtc } from '@/lib/shared/report-time';
+import { todayVn, vnRangeUtc } from '@/lib/shared/report-time';
 import { teamSubquery } from '@/lib/teams/team';
 import { setPancakeTransport } from '@/lib/pancake/pancake';
 import { fakePancake } from '@/lib/demo/fake-pancake';
 import { DEMO_START, STAFF, UNITS, addDay, dayData, hrSnapshot, toSourceOrder, uuidOf, vnDayOfMs } from '@/lib/demo/world';
 import { MARKETING_TEAMS_KEY } from '@/lib/teams/marketing-teams';
+import { demoHrApp } from '@/lib/demo/hr-app';
 
 export const isDemo = () => env.DEMO_MODE === '1';
 
@@ -54,6 +55,8 @@ export function installDemo() {
 /** Web nhân sự giả: chỉ có ảnh chụp /api/v1/snapshot (team, Leader, Trưởng phòng, chi nhánh). */
 export function demoHrFetch(path: string): Response {
   if (path.split('?')[0] === '/api/v1/snapshot') return Response.json(hrSnapshot());
+  const app = demoHrApp(path, todayVn());
+  if (app) return Response.json(app);
   return Response.json({ error: 'Bản demo không nối web nhân sự.' }, { status: 503 });
 }
 

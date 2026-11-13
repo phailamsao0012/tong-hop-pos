@@ -214,6 +214,22 @@ struct ScanLoginRow: View {
     }
 }
 
+/// Nút xanh "Quét đăng nhập máy tính" ở thẻ người dùng tab Thêm (khung 15A).
+struct ScanLoginButton: View {
+    @State private var scanning = false
+    var body: some View {
+        Button { scanning = true } label: {
+            Label("Quét đăng nhập máy tính", systemImage: "qrcode.viewfinder")
+                .mtFont(.body).fontWeight(.bold).foregroundStyle(Color.white)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .background(Palette.mtBrandPrimary, in: .rect(cornerRadius: MT.rCell))
+        }
+        .buttonStyle(MTPressStyle())
+        .accessibilityHint("Quét mã QR trên màn đăng nhập web, xác nhận bằng \(Biometric.name)")
+        .fullScreenCover(isPresented: $scanning) { QRScanScreen() }
+    }
+}
+
 struct QRScanScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(ApprovalCenter.self) private var center
