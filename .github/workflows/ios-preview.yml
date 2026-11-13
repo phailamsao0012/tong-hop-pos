@@ -769,8 +769,13 @@ jobs:
             vars15=(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
               SIMCTL_CHILD_MEGATECH_TOUR=giaodien SIMCTL_CHILD_MEGATECH_NAV_RESET=1)
             m15 "$mode-mo-app-truoc"
-            env "${vars15[@]}" perl -e 'alarm shift; exec @ARGV' 30 xcrun simctl launch --stdout="$log15" "$UDID" "$BUNDLE" > /dev/null \
-              || { echo "::error::15: mở app ($mode) quá hạn"; exit 1; }
+            # Sau khi bật lại máy ảo, lần mở đầu có lúc quá 30 giây (13/11 lượt nền tối): tắt app, mở lại một lần với hạn 90 giây.
+            if ! env "${vars15[@]}" perl -e 'alarm shift; exec @ARGV' 30 xcrun simctl launch --stdout="$log15" "$UDID" "$BUNDLE" > /dev/null; then
+              echo "::warning::15: mở app ($mode) quá 30 giây, mở lại"
+              sim 30 terminate "$UDID" "$BUNDLE" || true; sleep 5
+              env "${vars15[@]}" perl -e 'alarm shift; exec @ARGV' 90 xcrun simctl launch --stdout="$log15" "$UDID" "$BUNDLE" > /dev/null \
+                || { echo "::error::15: mở app ($mode) quá hạn"; exit 1; }
+            fi
             m15 "$mode-mo-app-sau"
             m15 "$mode-face-id-truoc"; face_on_ask "$log15"; m15 "$mode-face-id-sau"
             for stage in "${ui_stages[@]}"; do
