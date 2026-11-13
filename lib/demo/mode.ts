@@ -202,7 +202,7 @@ async function seedTargets() {
   for (const m of [prev, month]) {
     if (m < DEMO_START.slice(0, 7)) continue;
     // Đã có mục tiêu ảo của tháng, kể cả KPI team Marketing (thêm 13/11/2026), thì thôi; thiếu thì ghi bổ sung (INSERT OR IGNORE giữ dòng cũ).
-    const exists = await db.prepare("SELECT 1 AS x FROM targets WHERE month=? AND updated_by='demo' AND scope='team' AND ref_id LIKE 'mkt\\_%' ESCAPE '\\' LIMIT 1").bind(m).first();
+    const exists = await db.prepare("SELECT 1 AS x FROM targets WHERE month=? AND updated_by='demo' AND scope='team' AND ref_id LIKE 'hr:dept-mkt-%' LIMIT 1").bind(m).first();
     if (exists) continue;
     // Doanh thu chốt cả tháng theo dữ liệu ảo (kể cả phần chưa tới), để mục tiêu sát thực tế.
     const pos = new Map<string, [number, number]>(), emp = new Map<string, [number, number]>(), team = new Map<string, [number, number]>();
@@ -215,7 +215,8 @@ async function seedTargets() {
       if (o.sellerId) { add(emp, o.sellerId, net); const unit = STAFF.find((s) => s.id === o.sellerId)?.unit; if (unit && UNITS[unit]?.kind === 'team') add(team, `dept-${unit}`, net); }
       // KPI team Marketing ảo (team MKT Hà Nội / Thái Nguyên ở cuối ensureDemoSeed): doanh thu đơn có marketer của team đó.
       // KPI người của marketer (13/11/2026: chọn 1 POS thì KPI bộ phận = cộng KPI từng người của POS đó, kể cả Marketing).
-      if (o.marketerId) { const mk = STAFF.find((s) => s.id === o.marketerId); if (mk?.dept === 'mkt') { add(emp, mk.id, net); if (mk.branch === 'HN' || mk.branch === 'TN') add(team, `mkt_${uuidOf(`mkt-team:${mk.branch}`)}`, net); } }
+      // Mã team MKT theo nguồn team web nhân sự (lib/teams/mkt-teams-source.ts): "hr:" + mã phòng ban team MKT ảo (world.ts: dept-mkt-hn / dept-mkt-tn).
+      if (o.marketerId) { const mk = STAFF.find((s) => s.id === o.marketerId); if (mk?.dept === 'mkt') { add(emp, mk.id, net); add(team, `hr:dept-mkt-${mk.branch.toLowerCase()}`, net); } }
     }
     const round = (v: number) => Math.max(1, Math.round(v * 1.06 / 5e6)) * 5e6;
     const push = (scope: string, refId: string, [rev, n]: [number, number], workingDays: number | null) => stmts.push(db.prepare('INSERT OR IGNORE INTO targets (id,month,scope,ref_id,revenue,closed_orders,working_days,updated_by,updated_at) VALUES (?,?,?,?,?,?,?,?,?)')

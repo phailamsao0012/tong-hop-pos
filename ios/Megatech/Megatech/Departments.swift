@@ -349,14 +349,15 @@ struct SaleBoard: View {
     let s: API.Sections.Sale
     var definition: String? = nil
     var body: some View {
-        // Khung 02 "Doanh thu · Sale": số lớn, 3 ô Đơn chốt · Tỷ lệ chốt · AOV (máy chủ chưa trả AOV của Sale: "—").
+        // Khung 02 "Doanh thu · Sale": số lớn, 3 ô Đơn chốt · Tỷ lệ chốt · AOV. AOV = doanh thu ÷ đơn chốt, tính trên app từ số của
+        // bảng (máy chủ chưa trả AOV Sale). Badge so kỳ trước: /api/reports/sections chưa trả kỳ trước nên chưa có.
         DeptBoard(dept: .sale, heroLabel: "Doanh thu", hero: Fmt.vnd(s.net), heroNote: "", heroMoney: s.net, definition: definition, title: "Doanh thu · Sale") {
             HStack(alignment: .top, spacing: MT.cellGap) {
                 BoardCell(label: "Đơn chốt", value: "\(Fmt.int(s.orders)) đơn", note: "chờ XN + đã XN")
                 BoardCell(label: "Tỷ lệ chốt", note: "\(Fmt.int(s.closedNow)) ÷ \(Fmt.int(s.created))") {
                     MTRateBadge(rate: s.rate, kind: .saleClose)
                 }
-                BoardCell(label: "AOV", value: "—", note: "chưa có trên máy chủ")
+                BoardCell(label: "AOV", value: s.orders > 0 ? Fmt.shortVnd(s.net / s.orders) : "—", note: "doanh thu ÷ đơn chốt")
             }
         }
     }

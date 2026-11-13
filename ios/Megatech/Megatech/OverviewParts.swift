@@ -84,9 +84,18 @@ struct DeptProgressCard: View {
         case "cskh": return cskhStaff
         default:
             guard let allStaff, let teams else { return nil }
+            // Team MKT theo web nhân sự chỉ trả tên thành viên (mã rỗng), nên nhận người Marketing như máy chủ (lib/teams/team.ts
+            // nameSuffixDept): tên tài khoản POS có hậu tố cuối "MKT" (kể cả "MKT _n"); cộng người có mã trong team MKT nếu có.
             let ids = Set(teams.filter { $0.dept == "mkt" }.flatMap { $0.memberRefs ?? [] }.map(\.id).filter { !$0.isEmpty })
-            return allStaff.filter { ids.contains($0.id) }
+            return allStaff.filter { ids.contains($0.id) || Self.mktSuffix($0.name) }
         }
+    }
+    /// Hậu tố bộ phận Marketing ở cuối tên như máy chủ: "… MKT" hoặc "… MKT _n".
+    static func mktSuffix(_ name: String) -> Bool {
+        let words = name.lowercased().split(whereSeparator: \.isWhitespace).map(String.init)
+        guard let last = words.last else { return false }
+        if last == "mkt" { return true }
+        return last == "_n" && words.count >= 2 && words[words.count - 2] == "mkt"
     }
     private var today: String { VNDate.string(.now) }
     private var ym: String { String(today.prefix(7)) }

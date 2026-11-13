@@ -49,6 +49,15 @@ Bỏ: ô icon, dòng mô tả, mũi tên › trên thẻ (vẫn chạm cả th�
 - Bản ảo: đã có KPI team mẫu cho Sale, CSKH. Thêm KPI mẫu cho 2 team MKT ảo (Hà Nội, Thái Nguyên) ở `lib/demo/mode.ts`, từ doanh thu đơn có marketer của team, chỉ dữ liệu ảo.
 - Tour 15 mốc `tong-quan` chờ thêm lượt tải `tien-do-thang`.
 
+## Sửa sau lượt chụp 657fccc
+- Marketing ở Tiến độ tháng hiện "Chưa giao KPI":
+  - Mọi POS: bản ảo ghi KPI team MKT theo mã `mkt_…`, nhưng với nguồn team web nhân sự, `/api/teams?list=1` trả mã `hr:dept-mkt-hn` / `hr:dept-mkt-tn`. Sửa seed bản ảo theo đúng mã đó.
+  - 1 POS: team MKT web nhân sự chỉ trả tên thành viên, mã rỗng. App nhận người Marketing như máy chủ (`nameSuffixDept`): tên tài khoản POS có hậu tố cuối "MKT", cộng người có mã trong team MKT nếu có.
+- Doanh thu · Sale:
+  - AOV = doanh thu ÷ đơn chốt, tính trên app.
+  - Badge so kỳ trước: `/api/reports/sections` chưa trả kỳ trước, nên chưa có (không gọi thêm API).
+- Biểu đồ Số liệu & KH và Trong kỳ: nhãn trục "01/11", nhãn điểm cuối dạng gọn "63,7 tr ₫".
+
 ## Lượt iOS preview đỏ ở 72ae0a8 (đoạn 15, Tổng quan)
 - Nguyên nhân: từ R3, Tổng quan gọi cùng lúc tong-quan (2), trung-tam (8), tien-do-thang (2), lại thêm canh-bao (3) và trang-chu (5) còn chạy, lên một web ảo wrangler một luồng.
   - Báo cáo overview / shift / marketing analytics mất 86–89 giây, quá hạn 45 giây của app.

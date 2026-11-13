@@ -36,6 +36,22 @@
   - lưu thêm dòng `[UIPOS]`;
   - BASE 127.0.0.1 và bước "Chặn gọi demo" giữ nguyên.
 
+## Marketing chọn 1 POS: chi phí quảng cáo và ROAS (dừng, chờ quyết)
+- Ảnh kiểm: Marketing chọn 1 POS vẫn hiện chi phí quảng cáo của mọi POS (ghi "mọi POS") và không có ROAS.
+- Web tổng cũng chưa tách được chi phí theo POS:
+  - bảng `ad_costs` chỉ có marketer, ngày, sản phẩm, số tiền; không có POS (Google Sheet CPQC Daily nhập theo marketer);
+  - `lib/reports/mkt-analytics.ts` cộng chi phí theo marketer, không lọc POS; chỉ đơn, số về, doanh thu lọc theo POS;
+  - trang Chi phí & ROAS trên web (`app/mkt-roas-view.tsx`) khi lọc POS vẫn tính ROAS bằng chi phí mọi POS và ghi cảnh báo "ROAS lúc này thấp hơn thực tế. Chọn Tất cả POS để xem ROAS đúng".
+- Theo dặn: app giữ như hiện tại (chi phí ghi "mọi POS", không tính ROAS khi lọc POS), không tự chế cách chia chi phí.
+- Để làm đúng luật "chọn POS nào chỉ số của POS đó" cần chốt một trong hai:
+  1. sheet chi phí ghi thêm POS cho từng dòng (máy chủ lưu `ad_costs.pos_id`);
+  2. một quy tắc chia chi phí của marketer cho các POS, ví dụ theo tỷ lệ số về hoặc đơn của marketer ở từng POS. Quy tắc này phải sửa ở máy chủ để web và app cùng số.
+
+## CSKH chọn 1 POS: KPI bằng Mọi POS ở bản ảo
+- App đã lọc đúng: thẻ KPI CSKH và Tiến độ tháng chỉ cộng KPI người có `posIds` chứa POS đang chọn.
+- Ở bản ảo, Pancake ảo trả mọi nhân viên cho mọi POS (`lib/demo/world.ts` `listUsers` bỏ qua posId). Đơn ảo chọn người bán, marketer trong cả bộ phận, không theo POS. Vì vậy ai cũng thuộc mọi POS, KPI 1 POS = KPI mọi POS.
+- Không sửa bản ảo: muốn mỗi người chỉ thuộc 1–2 POS thì phải đổi cách tạo đơn ảo (chọn người bán theo POS), làm đổi số ở mọi màn và các test của bản ảo. Nếu cần ảnh kiểm KPI theo POS khác nhau, nên làm thành một việc riêng cho bản ảo.
+
 ## Chưa làm, cần anh / tổ khác chốt
 - Nhân sự (web vệ tinh): danh sách nhân sự, quân số, hồ sơ chưa lọc theo POS. Dữ liệu nhân sự chia theo chi nhánh / phòng ban, không theo POS. Cần Tổ web nhân sự cho biết cách nối người với POS.
 - Thành tích trong hồ sơ nhân sự (`staff-profile` gọi `pos=` rỗng) chưa theo POS, cùng lý do trên.

@@ -422,7 +422,7 @@ struct CenterBlocks: View {
                 if let series = report.current.series, !series.isEmpty {
                     Panel {
                         Text("Trong kỳ").mtFont(.cardHeader)
-                        MTTrendChart(points: byDay(series), height: 150, scope: ScopeText.text(period: period, pos: nil) + filterSuffix)
+                        MTTrendChart(points: chartPoints(series), height: 150, value: { Fmt.shortVnd($0) }, scope: ScopeText.text(period: period, pos: nil) + filterSuffix)
                     }
                 }
                 if applied != nil { Text("Số theo team đang chọn.").font(.caption).foregroundStyle(Palette.muted) }
@@ -611,7 +611,7 @@ struct CenterBlocks: View {
                     Text(money(t.closedNet)).mtFont(.heroNumber).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
                         .loadingPlaceholder(loading)
                     if let series = report?.current.series, !series.isEmpty {
-                        MTTrendChart(points: byDay(series), height: 140, scope: ScopeText.text(period: period, pos: nil) + filterSuffix)
+                        MTTrendChart(points: chartPoints(series), height: 140, value: { Fmt.shortVnd($0) }, scope: ScopeText.text(period: period, pos: nil) + filterSuffix)
                     }
                 }.contentShape(.rect)
             }.buttonStyle(.plain)
@@ -699,6 +699,13 @@ struct CenterBlocks: View {
         NavigationLink(value: q("processing", "confirmed", "Chưa xuất kho")) { StatusPill(name: "Chưa xuất \(Fmt.int(total["processing"]?.orders ?? 0))", code: 0) }
     }
     private func byDay(_ s: [API.SeriesRow]) -> [(String, Double)] { var m: [String: Double] = [:]; for x in s { m[x.bucket, default: 0] += x.closedNet }; return m.keys.sorted().map { ($0, m[$0]!) } }
+    /// Điểm biểu đồ trong kỳ: nhãn "01/11" thay "2026-11-01" (khung 03, 04); khoá không phải ngày thì giữ nguyên.
+    private func chartPoints(_ s: [API.SeriesRow]) -> [(String, Double)] {
+        byDay(s).map { key, v in
+            let label = key.count == 10 ? "\(key.suffix(2))/\(key.dropFirst(5).prefix(2))" : key
+            return (label, v)
+        }
+    }
     private func byDayOrders(_ s: [API.SeriesRow]) -> [(String, Double)] { var m: [String: Double] = [:]; for x in s { m[x.bucket, default: 0] += x.closedOrders }; return m.keys.sorted().map { ($0, m[$0]!) } }
     /// 8 nguồn tải cùng lúc, nguồn nào về trước hiện trước. Nguồn lỗi: cùng bộ lọc thì giữ số đang hiện, bộ lọc mới thì bỏ số cũ;
     /// báo một dòng lỗi có nút Thử lại. force: kéo để làm mới / Thử lại; không force mà số chưa quá 60 giây thì không tải.
