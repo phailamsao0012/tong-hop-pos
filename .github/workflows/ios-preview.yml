@@ -163,7 +163,9 @@ jobs:
           T0="$(now)"
           # Mốc thời gian (giây tính từ lúc bắt đầu) để tìm đúng khung hình trong video.
           mark() { python3 -c "import time; print('%.1f' % (time.time() - $T0))" | tr -d '\n' >> "$OUT/moc-thoi-gian.txt"; echo " $1" >> "$OUT/moc-thoi-gian.txt"; }
-          face() { xcrun simctl spawn "$UDID" notifyutil -p "com.apple.BiometricKit_Sim.pearl.$1"; }
+          # Có hạn 20 giây: 13/11 lệnh này treo ~20 phút ở đoạn 12 (app đứng ở hộp Face ID, thiếu mốc XNK).
+          face() { perl -e 'alarm shift; exec @ARGV' 20 xcrun simctl spawn "$UDID" notifyutil -p "com.apple.BiometricKit_Sim.pearl.$1" \
+            || echo "::warning::lệnh Face ID $1 quá hạn hoặc lỗi"; }
           # Như máy đã từng đăng nhập: có phiên + nhớ email (tài khoản demo công khai, qua tham số -thp_last_email của UserDefaults)
           # để hiện "Chào mừng trở lại" với email đã che. App đang chạy nền thì lệnh này chỉ đưa app lên lại (không mở mới).
           # MEGATECH_FPS=20: hiệu ứng chạy 20 khung hình/giây (chỉ bản Debug) để máy ảo chậm còn sức nhận lệnh giả lập Face ID.
@@ -245,10 +247,12 @@ jobs:
             if ! grep -q 'hoi-face-id' "$1" 2> /dev/null; then
               mark "face-id-khop-gio-co-dinh"; face match; sleep 5; face match; return 0
             fi
-            for n in 1 2 3; do
+            # Máy ảo chậm có lúc bỏ qua lệnh "khớp" (13/11: kẹt ở hoi-face-id, đoạn 12 thiếu mốc). Gửi lại mỗi 3 giây tới 15 lần.
+            for n in $(seq 1 15); do
               sleep 1; mark "face-id-khop-$n"; face match
-              for i in $(seq 1 15); do grep -q 'face-id-dung' "$1" 2> /dev/null && return 0; sleep 0.2; done
+              for i in $(seq 1 10); do grep -q 'face-id-dung' "$1" 2> /dev/null && return 0; sleep 0.2; done
             done
+            echo "::warning::Face ID chưa nhận khớp sau 15 lần ($1)"
           }
           xcrun simctl terminate "$UDID" "$BUNDLE" || true; sleep 1
           rec 7-mo-nhanh
