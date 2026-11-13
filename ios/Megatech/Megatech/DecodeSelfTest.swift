@@ -341,6 +341,17 @@ enum DecodeSelfTest {
         if let list = r.decode("TEAMS_EMPTY", API.HrTeamList.self, #"{"teams":[]}"#) {
             r.check("TEAMS_EMPTY_COUNT", list.teams.isEmpty)
         }
+        // memberRefs (R3 Tiến độ tháng, cộng KPI người theo POS): có thì đọc, thiếu thì nil; team MKT có thể có id rỗng.
+        if let list = r.decode("TEAMS_MEMBERS", API.HrTeamList.self, #"""
+        {"teams":[{"id":"mkt_a","name":"MKT A","office":null,"dept":"mkt","people":2,"mentor":null,"members":["NV A","NV B"],"memberRefs":[{"id":"u1","name":"NV A"},{"id":"","name":"NV B"}],"group":null},
+        {"id":"team-c","name":"Team C","office":null,"dept":"sale","people":1,"mentor":null}]}
+        """#) {
+            r.check("TEAMS_MEMBERS_COUNT", list.teams.count == 2)
+            if list.teams.count == 2 {
+                r.check("TEAMS_MEMBERS_REFS", list.teams[0].dept == "mkt" && list.teams[0].memberRefs?.map(\.id) == ["u1", ""] && list.teams[0].memberRefs?.last?.name == "NV B")
+                r.check("TEAMS_MEMBERS_MISSING", list.teams[1].memberRefs == nil)
+            }
+        }
     }
 
     private static func paths(_ r: inout Run) {

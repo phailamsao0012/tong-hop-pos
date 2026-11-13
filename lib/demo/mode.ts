@@ -214,7 +214,8 @@ async function seedTargets() {
       add(pos, p.id, net);
       if (o.sellerId) { add(emp, o.sellerId, net); const unit = STAFF.find((s) => s.id === o.sellerId)?.unit; if (unit && UNITS[unit]?.kind === 'team') add(team, `dept-${unit}`, net); }
       // KPI team Marketing ảo (team MKT Hà Nội / Thái Nguyên ở cuối ensureDemoSeed): doanh thu đơn có marketer của team đó.
-      if (o.marketerId) { const mk = STAFF.find((s) => s.id === o.marketerId); if (mk?.dept === 'mkt' && (mk.branch === 'HN' || mk.branch === 'TN')) add(team, `mkt_${uuidOf(`mkt-team:${mk.branch}`)}`, net); }
+      // KPI người của marketer (13/11/2026: chọn 1 POS thì KPI bộ phận = cộng KPI từng người của POS đó, kể cả Marketing).
+      if (o.marketerId) { const mk = STAFF.find((s) => s.id === o.marketerId); if (mk?.dept === 'mkt') { add(emp, mk.id, net); if (mk.branch === 'HN' || mk.branch === 'TN') add(team, `mkt_${uuidOf(`mkt-team:${mk.branch}`)}`, net); } }
     }
     const round = (v: number) => Math.max(1, Math.round(v * 1.06 / 5e6)) * 5e6;
     const push = (scope: string, refId: string, [rev, n]: [number, number], workingDays: number | null) => stmts.push(db.prepare('INSERT OR IGNORE INTO targets (id,month,scope,ref_id,revenue,closed_orders,working_days,updated_by,updated_at) VALUES (?,?,?,?,?,?,?,?,?)')

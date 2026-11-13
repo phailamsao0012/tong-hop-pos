@@ -34,8 +34,18 @@ Bỏ: ô icon, dòng mô tả, mũi tên › trên thẻ (vẫn chạm cả th�
 - Mốc tới hôm nay tính như web (`lib/kpi/kpi-pace.ts`): mỗi team KPI ngày = KPI ÷ số ngày làm (trống = số ngày của tháng), nhân số ngày đã qua, rồi cộng các team.
   - Đạt mốc thì "✓ Đúng tiến độ", chưa đạt thì "▼ Chậm tiến độ".
 - Bộ phận không có KPI team nào: "—" và chữ nhỏ "Chưa giao KPI".
-- Theo POS: team chưa gắn POS (`/api/teams` không có trường POS), nên KPI vẫn cộng theo bộ phận. Khi đang chọn 1 POS, khối ghi rõ đang so số của POS đó với KPI cả bộ phận.
-  - **Câu hỏi:** team có gắn POS không, và gắn ở đâu (web nhân sự hay Chia team), để lọc KPI team theo POS.
+- Đang chọn 1 POS (anh Vũ chọn "Cộng KPI người" 13/11/2026): KPI bộ phận = cộng KPI từng người (`/api/targets` scope `employee`) thuộc bộ phận đó và làm ở POS đó (`posIds` của nhân viên).
+  - Người của bộ phận:
+    - Sale, CSKH theo `/api/employees?team=sale|cskh`;
+    - Marketing theo thành viên các team MKT (`memberRefs` của `/api/teams?list=1`, thêm trường tuỳ chọn và ca DecodeSelfTest `TEAMS_MEMBERS`) và `posIds` ở `/api/employees`.
+  - Mốc tới hôm nay cùng cách: từng người KPI ngày × số ngày đã qua, rồi cộng.
+  - POS không có KPI người nào cho bộ phận: "—" và "Chưa giao KPI".
+  - Ghi chú dưới khối: "KPI của POS = cộng KPI từng người của POS này". Bỏ câu "so với KPI cả bộ phận".
+  - Mọi POS: giữ cộng KPI team như trên.
+  - **Giới hạn:** KPI người trên máy chủ không chia theo POS (một người một con số). Người làm nhiều POS nên được tính đủ KPI ở mỗi POS họ làm; khối ghi "N người làm nhiều POS…". Muốn chia đúng phần POS thì cần máy chủ lưu KPI người theo POS. Câu hỏi này gửi anh.
+  - Bản ảo:
+    - Đã có KPI người mẫu cho người bán Sale/CSKH. Thêm KPI người mẫu cho marketer (`lib/demo/mode.ts`, chỉ dữ liệu ảo).
+    - Pancake ảo cho mọi nhân viên có mặt ở mọi POS, nên ở bản ảo KPI một POS bằng KPI cả bộ phận và ai cũng "làm nhiều POS". Không sửa thế giới ảo vì sẽ đổi số mọi màn khác.
 - Bản ảo: đã có KPI team mẫu cho Sale, CSKH. Thêm KPI mẫu cho 2 team MKT ảo (Hà Nội, Thái Nguyên) ở `lib/demo/mode.ts`, từ doanh thu đơn có marketer của team, chỉ dữ liệu ảo.
 - Tour 15 mốc `tong-quan` chờ thêm lượt tải `tien-do-thang`.
 

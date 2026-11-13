@@ -251,6 +251,9 @@ extension API {
         let dept: String
         let people: Int
         let mentor: String?
+        /// Thành viên (mã tài khoản POS, tên); máy chủ cũ không có thì nil. Team MKT nhập tay có thể có id rỗng.
+        let memberRefs: [MemberRef]?
+        struct MemberRef: Decodable { let id: String; let name: String }
     }
     struct HrTeamList: Decodable { let teams: [HrTeamItem] }
 

@@ -21,21 +21,42 @@ struct TeamNotFilteredBanner: View {
 /// KPI tháng của một bộ phận = cộng KPI các team thuộc bộ phận đó (anh Vũ chọn 13/11/2026), từ /api/targets (scope "team") và
 /// danh sách team (/api/teams?list=1, trường dept: sale / cskh / mkt). Mốc tới hôm nay như web (lib/kpi/kpi-pace.ts): mỗi team
 /// KPI ngày = KPI ÷ số ngày làm (trống = số ngày của tháng), nhân số ngày đã qua (không quá số ngày làm), rồi cộng các team.
+/// Đang chọn 1 POS (anh Vũ chọn 13/11/2026): KPI bộ phận = cộng KPI từng NGƯỜI (scope "employee") thuộc bộ phận đó và làm ở POS
+/// đó (posIds của nhân viên). KPI người trên máy chủ không chia theo POS: người làm nhiều POS được tính đủ KPI (đếm ở multiPos).
 struct DeptKpi: Equatable {
     let goal: Double
     let pace: Double
-    let teams: Int
-    static func build(targets: [API.Target], teams: [API.HrTeamItem], dept: String, day: Int, daysInMonth: Int) -> DeptKpi? {
-        let ids = Set(teams.filter { $0.dept == dept }.map(\.id))
-        let mine = targets.filter { $0.scope == "team" && ids.contains($0.refId) && $0.revenue > 0 }
-        guard !mine.isEmpty else { return nil }
+    /// Số team (Mọi POS) hoặc số người (một POS) có KPI.
+    let count: Int
+    /// Một POS: số người có KPI mà làm nhiều POS.
+    var multiPos = 0
+    /// Cộng KPI các dòng, mốc tới hôm nay như lib/kpi/kpi-pace.ts (từng dòng rồi cộng).
+    private static func sum(_ rows: [API.Target], day: Int, daysInMonth: Int) -> (goal: Double, pace: Double) {
         var goal = 0.0, pace = 0.0
-        for t in mine {
+        for t in rows {
             let days = Double((t.workingDays ?? 0) > 0 ? Int(t.workingDays!) : daysInMonth)
             goal += t.revenue
             pace += t.revenue / days * min(Double(day), days)
         }
-        return DeptKpi(goal: goal, pace: pace, teams: mine.count)
+        return (goal, pace)
+    }
+    static func build(targets: [API.Target], teams: [API.HrTeamItem], dept: String, day: Int, daysInMonth: Int) -> DeptKpi? {
+        let ids = Set(teams.filter { $0.dept == dept }.map(\.id))
+        let mine = targets.filter { $0.scope == "team" && ids.contains($0.refId) && $0.revenue > 0 }
+        guard !mine.isEmpty else { return nil }
+        let s = sum(mine, day: day, daysInMonth: daysInMonth)
+        return DeptKpi(goal: s.goal, pace: s.pace, count: mine.count)
+    }
+    /// staff: người thuộc bộ phận (có posIds). Chỉ người có posIds chứa POS đang chọn.
+    static func people(targets: [API.Target], staff: [API.Employee], pos: String, day: Int, daysInMonth: Int) -> DeptKpi? {
+        let inPos = staff.filter { ($0.posIds ?? []).contains(pos) }
+        let ids = Set(inPos.map(\.id))
+        let mine = targets.filter { $0.scope == "employee" && ids.contains($0.refId) && $0.revenue > 0 }
+        guard !mine.isEmpty else { return nil }
+        let withGoal = Set(mine.map(\.refId))
+        let multi = inPos.filter { withGoal.contains($0.id) && ($0.posIds?.count ?? 0) > 1 }.count
+        let s = sum(mine, day: day, daysInMonth: daysInMonth)
+        return DeptKpi(goal: s.goal, pace: s.pace, count: mine.count, multiPos: multi)
     }
 }
 
@@ -51,7 +72,22 @@ struct DeptProgressCard: View {
     @Environment(\.thinking) private var thinking
     @State private var targets: [API.Target]?
     @State private var teams: [API.HrTeamItem]?
+    /// Một POS: nhân viên Sale, CSKH (/api/employees?team=) và mọi nhân viên (posIds của người team MKT); tải một lần.
+    @State private var saleStaff: [API.Employee]?
+    @State private var cskhStaff: [API.Employee]?
+    @State private var allStaff: [API.Employee]?
     @State private var failText: String?
+    /// Người của bộ phận: Sale, CSKH theo /api/employees?team=; Marketing theo thành viên các team MKT (memberRefs).
+    private func staff(_ dept: String) -> [API.Employee]? {
+        switch dept {
+        case "sale": return saleStaff
+        case "cskh": return cskhStaff
+        default:
+            guard let allStaff, let teams else { return nil }
+            let ids = Set(teams.filter { $0.dept == "mkt" }.flatMap { $0.memberRefs ?? [] }.map(\.id).filter { !$0.isEmpty })
+            return allStaff.filter { ids.contains($0.id) }
+        }
+    }
     private var today: String { VNDate.string(.now) }
     private var ym: String { String(today.prefix(7)) }
     private var day: Int { Int(today.suffix(2)) ?? 1 }
@@ -60,9 +96,21 @@ struct DeptProgressCard: View {
     private var monthView: Bool { period == .month }
     private func money(_ v: Double) -> String { hideMoney ? "••• tr ₫" : Fmt.shortVnd(v) }
     private func kpi(_ dept: String) -> DeptKpi? {
-        guard let targets, let teams else { return nil }
-        return DeptKpi.build(targets: targets, teams: teams, dept: dept, day: day, daysInMonth: daysInMonth)
+        guard let targets else { return nil }
+        if pos.isEmpty {
+            guard let teams else { return nil }
+            return DeptKpi.build(targets: targets, teams: teams, dept: dept, day: day, daysInMonth: daysInMonth)
+        }
+        guard let people = staff(dept) else { return nil }
+        return DeptKpi.people(targets: targets, staff: people, pos: pos, day: day, daysInMonth: daysInMonth)
     }
+    /// Đã đủ nguồn để biết bộ phận "Chưa giao KPI" (không nhầm với đang tải).
+    private var sourcesReady: Bool {
+        guard targets != nil else { return false }
+        return pos.isEmpty ? teams != nil : (saleStaff != nil && cskhStaff != nil && allStaff != nil && teams != nil)
+    }
+    /// Một POS: số người có KPI mà làm nhiều POS (KPI người chưa chia theo POS).
+    private var multiPos: Int { pos.isEmpty ? 0 : ["sale", "cskh", "mkt"].compactMap { kpi($0)?.multiPos }.reduce(0, +) }
     private func amounts(_ net: Double, _ k: DeptKpi?) -> String {
         let done = monthView ? money(net) : "—"
         guard let k else { return "\(done) / —" }
@@ -76,7 +124,7 @@ struct DeptProgressCard: View {
             } else {
                 Label("Chậm tiến độ", systemImage: "arrowtriangle.down.fill").labelStyle(.titleAndIcon).foregroundStyle(Palette.bad)
             }
-        } else if k == nil, targets != nil, teams != nil {
+        } else if k == nil, sourcesReady {
             Text("Chưa giao KPI").foregroundStyle(Palette.muted)
         }
     }
@@ -114,7 +162,8 @@ struct DeptProgressCard: View {
                 row(.cskh, "cskh", "\(Fmt.int(d.cskh.orders)) đơn chốt", d.cskh.net)
                 row(.mkt, "mkt", "\(Fmt.int(mkt?.closed ?? d.mkt.orders)) đơn XN", mkt?.net ?? d.mkt.net)
                 if !pos.isEmpty {
-                    Text("KPI team chưa gắn POS: đang so số của POS đang chọn với KPI cả bộ phận.")
+                    Text("KPI của \(PosBreakdown.short[pos] ?? pos) = cộng KPI từng người của POS này."
+                         + (multiPos > 0 ? " \(multiPos) người làm nhiều POS: KPI người chưa chia theo POS nên đang tính đủ." : ""))
                         .mtFont(.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                 }
                 if let failText {
@@ -126,21 +175,34 @@ struct DeptProgressCard: View {
             }
         }
         .padding(MT.cardPad).frame(maxWidth: .infinity, alignment: .leading).cardSurface()
-        .task(id: ym) { await load() }
+        .task(id: "\(ym)|\(pos.isEmpty)") { await load() }
         .pullToReload { await load(force: true) }
     }
-    /// KPI tháng này (mọi scope, lọc team ở trên) và danh sách team (dùng chung HrTeamCache, không hỏi lại trong 5 phút).
+    /// KPI tháng này (mọi scope) và danh sách team (dùng chung HrTeamCache). Đang chọn POS: thêm danh sách nhân viên (một lần).
     @MainActor private func load(force: Bool = false) async {
-        let m = ym
-        let trace = LoadTrace("tien-do-thang", requests: 2)
+        let m = ym, needStaff = !pos.isEmpty && (force || saleStaff == nil || cskhStaff == nil || allStaff == nil)
+        let trace = LoadTrace("tien-do-thang", requests: needStaff ? 5 : 2)
         async let tReq = attempt(true, trace) { try await API.targets(month: m) }
         async let lReq = attempt(true, trace) { try await HrTeamCache.list(force: force) }
-        let (tRes, lRes) = await (tReq, lReq)
+        async let sReq = attempt(needStaff, trace) { try await API.employees(team: "sale") }
+        async let cReq = attempt(needStaff, trace) { try await API.employees(team: "cskh") }
+        async let aReq = attempt(needStaff, trace) { try await API.employees() }
+        let (tRes, lRes, sRes, cRes, aRes) = await (tReq, lReq, sReq, cReq, aReq)
         trace.end(cancelled: Task.isCancelled)
         guard !Task.isCancelled else { return }
         var errors: [Error] = []
-        switch tRes { case .success(let v)?: targets = v.items; case .failure(let e)?: errors.append(e); case nil: break }
-        switch lRes { case .success(let v)?: teams = v; case .failure(let e)?: errors.append(e); case nil: break }
+        func take<T>(_ r: Result<T, Error>?, _ set: (T) -> Void) {
+            switch r {
+            case .success(let v)?: set(v)
+            case .failure(let e)?: errors.append(e)
+            case nil: break
+            }
+        }
+        take(tRes) { targets = $0.items }
+        take(lRes) { teams = $0 }
+        take(sRes) { saleStaff = $0 }
+        take(cRes) { cskhStaff = $0 }
+        take(aRes) { allStaff = $0 }
         failText = errors.compactMap { LoadError.text($0) }.first
     }
 }
