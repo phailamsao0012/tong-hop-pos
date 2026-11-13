@@ -228,6 +228,23 @@ struct DeptProgressCard: View {
     }
 }
 
+/// Badge "▲ 12 (10,0%)" ở Đơn cần lưu ý (khung 05): số đơn và tỷ lệ hoàn / huỷ; ≥7% đỏ ▲, 5–7% vàng !, <5% xanh ✓.
+struct RefundCountBadge: View {
+    let count: Double
+    let rate: Double
+    private var level: Int { rate >= 7 ? 2 : rate >= 5 ? 1 : 0 }
+    var body: some View {
+        let ink: Color = level == 2 ? Palette.bad : level == 1 ? Palette.warn : Palette.good
+        let fill: Color = level == 2 ? Palette.badSoft : level == 1 ? Palette.warnSoft : Palette.goodSoft
+        let mark = level == 2 ? "▲" : level == 1 ? "!" : "✓"
+        Text("\(mark) \(Fmt.int(count)) (\(Fmt.pct(rate)))")
+            .mtFont(.caption).fontWeight(.bold).foregroundStyle(ink)
+            .padding(.horizontal, 8).padding(.vertical, 4)
+            .background(fill, in: .capsule)
+            .accessibilityLabel("\(Fmt.int(count)) đơn, \(Fmt.pct(rate)) trên đơn chốt")
+    }
+}
+
 /// Một hàng POS (khung 04): "POS A · 60 chốt / 90 đơn" và tiền bên phải. Chạm lọc riêng POS đó.
 struct PosSumRow: View {
     let row: API.PosRow

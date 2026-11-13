@@ -32,6 +32,24 @@ struct DeptEntry: Identifiable {
     /// Dòng mô tả bên trong khi phòng chỉ có một trang.
     var inside: String? = nil
     var badge = 0
+    /// Chữ link xanh ở góc thẻ (khung 07), mở trang chính của phòng.
+    var link: String {
+        switch id {
+        case "sale": return "Sale"
+        case "cskh": return "Tổng quan CSKH"
+        case "mkt": return "Phân tích"
+        case "vandon": return "Xem Vận đơn"
+        default: return "Tổng quan"
+        }
+    }
+    /// Nút trong lưới 2 cột: bỏ trang trùng với link ở góc (Tổng quan CSKH, Tổng quan Nhân sự); tên nút theo khung 07.
+    var gridSubs: [Sub] {
+        let names = ["compare": "Tổng quan & so sánh", "batches": "Data được cấp", "shift": "Trong ca", "cskh-kpi": "KPI CSKH",
+                     "calls": "Cuộc gọi", "care": "Khách theo NV", "repurchase": "Mua lại & Upsell", "dormant": "Khách lâu chưa mua",
+                     "list": "Danh sách nhân sự", "org": "Sơ đồ tổ chức", "approvals": "Duyệt thay đổi", "recruit": "Tuyển dụng"]
+        let skip: Set<String> = id == "cskh" ? ["cskh-overview"] : id == "hr" ? ["overview"] : []
+        return subs.filter { !skip.contains($0.id) }.map { Sub(id: $0.id, title: names[$0.id] ?? $0.title, icon: $0.icon, route: $0.route, badge: $0.badge) }
+    }
 
     static func all(for me: API.Me, hrBadge: Int) -> [DeptEntry] {
         var r: [DeptEntry] = []
@@ -72,59 +90,52 @@ struct DeptEntry: Identifiable {
     }
 }
 
+/// Thẻ một phòng (khung 07): tên đậm (Nhân sự có badge "N chờ duyệt"), link xanh bên phải mở trang chính, lưới 2 cột nút chữ căn
+/// giữa có ›. Phòng chỉ có một trang (Marketing, Vận đơn) thì chỉ một dòng tên + link. Không icon, không mô tả.
 struct DeptCard: View {
     let entry: DeptEntry
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+    private var header: some View {
+        HStack(spacing: 6) {
+            Text(entry.title).mtFont(.cardHeader).foregroundStyle(Palette.ink)
+            if entry.badge > 0 {
+                Text("\(entry.badge) chờ duyệt").mtFont(.caption).fontWeight(.semibold).foregroundStyle(Palette.bad)
+                    .padding(.horizontal, 7).padding(.vertical, 2).background(Palette.badSoft, in: .capsule)
+            }
+            Spacer(minLength: 6)
             NavigationLink(value: entry.route) {
-                HStack(spacing: 12) {
-                    MetricIcon(entry.icon, size: 19).foregroundStyle(Palette.mtTextPrimary)
-                        .frame(width: 46, height: 46)
-                        .background(entry.tint.opacity(0.12), in: .rect(cornerRadius: MT.rCell))
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 6) {
-                            Text(entry.title).mtFont(.cardHeader).foregroundStyle(Color.ink)
-                            if entry.badge > 0 {
-                                Text("\(entry.badge) chờ duyệt").mtFont(.caption).foregroundStyle(.white)
-                                    .padding(.horizontal, 6).padding(.vertical, 2).background(Color.bad, in: .capsule)
-                            }
-                        }
-                        Text(entry.caption).mtFont(.caption).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: 4)
-                    Image(systemName: "chevron.right").mtFont(.body).foregroundStyle(entry.tint)
-                        .frame(width: 28, height: 28).background(entry.tint.opacity(0.12), in: .circle)
-                }.contentShape(.rect)
-            }.buttonStyle(.plain)
-            if !entry.subs.isEmpty {
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
-                    ForEach(entry.subs) { s in
-                        NavigationLink(value: s.route) {
-                            HStack(spacing: 6) {
-                                MetricIcon(s.icon, size: 11).foregroundStyle(entry.tint).frame(width: 18)
-                                Text(s.title).mtFont(.body).foregroundStyle(Color.ink).fixedSize(horizontal: false, vertical: true)
-                                Spacer(minLength: 0)
-                                if s.badge > 0 {
-                                    Text("\(s.badge)").mtFont(.caption).foregroundStyle(.white).padding(.horizontal, 5).padding(.vertical, 1).background(Color.bad, in: .capsule)
-                                }
-                            }
-                            .padding(.horizontal, 10).frame(minHeight: 44)
-                            .background(entry.tint.opacity(0.07), in: .rect(cornerRadius: 10)).contentShape(.rect)
-                        }.buttonStyle(.plain)
-                    }
+                HStack(spacing: 2) { Text(entry.link); Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)) }
+                    .mtFont(.caption).fontWeight(.semibold).foregroundStyle(Palette.accent).frame(minHeight: 32).contentShape(.rect)
+            }
+            .buttonStyle(.plain).accessibilityLabel("\(entry.link), mở \(entry.title)")
+        }
+    }
+    private func tile(_ s: DeptEntry.Sub) -> some View {
+        NavigationLink(value: s.route) {
+            HStack(spacing: 4) {
+                Text(s.badge > 0 ? "\(s.title) · \(s.badge)" : s.title)
+                    .mtFont(.body).fontWeight(.semibold).multilineTextAlignment(.center)
+                    .foregroundStyle(s.badge > 0 ? Palette.warn : Palette.ink).fixedSize(horizontal: false, vertical: true)
+                Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundStyle(Palette.muted)
+            }
+            .padding(.horizontal, 8).padding(.vertical, 6)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .background(Palette.wash, in: .rect(cornerRadius: MT.rCell))
+            .overlay { RoundedRectangle(cornerRadius: MT.rCell).strokeBorder(Palette.line, lineWidth: 1) }
+            .contentShape(.rect)
+        }.buttonStyle(.plain)
+    }
+    var body: some View {
+        let subs = entry.gridSubs
+        VStack(alignment: .leading, spacing: MT.cellGap) {
+            header
+            if !subs.isEmpty {
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: MT.cellGap), GridItem(.flexible(), spacing: MT.cellGap)], spacing: MT.cellGap) {
+                    ForEach(subs) { s in tile(s) }
                 }
-            } else if let inside = entry.inside {
-                NavigationLink(value: entry.route) {
-                    HStack(alignment: .top, spacing: 6) {
-                        Image(systemName: "square.text.square.fill").mtFont(.caption).foregroundStyle(entry.tint)
-                        Text(inside).mtFont(.caption).foregroundStyle(Color.inkSoft).multilineTextAlignment(.leading)
-                        Spacer(minLength: 0)
-                    }
-                    .frame(minHeight: 44).padding(10).background(entry.tint.opacity(0.07), in: .rect(cornerRadius: MT.rCell)).contentShape(.rect)
-                }.buttonStyle(.plain)
             }
         }
         .padding(MT.cardPad)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .cardSurface()
     }
 }
