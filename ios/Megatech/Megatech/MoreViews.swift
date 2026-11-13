@@ -467,7 +467,7 @@ struct SaleKpiReadView: View {
                         }
                 }.padding(MT.cardPad).tileSurface()
                 Panel {
-                    Text("Ngưỡng tỷ lệ chốt Sale toàn phòng: ≥ 42%").mtFont(.cardHeader)
+                    Text("Ngưỡng tỷ lệ chốt Sale toàn phòng: ≥ 40%").mtFont(.cardHeader)
                     Text("Tỷ lệ chốt thực đạt").mtFont(.caption)
                     MTRateBadge(rate: overview?.current.total.shownRate, kind: .saleClose)
                     Text("Chỉ tiêu không phải số thực đạt. Chia và sửa KPI trên web.").mtFont(.caption).foregroundStyle(Color.mtTextSecondary)

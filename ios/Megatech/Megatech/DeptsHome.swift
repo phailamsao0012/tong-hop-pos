@@ -55,9 +55,13 @@ struct DeptEntry: Identifiable {
         var r: [DeptEntry] = []
         let sale = SALE_PAGES.filter { me.canView($0.id) }
         if !sale.isEmpty {
+            var subs = sale.map { Sub(id: $0.id, title: $0.title, icon: $0.icon, route: .dept(.sale, page: $0.id)) }
+            // Khung 07: "Từng nhân viên" mở bảng nhân viên Sale (khung 09A1), ngay sau "Tổng quan & so sánh".
+            if me.canView("compare"), let at = subs.firstIndex(where: { $0.id == "compare" }) {
+                subs.insert(Sub(id: "staff", title: "Từng nhân viên", icon: "person.3", route: .dept(.sale, page: "staff")), at: at + 1)
+            }
             r.append(DeptEntry(id: "sale", title: "Sale", caption: "Chốt đơn từ số MKT đưa về, chia data, theo dõi ca",
-                               icon: CompanyDept.sale.icon, tint: CompanyDept.sale.tint, route: .dept(.sale),
-                               subs: sale.map { Sub(id: $0.id, title: $0.title, icon: $0.icon, route: .dept(.sale, page: $0.id)) }))
+                               icon: CompanyDept.sale.icon, tint: CompanyDept.sale.tint, route: .dept(.sale), subs: subs))
         }
         let cskh = CSKH_PAGES.filter { me.canView($0.id) }
         if !cskh.isEmpty {

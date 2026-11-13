@@ -225,7 +225,8 @@ struct MTRateBadge: View {
     let kind: Kind
     private var level: Int {
         guard let rate, rate.isFinite else { return -1 }
-        return kind == .saleClose ? (rate < 42 ? 2 : 0) : (rate >= 7 ? 2 : rate >= 5 ? 1 : 0)
+        // Luật anh Vũ: tỷ lệ chốt Sale dưới 40% đỏ ▼ (mọi trang); hoàn ≥7% đỏ ▲, 5–7% vàng !, dưới 5% xanh ✓.
+        return kind == .saleClose ? (rate < 40 ? 2 : 0) : (rate >= 7 ? 2 : rate >= 5 ? 1 : 0)
     }
     private var ink: Color { level == 2 ? Palette.bad : level == 1 ? Palette.warn : level == 0 ? Palette.good : Palette.muted }
     private var fill: Color { level == 2 ? Palette.badSoft : level == 1 ? Palette.warnSoft : level == 0 ? Palette.goodSoft : Palette.wash }

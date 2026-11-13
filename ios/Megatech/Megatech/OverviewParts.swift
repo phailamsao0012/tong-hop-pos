@@ -228,11 +228,13 @@ struct DeptProgressCard: View {
     }
 }
 
-/// Badge "▲ 12 (10,0%)" ở Đơn cần lưu ý (khung 05): số đơn và tỷ lệ hoàn / huỷ; ≥7% đỏ ▲, 5–7% vàng !, <5% xanh ✓.
+/// Badge "▲ 12 (10,0%)" ở Đơn cần lưu ý (khung 05): số đơn và tỷ lệ. Hoàn: ≥7% đỏ ▲, 5–7% vàng !, <5% xanh ✓.
+/// Huỷ (cancel = true): ≥5% đỏ ▲, dưới 5% xanh ✓ (luật anh Vũ 13/11/2026).
 struct RefundCountBadge: View {
     let count: Double
     let rate: Double
-    private var level: Int { rate >= 7 ? 2 : rate >= 5 ? 1 : 0 }
+    var cancel = false
+    private var level: Int { cancel ? (rate >= 5 ? 2 : 0) : (rate >= 7 ? 2 : rate >= 5 ? 1 : 0) }
     var body: some View {
         let ink: Color = level == 2 ? Palette.bad : level == 1 ? Palette.warn : Palette.good
         let fill: Color = level == 2 ? Palette.badSoft : level == 1 ? Palette.warnSoft : Palette.goodSoft

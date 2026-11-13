@@ -941,14 +941,19 @@ enum DebugTour {
         await pause("don-hang", seconds: 2)
         await play([(0.35, { nav.tab = .depts; nav.deptsPath = [] })])
         await pause("phong-ban", seconds: 4)
-        // Sale mở thẳng trang Nhân viên (cùng một màn cho mốc sale và nhan-vien, không mở lại để khỏi tải hai lần).
+        // Sale (khung 08A), rồi "Từng nhân viên" (khung 09A1) mở từ nút So sánh nhân viên.
         MktNvTour.compare = false; MktNvTour.failed = false
         t = Date()
         nav.deptsPath = [.dept(.sale, period: .month, page: "compare")]
         guard await ready({ MktNvTour.compare }) else { return }
         guard await loaded(["nhan-vien", "bang-nhan-vien", "so-cung-ky"], since: t) else { return }
         await pause("sale", seconds: 2)
-        await pause("nhan-vien", seconds: 1)
+        MktNvTour.compare = false
+        t = Date()
+        nav.deptsPath = [.dept(.sale, period: .month, page: "compare"), .dept(.sale, period: .month, page: "staff")]
+        guard await ready({ MktNvTour.compare }) else { return }
+        guard await loaded(["nhan-vien"], since: t) else { return }
+        await pause("nhan-vien", seconds: 2)
         MktNvTour.staff = false; DebugTap.shared.tap("nv-mo")
         t = Date()
         guard await ready({ MktNvTour.staff }) else { return }

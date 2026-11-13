@@ -530,12 +530,14 @@ struct ShipTable: View {
 /// Kéo để làm mới: mọi khối bên trong có pullToReload tải lại cùng lúc (không chạy việc kéo làm mới của trang bên dưới).
 struct DeptPage<Content: View>: View {
     let title: String
+    /// Chữ breadcrumb; nil = theo tab đang mở.
+    var parent: String? = nil
     @ViewBuilder let content: Content
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: MT.cardGap) {
-                    ChildHeader(title: title)
+                    ChildHeader(title: title, parent: parent)
                     content
                 }.padding(.horizontal, MT.gutter).padding(.top, 8).padding(.bottom, 24)
             }
@@ -567,6 +569,9 @@ struct DeptDestination: View {
         let ps = period == nil ? NavMemory.pos : pos
         let pr = period == nil ? NavMemory.product : product
         switch dept {
+        // Khung 09A1 "Từng nhân viên": bảng đầy đủ, breadcrumb "‹ Sale".
+        case .sale where page == "staff":
+            DeptPage(title: "Từng nhân viên", parent: "Sale") { CompareView(team: "sale", embedded: true, period: p, pos: ps, product: pr, mode: .table) }
         case .sale: DeptPage(title: dept.pageTitle) { SaleContent(initial: page, period: p, pos: ps, product: pr) }
         case .cskh: DeptPage(title: dept.pageTitle) { CskhContent(initial: page, period: p, pos: ps, product: pr) }
         case .mkt: DeptPage(title: dept.pageTitle) {
@@ -592,14 +597,18 @@ struct SaleContent: View {
     }
     private var pages: [WebPage] { SALE_PAGES.filter { auth.me?.canView($0.id) ?? false } }
     var body: some View {
+        let switcher = MTSegmentedControl(selection: $page, options: pages.map { ($0.id, $0.title) })
         Group {
-            MTSegmentedControl(selection: $page, options: pages.map { ($0.id, $0.title) })
-            if HrUnit.notice(for: page) { HrTeamNotice(applies: false, deptLabel: "Sale") }
             switch page {
-            case "shift": ShiftView()
-            case "batches": BatchesView(embedded: true)
-            case "pipeline": PipelineView(embedded: true)
-            default: CompareView(team: "sale", embedded: true, period: period, pos: pos, product: product)
+            case "shift", "batches", "pipeline":
+                switcher
+                if HrUnit.notice(for: page) { HrTeamNotice(applies: false, deptLabel: "Sale") }
+                if page == "shift" { ShiftView() }
+                else if page == "batches" { BatchesView(embedded: true) }
+                else { PipelineView(embedded: true) }
+            default:
+                // Khung 08A: pill lọc rồi segmented ngay dưới (CompareView chèn qua header).
+                CompareView(team: "sale", embedded: true, period: period, pos: pos, product: product, mode: .summary, header: AnyView(switcher))
             }
         }
         .onAppear { if !pages.contains(where: { $0.id == page }), let f = pages.first { page = f.id } }

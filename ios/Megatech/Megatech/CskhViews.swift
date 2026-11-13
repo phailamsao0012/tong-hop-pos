@@ -739,7 +739,12 @@ struct GoalRow: View {
 // MARK: So sánh nhân viên (như web)
 
 struct CompareView: View {
+    /// full: bố cục cũ (CSKH, Tất cả); summary: trang Sale (khung 08A); table: "Từng nhân viên" (khung 09A1).
+    enum Mode { case full, summary, table }
     var team = "all"; var embedded = false
+    var mode: Mode = .full
+    /// Nội dung chèn ngay dưới pill lọc (trang Sale: segmented Nhân viên / Data / Trong ca).
+    var header: AnyView? = nil
     @Environment(AuthModel.self) private var auth
     @Environment(AppNav.self) private var nav: AppNav?
     @State private var teamError: String?
@@ -757,11 +762,12 @@ struct CompareView: View {
     /// Nhóm đơn của bảng Sale vừa bấm ở Tổng quan ("all" = mọi nhóm).
     private let product: String
     /// period, pos, product: kỳ, POS, nhóm đơn mở sẵn (khi mở từ bảng Sale ở Tổng quan); period nil = kỳ chung (AppNav, kế hoạch 1.4).
-    init(team: String = "all", embedded: Bool = false, period: Period? = nil, pos: String = "", product: String = "all") {
+    init(team: String = "all", embedded: Bool = false, period: Period? = nil, pos: String = "", product: String = "all", mode: Mode = .full, header: AnyView? = nil) {
         self.team = team; self.embedded = embedded
         _period = State(initialValue: period ?? NavMemory.period)
         _pos = State(initialValue: pos)
         self.product = product
+        self.mode = mode; self.header = header
     }
     /// Tài khoản chỉ xem một bộ phận: máy chủ ép team về bộ phận đó (lib/access.ts), nên hỏi và ghi nhãn theo bộ phận đó.
     private var myTeam: String { auth.me?.team ?? "all" }
@@ -781,11 +787,116 @@ struct CompareView: View {
     private func median(_ xs: [Double]) -> Double? { let s = xs.sorted(); guard !s.isEmpty else { return nil }; return s.count % 2 == 1 ? s[s.count / 2] : (s[s.count / 2 - 1] + s[s.count / 2]) / 2 }
     var body: some View {
         Embed(embedded: embedded, title: "So sánh nhân viên") {
-            PageTitle(title: "So sánh nhân viên", subtitle: "Tỷ lệ chốt = \(MetricPrefs.shared.rateShort) · so với kỳ liền trước")
+            if mode == .full { PageTitle(title: "So sánh nhân viên", subtitle: "Tỷ lệ chốt = \(MetricPrefs.shared.rateShort) · so với kỳ liền trước") }
             ScopeFilterPill(period: $period, pos: $pos, team: true, fixedProduct: product)
-            if team == "all" && myTeam == "all" { Segmented(selection: $teamPick, options: [("sale", "Sale"), ("cskh", "CSKH"), ("all", "Tất cả")]) }
+            if let header { header }
+            if mode == .summary { summaryContent } else { fullContent }
+        }
+        .task(id: loadKey) { await load() }
+        .pageReload(embedded: embedded) { await load() }
+        #if DEBUG
+        .onChange(of: DebugTap.shared.tick) { _, _ in
+            guard MktNvTour.active, DebugTap.shared.target == "nv-mo" else { return }
+            // Trang Sale nằm dưới trang "Từng nhân viên": chỉ trang trên cùng mở hồ sơ.
+            if mode == .summary, case .dept(_, _, _, _, let pg)? = nav?.deptsPath.last, pg == "staff" { return }
+            let low = rankedStaff(high: false).first
+            let top = rankedStaff(high: true).first
+            guard let e = low ?? top else { MktNvTour.failed = true; return }
+            nav?.deptsPath.append(.staffDetail(.of(e, in: filters, period: period, hrTeam: applied?.id)))
+        }
+        #endif
+    }
+
+    // MARK: Trang Sale (khung 08A)
+
+    private var deptLabel: String { effTeam == "sale" ? "Sale" : effTeam == "cskh" ? "CSKH" : "Tất cả" }
+    /// Hero "DOANH THU CHỐT · SALE", bảng theo nhóm sản phẩm, "Hiệu suất đội ngũ", nút "So sánh nhân viên ›", rồi bảng nhân viên
+    /// theo nhóm sản phẩm (StaffTableBlock: giữ vì xác nhận kho, team dùng bảng này).
+    @ViewBuilder private var summaryContent: some View {
+        HrTeamNotice(applies: applied != nil, deptLabel: deptLabel)
+        if let teamError { HrTeamErrorView(message: teamError) { nav?.hrUnit = nil } }
+        else if let error, data == nil { StateView(error: error) { await load() } }
+        if let d = data {
+            saleHero(d)
+            if effTeam == "sale" { ProductGroupsBlock(period: period, pos: pos, product: product, hrTeam: applied?.id) }
+            teamCard
+            NavigationLink(value: Route.dept(.sale, period: period, pos: pos, product: product, page: "staff")) {
+                HStack(spacing: 4) { Text("So sánh nhân viên"); Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)) }
+                    .mtFont(.body).fontWeight(.bold).foregroundStyle(Color.white)
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .background(Palette.mtBrandPrimary, in: .rect(cornerRadius: MT.rCell))
+            }.buttonStyle(MTPressStyle())
+        } else if error == nil { Skeleton(height: 140); Skeleton(height: 220) }
+        if effTeam == "sale", auth.me?.canView("sale-overview") == true {
+            StaffTableBlock(team: "sale", by: "seller", period: period, pos: pos, product: product, hrTeam: applied)
+        }
+    }
+    /// Hero: badge so kỳ trước, số lớn, 2 thanh Kỳ trước / Kỳ này.
+    private func saleHero(_ d: API.Overview) -> some View {
+        let t = d.current.total, previous = d.compare?.total.closedNet
+        return NavigationLink(value: Route.orders(OrderQuery.from(filters, group: "closed", basis: "confirmed", title: "Đơn chốt"))) {
+            VStack(alignment: .leading, spacing: MT.cellGap) {
+                HStack(alignment: .top) {
+                    Text("DOANH THU CHỐT · \(deptLabel.uppercased())").mtFont(.caption).fontWeight(.bold).foregroundStyle(Palette.muted)
+                    Spacer(minLength: 6)
+                    if let delta = Fmt.delta(t.closedNet, previous) { DeltaPill(delta) }
+                }
+                Text(Fmt.shortVnd(t.closedNet)).mtFont(.heroNumber).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
+                Text("\(Fmt.int(t.closedOrders)) đơn chốt" + (product == "all" ? "" : " · nhóm \(Fmt.productGroup(product))"))
+                    .mtFont(.caption).foregroundStyle(Palette.muted)
+                if let previous {
+                    MTComparisonBarRow(previous: previous, previousText: Fmt.shortMoney(previous), previousLabel: "Kỳ trước",
+                                       current: t.closedNet, currentText: Fmt.shortMoney(t.closedNet), currentLabel: "Kỳ này")
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading).contentShape(.rect)
+            .heroSurface()
+        }.buttonStyle(.plain)
+    }
+    /// "Hiệu suất đội ngũ": lưới 2×2 và các hàng nhân viên kèm badge tỷ lệ chốt (dưới 40% đỏ ▼).
+    private var teamCard: some View {
+        let list = rows
+        let assigned = list.reduce(0) { $0 + $1.assignedOrders }, closed = list.reduce(0) { $0 + $1.closedOrders }
+        let qualified = list.filter { $0.assignedOrders >= 10 }
+        let med = median(qualified.compactMap(\.shownRate))
+        let best = qualified.max { ($0.shownRate ?? -1) < ($1.shownRate ?? -1) }
+        return VStack(alignment: .leading, spacing: MT.cellGap) {
+            Text("Hiệu suất đội ngũ").mtFont(.cardHeader).foregroundStyle(Palette.ink)
+            Grid(horizontalSpacing: MT.cellGap, verticalSpacing: MT.cellGap) {
+                GridRow {
+                    BoardCell(label: "Tổng nhân sự", value: Fmt.int(Double(list.count)))
+                    BoardCell(label: "Tổng đơn chia / chốt", value: "\(Fmt.int(assigned)) / \(Fmt.int(closed))")
+                }
+                GridRow {
+                    BoardCell(label: "Trung vị tỷ lệ chốt", note: "người từ 10 đơn chia") { MTRateBadge(rate: med, kind: .saleClose) }
+                    BoardCell(label: "Nổi bật · \(best?.name ?? "—")") { MTRateBadge(rate: best?.shownRate, kind: .saleClose) }
+                }
+            }
+            ForEach(list.prefix(10)) { e in
+                NavigationLink(value: Route.staffDetail(.of(e, in: filters, period: period, hrTeam: applied?.id))) {
+                    HStack(spacing: 6) {
+                        Text("\(e.name ?? "NV") · \(Fmt.int(e.closedOrders))/\(Fmt.int(e.assignedOrders))")
+                            .mtFont(.body).fontWeight(.semibold).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
+                        Spacer(minLength: 4)
+                        Text(Fmt.shortVnd(e.closedNet)).mtFont(.body).fontWeight(.bold).foregroundStyle(Palette.ink).lineLimit(1)
+                        MTRateBadge(rate: e.shownRate, kind: .saleClose)
+                        Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).foregroundStyle(Palette.muted)
+                    }
+                    .padding(10).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .background(Palette.wash, in: .rect(cornerRadius: MT.rCell)).contentShape(.rect)
+                }.buttonStyle(.plain)
+            }
+            if list.count > 10 { Text("Xem đủ \(list.count) người ở So sánh nhân viên.").mtFont(.caption).foregroundStyle(Palette.muted) }
+        }
+        .padding(MT.cardPad).frame(maxWidth: .infinity, alignment: .leading).cardSurface()
+    }
+
+    // MARK: Bố cục cũ (CSKH, Tất cả) và "Từng nhân viên" (khung 09A1)
+
+    @ViewBuilder private var fullContent: some View {
+            if mode == .full, team == "all" && myTeam == "all" { Segmented(selection: $teamPick, options: [("sale", "Sale"), ("cskh", "CSKH"), ("all", "Tất cả")]) }
             HrTeamNotice(applies: applied != nil, deptLabel: effTeam == "sale" ? "Sale" : effTeam == "cskh" ? "CSKH" : "Tất cả")
-            if effTeam == "sale", auth.me?.canView("sale-overview") == true {
+            if mode == .full, effTeam == "sale", auth.me?.canView("sale-overview") == true {
                 StaffTableBlock(team: "sale", by: "seller", period: period, pos: pos, product: product, hrTeam: applied)
             }
             HStack(spacing: 8) {
@@ -815,7 +926,8 @@ struct CompareView: View {
                                            current: t.closedNet, currentText: Fmt.shortMoney(t.closedNet), currentLabel: "Kỳ này")
                     }
                 }
-                if effTeam == "sale" {
+                // Trang "Từng nhân viên" (table): bảng theo nhóm sản phẩm đã có ở trang Sale, không tải lại.
+                if mode == .full, effTeam == "sale" {
                     ProductGroupsBlock(period: period, pos: pos, product: product, hrTeam: applied?.id)
                 }
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
@@ -891,18 +1003,6 @@ struct CompareView: View {
                 }
                 Text("Cách tính: đơn chia = đơn có người bán được gán trong kỳ; đơn chốt theo ngày xác nhận lần đầu; tỷ lệ chốt = \(MetricPrefs.shared.rateShort) (đổi ở Thêm → Cách tính). Nổi bật và cần hỗ trợ chỉ xét người có từ 10 đơn chia.").mtFont(.caption).foregroundStyle(Color.inkSoft)
             } else if error == nil { SkeletonGrid(tiles: 4); Skeleton(height: 220) }
-        }
-        .task(id: loadKey) { await load() }
-        .pageReload(embedded: embedded) { await load() }
-        #if DEBUG
-        .onChange(of: DebugTap.shared.tick) { _, _ in
-            guard MktNvTour.active, DebugTap.shared.target == "nv-mo" else { return }
-            let low = rankedStaff(high: false).first
-            let top = rankedStaff(high: true).first
-            guard let e = low ?? top else { MktNvTour.failed = true; return }
-            nav?.deptsPath.append(.staffDetail(.of(e, in: filters, period: period, hrTeam: applied?.id)))
-        }
-        #endif
     }
     private enum ScoreColumn: CaseIterable, Identifiable {
         case revenue, rate, assigned, closed, average, previous
@@ -958,35 +1058,34 @@ struct CompareView: View {
         var body: some View {
             VStack(alignment: .leading, spacing: MT.cardGap) {
                 if let report {
+                    // Khung 08A: mỗi nhóm sản phẩm một bảng Nhân viên | Đơn chốt | Doanh thu, có dòng Tổng.
                     ForEach(report.groups) { group in
                         Panel {
                             HStack(alignment: .top) {
-                                Text(group.label).mtFont(.cardHeader)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(group.label).mtFont(.cardHeader)
+                                    Text(Fmt.int(group.closed) + " đơn chốt").mtFont(.caption).foregroundStyle(Palette.muted)
+                                }
                                 Spacer()
                                 Button {
                                     explain(group.label, closed: group.closed, net: group.closedNet, report: report)
                                 } label: {
-                                    Text(Fmt.shortMoney(group.closedNet)).mtFont(.cardMetric).lineLimit(1).minimumScaleFactor(0.6).frame(minHeight: 44)
+                                    Text(Fmt.shortVnd(group.closedNet)).mtFont(.cardMetric).lineLimit(1).minimumScaleFactor(0.6).frame(minHeight: 44)
                                 }.buttonStyle(.plain)
-                                InfoButton(InfoText(title: group.label, body: report.definitions["groups"] ?? ""))
                             }
-                            Text(Fmt.int(group.closed) + " đơn chốt").mtFont(.caption).foregroundStyle(Palette.muted)
-                            ForEach(report.staff) { person in
-                                if let value = person.groups[group.label] {
-                                    Button { explain(person.name + " · " + group.label, closed: value.closed, net: value.closedNet, report: report) } label: {
-                                    HStack(alignment: .top, spacing: MT.cellGap) {
-                                        Text(person.name).mtFont(.body)
-                                        Spacer()
-                                        Text(Fmt.int(value.closed) + " · " + Fmt.shortMoney(value.closedNet)).mtFont(.body)
-                                    }.frame(minHeight: 44).accessibilityElement(children: .combine)
-                                    }.buttonStyle(.plain)
+                            VStack(spacing: 0) {
+                                tableRow("Nhân viên", "Đơn chốt", "Doanh thu", header: true)
+                                ForEach(report.staff) { person in
+                                    if let value = person.groups[group.label] {
+                                        Button { explain(person.name + " · " + group.label, closed: value.closed, net: value.closedNet, report: report) } label: {
+                                            tableRow(person.name, Fmt.int(value.closed), Fmt.shortVnd(value.closedNet))
+                                        }.buttonStyle(.plain)
+                                    }
                                 }
+                                tableRow("Tổng", Fmt.int(group.closed), Fmt.shortVnd(group.closedNet), total: true)
                             }
-                            HStack {
-                                Text("Tổng nhóm").mtFont(.cardHeader)
-                                Spacer()
-                                Text(Fmt.int(group.closed) + " · " + Fmt.shortMoney(group.closedNet)).mtFont(.body)
-                            }.padding(MT.cellGap).tileSurface()
+                            .background(Palette.wash, in: .rect(cornerRadius: MT.rCell))
+                            .overlay { RoundedRectangle(cornerRadius: MT.rCell).strokeBorder(Palette.line, lineWidth: 1) }
                         }
                     }
                     if let definition = report.definitions["groups"] {
@@ -998,6 +1097,20 @@ struct CompareView: View {
                 else { StateView(loading: "Đang tải nhóm sản phẩm…") }
             }.task(id: key) { await loadGroups() }
                 .sheet(item: $explanation) { InfoSheet(info: $0) }
+        }
+        /// Một dòng bảng nhóm sản phẩm: tên (cột cố định trái), đơn chốt, doanh thu.
+        private func tableRow(_ name: String, _ closed: String, _ net: String, header: Bool = false, total: Bool = false) -> some View {
+            HStack(spacing: MT.cellGap) {
+                Text(name).frame(maxWidth: .infinity, alignment: .leading).lineLimit(1).minimumScaleFactor(0.8)
+                Text(closed).frame(width: 64, alignment: .trailing)
+                Text(net).frame(width: 92, alignment: .trailing).lineLimit(1).minimumScaleFactor(0.7)
+            }
+            .mtFont(header ? .caption : .body).fontWeight(header || total ? .bold : .regular)
+            .foregroundStyle(header ? Palette.muted : Palette.ink).monospacedDigit()
+            .padding(.horizontal, 10).frame(minHeight: header ? 36 : 40)
+            .overlay(alignment: .top) { if !header { Rectangle().fill(Palette.line).frame(height: 1) } }
+            .contentShape(.rect)
+            .accessibilityElement(children: .combine)
         }
         private func explain(_ title: String, closed: Double, net: Double, report: API.ProductGroupsReport) {
             let scope = Fmt.day(period.range.0) + " – " + Fmt.day(period.range.1) + " · " + (pos.isEmpty ? "Mọi POS" : PosBreakdown.short[pos] ?? pos) + " · " + (hrTeam == nil ? "Mọi team" : "Team đang chọn")

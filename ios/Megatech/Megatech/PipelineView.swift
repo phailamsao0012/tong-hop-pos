@@ -164,16 +164,16 @@ struct PipelineView: View {
             attentionRow("Chờ chuyển hàng (đã đóng, chưa giao)", n(T, "waiting"), rate: nil, .orders(q("waiting", "Chờ chuyển hàng")))
             attentionRow("Đã xác nhận, chưa đóng hàng", n(T, "confirmed"), rate: nil, .orders(q("justconfirmed", "Đã xác nhận")))
             attentionRow("Hoàn / trả hàng", n(T, "returned"), rate: closed > 0 ? n(T, "returned") / closed * 100 : nil, .orders(q("returned", "Hoàn")))
-            attentionRow("Hủy sau khi chốt", n(T, "cancelled"), rate: closed > 0 ? n(T, "cancelled") / closed * 100 : nil, .orders(q("cancelled", "Hủy sau chốt")))
+            attentionRow("Hủy sau khi chốt", n(T, "cancelled"), rate: closed > 0 ? n(T, "cancelled") / closed * 100 : nil, .orders(q("cancelled", "Hủy sau chốt")), cancel: true)
         }
         .padding(MT.cardPad).frame(maxWidth: .infinity, alignment: .leading).cardSurface()
     }
-    private func attentionRow(_ title: String, _ count: Double, rate: Double?, _ route: Route) -> some View {
+    private func attentionRow(_ title: String, _ count: Double, rate: Double?, _ route: Route, cancel: Bool = false) -> some View {
         NavigationLink(value: route) {
             HStack(spacing: 8) {
                 Text(title).mtFont(.body).fontWeight(.semibold).foregroundStyle(Palette.ink).lineLimit(2)
                 Spacer(minLength: 6)
-                if let rate { RefundCountBadge(count: count, rate: rate) }
+                if let rate { RefundCountBadge(count: count, rate: rate, cancel: cancel) }
                 else { Text(Fmt.int(count)).mtFont(.body).fontWeight(.bold).foregroundStyle(Palette.ink) }
                 Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Palette.muted)
             }
