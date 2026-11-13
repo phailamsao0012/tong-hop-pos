@@ -257,6 +257,90 @@ jobs:
             done
             echo "::warning::Face ID chưa nhận khớp sau 15 lần ($1)"
           }
+          # Đoạn 15 chạy sớm, ngay sau đoạn 6 (13/11): chạy cuối thì máy ảo đã chạy gần 1 giờ, hay treo hoặc tự tắt, ảnh giao diện mất.
+          # 15. Giao diện 1.0: chụp các màn chính, sáng rồi tối (chỉ ảnh, không video).
+          ui_stages=(hom-nay hom-nay-2 hom-nay-3 tong-quan tong-quan-so-lieu tong-quan-pos don-hang phong-ban sale nhan-vien nhan-vien-mot cskh mkt cskh-mot-pos mkt-mot-pos van-don thong-bao thong-bao-2 them nhan-su)
+          # Mốc chờ 180 giây (13/11): app khi chạy tour chờ mỗi request tới 120 giây và tải lại màn lỗi một lần (c9161ff).
+          wait_ui() {
+            local deadline=$((SECONDS + ${2:-90})) log="$3"
+            while (( SECONDS < deadline )); do
+              if grep -q '^\[UI\] moc=loi-tai$' "$log"; then
+                echo "::error::15-giao-dien: lỗi tải khi chờ mốc $1"; tail -n 40 "$log" | grep -E '^\[(UI|MOC|MKT|NV)\]' || true; return 1
+              fi
+              if grep -q "^\[UI\] moc=$1$" "$log"; then sleep 1; return 0; fi
+              sleep 0.2
+            done
+            echo "::error::15-giao-dien: thiếu mốc $1"; tail -n 40 "$log" | grep -E '^\[(UI|MOC|MKT|NV)\]' || true; return 1
+          }
+          # Đoạn 15 chạy sau gần 1 giờ máy ảo chạy liền: lệnh simctl có thể treo (2 lượt liền im 10–14 phút ở chỗ đổi sang nền tối,
+          # app đã hỏi Face ID nhưng không nhận được "khớp"). Mỗi lệnh simctl ở đây có hạn (perl alarm), có mốc trước / sau
+          # (moc-thoi-gian.txt và log job) để biết lệnh nào treo; lượt nền tối chạy trên máy ảo vừa tắt và bật lại.
+          m15() { mark "15-$1"; echo "15: $1 $(date +%H:%M:%S)"; }
+          sim() { local s="$1"; shift; perl -e 'alarm shift; exec @ARGV' "$s" xcrun simctl "$@"; }
+          # Face ID có hạn 20 giây mỗi lệnh (face_on_ask gọi hàm này).
+          face() { m15 "face-$1-truoc"; sim 20 spawn "$UDID" notifyutil -p "com.apple.BiometricKit_Sim.pearl.$1" || echo "::warning::15: lệnh Face ID $1 quá hạn"; m15 "face-$1-sau"; }
+          reboot_sim() {
+            m15 "shutdown-truoc"; sim 120 shutdown "$UDID" || echo "::warning::15: shutdown quá hạn"; m15 "shutdown-sau"
+            m15 "boot-truoc"; sim 180 boot "$UDID" || true
+            sim 300 bootstatus "$UDID" -b > /dev/null || { echo "::error::15: máy ảo không bật lại được"; return 1; }
+            m15 "boot-sau"
+            sim 30 status_bar "$UDID" override --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4 || true
+            sim 30 spawn "$UDID" notifyutil -s com.apple.BiometricKit.enrollmentChanged 1 || true
+            sim 30 spawn "$UDID" notifyutil -p com.apple.BiometricKit.enrollmentChanged || true
+            # Làm ấm như lúc mở máy ảo: lần mở đầu sau khi bật rất chậm, lệnh Face ID tới trễ.
+            # Chỉ trỏ vào web ảo ($BASE 127.0.0.1), không để app dùng địa chỉ mặc định.
+            m15 "lam-am-truoc"
+            SIMCTL_CHILD_MEGATECH_BASE="$BASE" perl -e 'alarm shift; exec @ARGV' 30 xcrun simctl launch "$UDID" "$BUNDLE" > /dev/null || true
+            sleep 20
+            sim 30 terminate "$UDID" "$BUNDLE" || true; m15 "lam-am-sau"
+          }
+          for mode in sang toi; do
+            if [ "$mode" = toi ]; then reboot_sim || exit 1; fi
+            m15 "$mode-terminate-truoc"; sim 30 terminate "$UDID" "$BUNDLE" || true; m15 "$mode-terminate-sau"
+            # 13/11: máy ảo tự tắt sau khi bật lại (đổi nền báo "current state: Shutdown"): còn tắt thì bật lại một lần nữa.
+            if ! sim 30 list devices booted | grep -q "$UDID"; then
+              echo "::warning::15: máy ảo đang tắt trước lượt $mode, bật lại"; reboot_sim || exit 1
+            fi
+            m15 "$mode-giao-dien-truoc"
+            if [ "$mode" = toi ]; then look=dark; else look=light; fi
+            sim 60 ui "$UDID" appearance "$look" || { echo "::error::15: đổi giao diện $look quá hạn"; exit 1; }
+            m15 "$mode-giao-dien-sau"
+            log15="$RUNNER_TEMP/ui-15-$mode.txt"
+            vars15=(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
+              SIMCTL_CHILD_MEGATECH_TOUR=giaodien SIMCTL_CHILD_MEGATECH_NAV_RESET=1 SIMCTL_CHILD_MEGATECH_SKIP_FACEID=1)
+            # Máy ảo vừa bật lại có lúc mở app xong, Face ID đúng mà 3 phút không tới mốc hom-nay (13/11 lượt nền tối,
+            # web ảo trả chậm 8–145 giây): tắt app, mở lại một lần rồi chờ lại.
+            for try15 in 1 2; do
+            rm -f "$log15"
+            m15 "$mode-mo-app-truoc"
+            # Sau khi bật lại máy ảo, lần mở đầu có lúc quá 30 giây (13/11 lượt nền tối): tắt app, mở lại một lần với hạn 90 giây.
+            if ! env "${vars15[@]}" perl -e 'alarm shift; exec @ARGV' 30 xcrun simctl launch --stdout="$log15" "$UDID" "$BUNDLE" > /dev/null; then
+              echo "::warning::15: mở app ($mode) quá 30 giây, mở lại"
+              sim 30 terminate "$UDID" "$BUNDLE" || true; sleep 5
+              env "${vars15[@]}" perl -e 'alarm shift; exec @ARGV' 90 xcrun simctl launch --stdout="$log15" "$UDID" "$BUNDLE" > /dev/null \
+                || { echo "::error::15: mở app ($mode) quá hạn"; exit 1; }
+            fi
+            m15 "$mode-mo-app-sau"
+            m15 "$mode-face-id-truoc"; face_on_ask "$log15"; m15 "$mode-face-id-sau"
+            if wait_ui hom-nay 180 "$log15"; then break; fi
+            if [ "$try15" = 2 ]; then exit 1; fi
+            echo "::warning::15: lượt $mode chưa tới mốc hom-nay, mở lại app"
+            sim 30 terminate "$UDID" "$BUNDLE" || true; sleep 5
+            done
+            for stage in "${ui_stages[@]}"; do
+              if [ "$stage" != hom-nay ]; then wait_ui "$stage" 180 "$log15"; fi
+              # 13/11: một lệnh chụp nền tối treo quá 30 giây (thiếu ảnh 39/40): chụp lại một lần.
+              sim 30 io "$UDID" screenshot "$OUT/15-$mode-$stage.png" > /dev/null \
+                || { echo "::warning::15: chụp $mode-$stage quá hạn, chụp lại"; sim 45 io "$UDID" screenshot "$OUT/15-$mode-$stage.png" > /dev/null; } \
+                || echo "::warning::15: chụp lại $mode-$stage vẫn quá hạn"
+            done
+            wait_ui xong 30 "$log15"
+          done
+          sim 60 ui "$UDID" appearance light || true
+          n15=$(ls "$OUT"/15-*.png 2>/dev/null | wc -l | tr -d ' ')
+          if [ "$n15" != "$(( ${#ui_stages[@]} * 2 ))" ]; then echo "::error::15-giao-dien: thiếu ảnh ($n15/$(( ${#ui_stages[@]} * 2 )))"; exit 1; fi
+          grep -hE '^\[(UI|UIPOS)\]' "$RUNNER_TEMP"/ui-15-*.txt > "$OUT/15-giao-dien-app.txt" || true
+          mark "het-15"
           xcrun simctl terminate "$UDID" "$BUNDLE" || true; sleep 1
           rec 7-mo-nhanh
           launch_clock "$RUNNER_TEMP/moc-7-1.txt" 1; mark "mo-app-lan-1-co-logo"
@@ -733,89 +817,6 @@ jobs:
               fail('thiếu hoặc sai dữ liệu đối chiếu API; không in đường dẫn hay nội dung trả về')
           sys.exit(1 if failed else 0)
           PY14
-          # 15. Giao diện 1.0: chụp các màn chính, sáng rồi tối (chỉ ảnh, không video).
-          ui_stages=(hom-nay hom-nay-2 hom-nay-3 tong-quan tong-quan-so-lieu tong-quan-pos don-hang phong-ban sale nhan-vien nhan-vien-mot cskh mkt cskh-mot-pos mkt-mot-pos van-don thong-bao thong-bao-2 them nhan-su)
-          # Mốc chờ 180 giây (13/11): app khi chạy tour chờ mỗi request tới 120 giây và tải lại màn lỗi một lần (c9161ff).
-          wait_ui() {
-            local deadline=$((SECONDS + ${2:-90})) log="$3"
-            while (( SECONDS < deadline )); do
-              if grep -q '^\[UI\] moc=loi-tai$' "$log"; then
-                echo "::error::15-giao-dien: lỗi tải khi chờ mốc $1"; tail -n 40 "$log" | grep -E '^\[(UI|MOC|MKT|NV)\]' || true; return 1
-              fi
-              if grep -q "^\[UI\] moc=$1$" "$log"; then sleep 1; return 0; fi
-              sleep 0.2
-            done
-            echo "::error::15-giao-dien: thiếu mốc $1"; tail -n 40 "$log" | grep -E '^\[(UI|MOC|MKT|NV)\]' || true; return 1
-          }
-          # Đoạn 15 chạy sau gần 1 giờ máy ảo chạy liền: lệnh simctl có thể treo (2 lượt liền im 10–14 phút ở chỗ đổi sang nền tối,
-          # app đã hỏi Face ID nhưng không nhận được "khớp"). Mỗi lệnh simctl ở đây có hạn (perl alarm), có mốc trước / sau
-          # (moc-thoi-gian.txt và log job) để biết lệnh nào treo; lượt nền tối chạy trên máy ảo vừa tắt và bật lại.
-          m15() { mark "15-$1"; echo "15: $1 $(date +%H:%M:%S)"; }
-          sim() { local s="$1"; shift; perl -e 'alarm shift; exec @ARGV' "$s" xcrun simctl "$@"; }
-          # Face ID có hạn 20 giây mỗi lệnh (face_on_ask gọi hàm này).
-          face() { m15 "face-$1-truoc"; sim 20 spawn "$UDID" notifyutil -p "com.apple.BiometricKit_Sim.pearl.$1" || echo "::warning::15: lệnh Face ID $1 quá hạn"; m15 "face-$1-sau"; }
-          reboot_sim() {
-            m15 "shutdown-truoc"; sim 120 shutdown "$UDID" || echo "::warning::15: shutdown quá hạn"; m15 "shutdown-sau"
-            m15 "boot-truoc"; sim 180 boot "$UDID" || true
-            sim 300 bootstatus "$UDID" -b > /dev/null || { echo "::error::15: máy ảo không bật lại được"; return 1; }
-            m15 "boot-sau"
-            sim 30 status_bar "$UDID" override --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4 || true
-            sim 30 spawn "$UDID" notifyutil -s com.apple.BiometricKit.enrollmentChanged 1 || true
-            sim 30 spawn "$UDID" notifyutil -p com.apple.BiometricKit.enrollmentChanged || true
-            # Làm ấm như lúc mở máy ảo: lần mở đầu sau khi bật rất chậm, lệnh Face ID tới trễ.
-            # Chỉ trỏ vào web ảo ($BASE 127.0.0.1), không để app dùng địa chỉ mặc định.
-            m15 "lam-am-truoc"
-            SIMCTL_CHILD_MEGATECH_BASE="$BASE" perl -e 'alarm shift; exec @ARGV' 30 xcrun simctl launch "$UDID" "$BUNDLE" > /dev/null || true
-            sleep 20
-            sim 30 terminate "$UDID" "$BUNDLE" || true; m15 "lam-am-sau"
-          }
-          for mode in sang toi; do
-            if [ "$mode" = toi ]; then reboot_sim || exit 1; fi
-            m15 "$mode-terminate-truoc"; sim 30 terminate "$UDID" "$BUNDLE" || true; m15 "$mode-terminate-sau"
-            # 13/11: máy ảo tự tắt sau khi bật lại (đổi nền báo "current state: Shutdown"): còn tắt thì bật lại một lần nữa.
-            if ! sim 30 list devices booted | grep -q "$UDID"; then
-              echo "::warning::15: máy ảo đang tắt trước lượt $mode, bật lại"; reboot_sim || exit 1
-            fi
-            m15 "$mode-giao-dien-truoc"
-            if [ "$mode" = toi ]; then look=dark; else look=light; fi
-            sim 60 ui "$UDID" appearance "$look" || { echo "::error::15: đổi giao diện $look quá hạn"; exit 1; }
-            m15 "$mode-giao-dien-sau"
-            log15="$RUNNER_TEMP/ui-15-$mode.txt"
-            vars15=(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
-              SIMCTL_CHILD_MEGATECH_TOUR=giaodien SIMCTL_CHILD_MEGATECH_NAV_RESET=1 SIMCTL_CHILD_MEGATECH_SKIP_FACEID=1)
-            # Máy ảo vừa bật lại có lúc mở app xong, Face ID đúng mà 3 phút không tới mốc hom-nay (13/11 lượt nền tối,
-            # web ảo trả chậm 8–145 giây): tắt app, mở lại một lần rồi chờ lại.
-            for try15 in 1 2; do
-            rm -f "$log15"
-            m15 "$mode-mo-app-truoc"
-            # Sau khi bật lại máy ảo, lần mở đầu có lúc quá 30 giây (13/11 lượt nền tối): tắt app, mở lại một lần với hạn 90 giây.
-            if ! env "${vars15[@]}" perl -e 'alarm shift; exec @ARGV' 30 xcrun simctl launch --stdout="$log15" "$UDID" "$BUNDLE" > /dev/null; then
-              echo "::warning::15: mở app ($mode) quá 30 giây, mở lại"
-              sim 30 terminate "$UDID" "$BUNDLE" || true; sleep 5
-              env "${vars15[@]}" perl -e 'alarm shift; exec @ARGV' 90 xcrun simctl launch --stdout="$log15" "$UDID" "$BUNDLE" > /dev/null \
-                || { echo "::error::15: mở app ($mode) quá hạn"; exit 1; }
-            fi
-            m15 "$mode-mo-app-sau"
-            m15 "$mode-face-id-truoc"; face_on_ask "$log15"; m15 "$mode-face-id-sau"
-            if wait_ui hom-nay 180 "$log15"; then break; fi
-            if [ "$try15" = 2 ]; then exit 1; fi
-            echo "::warning::15: lượt $mode chưa tới mốc hom-nay, mở lại app"
-            sim 30 terminate "$UDID" "$BUNDLE" || true; sleep 5
-            done
-            for stage in "${ui_stages[@]}"; do
-              if [ "$stage" != hom-nay ]; then wait_ui "$stage" 180 "$log15"; fi
-              # 13/11: một lệnh chụp nền tối treo quá 30 giây (thiếu ảnh 39/40): chụp lại một lần.
-              sim 30 io "$UDID" screenshot "$OUT/15-$mode-$stage.png" > /dev/null \
-                || { echo "::warning::15: chụp $mode-$stage quá hạn, chụp lại"; sim 45 io "$UDID" screenshot "$OUT/15-$mode-$stage.png" > /dev/null; } \
-                || echo "::warning::15: chụp lại $mode-$stage vẫn quá hạn"
-            done
-            wait_ui xong 30 "$log15"
-          done
-          sim 60 ui "$UDID" appearance light || true
-          n15=$(ls "$OUT"/15-*.png 2>/dev/null | wc -l | tr -d ' ')
-          if [ "$n15" != "$(( ${#ui_stages[@]} * 2 ))" ]; then echo "::error::15-giao-dien: thiếu ảnh ($n15/$(( ${#ui_stages[@]} * 2 )))"; exit 1; fi
-          grep -hE '^\[(UI|UIPOS)\]' "$RUNNER_TEMP"/ui-15-*.txt > "$OUT/15-giao-dien-app.txt" || true
-          mark "het-15"
           # Cờ Face ID mỗi lần vào app ở đoạn 7–11: lúc Face ID đúng, lúc vào app, lúc app active lại, có chạm trần giữ cờ hay không
           # (chỉ tên mốc và mili giây) ở co-face-id.txt, để soi chỗ màn che chớp lên ngay sau Face ID.
           for f in moc-7-1 moc-7-2 moc-8 nho-9-1 nho-9-2 cham-10 tim-11; do
