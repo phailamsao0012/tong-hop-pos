@@ -987,7 +987,8 @@ struct CompareView: View {
                 RankBlock(title: "Cần hỗ trợ", sub: "Tỷ lệ thấp nhất, ≥ 10 đơn chia", icon: "person.2.fill", tone: .bad, rows: Array(low), prev: prevBy, filters: filters, period: period, hrTeam: applied?.id)
                 RankBlock(title: "Cân bằng data", sub: "Chốt tốt nhưng ít data, nên cấp thêm số", icon: "arrow.left.arrow.right", tone: .warn, rows: Array(balance), prev: prevBy, filters: filters, period: period, hrTeam: applied?.id)
                 }
-                // Bảng chi tiết
+                // Bảng chi tiết (trang "Từng nhân viên" 09A1: bảng gọn 4 cột vừa màn hình).
+                if mode == .table { compactTable(list) } else {
                 HStack { Text("So sánh chi tiết nhân viên (\(list.count) người)").mtFont(.cardHeader); Spacer(); ExportButton(view: "compare", filename: "so-sanh-nhan-vien-\(period.range.0)-\(period.range.1)", headers: ["Nhân viên", "Bộ phận", "Đơn chia", "Đơn chốt", "Tỷ lệ chốt", "Doanh thu", "AOV", "Tỷ lệ kỳ trước", "Doanh thu kỳ trước"]) { list.map { [$0.name ?? "", $0.department ?? "", Fmt.int($0.assignedOrders), Fmt.int($0.closedOrders), Fmt.pct($0.shownRate), Fmt.int($0.closedNet), Fmt.int($0.averageOrder ?? 0), Fmt.pct(prevBy[$0.sellerId]?.shownRate), Fmt.int(prevBy[$0.sellerId]?.closedNet ?? 0)] } }; Menu { Button("Theo doanh thu") { sort = "closedNet" }; Button("Theo đơn chốt") { sort = "closedOrders" }; Button("Theo tỷ lệ chốt") { sort = "rate" } } label: { HStack(spacing: 3) { Text(sort == "closedNet" ? "Doanh thu" : sort == "closedOrders" ? "Đơn chốt" : "Tỷ lệ chốt"); Image(systemName: "chevron.down").mtFont(.caption) }.mtFont(.caption).foregroundStyle(Color.ink) } }
                 MTStickyColumnTable(
                     rows: Array(list.prefix(60)), total: nil, columns: ScoreColumn.allCases,
@@ -1006,8 +1007,50 @@ struct CompareView: View {
                         scoreCell(employee, column: column)
                     }.buttonStyle(.plain)
                 }
+                }
                 Text("Cách tính: đơn chia = đơn có người bán được gán trong kỳ; đơn chốt theo ngày xác nhận lần đầu; tỷ lệ chốt = \(MetricPrefs.shared.rateShort) (đổi ở Thêm → Cách tính). Nổi bật và cần hỗ trợ chỉ xét người có từ 10 đơn chia.").mtFont(.caption).foregroundStyle(Color.inkSoft)
             } else if error == nil { SkeletonGrid(tiles: 4); Skeleton(height: 220) }
+    }
+    /// Khung 09A1: Nhân viên | Số chia | Đơn chốt | Tỷ lệ chốt, dòng Tổng cuối; chạm tiêu đề cột để xếp, chạm một dòng mở trang nhân viên.
+    @ViewBuilder private func compactTable(_ list: [API.EmployeeRow]) -> some View {
+        let assigned = list.reduce(0) { $0 + $1.assignedOrders }, closed = list.reduce(0) { $0 + $1.closedOrders }, den = list.reduce(0) { $0 + $1.legacyRateDen }
+        VStack(spacing: 0) {
+            HStack(spacing: MT.cellGap) {
+                headerCell("Nhân viên", key: "closedNet").frame(maxWidth: .infinity, alignment: .leading)
+                Text("Số chia").frame(width: 56, alignment: .trailing)
+                headerCell("Đơn chốt", key: "closedOrders").frame(width: 64, alignment: .trailing)
+                headerCell("Tỷ lệ chốt", key: "rate").frame(width: 84, alignment: .trailing)
+            }
+            .mtFont(.caption).fontWeight(.bold).foregroundStyle(Palette.muted)
+            .padding(.horizontal, 10).frame(minHeight: 40)
+            ForEach(list.prefix(60)) { e in
+                NavigationLink(value: Route.staffDetail(.of(e, in: filters, period: period, hrTeam: applied?.id))) {
+                    compactRow(e.name ?? "NV", assigned: e.assignedOrders, closed: e.closedOrders, rate: e.shownRate)
+                }.buttonStyle(.plain)
+            }
+            compactRow("Tổng (\(list.count) người)", assigned: assigned, closed: closed, rate: den > 0 ? closed / den * 100 : nil, total: true)
+        }
+        .background(Palette.wash, in: .rect(cornerRadius: MT.rCell))
+        .overlay { RoundedRectangle(cornerRadius: MT.rCell).strokeBorder(Palette.line, lineWidth: 1) }
+    }
+    private func headerCell(_ title: String, key: String) -> some View {
+        Button { sort = key } label: {
+            HStack(spacing: 2) { Text(title); if sort == key { Image(systemName: "arrow.down").font(.system(size: 9, weight: .bold)) } }
+        }.buttonStyle(.plain)
+    }
+    private func compactRow(_ name: String, assigned: Double, closed: Double, rate: Double?, total: Bool = false) -> some View {
+        HStack(spacing: MT.cellGap) {
+            Text(name).lineLimit(1).minimumScaleFactor(0.75).frame(maxWidth: .infinity, alignment: .leading)
+            Text(Fmt.int(assigned)).frame(width: 56, alignment: .trailing)
+            Text(Fmt.int(closed)).frame(width: 64, alignment: .trailing)
+            Group {
+                if effTeam == "sale" { MTRateBadge(rate: rate, kind: .saleClose) } else { Text(Fmt.pct(rate)) }
+            }.frame(width: 84, alignment: .trailing)
+        }
+        .mtFont(.body).fontWeight(total ? .bold : .regular).foregroundStyle(Palette.ink).monospacedDigit()
+        .padding(.horizontal, 10).frame(minHeight: 44)
+        .overlay(alignment: .top) { Rectangle().fill(Palette.line).frame(height: 1) }
+        .contentShape(.rect)
     }
     private enum ScoreColumn: CaseIterable, Identifiable {
         case revenue, rate, assigned, closed, average, previous
