@@ -10,17 +10,20 @@ struct LoginShell<Content: View>: View {
     /// Tăng 1 để thẻ rung (sai mật khẩu / Face ID không khớp).
     var shake: Int
     let content: Content
+    var themed: Bool
     @Environment(IntroState.self) private var intro
 
-    init(mood: MascotMood, gaze: CGPoint = .zero, shake: Int = 0, @ViewBuilder content: () -> Content) {
+    init(mood: MascotMood, gaze: CGPoint = .zero, shake: Int = 0, themed: Bool = false, @ViewBuilder content: () -> Content) {
         self.mood = mood; self.gaze = gaze; self.shake = shake; self.content = content()
+        self.themed = themed
     }
 
     var body: some View {
         let shown = intro.stage != .play
         ZStack {
             // Lúc màn mở đầu đang phủ kín thì chỉ để nền phẳng: không vẽ tia chớp, linh vật, thẻ phía sau cho đỡ tốn máy.
-            if shown { LoginBackdrop() } else { Color(hex: 0x071a14).ignoresSafeArea() }
+            if themed { Color.mtBackground.ignoresSafeArea() }
+            else if shown { LoginBackdrop() } else { Color(hex: 0x071a14).ignoresSafeArea() }
             if shown {
                 GeometryReader { g in
                     ScrollView {
@@ -46,15 +49,21 @@ struct LoginShell<Content: View>: View {
             }
         }
         .animation(.timingCurve(0.16, 1, 0.3, 1, duration: 1), value: shown)
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(themed ? nil : .dark)
     }
 
-    private var card: some View {
+    @ViewBuilder private var card: some View {
+        if themed {
+            RoundedRectangle(cornerRadius: MT.rCard)
+                .fill(Color.mtSurfaceCard)
+                .overlay(RoundedRectangle(cornerRadius: MT.rCard).stroke(Color.mtCardBorder))
+        } else {
         RoundedRectangle(cornerRadius: 22)
             .fill(LinearGradient(colors: [Color(red: 22 / 255, green: 62 / 255, blue: 48 / 255).opacity(0.97), Color(red: 11 / 255, green: 37 / 255, blue: 29 / 255).opacity(0.98)],
                                  startPoint: .top, endPoint: .bottom))
             .overlay(RoundedRectangle(cornerRadius: 22).stroke(Brand.mint.opacity(0.2)))
             .shadow(color: Color(hex: 0x020e09).opacity(0.9), radius: 30, y: 30)
+        }
     }
 }
 

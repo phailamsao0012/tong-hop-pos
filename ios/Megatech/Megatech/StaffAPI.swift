@@ -1,5 +1,105 @@
 import Foundation
 
+extension API {
+    /// Hợp đồng riêng cho 17C: giữ nguyên decoder và hàm hồ sơ của các màn cũ.
+    struct HRProfileAchievements: Decodable {
+        struct Best: Decodable { let month: ProfileMonth?; let rateMonth: ProfileMonth? }
+        let profile: StaffProfileReport
+        let best: Best?
+        let topMonths: [ProfileMonth]?
+        private enum CodingKeys: String, CodingKey { case best, topMonths }
+        init(from decoder: Decoder) throws {
+            profile = try StaffProfileReport(from: decoder)
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            best = try values.decodeIfPresent(Best.self, forKey: .best)
+            topMonths = try values.decodeIfPresent([ProfileMonth].self, forKey: .topMonths)
+        }
+    }
+    static func hrProfileAchievements(id: String) async throws -> HRProfileAchievements {
+        try await request("/api/reports/staff-profile?id=\(queryValue(id))&pos=")
+    }
+    struct Kpi2Goal: Decodable {
+        let assigned: Double?
+        let closed: Double?
+        let orders: Double?
+        let upsellRate: Double?
+        let products: [String: Double]?
+    }
+    struct Kpi2Report: Decodable {
+        let month: String
+        let items: [String: Kpi2Goal]
+    }
+    static func kpi2(month: String) async throws -> Kpi2Report {
+        try await request("/api/kpi2?month=\(queryValue(month))")
+    }
+    struct ProfileTenure: Decodable {
+        let joined: String
+        let source: String
+        let t: Int
+    }
+    struct StaffTenureReport: Decodable {
+        let today: String
+        let people: [String: ProfileTenure]
+    }
+    struct ProfileBadge: Decodable, Identifiable {
+        let key: String
+        let tier: String
+        let label: String
+        let note: String
+        let month: String?
+        var id: String { key }
+    }
+    struct ProfileMonth: Decodable, Identifiable {
+        let month: String
+        let net: Double
+        let closedOrders: Double
+        let rate: Double?
+        let rank: Int?
+        let of: Int
+        var id: String { month }
+    }
+    struct StaffProfileReport: Decodable {
+        let tenure: ProfileTenure?
+        let posCreated: String?
+        let firstOrderDay: String?
+        let months: [ProfileMonth]
+        let badges: [ProfileBadge]
+        let definitions: [String: String]
+    }
+    static func staffTenure() async throws -> StaffTenureReport {
+        try await request("/api/staff-tenure")
+    }
+    static func staffProfile(id: String, pos: String) async throws -> StaffProfileReport {
+        try await request("/api/reports/staff-profile?id=\(queryValue(id))&pos=\(queryValue(pos))")
+    }
+    struct ProductGroupCell: Decodable, Identifiable {
+        let label: String
+        let closed: Double
+        let closedNet: Double
+        var id: String { label }
+    }
+    struct ProductGroupStaff: Decodable, Identifiable {
+        let sellerId: String
+        let name: String
+        let groups: [String: ProductGroupValue]
+        var id: String { sellerId }
+        // Máy chủ trả số theo nhóm của từng người ở khoá byGroup (lib/reports/product-groups-report.ts).
+        enum CodingKeys: String, CodingKey { case sellerId, name, groups = "byGroup" }
+    }
+    struct ProductGroupValue: Decodable {
+        let closed: Double
+        let closedNet: Double
+    }
+    struct ProductGroupsReport: Decodable {
+        let groups: [ProductGroupCell]
+        let staff: [ProductGroupStaff]
+        let definitions: [String: String]
+    }
+    static func saleProductGroups(start: String, end: String, pos: String, hrTeam: String?) async throws -> ProductGroupsReport {
+        try await request("/api/reports/product-groups?start=\(queryValue(start))&end=\(queryValue(end))&posIds=\(queryValue(pos))&team=sale&dim=main&basis=both&by=seller" + HrUnit.suffix(hrTeam))
+    }
+}
+
 /// Bộ lọc của danh sách cấu thành một ô; giữ nguyên kỳ, POS và team khi mở từ bảng (I3).
 struct StaffOrderQuery: Hashable {
     let team: String
@@ -26,6 +126,9 @@ extension API {
     struct StaffPeriod: Decodable { let start: String; let end: String }
     struct StaffDefinitions: Decodable { let packed: String?; let closed: String; let rate: String }
     struct StaffRow: Decodable, Identifiable {
+        let delivered: Double?
+        let deliveredNet: Double?
+        let paidNet: Double?
         let sellerId: String
         let name: String
         let department: String?
@@ -47,6 +150,9 @@ extension API {
         var id: String { sellerId }
     }
     struct StaffSum: Decodable {
+        let delivered: Double?
+        let deliveredNet: Double?
+        let paidNet: Double?
         let people: Double
         let created: Double
         let createdClosed: Double
@@ -147,6 +253,9 @@ extension API {
         let dept: String
         let people: Int
         let mentor: String?
+        /// Thành viên (mã tài khoản POS, tên); máy chủ cũ không có thì nil. Team MKT nhập tay có thể có id rỗng.
+        let memberRefs: [MemberRef]?
+        struct MemberRef: Decodable { let id: String; let name: String }
     }
     struct HrTeamList: Decodable { let teams: [HrTeamItem] }
 

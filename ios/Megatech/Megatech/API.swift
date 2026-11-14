@@ -1,4 +1,15 @@
 import Foundation
+
+extension API {
+    /// Chỉ các số tổng hợp của người lên đơn, từ cùng phản hồi Vận đơn đang gọi.
+    struct VanDonSellerRow: Decodable, Identifiable {
+        let key: String; let label: String; let dept: String?
+        let closed: Double; let sent: Double; let sentNet: Double
+        let returned: Double; let returnedNet: Double
+        let returnRate: Double?; let returnRateNet: Double?
+        var id: String { key }
+    }
+}
 import UniformTypeIdentifiers
 
 /// Gọi API của web tonghopposmegatech.io.vn. Phiên đăng nhập là cookie `thp_session`; app giữ token trong Keychain
@@ -11,11 +22,19 @@ enum API {
         #endif
         return URL(string: "https://tonghopposmegatech.io.vn")!
     }()
+    /// Hạn mỗi request: 45 giây; bản Debug khi chạy lượt tự xem (MEGATECH_TOUR) 120 giây, vì web ảo một luồng trên máy CI có lúc
+    /// trả một báo cáo mất gần 90 giây. Bản phát hành không đổi.
+    static let requestTimeout: TimeInterval = {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["MEGATECH_TOUR"]?.isEmpty == false { return 120 }
+        #endif
+        return 45
+    }()
     static let session: URLSession = {
         let c = URLSessionConfiguration.default
         c.httpCookieStorage = nil
         c.httpShouldSetCookies = false
-        c.timeoutIntervalForRequest = 45
+        c.timeoutIntervalForRequest = requestTimeout
         return URLSession(configuration: c)
     }()
     /// Như `session` nhưng không có bộ nhớ đệm phản hồi (không ghi gì xuống máy, kể cả Cache.db): phần tải trước lúc hộp Face ID
@@ -26,7 +45,7 @@ enum API {
         c.httpShouldSetCookies = false
         c.urlCache = nil
         c.requestCachePolicy = .reloadIgnoringLocalCacheData
-        c.timeoutIntervalForRequest = 45
+        c.timeoutIntervalForRequest = requestTimeout
         return URLSession(configuration: c)
     }()
 
@@ -272,14 +291,14 @@ enum API {
         let closedCustomers: Double?
         let closeRate: Double?
         /// Tỷ lệ chốt theo cách tính đang chọn; tỷ lệ hoàn / hủy (máy chủ tính, %).
-        var rate: Double? = nil
+        var rateTop: Double? = nil; var rateDen: Double? = nil; var rate: Double? = nil
         var assignedOrders: Double? = nil
         var returnRatio: Double? = nil
         var cancelRatio: Double? = nil
         let groups: [String: Group]
     }
     struct PosRow: Decodable { let posId: String; let closedOrders: Double; let closedNet: Double; let orders: Double; var assignedOrders: Double? = nil; var rate: Double? = nil; var returnRatio: Double? = nil; var cancelRatio: Double? = nil }
-    struct EmployeeRow: Decodable, Identifiable { let sellerId: String; let name: String?; let department: String?; let orders: Double; let closedOrders: Double; let closedNet: Double; let assignedOrders: Double; let closeRate: Double?; let assignedCloseRate: Double?; let averageOrder: Double?; var rate: Double? = nil; var returnRatio: Double? = nil; var cancelRatio: Double? = nil; var id: String { sellerId } }
+    struct EmployeeRow: Decodable, Identifiable { let sellerId: String; let name: String?; let department: String?; let orders: Double; let closedOrders: Double; let closedNet: Double; let assignedOrders: Double; let closeRate: Double?; let assignedCloseRate: Double?; let averageOrder: Double?; var rateTop: Double? = nil; var rateDen: Double? = nil; var rate: Double? = nil; var returnRatio: Double? = nil; var cancelRatio: Double? = nil; var id: String { sellerId } }
     struct Reconcile: Decodable { let orders: Double; let gross: Double; let net: Double; let discount: Double }
     struct SeriesRow: Decodable { let bucket: String; let posId: String; let orders: Double; let closedOrders: Double; let closedNet: Double; var rate: Double? = nil; let groups: [String: Group] }
     struct Period: Decodable { let total: Metrics; let byPos: [PosRow]; let byEmployee: [EmployeeRow]?; let series: [SeriesRow]?; let reconcile: Reconcile? }
@@ -382,8 +401,8 @@ enum API {
         var id: String { marketerId }
     }
     struct Marketing: Decodable { let summary: MktSummary; let byMarketer: [Marketer] }
-    static func marketing(start: String, end: String) async throws -> Marketing {
-        try await request("/api/reports/marketing?posIds=&start=\(start)&end=\(end)&basis=created&stage=all")
+    static func marketing(start: String, end: String, posIds: [String] = []) async throws -> Marketing {
+        try await request("/api/reports/marketing?posIds=\(posIds.joined(separator: ","))&start=\(start)&end=\(end)&basis=created&stage=all")
     }
 
     // MARK: Vận hành đơn
@@ -415,7 +434,8 @@ enum API {
     struct SyncPos: Decodable, Identifiable { let posId: String; let records: Double; let lastSyncAt: String?; let lastError: String?; let status: String; let errors24h: Double; var id: String { posId } }
     static func syncStatus() async throws -> [SyncPos] { try await request("/api/sync/pos") }
     struct CskhBadge: Decodable { let callsToday: Double; let over20: Double }
-    static func cskhBadge() async throws -> CskhBadge { try await request("/api/reports/cskh-badge") }
+    /// posIds: máy chủ chưa nhận tham số này (Tổ web tổng đang sửa) thì bỏ qua, trả số mọi POS như cũ.
+    static func cskhBadge(posIds: [String] = []) async throws -> CskhBadge { try await request("/api/reports/cskh-badge?posIds=\(posIds.joined(separator: ","))") }
     struct Employee: Decodable, Identifiable { let id: String; let name: String; let department: String?; let posIds: [String]?; let active: Bool? }
     static func employees() async throws -> [Employee] { try await request("/api/employees") }
 
@@ -429,8 +449,8 @@ enum API {
         let noteCount: Double; let lastNoteAt: String?; let daysSinceNote: Double?; let notes: [CareNote]
     }
     struct Care: Decodable { let total: Double; let summary: CareSummary; let staff: [CareStaff]; let rows: [CareRow] }
-    static func care(assigned: String, sort: String, minDays: Int, q: String, page: Int) async throws -> Care {
-        try await request("/api/reports/care?posIds=&assigned=\(assigned.isEmpty ? "all" : assigned)&sort=\(sort)&minDays=\(minDays)&q=\(q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")&page=\(page)&size=50")
+    static func care(assigned: String, sort: String, minDays: Int, q: String, page: Int, posIds: [String] = []) async throws -> Care {
+        try await request("/api/reports/care?posIds=\(posIds.joined(separator: ","))&assigned=\(assigned.isEmpty ? "all" : assigned)&sort=\(sort)&minDays=\(minDays)&q=\(q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")&page=\(page)&size=50")
     }
 
     // MARK: Cuộc gọi CSKH
@@ -439,7 +459,7 @@ enum API {
     struct CallCoverage: Decodable { let customers: Double; let notes: Double; let firstNote: String?; let lastFetch: String? }
     struct CallPeriod: Decodable { let days: [String] }
     struct Calls: Decodable { let staff: [CallStaff]; let coverage: CallCoverage?; let period: CallPeriod? }
-    static func calls(start: String, end: String, team: String = "cskh") async throws -> Calls { try await request("/api/reports/calls?posIds=&start=\(start)&end=\(end)&team=\(team)") }
+    static func calls(start: String, end: String, team: String = "cskh", posIds: [String] = []) async throws -> Calls { try await request("/api/reports/calls?posIds=\(posIds.joined(separator: ","))&start=\(start)&end=\(end)&team=\(team)") }
 
     // MARK: Mua lại & Upsell
     struct Level: Decodable { let level: Int; let label: String; let customers: Double; let orders: Double; let net: Double }
@@ -463,8 +483,8 @@ enum API {
         var id: String { posId + ":" + phone }
     }
     struct CustomerPage: Decodable { let page: Int; let hasMore: Bool; let total: Double; let segments: [String: Double]?; let groups: [String: Double]?; let groupNets: [String: Double]?; let customers: [CustomerRow] }
-    static func customers(segment: String, sort: String, q: String, page: Int, size: Int = 50) async throws -> CustomerPage {
-        try await request("/api/reports/customers?posIds=&segment=\(segment)&sort=\(sort)&q=\(q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")&page=\(page)&size=\(size)")
+    static func customers(segment: String, sort: String, q: String, page: Int, size: Int = 50, posIds: [String] = []) async throws -> CustomerPage {
+        try await request("/api/reports/customers?posIds=\(posIds.joined(separator: ","))&segment=\(segment)&sort=\(sort)&q=\(q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")&page=\(page)&size=\(size)")
     }
     /// Ô tìm Hồ sơ khách (kế hoạch 1.5): tìm trong bảng khách theo SĐT đã chuẩn hóa hoặc tên, tối đa 20 dòng, không lọc ngày.
     static func customerSearch(_ q: String, posIds: [String]) async throws -> CustomerPage {

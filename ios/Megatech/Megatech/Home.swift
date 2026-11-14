@@ -6,6 +6,8 @@ import SwiftUI
 struct HomeView: View {
     @Environment(AppNav.self) private var nav
     @Environment(AuthModel.self) private var auth
+    @SceneStorage("thp_overview_seg") private var overviewSegment = "departments"
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Kỳ, POS, nhóm đơn chung (AppNav, kế hoạch 1.4): nhớ giữa các lần mở app; bảng nào chạm vào cũng mở trang con đúng bộ lọc này.
     private var period: Period { nav.period }
     private var pos: String { nav.pos }
@@ -33,41 +35,56 @@ struct HomeView: View {
         @Bindable var nav = nav
         NavigationStack(path: $nav.overviewPath) {
             if !allowed {
-                TabPage {
-                    PageTitle(title: "Tổng quan", subtitle: "4 bộ phận")
-                    ContentUnavailableView("Chưa được cấp quyền", systemImage: "lock.fill", description: Text("Tài khoản này chưa được xem Tổng quan POS. Các phần khác xem ở Trang chủ và Phòng ban."))
+                TabPage(title: "Tổng quan", greeting: period.kicker) {
+                    ContentUnavailableView("Chưa được cấp quyền", systemImage: "lock.fill", description: Text("Tài khoản này chưa được xem Tổng quan POS. Các phần khác xem ở Hôm nay và Phòng ban."))
                 }
                 .appRoutes()
             } else {
-                TabPage {
+                TabPage(title: segmentTitle, greeting: period.kicker) {
                     ScrollViewReader { proxy in
                         VStack(alignment: .leading, spacing: 14) {
-                            PageTitle(title: "Tổng quan", subtitle: "4 bộ phận · \(period.label)")
-                            // Một bộ chọn kỳ cho cả trang (khối Số liệu theo kỳ bên dưới dùng cùng kỳ này), đổi bằng 1 chạm.
-                            PeriodChips(period: $nav.period)
-                            PosChipRow(selection: $nav.pos)
-                            HStack(spacing: 8) {
-                                Text("Nhóm đơn").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.inkSoft)
-                                FilterChip(label: "Tất cả", on: product == "all") { nav.product = "all" }
-                                FilterChip(label: "Gentadox", on: product == "gentadox") { nav.product = "gentadox" }
-                                FilterChip(label: "SK + GK", on: product == "skgk") { nav.product = "skgk" }
-                                Spacer()
-                            }
-                            HStack { HrTeamChip(); Spacer() }
+                            // Một pill lọc cho cả trang (khung Gemini): bấm mở bảng chọn kỳ, POS, nhóm đơn, team.
+                            ScopeFilterPill(period: $nav.period, pos: $nav.pos, product: $nav.product, team: true)
+                            MTSegmentedControl(selection: $overviewSegment, options: [("departments", "Bốn bộ phận"), ("metrics", "Số liệu & KH"), ("pos", "Theo POS")])
+                            VStack(alignment: .leading, spacing: MT.cardGap) {
+                            // Khung 02: banner vàng khi đang chọn team (bảng bộ phận chưa lọc theo team).
+                            if nav.hrUnit != nil { TeamNotFilteredBanner(text: "Bảng bộ phận chưa lọc theo team") }
                             if let error, sections == nil {
                                 StateView(error: error) { await load(force: true) }
                             }
+                            DeptProgressCard(data: sections, mkt: mkt?.current, period: period, pos: pos)
                             DeptBoards(data: sections, mkt: mkt?.current, mktRatios: !posLimited, mktNote: product == "all" ? nil : "MKT chưa lọc được theo nhóm đơn: số của mọi sản phẩm.",
                                        period: period, pos: pos, product: product, me: auth.me, failed: error != nil)
                                 .environment(\.thinking, loading && sections != nil)
-                            if nav.hrUnit != nil { Text("4 bảng bộ phận chưa lọc theo team.").font(.caption).foregroundStyle(Color.inkSoft) }
                             if let s = sections { footnote(s) }
-                            CenterBlocks(period: period, team: "all", pos: pos, product: product)
+                            }
+                            .frame(height: overviewSegment == "departments" ? nil : 0, alignment: .top)
+                            .clipped().opacity(overviewSegment == "departments" ? 1 : 0)
+                            .allowsHitTesting(overviewSegment == "departments")
+                            .accessibilityHidden(overviewSegment != "departments")
+                            CenterBlocks(period: period, team: "all", pos: pos, product: product, overviewSegment: overviewSegment)
+                                .frame(height: overviewSegment == "departments" ? 0 : nil, alignment: .top)
+                                .clipped().opacity(overviewSegment == "departments" ? 0 : 1)
+                                .allowsHitTesting(overviewSegment != "departments")
+                                .accessibilityHidden(overviewSegment == "departments")
                         }
-                        .onChange(of: nav.overviewScroll) { _, id in
+                        .onChange(of: nav.overviewScroll, initial: true) { _, id in
                             guard let id else { return }
-                            withAnimation(.easeInOut(duration: 0.7)) { proxy.scrollTo(id, anchor: .top) }
-                            nav.overviewScroll = nil
+                            // "dau:<phần>" (lượt chụp giao diện): chọn phần, giữ đầu trang (tiêu đề, pill lọc, segmented), không cuộn.
+                            if id.hasPrefix("dau:") {
+                                overviewSegment = String(id.dropFirst(4))
+                                nav.overviewScroll = nil
+                                return
+                            }
+                            overviewSegment = ["sale", "cskh", "mkt", "vandon"].contains(id) ? "departments" : "metrics"
+                            Task { @MainActor in
+                                // Đợi SwiftUI cập nhật kích thước khung trước khi tìm neo.
+                                await Task.yield()
+                                try? await Task.sleep(for: .milliseconds(100))
+                                guard nav.overviewScroll == id else { return }
+                                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.7)) { proxy.scrollTo(id, anchor: .top) }
+                                nav.overviewScroll = nil
+                            }
                         }
                     }
                 }
@@ -79,34 +96,25 @@ struct HomeView: View {
         }
     }
 
+    /// Tiêu đề lớn theo phần đang xem (khung 02, 03, 04).
+    private var segmentTitle: String {
+        switch overviewSegment {
+        case "metrics": return "Số liệu theo kỳ"
+        case "pos": return "Tổng quan POS"
+        default: return "Tổng quan"
+        }
+    }
     /// Giờ đồng bộ Pancake và cách tính từng bộ phận (như nút "i" trên web).
     private func syncFootnote(_ sections: API.Sections) -> String {
         let synced: String = sections.syncedAt.map { " · số Pancake đồng bộ \(Fmt.time($0))" } ?? ""
         return "Chạm vào bộ phận để xem chi tiết\(synced)"
     }
     private func footnote(_ s: API.Sections) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(syncFootnote(s))
-                .font(.system(size: 10)).foregroundStyle(Color.inkSoft)
-            if let defs = s.definitions, !defs.isEmpty {
-                DisclosureGroup {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(CompanyDept.allCases) { d in
-                            if let t = d == .vandon ? CompanyDept.vanDonDefinition(VdBasis(s.sentBasis)) : defs[d.definitionKey] {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(d.title).font(.system(size: 11, weight: .bold)).foregroundStyle(d.tint)
-                                    Text(t).font(.system(size: 11)).foregroundStyle(Color.ink).fixedSize(horizontal: false, vertical: true)
-                                }
-                            }
-                        }
-                    }
-                    .padding(.top, 6)
-                } label: {
-                    Label("Cách tính 4 bộ phận", systemImage: "info.circle").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.brand)
-                }
-                .padding(12).background(Color.card, in: .rect(cornerRadius: 12)).cardShadow()
-            }
-        }
+        let definitions = CompanyDept.allCases.compactMap { dept -> String? in
+            let text = dept == .vandon ? CompanyDept.vanDonDefinition(VdBasis(s.sentBasis)) : s.definitions?[dept.definitionKey]
+            return text.map { "\(dept.title)\n\($0)" }
+        }.joined(separator: "\n\n")
+        return GroupTitle(title: "4 bộ phận", subtitle: syncFootnote(s), info: InfoText(title: "Cách tính 4 bộ phận", body: definitions))
     }
 
     /// Lần tải đầu (kỳ, POS, nhóm đơn nhớ từ lần mở trước, NavMemory) được tải trước lúc hộp Face ID đang hiện: đổi cách tải thì
@@ -215,7 +223,7 @@ struct OverviewView: View {
         let cancelled: Double = (groups["cancelled"]?.orders ?? 0) + (groups["returned"]?.orders ?? 0)
         return [("Đã thanh toán", groups["delivered"]?.orders ?? 0, .good),
                 ("Đang xử lý", processing, .warn),
-                ("Chờ xác nhận", groups["new"]?.orders ?? 0, .orange),
+                ("Chờ xác nhận", groups["new"]?.orders ?? 0, Palette.mtWarningInk),
                 ("Đã hủy", cancelled, .bad)]
     }
     private func q(_ group: String, _ basis: String, _ title: String) -> OrderQuery { OrderQuery(start: range.0, end: range.1, posIds: posIds, group: group, basis: basis, title: title) }
@@ -225,41 +233,61 @@ struct OverviewView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                PageTitle(title: "Tổng quan POS", subtitle: "Hiệu suất bán hàng theo từng điểm", trailing: AnyView(Hint(text: "Số liệu Pancake")))
-                PeriodChips(period: $preset)
-                PosChipRow(selection: Binding(get: { pos ?? "" }, set: { pos = $0.isEmpty ? nil : $0 }), label: nil)
-                ScopeLine(period: preset, pos: pos ?? "")
+                ChildHeader(title: "Theo POS")
+                ScopeFilterPill(period: $preset, pos: Binding(get: { pos ?? "" }, set: { pos = $0.isEmpty ? nil : $0 }))
                 if let error, data == nil { StateView(error: error) { await load() } }
                 if refFirst { PancakeRefCard(start: range.0, end: range.1, posIds: posIds) }
                 if let t = data?.current.total {
                     let p = data?.compare?.total
                     let rec = reconcile(t, data?.current.reconcile)
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("Doanh thu theo POS").font(.headline).foregroundStyle(Palette.heroInk)
+                        OverviewMoney(money: t.closedNet, onHero: true).loadingPlaceholder(loading)
+                        if let delta = Fmt.delta(t.closedNet, p?.closedNet) { DeltaPill(delta, onHero: true) }
+                        HStack(alignment: .bottom, spacing: 10) {
+                            ForEach(data?.current.byPos ?? [], id: \.posId) { row in
+                                Button { pos = row.posId } label: {
+                                    VStack(spacing: 8) {
+                                        Text(Fmt.shortMoney(row.closedNet)).font(.caption.weight(.bold))
+                                        ColumnBar(height: 100 * row.closedNet / max(1, data?.current.byPos.map(\.closedNet).max() ?? 1), tint: PosInfo.color(row.posId))
+                                        Text(PosBreakdown.short[row.posId] ?? row.posId).font(.caption).foregroundStyle(Palette.heroMuted)
+                                    }.frame(maxWidth: .infinity)
+                                }.buttonStyle(.plain)
+                            }
+                        }
+                    }.heroSurface()
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                         Button { explain = MetricExplain(title: "Tổng đơn hàng", value: Fmt.int(t.orders), definition: "Số đơn được tạo trong kỳ (theo ngày tạo), không tính đơn đã xóa.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.int($0.orders)) }, count: canList ? Int(t.orders) : nil, query: canList ? q("", "created", "Đơn tạo") : nil) } label: {
                             KpiCard(icon: "ic_m_orders", tint: .good, label: "Tổng đơn hàng", value: Fmt.int(t.orders), delta: Fmt.delta(t.orders, p?.orders)) }
                         Button { explain = MetricExplain(title: "Doanh thu đơn chốt", value: Fmt.money(t.closedNet), definition: "Tiền (sau giảm giá và quà, không cộng phí ship) của các đơn chốt trong kỳ: đơn vào Chờ xác nhận lần đầu trong kỳ, xếp theo giờ vào Chờ xác nhận. Đơn đang huỷ không tính, đơn hoàn vẫn tính. Chỉ tính người bán có hậu tố SALE, CSKH, MKT (đơn chưa gắn người bán vẫn tính). Cùng số với ô \"Doanh thu đơn chốt\" ở Tổng quan POS trên web.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.money($0.closedNet)) }, reconcile: rec) } label: {
-                            KpiCard(icon: "ic_m_revenue", tint: .teal, label: "Doanh thu đơn chốt", value: Fmt.vnd(t.closedNet), delta: Fmt.delta(t.closedNet, p?.closedNet)) }
+                            KpiCard(icon: "ic_m_revenue", tint: Palette.teal, label: "Doanh thu đơn chốt", value: Fmt.vnd(t.closedNet), delta: Fmt.delta(t.closedNet, p?.closedNet), money: t.closedNet) }
                         Button { explain = MetricExplain(title: "Tỷ lệ chốt", value: Fmt.pct(t.shownRate), definition: "\(MetricPrefs.shared.rateHint).\n\(t.rateFrac).\nĐổi ở Thêm → Cách tính.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.pct($0.shownRate)) }) } label: {
-                            KpiCard(icon: "ic_m_rate", tint: .purple, label: "Tỷ lệ chốt", value: Fmt.pct(t.shownRate), delta: (t.shownRate != nil && p?.shownRate != nil) ? Fmt.points(t.shownRate! - p!.shownRate!) : nil, deltaGood: (t.shownRate ?? 0) >= (p?.shownRate ?? 0), note: t.rateFrac) }
+                            KpiCard(icon: "ic_m_rate", tint: Palette.mtRolePurpleInk, label: "Tỷ lệ chốt", value: Fmt.pct(t.shownRate), delta: (t.shownRate != nil && p?.shownRate != nil) ? Fmt.points(t.shownRate! - p!.shownRate!) : nil, deltaGood: (t.shownRate ?? 0) >= (p?.shownRate ?? 0), note: t.rateFrac) }
                         Button { explain = MetricExplain(title: "Khách mua hàng", value: Fmt.int(t.customers ?? 0), definition: "Số SĐT khác nhau có đơn tạo trong kỳ. Trong đó \(Fmt.int(t.closedCustomers ?? 0)) SĐT có đơn chốt.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.int($0.customers ?? 0)) }, count: canList ? Int(t.orders) : nil, query: canList ? q("", "created", "Đơn tạo") : nil) } label: {
-                            KpiCard(icon: "ic_m_customers", tint: .blue, label: "Khách mua hàng", value: Fmt.int(t.customers ?? 0), delta: Fmt.delta(t.customers ?? 0, p?.customers)) }
+                            KpiCard(icon: "ic_m_customers", tint: Palette.info, label: "Khách mua hàng", value: Fmt.int(t.customers ?? 0), delta: Fmt.delta(t.customers ?? 0, p?.customers)) }
                     }.buttonStyle(.plain)
                     .environment(\.thinking, loading)
-                    if let rec { ReconcileLine(state: rec).reveal() }
+                    if let rec { ScopeStrip(text: rec.text, trailing: rec.ok ? "✓" : "⚠", tone: rec.ok ? Palette.good : Palette.warn).reveal() }
                     if !refFirst { PancakeRefCard(start: range.0, end: range.1, posIds: posIds) }
                     Panel {
-                        HStack { Text("Xu hướng doanh thu").font(.system(size: 15, weight: .bold)); Spacer(); Hint(text: range.0 == range.1 ? "Theo giờ" : "Theo ngày") }
+                        HStack { Text("Xu hướng doanh thu").font(.title3.weight(.bold)); Spacer(); Hint(text: range.0 == range.1 ? "Theo giờ" : "Theo ngày") }
                         if range.0 == range.1 {
                             if hourly.isEmpty { Text("Chưa có đơn chốt trong ngày.").font(.caption).foregroundStyle(Color.inkSoft) }
                             else { LineChart(points: hourlyPoints) }
                         } else if let s = data?.current.series { LineChart(points: byDay(s)) }
                     }
                     Panel {
-                        HStack { Text("Trạng thái đơn hàng").font(.system(size: 15, weight: .bold)); Spacer(); Hint(text: "Đơn tạo trong kỳ") }
-                        StackedBar(parts: statusParts(t))
-                        HStack(spacing: 8) {
+                        HStack { Text("Trạng thái đơn hàng").font(.title3.weight(.bold)); Spacer(); Hint(text: "Đơn tạo trong kỳ") }
+                        if StatusStrip.items.reduce(0.0, { $0 + (t.groups[$1.0]?.orders ?? 0) }) == t.orders {
+                            SplitBar(parts: StatusStrip.items.map { ($0.1, t.groups[$0.0]?.orders ?? 0, Fmt.int(t.groups[$0.0]?.orders ?? 0), $0.2) })
+                        }
+                        VStack(spacing: 8) {
                             ForEach(StatusStrip.items, id: \.0) { k, title, c in
-                                let cell = VStack(spacing: 2) { Text(Fmt.int(t.groups[k]?.orders ?? 0)).font(.system(size: 13, weight: .bold)).foregroundStyle(c); Text(title).font(.system(size: 8)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.7) }.frame(maxWidth: .infinity)
+                                let cell = HStack {
+                                    StatusPill(name: title, code: ["new": 0, "confirmed": 1, "shipping": 2, "delivered": 3, "returned": 4, "cancelled": 6][k])
+                                    Spacer()
+                                    Text(Fmt.int(t.groups[k]?.orders ?? 0)).font(.callout.weight(.bold)).monospacedDigit().foregroundStyle(c)
+                                }
                                 if canList { NavigationLink(value: Route.orders(q(k, "created", title))) { cell }.buttonStyle(.plain) } else { cell }
                             }
                         }.padding(.top, 4)
@@ -267,14 +295,15 @@ struct OverviewView: View {
                     if pos == nil { PosBreakdown(rows: data?.current.byPos ?? [], total: t.closedNet, pick: { pos = $0 }, prev: data?.compare?.byPos ?? []) }
                     if let synced = data?.syncedAt { Text("Đồng bộ Pancake lúc \(Fmt.dateTime(synced))").font(.caption).foregroundStyle(Color.inkSoft) }
                 } else if error == nil { SkeletonGrid(tiles: 4) }
-            }.padding(16)
+            }.padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 24)
         }
         .navigationTitle("Tổng quan POS").navigationBarTitleDisplayMode(.inline).brandNav()
+        .childChrome()
         .navigationDestination(item: $pushed) { OrderListView(query: $0) }
         // Kéo để làm mới: số của trang và khối Số tham chiếu Pancake tải lại cùng lúc.
         .refreshHost { await load() }
         .task(id: "\(preset.key)|\(pos ?? "")") { await load() }
-        .sheet(item: $explain) { m in ExplainSheet(m: m) { pushed = $0 } }
+        .sheet(item: $explain) { m in MTFilterSheet(title: m.title, existingNavigation: true) { ExplainSheet(m: m) { pushed = $0 } } }
     }
     private func byDay(_ s: [API.SeriesRow]) -> [(String, Double)] { var m: [String: Double] = [:]; for r in s { m[r.bucket, default: 0] += r.closedNet }; return m.keys.sorted().map { (String($0.suffix(2)), m[$0]!) } }
     private func reconcile(_ t: API.Metrics, _ r: API.Reconcile?) -> (ok: Bool, text: String)? {
@@ -287,7 +316,7 @@ struct OverviewView: View {
         let r = range, ids = posIds, oneDay = r.0 == r.1
         let trace = LoadTrace("tong-quan-pos", requests: oneDay ? 2 : 1)
         // Số theo giờ (chỉ khi xem một ngày) tải cùng lúc với số chính.
-        async let hReq = attempt(oneDay, trace) { try await API.shift(date: r.0, shift: "day") }
+        async let hReq = attempt(oneDay, trace) { try await API.shift(date: r.0, shift: "day", posIds: ids) }
         do {
             data = try await trace.run { try await API.overview(start: r.0, end: r.1, posIds: ids) }
             error = nil
@@ -310,6 +339,7 @@ struct CenterBlocks: View {
     /// Kỳ của trang chứa khối (Tổng quan: kỳ chung, chọn ở dải chip đầu trang; khối không có bộ chọn kỳ riêng).
     let period: Period
     var team = "all"; var pos = ""; var product = "all"
+    var overviewSegment = "metrics"
     private var posIds: [String] { pos.isEmpty ? [] : [pos] }
     @State private var report: API.Overview?
     @State private var trend: API.Overview?
@@ -365,7 +395,8 @@ struct CenterBlocks: View {
     }
     private func dormantTone(_ bucket: String) -> Color {
         if bucket == "90+" { return .bad }
-        if bucket == "61-90" { return .warn }
+        if bucket == "61-90" { return Palette.orange }
+        if bucket == "46-60" { return Palette.warn }
         return .good
     }
     private func purchasedSummary(net: Double?, count: Double) -> String {
@@ -379,67 +410,58 @@ struct CenterBlocks: View {
     @Environment(AppNav.self) private var tourNav: AppNav?
     #endif
     private func q(_ group: String, _ basis: String, _ title: String, posIds: [String]? = nil) -> Route { .orders(OrderQuery(start: r.0, end: r.1, posIds: posIds ?? self.posIds, group: group, basis: basis, title: title, team: team, product: product)) }
+    @State private var staffGroup = "top"
+    @AppStorage("thp_hide_money") private var hideMoney = false
 
     var body: some View {
+        VStack(alignment: .leading, spacing: MT.cardGap) {
+        if overviewSegment == "pos" {
+            // Khung 04: hero "DOANH THU THEO POS" (badge so kỳ trước, số lớn, mỗi POS một hàng), rồi "Trong kỳ".
+            if let report {
+                posHero(report)
+                if let series = report.current.series, !series.isEmpty {
+                    Panel {
+                        Text("Trong kỳ").mtFont(.cardHeader)
+                        MTTrendChart(points: chartPoints(series), height: 150, value: { Fmt.shortVnd($0) }, scope: ScopeText.text(period: period, pos: nil) + filterSuffix)
+                    }
+                }
+                if applied != nil { Text("Số theo team đang chọn.").font(.caption).foregroundStyle(Palette.muted) }
+            } else if let failText {
+                StateView(error: failText) { await load(force: true) }
+            } else { StateView(loading: "Đang tải số theo POS…") }
+        }
+        VStack(alignment: .leading, spacing: MT.cardGap) {
         HrTeamNotice(applies: applied != nil, deptLabel: departmentLabel)
-        // Kỳ: cùng kỳ chọn ở đầu trang (kế hoạch 1.4 bỏ nút chọn kỳ thứ hai ở đây).
-        HStack {
-            Text("Số liệu theo kỳ").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink)
-            Spacer()
-            Hint(text: period.title)
-        }.padding(.top, 6).id("center")
-        Text("\(ScopeText.text(period: period, pos: nil)) · so với kỳ liền trước\(filterSuffix)").font(.system(size: 10)).foregroundStyle(Color.inkSoft).padding(.top, -8)
+        // Neo "center" cho lượt tự xem (cuộn tới đầu phần Số liệu & KH).
+        Color.clear.frame(height: 0).id("center")
         if let teamError { HrTeamErrorView(message: teamError) { nav?.hrUnit = nil } }
         else if let failText {
             StateView(error: failCount > 1 ? "\(failText) · \(failCount) phần chưa tải được" : failText, compact: true) { await load(force: true) }
         }
         if let t = report?.current.total {
-            let p = report?.compare?.total
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                NavigationLink(value: q("", "created", "Đơn tạo mới")) { KpiCard(icon: "ic_m_orders", tint: .blue, label: "Đơn tạo mới", value: Fmt.int(t.orders), delta: Fmt.delta(t.orders, p?.orders), note: "\(Fmt.int(t.customers ?? 0)) khách") }
-                NavigationLink(value: q("closed", "confirmed", "Đơn chốt")) { KpiCard(icon: "ic_m_closed", tint: .good, label: "Đơn chốt", value: Fmt.int(t.closedOrders), delta: Fmt.delta(t.closedOrders, p?.closedOrders), note: "Tỷ lệ chốt \(Fmt.pct(t.shownRate)) · \(t.rateFrac)") }
-                NavigationLink(value: q("closed", "confirmed", "Đơn chốt")) { KpiCard(icon: "ic_m_revenue", tint: .teal, label: "Doanh thu đơn chốt", value: Fmt.shortMoney(t.closedNet), delta: Fmt.delta(t.closedNet, p?.closedNet), note: "GTTB \(Fmt.shortMoney(t.averageOrder ?? 0))") }
-                KpiCard(icon: "ic_m_aov", tint: .gray, label: "Giá trị TB đơn (AOV)", value: Fmt.shortMoney(t.averageOrder ?? 0), delta: Fmt.delta(t.averageOrder ?? 0, p?.averageOrder), note: "Doanh thu ÷ đơn chốt")
-                NavigationLink(value: q("delivered", "created", "Giao thành công")) { KpiCard(icon: "shippingbox.fill", tint: .lime, label: "Giao thành công", value: Fmt.int(t.groups["delivered"]?.orders ?? 0), delta: Fmt.delta(t.groups["delivered"]?.orders ?? 0, p?.groups["delivered"]?.orders), note: "\(Fmt.shortMoney(t.groups["delivered"]?.net ?? 0)) · tính theo ngày tạo") }
-                NavigationLink(value: Route.page("shift")) { KpiCard(icon: "flame.fill", tint: .warn, label: "Chốt nóng \(shiftName) hôm nay", value: Fmt.pct(shift?.total.rate), delta: shift.flatMap { s in (s.total.rate != nil && s.yesterday.rate != nil) ? Fmt.points(s.total.rate! - s.yesterday.rate!) : nil }, deltaGood: (shift?.total.rate ?? 0) >= (shift?.yesterday.rate ?? 0), note: shift.map { "\(Fmt.int($0.total.closed)) chốt / \(Fmt.int($0.total.received)) số nhận" } ?? "—") }
-            }.buttonStyle(.plain)
-            .environment(\.thinking, loading)
+            // Khung 03: hero "DOANH THU ĐƠN CHỐT" có biểu đồ và lưới 2×2, rồi thẻ Mục tiêu tháng.
+            metricsHero(t, report?.compare?.total)
             if applied != nil { Text("Chốt nóng chưa lọc theo team.").font(.caption).foregroundStyle(Color.inkSoft) }
-            PancakeRefCard(start: r.0, end: r.1, posIds: posIds)
-            if applied != nil { Text("Số tham chiếu Pancake chưa lọc theo team.").font(.caption).foregroundStyle(Color.inkSoft) }
             if applied != nil { Color.clear.frame(height: 0).id("muc-tieu-team") }
             if applied != nil {
                 Text("Mục tiêu tháng chưa tính theo team").font(.subheadline).foregroundStyle(Color.inkSoft)
             } else {
-                // Mục tiêu tháng
-                let goal = (targets?.items ?? []).filter { $0.scope == "pos" && (pos.isEmpty || $0.refId == pos) }.reduce(0.0) { $0 + $1.revenue }
-                NavigationLink(value: Route.page("cskh-kpi")) {
-                    Panel(padding: 12) {
-                        HStack(spacing: 10) {
-                            MetricIcon("ic_m_kpi", size: 15).foregroundStyle(.purple).frame(width: 34, height: 34).background(Color.purple.opacity(0.13), in: .rect(cornerRadius: 9))
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Mục tiêu tháng \(r.1.suffix(5).prefix(2))").font(.system(size: 11)).foregroundStyle(Color.inkSoft)
-                                Text(goal > 0 ? Fmt.pct0(t.closedNet / goal * 100) : "—").font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(Color.ink)
-                            }
-                            Spacer()
-                            Text(goal > 0 ? "\(Fmt.short(t.closedNet)) / \(Fmt.shortMoney(goal)) · còn \(Fmt.shortMoney(max(0, goal - t.closedNet)))" : "Chưa đặt mục tiêu (Cấu hình → Mục tiêu tháng)").font(.system(size: 10)).foregroundStyle(Color.inkSoft).multilineTextAlignment(.trailing)
-                        }
-                        Bar(value: goal > 0 ? t.closedNet / goal : 0, tint: .purple, height: 7)
-                    }
-                }.buttonStyle(.plain)
+                goalCard(t)
             }
+            PancakeRefCard(start: r.0, end: r.1, posIds: posIds)
+            if applied != nil { Text("Số tham chiếu Pancake chưa lọc theo team.").font(.caption).foregroundStyle(Color.inkSoft) }
         } else if failText == nil || loading { SkeletonGrid(tiles: 6) }
 
         // Xu hướng 30 ngày
         Panel {
-            HStack { Text("Xu hướng 30 ngày").font(.system(size: 15, weight: .bold)); Spacer(); NavigationLink(value: Route.overview) { HStack(spacing: 2) { Text("Xem chi tiết"); Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)) }.font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.brand) }.buttonStyle(.plain) }
+            HStack { Text("Xu hướng 30 ngày").font(.title3.weight(.bold)); Spacer(); NavigationLink(value: Route.overview) { HStack(spacing: 2) { Text("Xem chi tiết"); Image(systemName: "chevron.right").font(.caption.weight(.bold)) }.font(.footnote.weight(.semibold)).foregroundStyle(Color.brand) }.buttonStyle(.plain) }
             // Biểu đồ đường, chưa chạm được (biểu đồ chạm được ở kế hoạch 2.8): chỉ ghi biểu đồ là gì và phạm vi.
-            Text("Doanh thu đơn chốt từng ngày (triệu ₫) · 30 ngày gần nhất, không theo kỳ đã chọn\(filterSuffix)").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+            Text("Doanh thu đơn chốt từng ngày (triệu ₫) · 30 ngày gần nhất, không theo kỳ đã chọn\(filterSuffix)").font(.footnote).foregroundStyle(Color.inkSoft)
                 .fixedSize(horizontal: false, vertical: true)
             if let s = trend?.current.series, !s.isEmpty {
                 let pts = byDay(s)
-                LineChart(points: pts.map { (String(Fmt.day($0.0).prefix(5)), $0.1) }, tint: .brand, height: 120)
-                HStack(spacing: 12) { HStack(spacing: 4) { Circle().fill(Color.brand).frame(width: 7, height: 7); Text("Doanh thu đơn chốt") }; Text("Đơn chốt 30 ngày: \(Fmt.int(byDayOrders(s).reduce(0) { $0 + $1.1 }))") }.font(.system(size: 9)).foregroundStyle(Color.inkSoft)
+                MTTrendChart(points: pts.map { (String(Fmt.day($0.0).prefix(5)), $0.1) }, tint: .brand, height: 180, scope: "Doanh thu đơn chốt · 30 ngày gần nhất" + filterSuffix)
+                HStack(spacing: 12) { HStack(spacing: 4) { Circle().fill(Color.brand).frame(width: 7, height: 7); Text("Doanh thu đơn chốt") }; Text("Đơn chốt 30 ngày: \(Fmt.int(byDayOrders(s).reduce(0) { $0 + $1.1 }))") }.font(.caption).foregroundStyle(Color.inkSoft)
             } else if trend != nil {
                 Text("Chưa có đơn chốt trong 30 ngày qua.").font(.caption).foregroundStyle(Color.inkSoft)
             } else if failText != nil && !loading {
@@ -450,13 +472,17 @@ struct CenterBlocks: View {
         // Trạng thái đơn + Vận hành đơn
         if let t = report?.current.total {
             Panel {
-                HStack { Text("Trạng thái đơn").font(.system(size: 15, weight: .bold)); Spacer(); Hint(text: "Đơn tạo trong kỳ · lúc đồng bộ") }
+                HStack { Text("Trạng thái đơn").font(.title3.weight(.bold)); Spacer(); Hint(text: "Đơn tạo trong kỳ · lúc đồng bộ") }
                 HStack(spacing: 14) {
-                    Donut(parts: StatusStrip.items.map { ($0.1, t.groups[$0.0]?.orders ?? 0, $0.2) }, center: Fmt.int(t.orders), label: "đơn tạo")
+                    if StatusStrip.items.reduce(0.0, { $0 + (t.groups[$1.0]?.orders ?? 0) }) == t.orders {
+                        OverviewStatusRing(parts: StatusStrip.items.map { ($0.1, t.groups[$0.0]?.orders ?? 0, $0.2) }, center: Fmt.int(t.orders))
+                    } else {
+                        Text(Fmt.int(t.orders)).font(.system(.title, design: .rounded, weight: .heavy)).monospacedDigit()
+                    }
                     VStack(alignment: .leading, spacing: 5) {
                         ForEach(StatusStrip.items, id: \.0) { k, title, c in
                             NavigationLink(value: q(k, "created", title)) {
-                                HStack(spacing: 6) { Circle().fill(c).frame(width: 8, height: 8); Text(title).font(.system(size: 11)).foregroundStyle(Color.ink).lineLimit(1); Spacer(); Text(Fmt.int(t.groups[k]?.orders ?? 0)).font(.system(size: 11, weight: .bold)).monospacedDigit(); Text(Fmt.pct0(t.orders > 0 ? (t.groups[k]?.orders ?? 0) / t.orders * 100 : nil)).font(.system(size: 10)).foregroundStyle(Color.inkSoft).frame(width: 34, alignment: .trailing) }
+                                HStack(spacing: 6) { Circle().fill(c).frame(width: 8, height: 8); Text(title).font(.footnote).foregroundStyle(Color.ink).lineLimit(1); Spacer(); Text(Fmt.int(t.groups[k]?.orders ?? 0)).font(.footnote.weight(.bold)).monospacedDigit(); Text(Fmt.pct0(t.orders > 0 ? (t.groups[k]?.orders ?? 0) / t.orders * 100 : nil)).font(.footnote).foregroundStyle(Color.inkSoft).frame(width: 34, alignment: .trailing) }
                             }.buttonStyle(.plain)
                         }
                     }
@@ -467,17 +493,15 @@ struct CenterBlocks: View {
         if let d = pipeline {
             let T = d.total, closed = T["closed"]?.orders ?? 0, shipped = T["shipped"]?.orders ?? 0, dl = T["delivered"]?.orders ?? 0
             Panel {
-                HStack { Text("Vận hành đơn").font(.system(size: 15, weight: .bold)); Spacer(); NavigationLink(value: Route.page("pipeline")) { HStack(spacing: 2) { Text("Xem chi tiết"); Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)) }.font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.brand) }.buttonStyle(.plain) }
+                HStack { Text("Vận hành đơn").font(.title3.weight(.bold)); Spacer(); NavigationLink(value: Route.page("pipeline")) { HStack(spacing: 2) { Text("Xem chi tiết"); Image(systemName: "chevron.right").font(.caption.weight(.bold)) }.font(.footnote.weight(.semibold)).foregroundStyle(Color.brand) }.buttonStyle(.plain) }
                 if applied != nil { Text("Vận hành đơn chưa lọc theo team.").font(.caption).foregroundStyle(Color.inkSoft) }
-                Text("Chốt → xuất đi → đã nhận · theo giờ chốt trong kỳ").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                Text("Chốt → xuất đi → đã nhận · theo giờ chốt trong kỳ").font(.footnote).foregroundStyle(Color.inkSoft)
                 NavigationLink(value: q("closed", "confirmed", "Đơn chốt")) { FunnelLine(label: "Đơn chốt", n: closed, of: closed, tint: .good) }.buttonStyle(.plain)
-                NavigationLink(value: q("shipped", "confirmed", "Đã xuất đi")) { FunnelLine(label: "Đã xuất đi", n: shipped, of: closed, tint: .blue) }.buttonStyle(.plain)
+                NavigationLink(value: q("shipped", "confirmed", "Đã xuất đi")) { FunnelLine(label: "Đã xuất đi", n: shipped, of: closed, tint: Palette.info) }.buttonStyle(.plain)
                 NavigationLink(value: q("delivered", "confirmed", "Đã nhận")) { FunnelLine(label: "Đã nhận", n: dl, of: closed, tint: .good) }.buttonStyle(.plain)
-                HStack(spacing: 6) {
-                    NavigationLink(value: q("shipping", "confirmed", "Đang giao")) { Tag(text: "Đang giao \(Fmt.int(T["shipping"]?.orders ?? 0))", tone: .orange) }
-                    NavigationLink(value: q("returned", "confirmed", "Hoàn")) { Tag(text: "Hoàn \(Fmt.int(T["returned"]?.orders ?? 0))", tone: .purple) }
-                    NavigationLink(value: q("cancelled", "confirmed", "Hủy sau chốt")) { Tag(text: "Hủy \(Fmt.int(T["cancelled"]?.orders ?? 0))", tone: .red) }
-                    NavigationLink(value: q("processing", "confirmed", "Chưa xuất kho")) { Tag(text: "Chưa xuất \(Fmt.int(T["processing"]?.orders ?? 0))", tone: .gray) }
+                ViewThatFits(in: .horizontal) {
+                    HStack { pipelinePills(T) }
+                    VStack(alignment: .leading, spacing: 8) { pipelinePills(T) }
                 }.buttonStyle(.plain)
             }
         }
@@ -491,12 +515,10 @@ struct CenterBlocks: View {
             let top = staff.sorted { ($0.shownRate ?? -1) > ($1.shownRate ?? -1) }.prefix(5)
             let low = staff.sorted { ($0.shownRate ?? 999) < ($1.shownRate ?? 999) }.prefix(5)
             Panel {
-                HStack { Text("Nhân viên").font(.system(size: 15, weight: .bold)); Spacer(); NavigationLink(value: Route.compare(team: "all")) { HStack(spacing: 2) { Text("So sánh nhân viên"); Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)) }.font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.brand) }.buttonStyle(.plain) }
-                Text("Tỷ lệ chốt (\(MetricPrefs.shared.rateShort)) · từ 10 đơn chia · Sale và CSKH").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
-                Text("TOP 5").font(.system(size: 9, weight: .bold)).tracking(0.8).foregroundStyle(Color.good)
-                EmpRows(rows: Array(top), tone: .good, filters: filters)
-                Text("CẦN HỖ TRỢ").font(.system(size: 9, weight: .bold)).tracking(0.8).foregroundStyle(Color.bad).padding(.top, 4)
-                EmpRows(rows: Array(low), tone: .bad, filters: filters)
+                HStack { Text("Nhân viên").font(.title3.weight(.bold)); Spacer(); NavigationLink(value: Route.compare(team: "all")) { HStack(spacing: 2) { Text("So sánh nhân viên"); Image(systemName: "chevron.right").font(.caption.weight(.bold)) }.font(.footnote.weight(.semibold)).foregroundStyle(Color.brand) }.buttonStyle(.plain) }
+                Text("Tỷ lệ chốt (\(MetricPrefs.shared.rateShort)) · từ 10 đơn chia · Sale và CSKH").font(.footnote).foregroundStyle(Color.inkSoft)
+                Segmented(selection: $staffGroup, options: [("top", "TOP 5"), ("low", "Cần hỗ trợ")])
+                EmpRows(rows: staffGroup == "top" ? Array(top) : Array(low), tone: Palette.accent, filters: filters, period: period, hrTeam: applied?.id)
             }
             .id("nhan-vien")
             #if DEBUG
@@ -504,7 +526,7 @@ struct CenterBlocks: View {
                 // "Chạm" người đầu bảng TOP 5: cùng đích với NavigationLink của dòng đó (EmpRows).
                 guard DebugTap.shared.target == "nhan-vien", let e = top.first else { return }
                 DebugTour.employeeTapped(filters)
-                tourNav?.overviewPath.append(Route.orders(OrderQuery.closedOrders(of: e, in: filters)))
+                tourNav?.overviewPath.append(Route.staffDetail(.of(e, in: filters, period: period, hrTeam: applied?.id)))
             }
             #endif
         }
@@ -512,7 +534,7 @@ struct CenterBlocks: View {
         if applied != nil { Color.clear.frame(height: 0).id("mua-lai-team") }
         // Mua lại & data
         Panel {
-            HStack { Text("Mua lại & data").font(.system(size: 15, weight: .bold)); Spacer(); NavigationLink(value: Route.page("repurchase")) { Text("Mua lại ›").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.brand) }.buttonStyle(.plain); NavigationLink(value: Route.page("batches")) { Text("Data ›").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.brand) }.buttonStyle(.plain) }
+            HStack { Text("Mua lại & data").font(.title3.weight(.bold)); Spacer(); NavigationLink(value: Route.page("repurchase")) { Text("Mua lại ›").font(.footnote.weight(.semibold)).foregroundStyle(Color.brand) }.buttonStyle(.plain); NavigationLink(value: Route.page("batches")) { Text("Data ›").font(.footnote.weight(.semibold)).foregroundStyle(Color.brand) }.buttonStyle(.plain) }
             if applied != nil { Text("Mua lại & data chưa lọc theo team.").font(.caption).foregroundStyle(Color.inkSoft) }
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
                 MiniCell(label: "Tỷ lệ mua lại (trọn đời)", value: repurchaseRate)
@@ -529,9 +551,9 @@ struct CenterBlocks: View {
         // Khách hàng
         if let c = customers, let g = c.groups, let seg = c.segments {
             Panel {
-                HStack { Text("Khách hàng").font(.system(size: 15, weight: .bold)); Spacer(); NavigationLink(value: Route.page("customers")) { HStack(spacing: 2) { Text("Xem chi tiết"); Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)) }.font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.brand) }.buttonStyle(.plain) }
+                HStack { Text("Khách hàng").font(.title3.weight(.bold)); Spacer(); NavigationLink(value: Route.page("customers")) { HStack(spacing: 2) { Text("Xem chi tiết"); Image(systemName: "chevron.right").font(.caption.weight(.bold)) }.font(.footnote.weight(.semibold)).foregroundStyle(Color.brand) }.buttonStyle(.plain) }
                 if applied != nil { Text("Khách hàng chưa lọc theo team.").font(.caption).foregroundStyle(Color.inkSoft) }
-                Text("Toàn bộ lịch sử · bấm một ô để mở trang tương ứng").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                Text("Toàn bộ lịch sử · bấm một ô để mở trang tương ứng").font(.footnote).foregroundStyle(Color.inkSoft)
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
                     NavigationLink(value: Route.page("customers")) { MiniCell(label: "Tổng khách", value: Fmt.int(g["total"] ?? 0)) }
                     NavigationLink(value: Route.page("customers")) { MiniCell(label: "Hoạt động 30 ngày", value: Fmt.int(seg["active"] ?? 0)) }
@@ -542,9 +564,9 @@ struct CenterBlocks: View {
                 }.buttonStyle(.plain)
             }
             Panel {
-                HStack { Text("Khách lâu chưa mua").font(.system(size: 15, weight: .bold)); Spacer(); NavigationLink(value: Route.page("dormant")) { HStack(spacing: 2) { Text("Xem chi tiết"); Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)) }.font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.brand) }.buttonStyle(.plain) }
+                HStack { Text("Khách lâu chưa mua").font(.title3.weight(.bold)); Spacer(); NavigationLink(value: Route.page("dormant")) { HStack(spacing: 2) { Text("Xem chi tiết"); Image(systemName: "chevron.right").font(.caption.weight(.bold)) }.font(.footnote.weight(.semibold)).foregroundStyle(Color.brand) }.buttonStyle(.plain) }
                 if applied != nil { Text("Khách hàng chưa lọc theo team.").font(.caption).foregroundStyle(Color.inkSoft) }
-                Text("Theo số ngày từ lần mua thành công gần nhất tới hôm nay").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                Text("Theo số ngày từ lần mua thành công gần nhất tới hôm nay").font(.footnote).foregroundStyle(Color.inkSoft)
                 let buckets = [("30-45", "30–45 ngày"), ("46-60", "46–60 ngày"), ("61-90", "61–90 ngày"), ("90+", "Trên 90 ngày")]
                 let buyers = max(1, (g["total"] ?? 0) - (g["never"] ?? 0))
                 let maxV = max(1, buckets.map { g[$0.0] ?? 0 }.max() ?? 1)
@@ -552,13 +574,19 @@ struct CenterBlocks: View {
                     let n = g[k] ?? 0, net = c.groupNets?[k]
                     NavigationLink(value: Route.page("dormant")) {
                         VStack(alignment: .leading, spacing: 3) {
-                            HStack { Text(label).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink); Spacer(); VStack(alignment: .trailing, spacing: 0) { Text(Fmt.int(n)).font(.system(size: 12, weight: .bold)).monospacedDigit(); Text("\(Fmt.pct0(n / buyers * 100)) khách đã mua").font(.system(size: 9)).foregroundStyle(Color.inkSoft) } }
+                            HStack { Text(label).font(.footnote.weight(.semibold)).foregroundStyle(Color.ink); Spacer(); VStack(alignment: .trailing, spacing: 0) { Text(Fmt.int(n)).font(.footnote.weight(.bold)).monospacedDigit(); Text("\(Fmt.pct0(n / buyers * 100)) khách đã mua").font(.caption).foregroundStyle(Color.inkSoft) } }
                             Bar(value: n / maxV, tint: dormantTone(k), height: 5)
-                            Text(purchasedSummary(net: net, count: n)).font(.system(size: 9)).foregroundStyle(Color.inkSoft)
+                            Text(purchasedSummary(net: net, count: n)).font(.caption).foregroundStyle(Color.inkSoft)
                         }.padding(.vertical, 4).contentShape(.rect)
                     }.buttonStyle(.plain)
                 }
             }
+        }
+        }
+        .frame(height: overviewSegment == "pos" ? 0 : nil, alignment: .top)
+        .clipped().opacity(overviewSegment == "pos" ? 0 : 1)
+        .allowsHitTesting(overviewSegment != "pos")
+        .accessibilityHidden(overviewSegment == "pos")
         }
         Color.clear.frame(height: 0)
             .task(id: key) { await load() }
@@ -566,7 +594,118 @@ struct CenterBlocks: View {
             .pullToReload { await load(force: true) }
     }
     private var shiftName: String { ["morning": "ca sáng", "afternoon": "ca chiều", "evening": "ca tối", "day": "cả ngày"][shift?.shift ?? ""] ?? "ca hiện tại" }
+    private func money(_ v: Double) -> String { hideMoney ? "••• tr ₫" : Fmt.shortVnd(v) }
+
+    /// Khung 03: hero "DOANH THU ĐƠN CHỐT": số lớn, biểu đồ trong kỳ, lưới 2×2 (Đơn tạo mới, Đơn chốt, AOV, Giao thành công),
+    /// rồi ô Chốt nóng (giữ từ bản trước).
+    private func metricsHero(_ t: API.Metrics, _ p: API.Metrics?) -> some View {
+        let delivered = t.groups["delivered"]
+        return VStack(alignment: .leading, spacing: MT.cellGap) {
+            NavigationLink(value: q("closed", "confirmed", "Đơn chốt")) {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .top) {
+                        Text("DOANH THU ĐƠN CHỐT").mtFont(.caption).fontWeight(.bold).foregroundStyle(Palette.muted)
+                        Spacer(minLength: 6)
+                        if !hideMoney, let d = Fmt.delta(t.closedNet, p?.closedNet) { DeltaPill(d) }
+                    }
+                    Text(money(t.closedNet)).mtFont(.heroNumber).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
+                        .loadingPlaceholder(loading)
+                    if let series = report?.current.series, !series.isEmpty {
+                        MTTrendChart(points: chartPoints(series), height: 140, value: { Fmt.shortVnd($0) }, scope: ScopeText.text(period: period, pos: nil) + filterSuffix)
+                    }
+                }.contentShape(.rect)
+            }.buttonStyle(.plain)
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: MT.cellGap), GridItem(.flexible(), spacing: MT.cellGap)], spacing: MT.cellGap) {
+                NavigationLink(value: q("", "created", "Đơn tạo mới")) {
+                    BoardCell(label: "Đơn tạo mới (khách)", value: "\(Fmt.int(t.orders)) đơn", note: "\(Fmt.int(t.customers ?? 0)) khách")
+                }
+                NavigationLink(value: q("closed", "confirmed", "Đơn chốt")) {
+                    BoardCell(label: "Đơn chốt (Tỷ lệ chốt)", value: "\(Fmt.int(t.closedOrders)) đơn", note: "Tỷ lệ chốt \(Fmt.pct(t.shownRate)) · \(t.rateFrac)")
+                }
+                BoardCell(label: "Giá trị TB đơn (AOV)", value: money(t.averageOrder ?? 0), note: "GTTB đơn chốt")
+                NavigationLink(value: q("delivered", "created", "Giao thành công")) {
+                    BoardCell(label: "Giao thành công", value: money(delivered?.net ?? 0), note: "\(Fmt.int(delivered?.orders ?? 0)) đơn đã giao · theo ngày tạo")
+                }
+            }.buttonStyle(.plain)
+            NavigationLink(value: Route.page("shift")) {
+                BoardCell(label: "Chốt nóng \(shiftName) hôm nay", value: Fmt.pct(shift?.total.rate),
+                          note: shift.map { "\(Fmt.int($0.total.closed)) chốt / \(Fmt.int($0.total.received)) số nhận" } ?? "—")
+            }.buttonStyle(.plain)
+        }
+        .environment(\.thinking, loading)
+        .heroSurface()
+        .id("so-lieu-hero")
+    }
+
+    /// Khung 03: thẻ "Mục tiêu tháng": Đã đạt / Mục tiêu, thanh, mốc cần đạt tới hôm nay. Mục tiêu là KPI tháng theo POS (Cấu hình).
+    private func goalCard(_ t: API.Metrics) -> some View {
+        let goal = (targets?.items ?? []).filter { $0.scope == "pos" && (pos.isEmpty || $0.refId == pos) }.reduce(0.0) { $0 + $1.revenue }
+        let ym = String(r.1.prefix(7))
+        let day = Double(Int(r.1.suffix(2)) ?? 1), dim = Double(Int(VNDate.monthEnd(ym).suffix(2)) ?? 30)
+        let pct = goal > 0 ? t.closedNet / goal * 100 : nil
+        return NavigationLink(value: Route.page("cskh-kpi")) {
+            VStack(alignment: .leading, spacing: MT.cellGap) {
+                HStack {
+                    Text("Mục tiêu tháng · POS").mtFont(.cardHeader).foregroundStyle(Palette.ink)
+                    Spacer(minLength: 6)
+                    HStack(spacing: 2) { Text("Xem KPI"); Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)) }
+                        .mtFont(.caption).fontWeight(.semibold).foregroundStyle(Palette.accent)
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Đã đạt / Mục tiêu").mtFont(.caption).foregroundStyle(Palette.muted)
+                        Spacer(minLength: 6)
+                        Text(goal > 0 ? "\(money(t.closedNet)) / \(money(goal)) (\(Fmt.pct0(pct)))" : "\(money(t.closedNet)) / —")
+                            .mtFont(.body).fontWeight(.bold).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.7)
+                    }
+                    if goal > 0 {
+                        Bar(value: t.closedNet / goal, tint: Palette.accent, height: 7)
+                        Text("Mốc cần đạt tới hôm nay: \(money(goal * day / dim))").mtFont(.caption).foregroundStyle(Palette.muted)
+                    } else {
+                        Text("Chưa đặt mục tiêu (Cấu hình → Mục tiêu tháng)").mtFont(.caption).foregroundStyle(Palette.muted)
+                    }
+                }
+                .padding(10).background(Palette.wash, in: .rect(cornerRadius: MT.rCell))
+            }
+            .padding(MT.cardPad).frame(maxWidth: .infinity, alignment: .leading).cardSurface()
+        }.buttonStyle(.plain)
+    }
+
+    /// Khung 04: hero "DOANH THU THEO POS": badge so kỳ trước, số lớn, mỗi POS một hàng "POS · chốt / đơn … tiền".
+    private func posHero(_ report: API.Overview) -> some View {
+        let t = report.current.total
+        let rows = report.current.byPos.sorted { $0.closedNet > $1.closedNet }
+        return VStack(alignment: .leading, spacing: MT.cellGap) {
+            HStack(alignment: .top) {
+                Text("DOANH THU THEO POS").mtFont(.caption).fontWeight(.bold).foregroundStyle(Palette.muted)
+                Spacer(minLength: 6)
+                if !hideMoney, let d = Fmt.delta(t.closedNet, report.compare?.total.closedNet) { DeltaPill(d) }
+            }
+            NavigationLink(value: q("closed", "confirmed", "Đơn chốt")) {
+                Text(money(t.closedNet)).mtFont(.heroNumber).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
+                    .frame(maxWidth: .infinity, alignment: .leading).contentShape(.rect)
+            }.buttonStyle(.plain)
+            ForEach(rows, id: \.posId) { row in
+                PosSumRow(row: row, hidden: hideMoney) { nav?.pos = row.posId }
+            }
+            Text(ScopeText.text(period: period, pos: nil) + filterSuffix).mtFont(.caption).foregroundStyle(Palette.muted)
+        }
+        .heroSurface()
+    }
+    @ViewBuilder private func pipelinePills(_ total: [String: API.Bucket]) -> some View {
+        NavigationLink(value: q("shipping", "confirmed", "Đang giao")) { StatusPill(name: "Đang giao \(Fmt.int(total["shipping"]?.orders ?? 0))", code: 2) }
+        NavigationLink(value: q("returned", "confirmed", "Hoàn")) { StatusPill(name: "Hoàn \(Fmt.int(total["returned"]?.orders ?? 0))", code: 4) }
+        NavigationLink(value: q("cancelled", "confirmed", "Hủy sau chốt")) { StatusPill(name: "Hủy \(Fmt.int(total["cancelled"]?.orders ?? 0))", code: 6) }
+        NavigationLink(value: q("processing", "confirmed", "Chưa xuất kho")) { StatusPill(name: "Chưa xuất \(Fmt.int(total["processing"]?.orders ?? 0))", code: 0) }
+    }
     private func byDay(_ s: [API.SeriesRow]) -> [(String, Double)] { var m: [String: Double] = [:]; for x in s { m[x.bucket, default: 0] += x.closedNet }; return m.keys.sorted().map { ($0, m[$0]!) } }
+    /// Điểm biểu đồ trong kỳ: nhãn "01/11" thay "2026-11-01" (khung 03, 04); khoá không phải ngày thì giữ nguyên.
+    private func chartPoints(_ s: [API.SeriesRow]) -> [(String, Double)] {
+        byDay(s).map { key, v in
+            let label = key.count == 10 ? "\(key.suffix(2))/\(key.dropFirst(5).prefix(2))" : key
+            return (label, v)
+        }
+    }
     private func byDayOrders(_ s: [API.SeriesRow]) -> [(String, Double)] { var m: [String: Double] = [:]; for x in s { m[x.bucket, default: 0] += x.closedOrders }; return m.keys.sorted().map { ($0, m[$0]!) } }
     /// 8 nguồn tải cùng lúc, nguồn nào về trước hiện trước. Nguồn lỗi: cùng bộ lọc thì giữ số đang hiện, bộ lọc mới thì bỏ số cũ;
     /// báo một dòng lỗi có nút Thử lại. force: kéo để làm mới / Thử lại; không force mà số chưa quá 60 giây thì không tải.
@@ -601,7 +740,7 @@ struct CenterBlocks: View {
             group.addTask { .pipeline(await attempt(true, trace) { try await API.pipeline(start: r.0, end: r.1, basis: "confirmed", posIds: ids, team: tm, product: prod) }) }
             group.addTask { .targets(await attempt(true, trace) { try await API.targets(month: month) }) }
             group.addTask { .trend(await attempt(true, trace) { try await API.overview(start: trendStart, end: today, posIds: ids, team: tm, compare: "none", product: prod, hrTeam: unit?.id) }) }
-            group.addTask { .customers(await attempt(wantCustomers, trace) { try await API.customers(segment: "", sort: "spend", q: "", page: 1, size: 1) }) }
+            group.addTask { .customers(await attempt(wantCustomers, trace) { try await API.customers(segment: "", sort: "spend", q: "", page: 1, size: 1, posIds: ids) }) }
             group.addTask { .repurchase(await attempt(true, trace) { try await API.repurchase(start: r.0, end: r.1, posIds: ids, team: tm, product: prod) }) }
             group.addTask { .batches(await attempt(true, trace) { try await API.batches(start: r.0, end: r.1, posIds: ids, team: tm) }) }
             for await part in group {
@@ -645,23 +784,18 @@ struct CenterBlocks: View {
 
 struct EmpRows: View {
     let rows: [API.EmployeeRow]; let tone: Color
-    /// Bộ lọc của khối chứa bảng (kỳ, POS, bộ phận, nhóm đơn): chạm một người mở đơn chốt của người đó với đúng bộ lọc này.
+    /// Bộ lọc của khối chứa bảng (kỳ, POS, bộ phận, nhóm đơn): chạm một người mở trang chi tiết của người đó với đúng bộ lọc này.
     let filters: OrderFilters
+    let period: Period; let hrTeam: String?
     var body: some View {
         VStack(spacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.element.id) { i, e in
-                NavigationLink(value: Route.orders(OrderQuery.closedOrders(of: e, in: filters))) {
-                    HStack(spacing: 8) {
-                        Text("\(i + 1)").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.inkSoft).frame(width: 14)
-                        Avatar(name: e.name ?? "?", size: 26, tint: tone)
-                        VStack(alignment: .leading, spacing: 0) { Text(e.name ?? "NV").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1); Text(e.department ?? "").font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1) }
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 1) { Text(Fmt.pct(e.shownRate)).font(.system(size: 11, weight: .bold)).foregroundStyle(tone); Text(e.rateFrac).font(.system(size: 9)).foregroundStyle(Color.inkSoft) }
-                        Bar(value: min(1, (e.shownRate ?? 0) / 100), tint: tone, height: 4).frame(width: 60)
-                    }.padding(.vertical, 4).contentShape(.rect)
+                NavigationLink(value: Route.staffDetail(.of(e, in: filters, period: period, hrTeam: hrTeam))) {
+                    RankRow(rank: i + 1, name: e.name ?? "NV", valueText: Fmt.pct(e.shownRate), fraction: min(1, (e.shownRate ?? 0) / 100), tint: tone, sub: e.rateFrac)
+                        .padding(.vertical, 8).contentShape(.rect)
                 }.buttonStyle(.plain)
             }
-            if rows.isEmpty { Text("Chưa đủ dữ liệu (từ 10 đơn chia).").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }
+            if rows.isEmpty { Text("Chưa đủ dữ liệu (từ 10 đơn chia).").font(.footnote).foregroundStyle(Color.inkSoft) }
         }
     }
 }
@@ -669,8 +803,7 @@ struct EmpRows: View {
 struct MiniCell: View {
     let label: String; let value: String
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) { Text(label).font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1); Text(value).font(.system(size: 15, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).monospacedDigit().minimumScaleFactor(0.6).lineLimit(1).rolling(value) }
-            .frame(maxWidth: .infinity, alignment: .leading).padding(10).background(Color.black.opacity(0.04), in: .rect(cornerRadius: 10))
+        StatCell(label: label, value: value)
     }
 }
 
@@ -685,7 +818,7 @@ struct Donut: View {
                 let start = parts.prefix(i).reduce(0) { $0 + $1.1 } / total
                 Circle().trim(from: start, to: shown ? start + p.1 / total : start).stroke(p.2, style: StrokeStyle(lineWidth: 14, lineCap: .butt)).rotationEffect(.degrees(-90))
             }
-            VStack(spacing: 0) { Text(center).font(.system(size: 16, weight: .bold, design: .rounded)).foregroundStyle(Color.ink); Text(label).font(.system(size: 9)).foregroundStyle(Color.inkSoft) }
+            VStack(spacing: 0) { Text(center).font(.system(size: 16, weight: .bold, design: .rounded)).foregroundStyle(Color.ink); Text(label).font(.caption).foregroundStyle(Color.inkSoft) }
         }.frame(width: 110, height: 110)
         .onAppear { withAnimation(.spring(duration: 0.9, bounce: 0.05)) { shown = true } }
     }

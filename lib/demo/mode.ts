@@ -7,12 +7,13 @@ import { ALL_VIEWS } from '@/lib/auth/access';
 import { ensureAdCostSchema } from '@/lib/ops/ad-costs';
 import { POS } from '@/lib/shared/report-model';
 import { NET } from '@/lib/reports/stats';
-import { vnRangeUtc } from '@/lib/shared/report-time';
+import { todayVn, vnRangeUtc } from '@/lib/shared/report-time';
 import { teamSubquery } from '@/lib/teams/team';
 import { setPancakeTransport } from '@/lib/pancake/pancake';
 import { fakePancake } from '@/lib/demo/fake-pancake';
 import { DEMO_START, STAFF, UNITS, addDay, dayData, hrSnapshot, toSourceOrder, uuidOf, vnDayOfMs } from '@/lib/demo/world';
 import { MARKETING_TEAMS_KEY } from '@/lib/teams/marketing-teams';
+import { demoHrApp } from '@/lib/demo/hr-app';
 
 export const isDemo = () => env.DEMO_MODE === '1';
 
@@ -54,6 +55,8 @@ export function installDemo() {
 /** Web nhân sự giả: chỉ có ảnh chụp /api/v1/snapshot (team, Leader, Trưởng phòng, chi nhánh). */
 export function demoHrFetch(path: string): Response {
   if (path.split('?')[0] === '/api/v1/snapshot') return Response.json(hrSnapshot());
+  const app = demoHrApp(path, todayVn());
+  if (app) return Response.json(app);
   return Response.json({ error: 'Bản demo không nối web nhân sự.' }, { status: 503 });
 }
 
@@ -201,7 +204,8 @@ async function seedTargets() {
   const now = new Date().toISOString();
   for (const m of [prev, month]) {
     if (m < DEMO_START.slice(0, 7)) continue;
-    const exists = await db.prepare("SELECT 1 AS x FROM targets WHERE month=? AND updated_by='demo' LIMIT 1").bind(m).first();
+    // Đã có mục tiêu ảo của tháng, kể cả KPI team Marketing (thêm 13/11/2026), thì thôi; thiếu thì ghi bổ sung (INSERT OR IGNORE giữ dòng cũ).
+    const exists = await db.prepare("SELECT 1 AS x FROM targets WHERE month=? AND updated_by='demo' AND scope='team' AND ref_id LIKE 'hr:dept-mkt-%' LIMIT 1").bind(m).first();
     if (exists) continue;
     // Doanh thu chốt cả tháng theo dữ liệu ảo (kể cả phần chưa tới), để mục tiêu sát thực tế.
     const pos = new Map<string, [number, number]>(), emp = new Map<string, [number, number]>(), team = new Map<string, [number, number]>();
@@ -212,6 +216,10 @@ async function seedTargets() {
       const net = src.total_price_after_sub_discount ?? 0;
       add(pos, p.id, net);
       if (o.sellerId) { add(emp, o.sellerId, net); const unit = STAFF.find((s) => s.id === o.sellerId)?.unit; if (unit && UNITS[unit]?.kind === 'team') add(team, `dept-${unit}`, net); }
+      // KPI team Marketing ảo (team MKT Hà Nội / Thái Nguyên ở cuối ensureDemoSeed): doanh thu đơn có marketer của team đó.
+      // KPI người của marketer (13/11/2026: chọn 1 POS thì KPI bộ phận = cộng KPI từng người của POS đó, kể cả Marketing).
+      // Mã team MKT theo nguồn team web nhân sự (lib/teams/mkt-teams-source.ts): "hr:" + mã phòng ban team MKT ảo (world.ts: dept-mkt-hn / dept-mkt-tn).
+      if (o.marketerId) { const mk = STAFF.find((s) => s.id === o.marketerId); if (mk?.dept === 'mkt') { add(emp, mk.id, net); add(team, `hr:dept-mkt-${mk.branch.toLowerCase()}`, net); } }
     }
     const round = (v: number) => Math.max(1, Math.round(v * 1.06 / 5e6)) * 5e6;
     const push = (scope: string, refId: string, [rev, n]: [number, number], workingDays: number | null) => stmts.push(db.prepare('INSERT OR IGNORE INTO targets (id,month,scope,ref_id,revenue,closed_orders,working_days,updated_by,updated_at) VALUES (?,?,?,?,?,?,?,?,?)')

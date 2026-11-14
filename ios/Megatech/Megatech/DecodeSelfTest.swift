@@ -9,6 +9,11 @@ enum DecodeSelfTest {
         compare(&r)
         teams(&r)
         paths(&r)
+        marketingRank(&r)
+        staffDetail(&r)
+        appB5(&r)
+        appB6(&r)
+        appB7(&r)
         emit(r.failed == 0 ? "DECODE_TEST OK \(r.total) cases" : "DECODE_TEST FAILED \(r.failed)/\(r.total)")
         exit(r.failed == 0 ? 0 : 1)
     }
@@ -29,6 +34,170 @@ enum DecodeSelfTest {
                 check(code, false)
                 return nil
             }
+        }
+    }
+    private static func appB7(_ r: inout Run) {
+        let month = #"{"month":"2026-11","net":30,"closedOrders":12,"rate":null,"rank":1,"of":12}"#
+        let base = #""tenure":null,"posCreated":null,"firstOrderDay":null,"months":[],"badges":[],"definitions":{}"#
+        if let report = r.decode("B7_HR_BEST", API.HRProfileAchievements.self,
+            "{" + base + ",\"best\":{\"month\":" + month + ",\"rateMonth\":null},\"topMonths\":[" + month + "]}") {
+            r.check("B7_HR_BEST_VALUES", report.best?.month?.net == 30 && report.topMonths?.first?.rank == 1 && report.profile.months.isEmpty)
+        }
+        for extra in ["", #", "best":null,"topMonths":null"#] {
+            if let report = r.decode("B7_HR_OPTIONAL", API.HRProfileAchievements.self, "{" + base + extra + "}") {
+                r.check("B7_HR_OPTIONAL_VALUES", report.best == nil && report.topMonths == nil)
+            }
+        }
+        let full = #"{"month":"2026-11","items":{"employee:staff-a":{"assigned":30,"closed":12,"orders":12,"upsellRate":30,"products":{"line-a":12}}}}"#
+        if let d = r.decode("B7_KPI_FULL", API.Kpi2Report.self, full) {
+            let g = d.items["employee:staff-a"]
+            r.check("B7_KPI_VALUES", d.month == "2026-11" && g?.assigned == 30 && g?.closed == 12 && g?.orders == 12 && g?.upsellRate == 30 && g?.products?["line-a"] == 12)
+        }
+        for fields in ["{}", #"{"assigned":null,"closed":null,"orders":null,"upsellRate":null,"products":null}"#] {
+            if let g = r.decode("B7_KPI_OPTIONAL", API.Kpi2Goal.self, fields) {
+                r.check("B7_KPI_NIL", g.assigned == nil && g.closed == nil && g.orders == nil && g.upsellRate == nil && g.products == nil)
+            }
+        }
+        if let d = r.decode("B7_KPI_EMPTY", API.Kpi2Report.self, #"{"month":"2026-11","items":{}}"#) {
+            r.check("B7_KPI_EMPTY_ITEMS", d.items.isEmpty)
+        }
+    }
+    private static func appB6(_ r: inout Run) {
+        let metrics = #"""
+        "cost":12,"net":30,"closed":12,"orders":12,"phones":30
+        """#
+        for extra in ["", ",\"newNet\":12,\"cskhNet\":12,\"otherNet\":6", ",\"newNet\":null,\"cskhNet\":null,\"otherNet\":null"] {
+            if let m = r.decode("B6_MKT_SPLIT", API.RoasMetrics.self, "{\(metrics)\(extra)}") {
+                let present = extra.contains(":12")
+                r.check("B6_MKT_SPLIT_VALUES", present ? m.newNet == 12 && m.cskhNet == 12 && m.otherNet == 6 : m.newNet == nil && m.cskhNet == nil && m.otherNet == nil)
+            }
+        }
+        let line = #"""
+        {"key":"total","label":"Tổng","closed":30,"closedNet":30,"confirmed":12,"waiting":12,"failed":6,"cancelledAfter":0,"sent":12,"sentNet":30,"delivered":12,"returned":0,"returnedNet":0}
+        """#
+        let seller = #"""
+        {"key":"staff-a","label":"NV A","dept":"Sale","closed":30,"sent":12,"sentNet":30,"returned":0,"returnedNet":0,"returnRate":null,"returnRateNet":null}
+        """#
+        for extra in ["", ",\"sellers\":null", ",\"sellers\":[]", ",\"sellers\":[\(seller)]"] {
+            if let d = r.decode("B6_VD_SELLERS", API.VanDon.self, "{\"total\":\(line),\"sellerDepts\":[],\"confirmers\":[],\"reasons\":[]\(extra)}") {
+                if extra.contains("staff-a") {
+                    r.check("B6_VD_SELLER_VALUES", d.sellers?.first?.key == "staff-a" && d.sellers?.first?.label == "NV A" && d.sellers?.first?.dept == "Sale" && d.sellers?.first?.closed == 30 && d.sellers?.first?.sent == 12 && d.sellers?.first?.sentNet == 30 && d.sellers?.first?.returned == 0 && d.sellers?.first?.returnedNet == 0 && d.sellers?.first?.returnRate == nil && d.sellers?.first?.returnRateNet == nil)
+                } else { r.check("B6_VD_SELLERS_OPTIONAL", d.sellers?.isEmpty ?? true) }
+            }
+        }
+        if let d = r.decode("B6_VD_RATES", API.VanDonSellerRow.self, #"{"key":"staff-a","label":"NV A","closed":30,"sent":12,"sentNet":30,"returned":12,"returnedNet":12,"returnRate":30,"returnRateNet":12}"#) {
+            r.check("B6_VD_RATES_VALUES", d.returnRate == 30 && d.returnRateNet == 12 && d.dept == nil)
+        }
+    }
+    private static func appB5(_ r: inout Run) {
+        if let d = r.decode("B5_TENURE", API.StaffTenureReport.self, #"{"today":"2026-11-10","people":{"staff-a":{"joined":"2026-10-10","source":"tay","t":1}}}"#) {
+            r.check("B5_TENURE_ID", d.people["staff-a"]?.t == 1 && d.people["staff-b"] == nil)
+        }
+        _ = r.decode("B5_TENURE_EMPTY", API.StaffTenureReport.self, #"{"today":"2026-11-10","people":{}}"#)
+        let month = #"{"month":"2026-10","net":30,"closedOrders":12,"rate":null,"rank":null,"of":1}"#
+        let badge = #"{"key":"badge-a","tier":"dong","label":"Mốc A","note":"Số giả"}"#
+        let tenure = #"{"joined":"2026-10-10","source":"tay","t":1}"#
+        if let d = r.decode("B5_PROFILE", API.StaffProfileReport.self, "{\"tenure\":\(tenure),\"posCreated\":\"2026-10-10\",\"firstOrderDay\":\"2026-10-12\",\"months\":[\(month)],\"badges\":[\(badge)],\"definitions\":{}}") {
+            r.check("B5_PROFILE_FIELDS", d.tenure?.source == "tay" && d.posCreated == "2026-10-10" && d.firstOrderDay == "2026-10-12" && d.months.first?.net == 30 && d.months.first?.rank == nil && d.badges.first?.label == "Mốc A" && d.badges.first?.tier == "dong")
+        }
+        if let d = r.decode("B5_PROFILE_EMPTY", API.StaffProfileReport.self, #"{"months":[],"badges":[],"definitions":{}}"#) {
+            r.check("B5_PROFILE_NIL", d.tenure == nil && d.posCreated == nil && d.firstOrderDay == nil)
+        }
+        let value = #"{"closed":12,"closedNet":30}"#
+        if let d = r.decode("B5_GROUPS", API.ProductGroupsReport.self, "{\"groups\":[{\"label\":\"Nhóm A\",\"closed\":12,\"closedNet\":30}],\"staff\":[{\"sellerId\":\"staff-a\",\"name\":\"NV A\",\"byGroup\":{\"Nhóm A\":\(value)}}],\"definitions\":{}}") {
+            r.check("B5_GROUP_CELL", d.groups.first?.label == "Nhóm A" && d.staff.first?.groups["Nhóm A"]?.closedNet == 30)
+        }
+        _ = r.decode("B5_GROUPS_EMPTY", API.ProductGroupsReport.self, #"{"groups":[],"staff":[],"definitions":{}}"#)
+        let base = #"""
+        "created":30,"createdClosed":12,"closed":12,"closedNet":30,"waiting":0
+        """#
+        for extra in ["", ",\"delivered\":12,\"deliveredNet\":30,\"paidNet\":12"] {
+            if let d = r.decode("B5_DELIVERY_ROW", API.StaffRow.self, "{\"sellerId\":\"staff-a\",\"name\":\"NV A\",\(base)\(extra)}") {
+                r.check("B5_DELIVERY_ROW_VALUES", extra.isEmpty ? d.delivered == nil && d.deliveredNet == nil && d.paidNet == nil : d.delivered == 12 && d.deliveredNet == 30 && d.paidNet == 12)
+            }
+            if let d = r.decode("B5_DELIVERY_TOTAL", API.StaffSum.self, "{\"people\":1,\(base)\(extra)}") {
+                r.check("B5_DELIVERY_TOTAL_VALUES", extra.isEmpty ? d.delivered == nil && d.deliveredNet == nil && d.paidNet == nil : d.delivered == 12 && d.deliveredNet == 30 && d.paidNet == 12)
+            }
+        }
+    }
+    private static func marketingRank(_ r: inout Run) {
+        let fields = API.MarketingRankRow.fields.map { "\"\($0)\":12" }.joined(separator: ",")
+        let person = "\"marketerId\":\"m-a\",\"marketerName\":\"NV A\",\"marketingTeamName\":\"Team A\""
+        let team = "\"marketingTeamId\":\"team-a\",\"marketingTeamName\":\"Team A\",\"marketerCount\":2"
+        let full = "{\(fields)}"
+        let json = "{\"summary\":\(full),\"byMarketer\":[{\(person),\(fields)}],\"byTeam\":[{\(team),\(fields)}],\"definitions\":{\"scope\":\"Số giả\"}}"
+        if let d = r.decode("MKTR_FULL", API.MarketingRankReport.self, json) {
+            r.check("MKTR_FIELDS", API.MarketingRankRow.fields.allSatisfy { d.summary.values[$0] == 12 && d.byMarketer.first?.values[$0] == 12 && d.byTeam.first?.values[$0] == 12 })
+            r.check("MKTR_IDS", d.byMarketer.first?.id == "m-a" && d.byTeam.first?.id == "team-a" && d.byTeam.first?.marketerCount == 2)
+            r.check("MKTR_RETURNED", MarketingRankSort.returned.value(d.summary) == 24)
+        }
+        let sparse = "{\"summary\":{},\"byMarketer\":[{\(person)}],\"byTeam\":[{\(team)}],\"definitions\":{}}"
+        if let d = r.decode("MKTR_MISSING", API.MarketingRankReport.self, sparse) {
+            r.check("MKTR_DEFAULTS", API.MarketingRankRow.fields.filter { !["confirmationRate", "deliveryRate", "averageOrder", "revenuePerPhone"].contains($0) }.allSatisfy { d.summary.values[$0] == 0 })
+            r.check("MKTR_RATES", d.summary.values["confirmationRate"] == nil && d.summary.values["deliveryRate"] == nil)
+        }
+        let ignored = String(sparse.dropLast()) + ",\"recentOrders\":{\"unexpected\":[true]},\"marketerOptions\":false}"
+        _ = r.decode("MKTR_IGNORE_ORDERS", API.MarketingRankReport.self, ignored)
+        if let row = r.decode("MKTR_NULL", API.MarketingRankRow.self, #"{"net":null,"confirmationRate":null,"deliveryRate":null,"averageOrder":null,"revenuePerPhone":null,"marketerCount":null}"#) {
+            r.check("MKTR_NULL_DEFAULTS", row.n("net") == 0 && row.marketerCount == 0 && row.values["confirmationRate"] == nil && row.values["deliveryRate"] == nil)
+            r.check("MKTR_NULL_MONEY", row.values["averageOrder"] == nil && row.values["revenuePerPhone"] == nil && MarketingRankSort.aov.display(row) == "—" && MarketingRankSort.perPhone.display(row) == "—")
+        }
+        let path = API.marketingRankPath(start: "2026-10-01", end: "2026-10-12", pos: "pos-a", team: "__unassigned")
+        r.check("MKTR_PATH", path.contains("posIds=pos-a&basis=confirmed&stage=confirmed&marketingTeamId=__unassigned") && !path.contains("marketerId="))
+        r.check("MKTR_ALL", API.marketingRankPath(start: "a", end: "b", pos: "", team: nil).hasSuffix("marketingTeamId=__all"))
+    }
+    private static func staffDetail(_ r: inout Run) {
+        let employee = #"{"sellerId":"staff-a","name":"NV A","orders":20,"closedOrders":13,"closedNet":30,"assignedOrders":30,"rate":60}"#
+        let metric = #"{"orders":20,"closedOrders":13,"closedNet":30,"closedDiscount":0,"groups":{}}"#
+        for newer in [false, true] {
+            let extra = newer ? #", "rateTop":12,"rateDen":20"# : ""
+            if let e = r.decode("NV_EMP", API.EmployeeRow.self, String(employee.dropLast()) + extra + "}") {
+                r.check("NV_EMP_RATE", e.rateTop == (newer ? 12 : nil) && e.rateDen == (newer ? 20 : nil))
+                r.check("NV_EMP_FRAC", e.rateFrac == MetricPrefs.shared.fraction(closed: newer ? 12 : 13, orders: 20, assignedOrders: newer ? 20 : 30))
+            }
+            if let m = r.decode("NV_METRICS", API.Metrics.self, String(metric.dropLast()) + extra + "}") {
+                r.check("NV_METRICS_RATE", m.rateTop == (newer ? 12 : nil) && m.rateDen == (newer ? 20 : nil))
+            }
+        }
+        let prefs = MetricPrefs.shared
+        let legacy = prefs.fraction(closed: 13, orders: 20, assignedOrders: 30)
+        r.check("NV_PARTIAL_TOP", prefs.fraction(top: 12, den: nil, closed: 13, orders: 20, assignedOrders: 30) == legacy)
+        r.check("NV_PARTIAL_DEN", prefs.fraction(top: nil, den: 20, closed: 13, orders: 20, assignedOrders: 30) == legacy)
+        r.check("NV_ZERO", prefs.fraction(top: 0, den: 0, closed: 13, orders: 20, assignedOrders: 30) == prefs.fraction(closed: 0, orders: 0, assignedOrders: 0))
+        let summary = #"{"orders":20,"closedOrders":13,"closedNet":30,"averageOrder":12,"assignedOrders":30,"assignedHidden":false,"rate":60,"rateTop":12,"rateDen":20,"createdPhones":12,"assignedPhones":12}"#
+        let order = #"{"id":"order-a","orderId":"12","posId":"pos-a","posName":"POS A","phone":"…","at":"2026-10-01T01:00:00Z","statusCode":0,"statusName":"Mới","group":"new","reason":"Chưa ghi lý do","reasonKind":"none","tags":[],"note":null,"marketerName":null,"net":30}"#
+        for sparse in [false, true] {
+            let note = sparse ? "" : #", "customerNote":{"text":"Số giả","by":"NV A","at":"2026-10-01T01:00:00Z"}"#
+            let tags = sparse ? "" : #", "otherTags":[{"tag":"Team A","n":1}]"#
+            let json = """
+            {"person":{"sellerId":"staff-a","name":"NV A","department":"SALE"},"rateBase":"created","assignedVisible":true,
+            "summary":\(sparse ? "null" : summary),"previousSummary":\(summary),"base":{"kind":"created","total":20,"closed":12,"open":8},
+            "statuses":[{"key":"new","label":"Mới","n":8,"closed":false}],
+            "reasons":[{"reason":"Chưa ghi lý do","kind":"none","n":8,"byStatus":{"new":8,"cancelled":0}}],"reasonsPartial":false,
+            "orders":[\(String(order.dropLast()) + note + "}")],"hasMore":true,"definitions":{"closed":"Số giả"}\(tags)}
+            """
+            if let d = r.decode("NV_DETAIL", API.StaffDetailReport.self, json) {
+                r.check("NV_DETAIL_SUMMARY", (d.summary == nil) == sparse && d.previousSummary?.rateTop == 12)
+                r.check("NV_DETAIL_OPTIONAL", (d.orders.first?.customerNote == nil) == sparse && (d.otherTags == nil) == sparse)
+                r.check("NV_DETAIL_BASE", d.base.open == 8 && d.reasons.first?.n == 8 && d.orders.first?.group == "new")
+            }
+        }
+        let nullText = String(order.dropLast()) + #", "customerNote":{"text":null,"by":null,"at":"2026-10-01T01:00:00Z"}}"#
+        if let o = r.decode("NV_NOTE_TEXT_NULL", API.StaffDetailReport.Order.self, nullText) {
+            r.check("NV_NOTE_TEXT_HIDDEN", o.customerNote.flatMap { StaffDetailTerms.customerNote($0) } == nil)
+        }
+        let nullGroup = order.replacingOccurrences(of: #""group":"new""#, with: #""group":null"#)
+        if let o = r.decode("NV_GROUP_NULL", API.StaffDetailReport.Order.self, nullGroup) {
+            r.check("NV_GROUP_OPTIONAL", o.group == nil && o.statusName == "Mới")
+        }
+        let nullNote = String(order.dropLast()) + #", "customerNote":null}"#
+        if let o = r.decode("NV_NOTE_NULL", API.StaffDetailReport.Order.self, nullNote) {
+            r.check("NV_NOTE_OPTIONAL", o.customerNote == nil)
+        }
+        if let e = r.decode("NV_QUERY_EMP", API.EmployeeRow.self, employee) {
+            let q = StaffDetailQuery.of(e, in: .init(period: .today, pos: "pos-a", team: "sale", product: "gentadox"), period: .today, hrTeam: "team-a")
+            r.check("NV_QUERY", q.path.contains("sellerId=staff-a") && q.path.contains("hrTeam=team-a") && q.path.contains("productSegment=gentadox"))
+            r.check("NV_NO_RESTORE", !Route.staffDetail(q).restorable && (try? JSONEncoder().encode(Route.staffDetail(q))) == nil)
         }
     }
     private static func emit(_ value: String) {
@@ -171,6 +340,17 @@ enum DecodeSelfTest {
         }
         if let list = r.decode("TEAMS_EMPTY", API.HrTeamList.self, #"{"teams":[]}"#) {
             r.check("TEAMS_EMPTY_COUNT", list.teams.isEmpty)
+        }
+        // memberRefs (R3 Tiến độ tháng, cộng KPI người theo POS): có thì đọc, thiếu thì nil; team MKT có thể có id rỗng.
+        if let list = r.decode("TEAMS_MEMBERS", API.HrTeamList.self, #"""
+        {"teams":[{"id":"mkt_a","name":"MKT A","office":null,"dept":"mkt","people":2,"mentor":null,"members":["NV A","NV B"],"memberRefs":[{"id":"u1","name":"NV A"},{"id":"","name":"NV B"}],"group":null},
+        {"id":"team-c","name":"Team C","office":null,"dept":"sale","people":1,"mentor":null}]}
+        """#) {
+            r.check("TEAMS_MEMBERS_COUNT", list.teams.count == 2)
+            if list.teams.count == 2 {
+                r.check("TEAMS_MEMBERS_REFS", list.teams[0].dept == "mkt" && list.teams[0].memberRefs?.map(\.id) == ["u1", ""] && list.teams[0].memberRefs?.last?.name == "NV B")
+                r.check("TEAMS_MEMBERS_MISSING", list.teams[1].memberRefs == nil)
+            }
         }
     }
 

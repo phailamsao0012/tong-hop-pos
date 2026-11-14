@@ -39,6 +39,46 @@
 10-16 09:21Z CI: hết lượt hỏi API GitHub, chờ 11 phút
 10-16 09:38Z ✅ S1I xong, CI xanh (c6695ce)
 10-16 09:38Z 🏁 xong cả 7 bước
+10-16 09:38Z 📤 đã đẩy claude/project-thread-avd7td (3d2ab6e), Claude kiểm một lần
+10-16 09:51Z bắt đầu ở C:/Users/PC/Projects/thp-app011, nhánh codex/app-0.11, 9 bước
+10-16 09:51Z W1 đã xong từ trước, bỏ qua
+10-16 09:51Z M1 đã xong từ trước, bỏ qua
+10-16 09:51Z M2 đã xong từ trước, bỏ qua
+10-16 09:51Z N1 đã xong từ trước, bỏ qua
+10-16 09:51Z T1 đã xong từ trước, bỏ qua
+10-16 09:51Z S1W đã xong từ trước, bỏ qua
+10-16 09:51Z S1I đã xong từ trước, bỏ qua
+10-16 09:51Z bước 8/9 S2W bắt đầu: Sửa nhỏ API staff-detail (lượt 2)
+10-16 09:53Z ✅ S2W xong (512049b), máy kiểm typecheck + test ngoài sandbox đạt
+10-16 09:53Z bước 9/9 S2I bắt đầu: Đoạn 14 gọi API chạy nền (lượt 2)
+10-16 09:54Z S2I: đã đẩy e3b4863, chờ CI (iOS + iOS preview)
+10-16 10:12Z CI: hết lượt hỏi API GitHub, chờ 20 phút
+10-16 11:20Z CI: hết lượt hỏi API GitHub, chờ 12 phút
+10-16 11:56Z 🔁 S2I: CI GitHub báo lỗi, Codex sửa vòng 1/4
+10-16 11:58Z 🔁 S2I: máy kiểm báo lỗi, Codex sửa vòng 2/4
+10-16 11:59Z S2I: đã đẩy 435a9b4, chờ CI (iOS + iOS preview)
+10-16 12:23Z CI: hết lượt hỏi API GitHub, chờ 10 phút
+10-16 12:45Z ✅ S2I xong, CI xanh (435a9b4)
+10-16 12:45Z 🏁 xong cả 9 bước
+
+```
+
+## Cảnh báo
+```
+S2I: lệnh lạ: "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$summary = @'"'
+# Tóm tắt S2I
+
+## File đã đổi
+
+- "'`.codex-out/S2I/tomtat.md`: viết l
+S2I: lệnh lạ: "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$summary = @'"'
+# Tóm tắt S2I
+
+## File đã đổi
+
+- "'`.codex-out/S2I/tomtat.md`: viết l
+S2I: lệnh lạ: "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$ErrorActionPreference = '"'Stop'; "'$p = Join-Path $PWD '"'.github/workflows/ios-pre
+S2I: lệnh lạ: "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$ErrorActionPreference = '"'Stop'; "'$p = Join-Path $PWD '"'.github/workflows/ios-pre
 
 ```
 
@@ -380,3 +420,77 @@ Không cần quyết định thêm về mã. Chưa xác nhận workflow iOS/iOS 
 ### Số đối chiếu
 
 Chưa có dòng `[MKT]`, `[NV]` mới vì không chạy app/demo. Không suy diễn số; CI sẽ ghi kết quả đối chiếu vào `14-mkt-api.txt`, `14-nv-api.txt`.
+
+
+---
+
+## Tóm tắt S2W
+
+### File đã đổi
+
+- `app/api/reports/staff-detail/route.ts`: tra phòng ban không lọc riêng cho cờ ẩn khi thiếu dòng tổng quan; giữ nguyên phạm vi `person`. SQL bỏ ghi chú chỉ chứa space/tab/LF/CR/NBSP; JS kiểm tra `trim()` trước khi trả ghi chú.
+- `tests/staff-detail.test.ts`: thêm ca CSKH có đơn ở POS A nhưng hồ sơ chỉ ở POS B, không có hậu tố tính doanh số; thêm ghi chú mới hơn chỉ chứa LF, tab và NBSP vào ca S1W.
+- `.codex-out/S2W/tomtat.md`: tóm tắt bước này.
+
+### Lệnh đã chạy và kết quả (build, test, chạy thử; mã thoát từng lệnh)
+
+- `git status --short`, `git show`, `git diff`, `git diff --stat`, các lệnh đọc file và `rg`: mã 0; đầu bước worktree sạch, diff chỉ gồm hai file mã được phép.
+- `pnpm typecheck`: mã 0.
+- `pnpm test`: mã 1, `spawn EPERM`; sandbox chặn tạo tiến trình chạy test, chưa xác nhận test mới đạt. Không sửa code vì lỗi sandbox.
+- `git diff --check`: mã 0.
+- Kiểm tra byte hai file mã bằng PowerShell: mã 0, LF và không BOM.
+- Không build trên máy. PC Windows không có Xcode, swiftc hay máy ảo; build và quay do CI trên GitHub thực hiện.
+
+### Ảnh / video
+
+Không có; S2W chỉ sửa API và test.
+
+### Số 5 dòng đầu
+
+Không áp dụng.
+
+### Ca máy ảo của mục 6
+
+Không áp dụng cho S2W; không chạy máy ảo trên PC.
+
+### Chỗ làm khác plan và lý do
+
+- Không fetch/merge, dùng mạng, commit hay push theo giới hạn người chạy.
+- Không sửa `ket-qua.md` vì ngoài bảng file được phép của S2W; bằng chứng mục 1.1 và 1.2 ghi trong tóm tắt này và test.
+- Test chưa chạy được vì sandbox; máy kiểm cần chạy lại ngoài sandbox.
+
+### Câu hỏi còn lại
+
+Không có câu hỏi nghiệp vụ. Cần máy kiểm chạy `pnpm typecheck` và `pnpm test` ngoài sandbox để xác nhận test hồi quy.
+
+### Số đối chiếu
+
+Không có dòng `[MKT]` / `[NV]` trong S2W. Test mới kiểm tra `base.kind === 'created'`, `summary === null`, `person.department === null` và tên mặc định; ca ghi chú giữ nội dung có chữ cũ hơn, khách chỉ có khoảng trắng trả `customerNote === null`. Đây là kỳ vọng test, chưa phải kết quả chạy đạt.
+
+
+---
+
+## Tóm tắt S2I
+### File đã đổi
+- `.github/workflows/ios-preview.yml`: chỉ đoạn 14; đặt dấu nháy khi lưu PID, dùng `with open` đóng log sau khi đọc. Giữ các curl chạy nền, nhãn lỗi, wait sau `het-14`, tách log theo LF và bỏ phần tử rỗng cuối.
+- `.codex-out/S2I/tomtat.md`: viết lại tóm tắt vòng 2.
+### Lệnh đã chạy và kết quả (build, test, chạy thử; mã thoát từng lệnh)
+- `git status`, `git log`, `git show`, `git diff`, `rg`, đọc tài liệu và workflow: 0.
+- `git diff --check`: 0; kiểm byte LF, không BOM: 0. Diff chỉ trong đoạn 14.
+- `bash -n` qua PATH: không khởi chạy vì không tìm thấy lệnh, không có mã thoát tiến trình Bash.
+- Git Bash trực tiếp, `-n` qua stdin đoạn 14: -1073741502; lỗi tạo signal pipe, Win32 error 5. Chưa xác nhận cú pháp bằng Bash.
+- Không build trên máy Windows; không chạy máy ảo, không dùng mạng. CI build và quay chưa được kiểm trong lượt này.
+### Ảnh / video
+Chưa có; chờ CI quay và kiểm ảnh `14-mkt-pos.png`, `14-mkt-xep-doanh-thu.png`.
+### Số 5 dòng đầu
+Không có dữ liệu chạy mới.
+### Ca máy ảo của mục 6
+Không chạy trên PC Windows; chờ CI kiểm đoạn 14 với NV=1.
+### Chỗ làm khác plan và lý do
+- Đầu lượt worktree sạch; commit HEAD đã chứa phần sửa S2I, khác thông báo máy kiểm chưa có file thay đổi. Giữ phần đã có và bổ sung chỉnh nhỏ trong đúng đoạn 14 để có diff review được.
+- Không sửa `ket-qua.md` vì ngoài bảng phạm vi S2I mục 3; ghi kết quả tại đây.
+- Không build, quay hoặc kiểm CI do giới hạn Windows và cấm mạng của lời giao.
+### Câu hỏi còn lại
+Máy kiểm cần chạy lại Bash và CI iOS/iOS preview, xác nhận ảnh đúng mốc và đối chiếu API đạt với NV=1.
+### Số đối chiếu
+Chưa có dòng `[MKT]`, `[NV]` mới; chưa xác nhận số app/API trong lượt này.
