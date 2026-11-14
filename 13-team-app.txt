@@ -1,0 +1,89 @@
+[TEAM] dept=all ap=khong trang=mo-app
+[TEAM] dept=all ap=khong trang=tong-quan
+[TEAM] ds team=6 nguoi=5,4,5,4,4,4
+[TEAM] moc=danh-sach
+[TEAM] dept=all ap=co trang=tong-quan
+[TEAM] tq don-chot=747 dt=740,5 tr ₫ tao-moi=2.263 gttb=991.245 ₫ giao=707
+[TEAM] dept=sale ap=co trang=nhan-vien
+[TEAM] dong=1 chia=518 chot=184 tl=35,7% dh=184/184 tldh=100,0% dt=199,2 tr ₫
+[TEAM] dong=2 chia=478 chot=204 tl=43,1% dh=204/204 tldh=100,0% dt=198,0 tr ₫
+[TEAM] dong=3 chia=493 chot=139 tl=28,4% dh=139/139 tldh=100,0% dt=133,3 tr ₫
+[TEAM] dong=4 chia=299 chot=117 tl=39,5% dh=117/117 tldh=100,0% dt=112,3 tr ₫
+[TEAM] dong=5 chia=475 chot=103 tl=21,9% dh=103/103 tldh=100,0% dt=97,6 tr ₫
+[TEAM] moc=sale
+[TEAM] moc=tong-quan
+[TEAM] moc=muc-tieu
+[TEAM] moc=van-hanh
+[TEAM] moc=mua-lai
+[TEAM] moc=khach-hang
+[TEAM] dept=cskh ap=khong trang=nhan-vien
+[TEAM] dept=cskh ap=khong trang=tong-quan
+[TEAM] moc=cskh
+[TEAM] ds team=6 nguoi=5,4,5,4,4,4
+[TEAM] ds team=6 nguoi=5,4,5,4,4,4
+[TEAM] dept=cskh ap=co trang=tong-quan
+[TEAM] dept=cskh ap=co trang=nhan-vien
+[TEAM] dong=1 chia=401 chot=331 tl=83,0% dh=331/331 tldh=100,0% dt=448,2 tr ₫
+[TEAM] dong=2 chia=398 chot=331 tl=83,7% dh=331/331 tldh=100,0% dt=436,0 tr ₫
+[TEAM] dong=3 chia=404 chot=343 tl=85,6% dh=343/343 tldh=100,0% dt=424,3 tr ₫
+[TEAM] dong=4 chia=380 chot=280 tl=74,5% dh=280/280 tldh=100,0% dt=340,1 tr ₫
+[TEAM] ds team=6 nguoi=5,4,5,4,4,4
+[TEAM] moc=cskh-team
+[TEAM] moc=cskh-calls
+[TEAM] ds team=6 nguoi=5,4,5,4,4,4
+[TEAM] dept=cskh ap=khong trang=nhan-vien
+[TEAM] dept=cskh ap=khong trang=tong-quan
+[TEAM] ds team=6 nguoi=5,4,5,4,4,4
+[TEAM] dept=all ap=co trang=van-don
+[TEAM] van-don don-di=747
+[TEAM] moc=van-don
+[TEAM] moc=trang-chu
+[TEAM] moc=don-hang
+[TEAM] moc=phong-ban-khong-cau
+[TEAM] moc=them-khong-cau
+[TEAM] moc=bao-cao-thang
+[TEAM] moc=cach-tinh-khong-cau
+[TEAM] moc=bao-mat-khong-cau
+[TEAM] moc=cau-hinh-khong-cau
+[TEAM] moc=nhat-ky-khong-cau
+[TEAM] moc=cai-dat-may-khong-cau
+[TEAM] moc=thong-bao
+[TEAM] moc=dong-bo
+[TEAM] moc=mkt
+[TEAM] moc=sale-data
+[TEAM] moc=sale-trong-ca
+[TEAM] moc=cskh-cuoc-goi
+[TEAM] moc=trang-theo-id
+[TEAM] moc=route-cuoc-goi
+[TEAM] moc=route-tong-quan
+[TEAM] moc=route-tham-chieu
+[TEAM] moc=route-pos
+[TEAM] moc=danh-sach-don
+[TEAM] dept=sale ap=co trang=nhan-vien
+[TEAM] dong=1 chia=518 chot=184 tl=35,7% dh=184/184 tldh=100,0% dt=199,2 tr ₫
+[TEAM] dong=2 chia=478 chot=204 tl=43,1% dh=204/204 tldh=100,0% dt=198,0 tr ₫
+[TEAM] dong=3 chia=493 chot=139 tl=28,4% dh=139/139 tldh=100,0% dt=133,3 tr ₫
+[TEAM] dong=4 chia=299 chot=117 tl=39,5% dh=117/117 tldh=100,0% dt=112,3 tr ₫
+[TEAM] dong=5 chia=475 chot=103 tl=21,9% dh=103/103 tldh=100,0% dt=97,6 tr ₫
+[TEAM] moc=sale-khong-cau-chung
+[TEAM] dept=cskh ap=khong trang=nhan-vien
+[TEAM] dept=cskh ap=khong trang=tong-quan
+[TEAM] moc=cskh-cau-rieng
+[TEAM] dept=all ap=co trang=van-don
+[TEAM] van-don don-di=747
+[TEAM] moc=bo
+[TEAM] dept=all ap=khong trang=van-don
+[TEAM] van-don don-di=3.672
+[TEAM] moc=trang-chu-khong-team
+[TEAM] moc=don-hang-khong-team
+[TEAM] moc=thang-khong-team
+[TEAM] dept=all ap=khong trang=van-don
+[TEAM] van-don don-di=3.672
+[TEAM] ds team=6 nguoi=5,4,5,4,4,4
+[TEAM] moc=tat-khi-con-team
+[TEAM] dept=all ap=co trang=van-don
+[TEAM] van-don don-di=747
+[TEAM] ds team=6 nguoi=5,4,5,4,4,4
+[TEAM] dept=all ap=khong trang=mo-app
+[TEAM] moc=mo-lai
+[TEAM] dept=all ap=khong trang=tong-quan

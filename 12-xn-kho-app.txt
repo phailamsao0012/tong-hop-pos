@@ -1,0 +1,593 @@
+[XNK] bang team=sale nguoi=13 tong=co tu=2026-10-01 den=2026-10-31
+[XNK] dong=1 chia=498 chot=213 tl=43,6% dh=213/213 tldh=100,0% dt=239,8 tr ₫
+[XNK] dong=2 chia=518 chot=184 tl=35,7% dh=184/184 tldh=100,0% dt=199,2 tr ₫
+[XNK] dong=3 chia=478 chot=204 tl=43,1% dh=204/204 tldh=100,0% dt=198,0 tr ₫
+[XNK] dong=4 chia=504 chot=164 tl=33,7% dh=164/164 tldh=100,0% dt=171,0 tr ₫
+[XNK] dong=5 chia=350 chot=148 tl=42,6% dh=148/148 tldh=100,0% dt=154,4 tr ₫
+[XNK] dong=tong chia=5.424 chot=1.811 tl=33,8% dh=1.811/1.811 tldh=100,0% dt=1,91 tỷ ₫
+[XNK] so mode=previous step=1 kind=wave cs=2026-09-01 ce=2026-09-30 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] bieu-do kind=wave diem=31
+[XNK] moc=cot
+[XNK] bang team=sale nguoi=13 tong=co tu=2026-10-01 den=2026-10-31
+[XNK] dong=1 chia=504 chot=164 tl=33,7% dh=164/164 tldh=100,0% dt=171,0 tr ₫
+[XNK] dong=2 chia=498 chot=213 tl=43,6% dh=213/213 tldh=100,0% dt=239,8 tr ₫
+[XNK] dong=3 chia=356 chot=105 tl=30,1% dh=105/105 tldh=100,0% dt=124,4 tr ₫
+[XNK] dong=4 chia=518 chot=184 tl=35,7% dh=184/184 tldh=100,0% dt=199,2 tr ₫
+[XNK] dong=5 chia=350 chot=148 tl=42,6% dh=148/148 tldh=100,0% dt=154,4 tr ₫
+[XNK] dong=tong chia=5.424 chot=1.811 tl=33,8% dh=1.811/1.811 tldh=100,0% dt=1,91 tỷ ₫
+[XNK] so mode=previous step=1 kind=wave cs=2026-09-01 ce=2026-09-30 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=164 so=0 doi=mới
+[XNK] mini dong=2 nay=213 so=0 doi=mới
+[XNK] mini dong=3 nay=105 so=0 doi=mới
+[XNK] mini dong=4 nay=184 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] moc=giai-thich
+[XNK] moc=ds
+[XNK] ds dh=1 don=164 du=co
+[XNK] so mode=previous step=1 kind=wave cs=2026-09-01 ce=2026-09-30 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=164 so=0 doi=mới
+[XNK] mini dong=2 nay=213 so=0 doi=mới
+[XNK] mini dong=3 nay=105 so=0 doi=mới
+[XNK] mini dong=4 nay=184 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] so mode=previous step=1 kind=wave cs=2026-09-01 ce=2026-09-30 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=164 so=0 doi=mới
+[XNK] mini dong=2 nay=213 so=0 doi=mới
+[XNK] mini dong=3 nay=105 so=0 doi=mới
+[XNK] mini dong=4 nay=184 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] bieu-do kind=wave diem=31
+[XNK] ds dh=0 don=164 du=co
+[XNK] so mode=previous step=1 kind=wave cs=2026-09-01 ce=2026-09-30 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=164 so=0 doi=mới
+[XNK] mini dong=2 nay=213 so=0 doi=mới
+[XNK] mini dong=3 nay=105 so=0 doi=mới
+[XNK] mini dong=4 nay=184 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] so mode=previous step=1 kind=wave cs=2026-09-01 ce=2026-09-30 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=164 so=0 doi=mới
+[XNK] mini dong=2 nay=213 so=0 doi=mới
+[XNK] mini dong=3 nay=105 so=0 doi=mới
+[XNK] mini dong=4 nay=184 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] bieu-do kind=wave diem=31
+[XNK] bang team=cskh nguoi=12 tong=co tu=2026-10-01 den=2026-10-31
+[XNK] dong=1 chia=401 chot=331 tl=83,0% dh=331/331 tldh=100,0% dt=448,2 tr ₫
+[XNK] dong=2 chia=398 chot=331 tl=83,7% dh=331/331 tldh=100,0% dt=436,0 tr ₫
+[XNK] dong=3 chia=404 chot=343 tl=85,6% dh=343/343 tldh=100,0% dt=424,3 tr ₫
+[XNK] dong=4 chia=430 chot=355 tl=83,0% dh=355/355 tldh=100,0% dt=408,7 tr ₫
+[XNK] dong=5 chia=379 chot=314 tl=83,4% dh=314/314 tldh=100,0% dt=378,5 tr ₫
+[XNK] dong=tong chia=4.318 chot=3.548 tl=82,7% dh=3.548/3.548 tldh=100,0% dt=4,49 tỷ ₫
+[XNK] so mode=previous step=1 kind=wave cs=2026-09-01 ce=2026-09-30 nay=3.548 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=331 so=0 doi=mới
+[XNK] mini dong=2 nay=331 so=0 doi=mới
+[XNK] mini dong=3 nay=343 so=0 doi=mới
+[XNK] mini dong=4 nay=355 so=0 doi=mới
+[XNK] mini dong=5 nay=314 so=0 doi=mới
+[XNK] mini dong=tong nay=3.548 so=0 doi=mới
+[XNK] bieu-do kind=wave diem=31
+[XNK] moc=cskh
+[XNK] moc=chu-lon
+[XNK] bang team=sale nguoi=13 tong=co tu=2026-10-01 den=2026-10-31
+[XNK] dong=1 chia=498 chot=213 tl=43,6% dh=213/213 tldh=100,0% dt=239,8 tr ₫
+[XNK] dong=2 chia=518 chot=184 tl=35,7% dh=184/184 tldh=100,0% dt=199,2 tr ₫
+[XNK] dong=3 chia=478 chot=204 tl=43,1% dh=204/204 tldh=100,0% dt=198,0 tr ₫
+[XNK] dong=4 chia=504 chot=164 tl=33,7% dh=164/164 tldh=100,0% dt=171,0 tr ₫
+[XNK] dong=5 chia=350 chot=148 tl=42,6% dh=148/148 tldh=100,0% dt=154,4 tr ₫
+[XNK] dong=tong chia=5.424 chot=1.811 tl=33,8% dh=1.811/1.811 tldh=100,0% dt=1,91 tỷ ₫
+[XNK] so mode=previous step=1 kind=wave cs=2026-09-01 ce=2026-09-30 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] bieu-do kind=wave diem=31
+[XNK] so mode=previous step=1 kind=wave cs=2026-09-01 ce=2026-09-30 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] moc=controls
+[XNK] so mode=previous step=1 kind=wave cs=2026-09-01 ce=2026-09-30 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] moc=wave
+[XNK] so mode=previous step=1 kind=diff cs=2026-09-01 ce=2026-09-30 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] bieu-do kind=diff diem=31
+[XNK] moc=diff
+[XNK] so mode=previous step=1 kind=cum cs=2026-09-01 ce=2026-09-30 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] bieu-do kind=cum diem=31
+[XNK] moc=cum
+[XNK] chua-khop khop-ky=co khoa=khong
+[XNK] so mode=weekday step=2 kind=cum cs=2026-07-23 ce=2026-08-22 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] bieu-do kind=cum diem=31
+[XNK] moc=weekday
+[XNK] so mode=weekday step=2 kind=cum cs=2026-07-23 ce=2026-08-22 nay=33,8% so=— diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=43,6% so=— doi=—
+[XNK] mini dong=2 nay=35,7% so=— doi=—
+[XNK] mini dong=3 nay=43,1% so=— doi=—
+[XNK] mini dong=4 nay=33,7% so=— doi=—
+[XNK] mini dong=5 nay=42,6% so=— doi=—
+[XNK] mini dong=tong nay=33,8% so=— doi=—
+[XNK] bieu-do kind=cum diem=31
+[XNK] moc=rate
+[XNK] chua-khop khop-ky=co khoa=khong
+[XNK] so mode=custom step=1 kind=cum cs=2026-09-01 ce=2026-09-30 nay=33,8% so=— diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=43,6% so=— doi=—
+[XNK] mini dong=2 nay=35,7% so=— doi=—
+[XNK] mini dong=3 nay=43,1% so=— doi=—
+[XNK] mini dong=4 nay=33,7% so=— doi=—
+[XNK] mini dong=5 nay=42,6% so=— doi=—
+[XNK] mini dong=tong nay=33,8% so=— doi=—
+[XNK] so mode=custom step=1 kind=cum cs=2026-09-01 ce=2026-09-30 nay=33,8% so=— diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=43,6% so=— doi=—
+[XNK] mini dong=2 nay=35,7% so=— doi=—
+[XNK] mini dong=3 nay=43,1% so=— doi=—
+[XNK] mini dong=4 nay=33,7% so=— doi=—
+[XNK] mini dong=5 nay=42,6% so=— doi=—
+[XNK] mini dong=tong nay=33,8% so=— doi=—
+[XNK] bieu-do kind=cum diem=31
+[XNK] moc=custom
+[XNK] bieu-do kind=cum diem=31
+[XNK] so mode=custom step=1 kind=wave cs=2026-09-01 ce=2026-09-30 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] bieu-do kind=wave diem=31
+[XNK] moc=chart-closed-wave
+[XNK] cham kind=wave i=0 nay=50 so=0 chenh=+50
+[XNK] moc=chart-tip-first
+[XNK] cham kind=wave i=15 nay=69 so=0 chenh=+69
+[XNK] moc=chart-tip-middle
+[XNK] cham kind=wave i=30 nay=38 so=— chenh=—
+[XNK] moc=chart-tip-last
+[XNK] so mode=custom step=1 kind=diff cs=2026-09-01 ce=2026-09-30 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] bieu-do kind=diff diem=31
+[XNK] moc=chart-closed-diff
+[XNK] so mode=custom step=1 kind=cum cs=2026-09-01 ce=2026-09-30 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] bieu-do kind=cum diem=31
+[XNK] moc=chart-closed-cum
+[XNK] bieu-do kind=cum diem=31
+[XNK] so mode=custom step=1 kind=wave cs=2026-09-01 ce=2026-09-30 nay=1,91 tỷ so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=239,8 tr so=0 doi=mới
+[XNK] mini dong=2 nay=199,2 tr so=0 doi=mới
+[XNK] mini dong=3 nay=198,0 tr so=0 doi=mới
+[XNK] mini dong=4 nay=171,0 tr so=0 doi=mới
+[XNK] mini dong=5 nay=154,4 tr so=0 doi=mới
+[XNK] mini dong=tong nay=1,91 tỷ so=0 doi=mới
+[XNK] bieu-do kind=wave diem=31
+[XNK] moc=chart-net-wave
+[XNK] so mode=custom step=1 kind=diff cs=2026-09-01 ce=2026-09-30 nay=1,91 tỷ so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=239,8 tr so=0 doi=mới
+[XNK] mini dong=2 nay=199,2 tr so=0 doi=mới
+[XNK] mini dong=3 nay=198,0 tr so=0 doi=mới
+[XNK] mini dong=4 nay=171,0 tr so=0 doi=mới
+[XNK] mini dong=5 nay=154,4 tr so=0 doi=mới
+[XNK] mini dong=tong nay=1,91 tỷ so=0 doi=mới
+[XNK] bieu-do kind=diff diem=31
+[XNK] moc=chart-net-diff
+[XNK] so mode=custom step=1 kind=cum cs=2026-09-01 ce=2026-09-30 nay=1,91 tỷ so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=239,8 tr so=0 doi=mới
+[XNK] mini dong=2 nay=199,2 tr so=0 doi=mới
+[XNK] mini dong=3 nay=198,0 tr so=0 doi=mới
+[XNK] mini dong=4 nay=171,0 tr so=0 doi=mới
+[XNK] mini dong=5 nay=154,4 tr so=0 doi=mới
+[XNK] mini dong=tong nay=1,91 tỷ so=0 doi=mới
+[XNK] bieu-do kind=cum diem=31
+[XNK] moc=chart-net-cum
+[XNK] bieu-do kind=cum diem=31
+[XNK] so mode=custom step=1 kind=wave cs=2026-09-01 ce=2026-09-30 nay=33,8% so=— diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=43,6% so=— doi=—
+[XNK] mini dong=2 nay=35,7% so=— doi=—
+[XNK] mini dong=3 nay=43,1% so=— doi=—
+[XNK] mini dong=4 nay=33,7% so=— doi=—
+[XNK] mini dong=5 nay=42,6% so=— doi=—
+[XNK] mini dong=tong nay=33,8% so=— doi=—
+[XNK] bieu-do kind=wave diem=31
+[XNK] moc=chart-rate-wave
+[XNK] so mode=custom step=1 kind=diff cs=2026-09-01 ce=2026-09-30 nay=33,8% so=— diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=43,6% so=— doi=—
+[XNK] mini dong=2 nay=35,7% so=— doi=—
+[XNK] mini dong=3 nay=43,1% so=— doi=—
+[XNK] mini dong=4 nay=33,7% so=— doi=—
+[XNK] mini dong=5 nay=42,6% so=— doi=—
+[XNK] mini dong=tong nay=33,8% so=— doi=—
+[XNK] bieu-do kind=diff diem=31
+[XNK] moc=chart-rate-diff
+[XNK] so mode=custom step=1 kind=cum cs=2026-09-01 ce=2026-09-30 nay=33,8% so=— diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=43,6% so=— doi=—
+[XNK] mini dong=2 nay=35,7% so=— doi=—
+[XNK] mini dong=3 nay=43,1% so=— doi=—
+[XNK] mini dong=4 nay=33,7% so=— doi=—
+[XNK] mini dong=5 nay=42,6% so=— doi=—
+[XNK] mini dong=tong nay=33,8% so=— doi=—
+[XNK] bieu-do kind=cum diem=31
+[XNK] moc=chart-rate-cum
+[XNK] bieu-do kind=cum diem=31
+[XNK] so mode=custom step=1 kind=wave cs=2026-09-01 ce=2026-09-30 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] bieu-do kind=wave diem=31
+[XNK] so mode=year step=1 kind=wave cs=2025-10-01 ce=2025-10-31 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] bieu-do kind=wave diem=31
+[XNK] moc=chart-year
+[XNK] so mode=custom step=1 kind=wave cs=2026-08-01 ce=2026-08-15 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] bieu-do kind=wave diem=31
+[XNK] moc=chart-unequal
+[XNK] chua-khop khop-ky=co khoa=khong
+[XNK] so mode=previous step=1 kind=wave cs=2026-09-01 ce=2026-09-30 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] bieu-do kind=wave diem=31
+[XNK] moc=rieng-before
+[XNK] rieng dong=1 nay=213 so=0
+[XNK] w5-rieng=co
+[XNK] bieu-do kind=wave diem=31
+[XNK] moc=rieng
+[XNK] cham kind=wave i=0 nay=6 so=0 chenh=+6
+[XNK] moc=rieng-tip-first
+[XNK] cham kind=wave i=15 nay=7 so=0 chenh=+7
+[XNK] moc=rieng-tip-middle
+[XNK] cham kind=wave i=30 nay=5 so=— chenh=—
+[XNK] moc=rieng-tip-last
+[XNK] moc=rieng-o
+[XNK] so mode=previous step=1 kind=diff cs=2026-09-01 ce=2026-09-30 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] rieng dong=1 nay=213 so=0
+[XNK] w5-rieng=co
+[XNK] bieu-do kind=diff diem=31
+[XNK] moc=rieng-diff
+[XNK] so mode=previous step=1 kind=cum cs=2026-09-01 ce=2026-09-30 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] rieng dong=1 nay=213 so=0
+[XNK] w5-rieng=co
+[XNK] bieu-do kind=cum diem=31
+[XNK] moc=rieng-cum
+[XNK] bieu-do kind=cum diem=31
+[XNK] moc=rieng-net
+[XNK] bieu-do kind=cum diem=31
+[XNK] moc=rieng-rate
+[XNK] chua-khop khop-ky=co khoa=khong
+[XNK] so mode=weekday step=2 kind=cum cs=2026-07-23 ce=2026-08-22 nay=33,8% so=— diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=43,6% so=— doi=—
+[XNK] mini dong=2 nay=35,7% so=— doi=—
+[XNK] mini dong=3 nay=43,1% so=— doi=—
+[XNK] mini dong=4 nay=33,7% so=— doi=—
+[XNK] mini dong=5 nay=42,6% so=— doi=—
+[XNK] mini dong=tong nay=33,8% so=— doi=—
+[XNK] rieng dong=1 nay=43,6% so=—
+[XNK] w5-rieng=co
+[XNK] bieu-do kind=cum diem=31
+[XNK] moc=rieng-mode
+[XNK] chua-khop khop-ky=co khoa=khong
+[XNK] bieu-do kind=wave diem=31
+[XNK] bieu-do kind=wave diem=31
+[XNK] so mode=previous step=1 kind=wave cs=2026-09-01 ce=2026-09-30 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] rieng dong=1 nay=213 so=0
+[XNK] w5-rieng=co
+[XNK] bieu-do kind=wave diem=31
+[XNK] ca-doi nay=1.811 so=0
+[XNK] bieu-do kind=wave diem=31
+[XNK] moc=rieng-ca-doi
+[XNK] rieng dong=1 nay=213 so=0
+[XNK] w5-rieng=co
+[XNK] bieu-do kind=wave diem=31
+[XNK] moc=rieng-toggle-in
+[XNK] ca-doi nay=1.811 so=0
+[XNK] bieu-do kind=wave diem=31
+[XNK] moc=rieng-toggle-out
+[XNK] moc=rieng-last-before
+[XNK] rieng dong=13 nay=87 so=0
+[XNK] w5-rieng=co
+[XNK] bieu-do kind=wave diem=31
+[XNK] moc=rieng-last
+[XNK] ca-doi nay=1.811 so=0
+[XNK] bieu-do kind=wave diem=31
+[XNK] moc=rieng-end
+[XNK] chua-khop khop-ky=co khoa=khong
+[XNK] so mode=custom step=1 kind=wave cs=2026-08-01 ce=2026-08-15 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] bieu-do kind=wave diem=31
+[XNK] bang team=sale nguoi=13 tong=co tu=2026-11-01 den=2026-11-14
+[XNK] dong=1 chia=156 chot=81 tl=51,3% dh=81/81 tldh=100,0% dt=95,5 tr ₫
+[XNK] dong=2 chia=203 chot=73 tl=33,0% dh=72/73 tldh=98,6% dt=91,7 tr ₫
+[XNK] dong=3 chia=191 chot=78 tl=38,7% dh=74/78 tldh=94,9% dt=91,0 tr ₫
+[XNK] dong=4 chia=185 chot=72 tl=37,8% dh=68/72 tldh=94,4% dt=85,1 tr ₫
+[XNK] dong=5 chia=182 chot=56 tl=30,2% dh=56/56 tldh=100,0% dt=70,7 tr ₫
+[XNK] dong=tong chia=2.118 chot=722 tl=33,1% dh=704/722 tldh=97,5% dt=846,4 tr ₫
+[XNK] so mode=custom step=1 kind=wave cs=2026-10-01 ce=2026-10-14 nay=722 so=789 diem=14 cutoff=11:00 ky=2026-11-01..2026-11-14
+[XNK] mini dong=1 nay=81 so=58 doi=+39,7%
+[XNK] mini dong=2 nay=73 so=70 doi=+4,3%
+[XNK] mini dong=3 nay=78 so=99 doi=−21,2%
+[XNK] mini dong=4 nay=72 so=97 doi=−25,8%
+[XNK] mini dong=5 nay=56 so=74 doi=−24,3%
+[XNK] mini dong=tong nay=722 so=789 doi=−8,5%
+[XNK] so mode=custom step=1 kind=wave cs=2026-10-01 ce=2026-10-14 nay=722 so=789 diem=14 cutoff=11:00 ky=2026-11-01..2026-11-14
+[XNK] mini dong=1 nay=81 so=58 doi=+39,7%
+[XNK] mini dong=2 nay=73 so=70 doi=+4,3%
+[XNK] mini dong=3 nay=78 so=99 doi=−21,2%
+[XNK] mini dong=4 nay=72 so=97 doi=−25,8%
+[XNK] mini dong=5 nay=56 so=74 doi=−24,3%
+[XNK] mini dong=tong nay=722 so=789 doi=−8,5%
+[XNK] bieu-do kind=wave diem=14
+[XNK] moc=chart-through-today
+[XNK] moc=dh-thang-nay
+[XNK] bang team=sale nguoi=13 tong=co tu=2026-11-01 den=2026-11-14
+[XNK] dong=1 chia=129 chot=30 tl=21,7% dh=30/30 tldh=100,0% dt=44,6 tr ₫
+[XNK] dong=2 chia=182 chot=56 tl=30,2% dh=56/56 tldh=100,0% dt=70,7 tr ₫
+[XNK] dong=3 chia=156 chot=81 tl=51,3% dh=81/81 tldh=100,0% dt=95,5 tr ₫
+[XNK] dong=4 chia=181 chot=50 tl=27,1% dh=50/50 tldh=100,0% dt=55,6 tr ₫
+[XNK] dong=5 chia=150 chot=47 tl=30,7% dh=47/47 tldh=100,0% dt=60,5 tr ₫
+[XNK] dong=tong chia=2.118 chot=722 tl=33,1% dh=704/722 tldh=97,5% dt=846,4 tr ₫
+[XNK] so mode=custom step=1 kind=wave cs=2026-10-01 ce=2026-10-14 nay=722 so=789 diem=14 cutoff=11:00 ky=2026-11-01..2026-11-14
+[XNK] mini dong=1 nay=30 so=48 doi=−37,5%
+[XNK] mini dong=2 nay=56 so=74 doi=−24,3%
+[XNK] mini dong=3 nay=81 so=58 doi=+39,7%
+[XNK] mini dong=4 nay=50 so=41 doi=+22,0%
+[XNK] mini dong=5 nay=47 so=35 doi=+34,3%
+[XNK] mini dong=tong nay=722 so=789 doi=−8,5%
+[XNK] moc=dh-thang-nay-giai-thich
+[XNK] moc=dh-thang-nay-ds
+[XNK] ds dh=1 don=30 du=co
+[XNK] bang team=sale nguoi=13 tong=co tu=2026-11-14 den=2026-11-14
+[XNK] dong=1 chia=3 chot=4 tl=33,3% dh=1/4 tldh=25,0% dt=5,0 tr ₫
+[XNK] dong=2 chia=3 chot=4 tl=0,0% dh=0/4 tldh=0,0% dt=4,0 tr ₫
+[XNK] dong=3 chia=3 chot=2 tl=0,0% dh=1/2 tldh=50,0% dt=3,2 tr ₫
+[XNK] dong=4 chia=1 chot=2 tl=0,0% dh=0/2 tldh=0,0% dt=1,9 tr ₫
+[XNK] dong=5 chia=6 chot=2 tl=33,3% dh=0/2 tldh=0,0% dt=1,3 tr ₫
+[XNK] dong=tong chia=36 chot=16 tl=11,1% dh=3/16 tldh=18,8% dt=16,3 tr ₫
+[XNK] so mode=custom step=1 kind=wave cs=2026-11-13 ce=2026-11-13 nay=16 so=14 diem=12 cutoff=11:00 ky=2026-11-14..2026-11-14
+[XNK] mini dong=1 nay=4 so=3 doi=+33,3%
+[XNK] mini dong=2 nay=4 so=2 doi=+100,0%
+[XNK] mini dong=3 nay=2 so=0 doi=mới
+[XNK] mini dong=4 nay=2 so=0 doi=mới
+[XNK] mini dong=5 nay=2 so=1 doi=+100,0%
+[XNK] mini dong=tong nay=16 so=14 doi=+14,3%
+[XNK] so mode=custom step=1 kind=wave cs=2026-11-13 ce=2026-11-13 nay=16 so=14 diem=12 cutoff=11:00 ky=2026-11-14..2026-11-14
+[XNK] mini dong=1 nay=4 so=3 doi=+33,3%
+[XNK] mini dong=2 nay=4 so=2 doi=+100,0%
+[XNK] mini dong=3 nay=2 so=0 doi=mới
+[XNK] mini dong=4 nay=2 so=0 doi=mới
+[XNK] mini dong=5 nay=2 so=1 doi=+100,0%
+[XNK] mini dong=tong nay=16 so=14 doi=+14,3%
+[XNK] bieu-do kind=wave diem=24
+[XNK] moc=today
+[XNK] so mode=custom step=1 kind=wave cs=2026-11-13 ce=2026-11-13 nay=16 so=14 diem=12 cutoff=11:00 ky=2026-11-14..2026-11-14
+[XNK] mini dong=1 nay=4 so=3 doi=+33,3%
+[XNK] mini dong=2 nay=4 so=2 doi=+100,0%
+[XNK] mini dong=3 nay=2 so=0 doi=mới
+[XNK] mini dong=4 nay=2 so=0 doi=mới
+[XNK] mini dong=5 nay=2 so=1 doi=+100,0%
+[XNK] mini dong=tong nay=16 so=14 doi=+14,3%
+[XNK] so mode=custom step=1 kind=wave cs=2026-11-13 ce=2026-11-13 nay=16 so=14 diem=12 cutoff=11:00 ky=2026-11-14..2026-11-14
+[XNK] mini dong=1 nay=4 so=3 doi=+33,3%
+[XNK] mini dong=2 nay=4 so=2 doi=+100,0%
+[XNK] mini dong=3 nay=2 so=0 doi=mới
+[XNK] mini dong=4 nay=2 so=0 doi=mới
+[XNK] mini dong=5 nay=2 so=1 doi=+100,0%
+[XNK] mini dong=tong nay=16 so=14 doi=+14,3%
+[XNK] moc=chart-today
+[XNK] cham kind=wave i=11 nay=0 so=0 chenh=+0
+[XNK] moc=chart-today-tip
+[XNK] moc=today-mini
+[XNK] bang team=sale nguoi=13 tong=co tu=2026-10-01 den=2026-10-31
+[XNK] dong=1 chia=498 chot=213 tl=43,6% dh=213/213 tldh=100,0% dt=239,8 tr ₫
+[XNK] dong=2 chia=518 chot=184 tl=35,7% dh=184/184 tldh=100,0% dt=199,2 tr ₫
+[XNK] dong=3 chia=478 chot=204 tl=43,1% dh=204/204 tldh=100,0% dt=198,0 tr ₫
+[XNK] dong=4 chia=504 chot=164 tl=33,7% dh=164/164 tldh=100,0% dt=171,0 tr ₫
+[XNK] dong=5 chia=350 chot=148 tl=42,6% dh=148/148 tldh=100,0% dt=154,4 tr ₫
+[XNK] dong=tong chia=5.424 chot=1.811 tl=33,8% dh=1.811/1.811 tldh=100,0% dt=1,91 tỷ ₫
+[XNK] so mode=custom step=1 kind=wave cs=2026-09-01 ce=2026-09-30 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] so mode=custom step=1 kind=wave cs=2026-09-01 ce=2026-09-30 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] bieu-do kind=wave diem=31
+[XNK] so mode=custom step=1 kind=wave cs=2026-09-01 ce=2026-09-30 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] moc=reopen-custom
+[XNK] bang team=sale nguoi=13 tong=co tu=2026-10-01 den=2026-10-31
+[XNK] dong=1 chia=498 chot=213 tl=43,6% dh=213/213 tldh=100,0% dt=239,8 tr ₫
+[XNK] dong=2 chia=518 chot=184 tl=35,7% dh=184/184 tldh=100,0% dt=199,2 tr ₫
+[XNK] dong=3 chia=478 chot=204 tl=43,1% dh=204/204 tldh=100,0% dt=198,0 tr ₫
+[XNK] dong=4 chia=504 chot=164 tl=33,7% dh=164/164 tldh=100,0% dt=171,0 tr ₫
+[XNK] dong=5 chia=350 chot=148 tl=42,6% dh=148/148 tldh=100,0% dt=154,4 tr ₫
+[XNK] dong=tong chia=5.424 chot=1.811 tl=33,8% dh=1.811/1.811 tldh=100,0% dt=1,91 tỷ ₫
+[XNK] so mode=custom step=1 kind=wave cs=2026-09-01 ce=2026-09-30 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] so mode=custom step=1 kind=wave cs=2026-09-01 ce=2026-09-30 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] bieu-do kind=wave diem=31
+[XNK] so mode=custom step=1 kind=wave cs=2026-09-01 ce=2026-09-30 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] moc=timezone
+[XNK] bang team=sale nguoi=13 tong=co tu=2026-10-01 den=2026-10-31
+[XNK] dong=1 chia=498 chot=213 tl=43,6% dh=213/213 tldh=100,0% dt=239,8 tr ₫
+[XNK] dong=2 chia=518 chot=184 tl=35,7% dh=184/184 tldh=100,0% dt=199,2 tr ₫
+[XNK] dong=3 chia=478 chot=204 tl=43,1% dh=204/204 tldh=100,0% dt=198,0 tr ₫
+[XNK] dong=4 chia=504 chot=164 tl=33,7% dh=164/164 tldh=100,0% dt=171,0 tr ₫
+[XNK] dong=5 chia=350 chot=148 tl=42,6% dh=148/148 tldh=100,0% dt=154,4 tr ₫
+[XNK] dong=tong chia=5.424 chot=1.811 tl=33,8% dh=1.811/1.811 tldh=100,0% dt=1,91 tỷ ₫
+[XNK] so mode=custom step=1 kind=wave cs=2026-09-01 ce=2026-09-30 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] so mode=custom step=1 kind=wave cs=2026-09-01 ce=2026-09-30 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] bieu-do kind=wave diem=31
+[XNK] so mode=weekday step=2 kind=wave cs=2026-07-23 ce=2026-08-22 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] bieu-do kind=wave diem=31
+[XNK] so mode=weekday step=2 kind=diff cs=2026-07-23 ce=2026-08-22 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] bieu-do kind=diff diem=31
+[XNK] so mode=weekday step=2 kind=diff cs=2026-07-23 ce=2026-08-22 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] moc=remember-set
+[XNK] bieu-do kind=diff diem=31
+[XNK] bang team=sale nguoi=13 tong=co tu=2026-10-01 den=2026-10-31
+[XNK] dong=1 chia=498 chot=213 tl=43,6% dh=213/213 tldh=100,0% dt=239,8 tr ₫
+[XNK] dong=2 chia=518 chot=184 tl=35,7% dh=184/184 tldh=100,0% dt=199,2 tr ₫
+[XNK] dong=3 chia=478 chot=204 tl=43,1% dh=204/204 tldh=100,0% dt=198,0 tr ₫
+[XNK] dong=4 chia=504 chot=164 tl=33,7% dh=164/164 tldh=100,0% dt=171,0 tr ₫
+[XNK] dong=5 chia=350 chot=148 tl=42,6% dh=148/148 tldh=100,0% dt=154,4 tr ₫
+[XNK] dong=tong chia=5.424 chot=1.811 tl=33,8% dh=1.811/1.811 tldh=100,0% dt=1,91 tỷ ₫
+[XNK] so mode=weekday step=2 kind=diff cs=2026-07-23 ce=2026-08-22 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] so mode=weekday step=2 kind=diff cs=2026-07-23 ce=2026-08-22 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] mini dong=1 nay=213 so=0 doi=mới
+[XNK] mini dong=2 nay=184 so=0 doi=mới
+[XNK] mini dong=3 nay=204 so=0 doi=mới
+[XNK] mini dong=4 nay=164 so=0 doi=mới
+[XNK] mini dong=5 nay=148 so=0 doi=mới
+[XNK] mini dong=tong nay=1.811 so=0 doi=mới
+[XNK] moc=remember-reopen

@@ -1,0 +1,7 @@
+moc-7-1: face-id-dung 16383 vao-app 16409 active-lai-sau-face-id 17648 
+moc-7-2: face-id-dung 9639 vao-app 9652 active-lai-sau-face-id 10917 
+moc-8: face-id-dung 10151 vao-app 10193 active-lai-sau-face-id 11394 
+nho-9-1: face-id-dung 10204 vao-app 10231 active-lai-sau-face-id 11528 
+nho-9-2: face-id-dung 10139 vao-app 10158 active-lai-sau-face-id 11424 
+cham-10: face-id-dung 10730 vao-app 10753 active-lai-sau-face-id 12100 
+tim-11: face-id-dung 10845 vao-app 10881 active-lai-sau-face-id 12167 

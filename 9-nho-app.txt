@@ -1,0 +1,4 @@
+Lan 1 (bat dau tu mac dinh):
+[NHO] mo-app tab=overview ky=today pos=tat-ca nhom=all trang=0,0,0,0
+Lan 2 (sau khi tat han app):
+[NHO] mo-app tab=overview ky=month pos=thuy-san nhom=gentadox trang=0,0,1,0

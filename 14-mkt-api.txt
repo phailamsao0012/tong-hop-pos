@@ -1,0 +1,5 @@
+pos_count=1
+rate_count app=3.0 api=3.0
+confirmationRate_1 app=35.83959899749373 api=35.83959899749373
+confirmationRate_2 app=34.61538461538461 api=34.61538461538461
+confirmationRate_3 app=32.27990970654628 api=32.27990970654628

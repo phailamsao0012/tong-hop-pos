@@ -1,0 +1,1 @@
+[TEAM] dept=all ap=khong trang=mo-app
