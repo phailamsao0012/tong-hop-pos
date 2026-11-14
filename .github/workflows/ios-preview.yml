@@ -295,7 +295,8 @@ jobs:
             sim 30 terminate "$UDID" "$BUNDLE" || true; m15 "lam-am-sau"
           }
           for mode in sang toi; do
-            if [ "$mode" = toi ]; then reboot_sim || exit 1; fi
+            # 14/11: bỏ tắt/bật máy ảo trước lượt nền tối. Đoạn 15 nay chạy sớm, máy ảo còn khoẻ; chính lần tắt/bật đó làm máy ảo
+            # treo rồi tự tắt (lỗi 405 "device is not booted"). Chỉ bật lại khi máy ảo thật sự đang tắt.
             m15 "$mode-terminate-truoc"; sim 30 terminate "$UDID" "$BUNDLE" || true; m15 "$mode-terminate-sau"
             # 13/11: máy ảo tự tắt sau khi bật lại (đổi nền báo "current state: Shutdown"): còn tắt thì bật lại một lần nữa.
             if ! sim 30 list devices booted | grep -q "$UDID"; then
@@ -326,6 +327,10 @@ jobs:
             if [ "$try15" = 2 ]; then exit 1; fi
             echo "::warning::15: lượt $mode chưa tới mốc hom-nay, mở lại app"
             sim 30 terminate "$UDID" "$BUNDLE" || true; sleep 5
+            if ! sim 30 list devices booted | grep -q "$UDID"; then
+              echo "::warning::15: máy ảo đang tắt, bật lại"; reboot_sim || exit 1
+              sim 60 ui "$UDID" appearance "$look" || true
+            fi
             done
             for stage in "${ui_stages[@]}"; do
               if [ "$stage" != hom-nay ]; then wait_ui "$stage" 180 "$log15"; fi
