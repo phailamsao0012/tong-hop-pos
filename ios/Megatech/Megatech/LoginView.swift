@@ -148,7 +148,6 @@ struct LoginView: View {
     private var form: some View {
         // Khung 19A: nhãn Email / Mật khẩu trên ô, "Nhớ máy này" một dòng, nút Đăng nhập; linh vật và Face ID giữ như cũ.
         VStack(alignment: .leading, spacing: 12) {
-            if let e = lastEmail, !e.isEmpty { Text("Tài khoản đã nhớ · \(SessionStore.mask(e))").mtFont(.caption).foregroundStyle(Self.mint) }
             label("Email")
             field {
                 TextField("", text: $email, prompt: Text("Email công ty").foregroundStyle(Color.mtTextSecondary))
