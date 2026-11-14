@@ -146,20 +146,24 @@ struct LoginView: View {
 
     // MARK: Email + mật khẩu
     private var form: some View {
-        VStack(spacing: 12) {
+        // Khung 19A: nhãn Email / Mật khẩu trên ô, "Nhớ máy này" một dòng, nút Đăng nhập; linh vật và Face ID giữ như cũ.
+        VStack(alignment: .leading, spacing: 12) {
+            if let e = lastEmail, !e.isEmpty { Text("Tài khoản đã nhớ · \(SessionStore.mask(e))").mtFont(.caption).foregroundStyle(Self.mint) }
+            label("Email")
             field {
-                TextField("", text: $email, prompt: Text("Email").foregroundStyle(Color.mtTextSecondary))
+                TextField("", text: $email, prompt: Text("Email công ty").foregroundStyle(Color.mtTextSecondary))
                     .textContentType(.username).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
                     .focused($focus, equals: .email).submitLabel(.next).onSubmit { focus = .password }
             }
+            label("Mật khẩu")
             field {
                 HStack(spacing: 8) {
                     Group {
                         if showPassword {
-                            TextField("", text: $password, prompt: Text("Mật khẩu").foregroundStyle(Color.mtTextSecondary))
+                            TextField("", text: $password, prompt: Text("Nhập mật khẩu").foregroundStyle(Color.mtTextSecondary))
                                 .textInputAutocapitalization(.never).autocorrectionDisabled()
                         } else {
-                            SecureField("", text: $password, prompt: Text("Mật khẩu").foregroundStyle(Color.mtTextSecondary))
+                            SecureField("", text: $password, prompt: Text("Nhập mật khẩu").foregroundStyle(Color.mtTextSecondary))
                         }
                     }
                     .textContentType(.password).focused($focus, equals: .password).submitLabel(.go).onSubmit { Task { await submit() } }
@@ -174,11 +178,9 @@ struct LoginView: View {
                 }
             }
             Toggle(isOn: $remember) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Nhớ máy này").mtFont(.cardHeader).foregroundStyle(Color.mtTextPrimary)
-                    Text("Lần sau mở bằng \(Biometric.name), không cần mật khẩu").mtFont(.caption).foregroundStyle(Self.mint)
-                }
-            }.tint(Self.lime).padding(.horizontal, 4).padding(.top, 2)
+                Text("Nhớ máy này").mtFont(.cardHeader).foregroundStyle(Color.mtTextPrimary)
+            }.tint(Self.lime).padding(.top, 2)
+            .accessibilityHint("Lần sau mở bằng \(Biometric.name), không cần mật khẩu")
             primary("Đăng nhập", disabled: email.isEmpty || password.isEmpty) { await submit() }.padding(.top, 8)
             if saved { outline("Dùng \(Biometric.name)") { error = nil; mode = .welcome } }
         }
@@ -276,9 +278,12 @@ struct LoginView: View {
     }
 
     // MARK: Thành phần
+    private func label(_ text: String) -> some View {
+        Text(text).mtFont(.cardHeader).foregroundStyle(Color.mtTextPrimary).padding(.bottom, -6)
+    }
     private func field<C: View>(@ViewBuilder _ c: () -> C) -> some View {
         c().font(.body).foregroundStyle(Color.mtTextPrimary).tint(Self.lime)
-            .padding(.horizontal, 16).padding(.vertical, 15)
+            .padding(.horizontal, 16).padding(.vertical, 13)
             .background(Color.mtSurfaceCell, in: .rect(cornerRadius: 14))
             .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.mtCardBorder))
     }
