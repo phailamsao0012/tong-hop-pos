@@ -665,3 +665,12 @@ Máy kiểm và CI có qua sau sửa import không? Chưa xác nhận lỗi tả
 
 - `15-toi-phong-ban.png`, `15-toi-sale.png`, `15-toi-nhan-vien.png`, `15-toi-cskh.png`, `15-toi-mkt.png` và ảnh sáng tương ứng sau CI chạy lại.
 - Các ảnh `15-sang-<mốc>.png`, `15-toi-<mốc>.png` còn lại, ảnh đăng nhập/xác minh và video Face ID của B8; đoạn 15 dùng phiên có sẵn không có ảnh dang-nhap.
+
+## Làm lại R1–R7 (Claude tự code, 12–14/11)
+
+- R1 khung chung, R2 Hôm nay + Thông báo, R-POS lọc theo POS, R3 Tổng quan, R4 Đơn hàng + Phòng ban, R5 Sale / Từng nhân viên / Một nhân viên: xong, CI xanh.
+- R6: CSKH (11A), Marketing (12A, nút Xếp hạng cuộn tới bảng), Vận đơn (vòng tỉ lệ + tóm tắt).
+- R7: Thêm (15A: thẻ người dùng, Báo cáo & KPI, Vận hành & Nhân sự, Tài khoản & hệ thống), Nhân sự (17A: quân số, vào/nghỉ, theo phòng; bản demo có dữ liệu ảo `lib/demo/hr-app.ts`), Đăng nhập (19A: nhãn trên ô, "Nhớ máy này" một dòng; giữ linh vật, Face ID, bước mã).
+- CI xem trước: đoạn 15 chạy sớm, không tắt/bật máy ảo trước lượt nền tối (lần tắt/bật đó làm máy ảo tự tắt, lỗi 405). Lượt chạy lại trên f083d51 xanh, đủ 40 ảnh.
+- Số build lên 13, số bản giữ 1.0.0.
+- Còn chờ anh: chi phí quảng cáo khi chọn một POS (sheet ghi POS từng dòng, hay chia theo tỉ lệ đơn), và lệnh "phát hành" để làm IPA.
