@@ -1,4 +1,5 @@
 'use client';
+import { seesAllKpi, type KpiSeen } from '@/lib/kpi/kpi-seen';
 import { usePosIds } from './pos-store';
 
 // Chỉ tiêu KPI mới của từng team và phần chia cho từng người (anh Vũ 07/11/2026: "giao tổng 1 cái cho cả team, các đầu lead và mentor
@@ -54,10 +55,11 @@ function toKpi2(values: Record<string, string>): Kpi2 {
   return out;
 }
 
-export function Kpi2Panel({ dept, teams, rows, period, end, editMonth, owner, targets, onTargets }: {
+export function Kpi2Panel({ seen, dept, teams, rows, period, end, editMonth, owner, targets, onTargets }: {
   dept: Dept; teams: Kpi2Team[]; rows: SellerRow[] | undefined; period: Period; end: string; editMonth: string; owner: boolean;
   /** KPI doanh số các tháng (bảng targets), dùng chung với trang KPI team. */ targets: Record<string, TargetItem[]>;
   onTargets: (month: string, items: TargetItem[]) => void;
+  /** KPI cá nhân xem được của ai (null = mọi người). */ seen?: KpiSeen;
 }) {
   // Quy tắc POS (anh Vũ 12/11/2026): số đã đạt / thực đạt tính trên POS đang chọn.
   const [kpiPos] = usePosIds();
@@ -82,6 +84,7 @@ export function Kpi2Panel({ dept, teams, rows, period, end, editMonth, owner, ta
     if (field === 'revenue' || field === 'aov') {
       const at = key.indexOf(':'); const t = targets[m]?.find((x) => x.scope === key.slice(0, at) && x.refId === key.slice(at + 1)) as (TargetItem & { aov?: number | null }) | undefined;
       // TB đơn của team tính từ TB đơn từng người (plan Đầu não 14/11/2026); chưa ai có thì dùng số cấp team cũ.
+      if (field === 'aov' && key.startsWith('team:') && !seesAllKpi(seen, ids)) return undefined;
       if (field === 'aov' && key.startsWith('team:')) return teamAov(ids.map((id) => ({ aov: monthValue(m, `employee:${id}`, 'aov'), revenue: monthValue(m, `employee:${id}`, 'revenue') })), t?.aov ?? null).aov ?? undefined;
       return (field === 'revenue' ? t?.revenue : t?.aov) || undefined;
     }
@@ -165,7 +168,7 @@ export function Kpi2Panel({ dept, teams, rows, period, end, editMonth, owner, ta
             {teams.map((t, i) => {
               const teamKey = `team:${t.id}`, memberKpi = t.members.map((m) => kpi[editMonth]?.[`employee:${m.id}`]);
               const lines = splitStatus(kpi[editMonth]?.[teamKey], memberKpi);
-              const revTeam = monthValue(editMonth, teamKey, 'revenue') ?? null, revSplit = t.members.reduce((a, m) => a + (monthValue(editMonth, `employee:${m.id}`, 'revenue') ?? 0), 0);
+              const revTeam = monthValue(editMonth, teamKey, 'revenue') ?? null, revSplit = seesAllKpi(seen, t.members.map((m) => m.id)) ? t.members.reduce((a, m) => a + (monthValue(editMonth, `employee:${m.id}`, 'revenue') ?? 0), 0) : null;
               const fieldLabel = (key: string) => fields.find((f) => f.key === key)?.label ?? key;
               const dirty = [teamKey, ...t.members.map((m) => `employee:${m.id}`)].some((k) => draft[k]);
               const anyEdit = canEdit(teamKey) || t.members.some((m) => canEdit(`employee:${m.id}`));
@@ -180,7 +183,9 @@ export function Kpi2Panel({ dept, teams, rows, period, end, editMonth, owner, ta
                       <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-5">{fields.map((f) => cell(teamKey, f, t.members.map((m) => m.id)))}</div>
                       {(lines.length > 0 || (revTeam && fields.some((f) => f.key === 'revenue'))) && (
                         <p className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-ink-3">
-                          {fields.some((f) => f.key === 'revenue') && revTeam !== null && <span className={revSplit > revTeam ? 'font-semibold text-bad' : ''}>Doanh số đã chia {shortMoney(revSplit)} / {shortMoney(revTeam)}{revSplit > revTeam ? ' · chia vượt' : ''}</span>}
+                          {fields.some((f) => f.key === 'revenue') && revTeam !== null && (revSplit === null
+                            ? <span title="Không có quyền xem KPI một số người trong team">Doanh số đã chia – / {shortMoney(revTeam)}</span>
+                            : <span className={revSplit > revTeam ? 'font-semibold text-bad' : ''}>Doanh số đã chia {shortMoney(revSplit)} / {shortMoney(revTeam)}{revSplit > revTeam ? ' · chia vượt' : ''}</span>)}
                           {lines.filter((l) => fields.some((f) => f.key === l.field)).map((l) => (
                             <span key={l.field} className={l.over ? 'font-semibold text-bad' : ''}>{fieldLabel(l.field)} đã chia {vi.format(l.split)} / {l.team === null ? 'chưa đặt' : vi.format(l.team)}{l.over ? ' · chia vượt' : ''}</span>
                           ))}

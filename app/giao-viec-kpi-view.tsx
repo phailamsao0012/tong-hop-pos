@@ -28,13 +28,14 @@ import { setHrUnit, useBranch, useHrUnit, useTeamChoice } from './team-store';
 import { ChartCard, Definitions, EmptyState, ErrorBox, SkeletonTable, pct, shortMoney, toast, vi } from './ui-kit';
 import { useApi } from './use-api';
 import { Kpi2Panel, ProductQtyCard } from './kpi2-panel';
+import { seesAllKpi, type KpiSeen } from '@/lib/kpi/kpi-seen';
 import { MktLeadsKpiPanel } from './mkt-leads-kpi-panel';
 
 type Dept = 'sale' | 'cskh';
 const LABEL: Record<Dept, string> = { sale: 'Sale', cskh: 'CSKH' };
 type Team = { id: string; name: string; leader: string | null; ids: string[]; members: { id: string; name: string }[] };
 type Target = TargetItem & { aov?: number | null };
-type TargetsResp = { items: Target[]; teams?: string[] | null };
+type TargetsResp = { items: Target[]; teams?: string[] | null; seeKpiOf?: string[] | null };
 type Field = 'revenue' | 'aov' | 'rate';
 type Branches = { offices: { id: string; name: string }[]; teams: { id: string; officeId: string }[] };
 const mmyyyy = (m: string) => `${m.slice(5)}/${m.slice(0, 4)}`;
@@ -78,7 +79,7 @@ function KpiLine({ label, value, goal, p, pace, onOpen }: { label: string; value
   );
 }
 
-function TeamCard({ team, actual, goal, sale, pace, onOpen, aovNote }: { team: Team; actual: TeamActual | null; goal: PeriodKpi; sale: boolean; pace: number; onOpen?: () => void; aovNote?: string }) {
+function TeamCard({ team, actual, goal, sale, pace, onOpen, aovNote, aovHidden }: { team: Team; actual: TeamActual | null; goal: PeriodKpi; sale: boolean; pace: number; onOpen?: () => void; aovNote?: string; aovHidden?: boolean }) {
   return (
     <article className="rounded-xl border border-line bg-surface p-3">
       <header className="mb-2 flex flex-wrap items-baseline justify-between gap-x-2">
@@ -88,9 +89,10 @@ function TeamCard({ team, actual, goal, sale, pace, onOpen, aovNote }: { team: T
       <div className="space-y-2">
         <KpiLine label="Doanh thu đơn chốt" value={actual ? shortMoney(actual.revenue) : '—'} goal={goal.revenue === null ? null : shortMoney(goal.revenue)}
           p={actual ? percentOf(actual.revenue, goal.revenue) : null} pace={pace} onOpen={actual ? onOpen : undefined} />
-        <KpiLine label="TB đơn chốt" value={actual?.aov == null ? '—' : shortMoney(actual.aov)} goal={goal.aov === null ? null : shortMoney(goal.aov)}
+        <KpiLine label="TB đơn chốt" value={actual?.aov == null ? '—' : shortMoney(actual.aov)} goal={aovHidden ? '–' : goal.aov === null ? null : shortMoney(goal.aov)}
           p={actual ? percentOf(actual.aov, goal.aov) : null} onOpen={actual ? onOpen : undefined} />
-        {aovNote && <p className="-mt-1 text-right text-[11px] text-ink-3">KPI TB đơn tính từ từng người · {aovNote}</p>}
+        {aovHidden ? <p className="-mt-1 text-right text-[11px] text-ink-3">KPI TB đơn tính từ từng người: không có quyền xem KPI cả team</p>
+          : aovNote && <p className="-mt-1 text-right text-[11px] text-ink-3">KPI TB đơn tính từ từng người · {aovNote}</p>}
         {sale && (
           <KpiLine label="Tỉ lệ chốt" value={actual ? pct(actual.closeRate, 1) : '—'} goal={goal.closeRate === null ? null : pct(goal.closeRate, 1)}
             p={actual ? percentOf(actual.closeRate, goal.closeRate) : null} onOpen={actual ? onOpen : undefined} />
@@ -159,6 +161,7 @@ export function GiaoViecKpiView({ owner, onOpen }: { owner: boolean; onOpen?: (v
 
   // KPI các tháng của kỳ (mỗi tháng một lần đọc /api/targets).
   const [targets, setTargets] = useState<Record<string, Target[]>>({});
+  const [seen, setSeen] = useState<KpiSeen>(undefined);
   const [targetError, setTargetError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
   useEffect(() => {
@@ -168,7 +171,7 @@ export function GiaoViecKpiView({ owner, onOpen }: { owner: boolean; onOpen?: (v
       .then((list) => {
         if (!live) return;
         setTargets((x) => ({ ...x, ...Object.fromEntries(list.map(([m, b]) => [m, b.items])) }));
-        setMine(list[0]?.[1].teams ?? null); setTargetError('');
+        setMine(list[0]?.[1].teams ?? null); setSeen(list[0]?.[1].seeKpiOf ?? null); setTargetError('');
       })
       .catch((e: Error) => { if (live) setTargetError(e.message); });
     return () => { live = false; };
@@ -176,7 +179,8 @@ export function GiaoViecKpiView({ owner, onOpen }: { owner: boolean; onOpen?: (v
   const targetsReady = months.every((m) => targets[m]) && (owner || mine !== null);
   const stored = (month: string, teamId: string) => targets[month]?.find((i) => i.scope === 'team' && i.refId === teamId);
   // TB đơn KPI của team: tính từ TB đơn từng người (plan Đầu não 14/11/2026, bước 3); chưa ai có thì dùng TB đơn cấp team cũ.
-  const aovOf = (month: string, t: Team) => teamAov(t.ids.map((id) => { const r = targets[month]?.find((i) => i.scope === 'employee' && i.refId === id); return { aov: r?.aov ?? null, revenue: r?.revenue ?? null }; }), stored(month, t.id)?.aov ?? null);
+  // Thiếu quyền xem KPI một người trong team (plan sửa web 1.3): không tính TB đơn team từ phần còn lại, hiện "–".
+  const aovOf = (month: string, t: Team) => !seesAllKpi(seen, t.ids) ? { aov: null, set: 0, total: t.ids.length, fromPeople: false } : teamAov(t.ids.map((id) => { const r = targets[month]?.find((i) => i.scope === 'employee' && i.refId === id); return { aov: r?.aov ?? null, revenue: r?.revenue ?? null }; }), stored(month, t.id)?.aov ?? null);
   const goalOf = (t: Team) => periodTarget(Object.fromEntries(months.map((m) => [m, { ...stored(m, t.id), aov: aovOf(m, t).aov }])), period);
   // Chọn ít hơn mọi POS: mục tiêu doanh thu team chia theo tỉ lệ doanh thu tháng trước của team ở các POS đang chọn (anh Vũ 12/11/2026, câu 2 chọn A).
   const share = useGoalShare(months[0] ?? today.slice(0, 7));
@@ -271,7 +275,7 @@ export function GiaoViecKpiView({ owner, onOpen }: { owner: boolean; onOpen?: (v
                   </div>
                   {missing.length > 0 && <p className="text-[12px] text-warn">Chưa đặt KPI doanh thu team {label} tháng {missing.map(mmyyyy).join(', ')}.</p>}
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    {teams.map((t) => <TeamCard key={t.id} team={t} actual={actualOf(t.ids)} goal={goalOfTeam(t)} aovNote={editMonth && aovOf(editMonth, t).fromPeople ? `đã đặt ${aovOf(editMonth, t).set}/${aovOf(editMonth, t).total} người` : undefined} sale={sale} pace={pace} onOpen={open(d.dept, t)} />)}
+                    {teams.map((t) => <TeamCard key={t.id} team={t} actual={actualOf(t.ids)} goal={goalOfTeam(t)} aovHidden={!seesAllKpi(seen, t.ids)} aovNote={editMonth && aovOf(editMonth, t).fromPeople ? `đã đặt ${aovOf(editMonth, t).set}/${aovOf(editMonth, t).total} người` : undefined} sale={sale} pace={pace} onOpen={open(d.dept, t)} />)}
                   </div>
                 </div>
               )}
@@ -285,7 +289,7 @@ export function GiaoViecKpiView({ owner, onOpen }: { owner: boolean; onOpen?: (v
         if (!teams.length || !d.teams.data) return null;
         return (
           <div key={`kpi2-${d.dept}`} className="space-y-4">
-            <Kpi2Panel dept={d.dept} teams={teams} rows={d.report.data?.current.byEmployee} period={period} end={end} editMonth={editMonth} owner={owner}
+            <Kpi2Panel seen={seen} dept={d.dept} teams={teams} rows={d.report.data?.current.byEmployee} period={period} end={end} editMonth={editMonth} owner={owner}
               targets={targets} onTargets={(m, items) => setTargets((x) => ({ ...x, [m]: items }))} />
             <ProductQtyCard dept={d.dept} teams={teams} period={period} end={end} />
           </div>

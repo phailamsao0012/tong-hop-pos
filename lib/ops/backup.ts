@@ -28,7 +28,8 @@ export const EXCLUDED_TABLES: Record<string, string> = {
 /** Cột bí mật trong bảng được sao lưu: ghi rỗng. Khôi phục tài khoản thì chủ hệ thống đặt lại mật khẩu (đăng nhập Google vẫn dùng được). */
 export const REDACTED_COLUMNS: Partial<Record<BackupTable, string[]>> = { users: ['password_hash'] };
 /** Dòng bí mật bỏ qua (điều kiện SQL cố định, không nhận từ ngoài). */
-export const ROW_FILTERS: Partial<Record<BackupTable, string>> = { app_settings: "key NOT IN ('bot_password')" };
+// Bản chụp KPI trước mỗi lần lưu (targets_backup:*) chỉ để hoàn tác trên web, chỉ chủ hệ thống thấy: không vào file sao lưu (17/11/2026).
+export const ROW_FILTERS: Partial<Record<BackupTable, string>> = { app_settings: "key NOT IN ('bot_password') AND key NOT LIKE 'targets_backup:%'" };
 
 export const BACKUP_STATUS_KEY = 'backup:last';
 export const BACKUP_PREFIX = 'd1/';
