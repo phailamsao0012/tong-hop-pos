@@ -1,0 +1,13 @@
+tong packed=865 closed=889 packedRate=97.30033745781778
+dong=1 packed=98 closed=100
+dong=2 packed=87 closed=89
+dong=3 packed=91 closed=91
+dong=4 packed=86 closed=91
+dong=5 packed=70 closed=73
+[XNK] bang team=sale nguoi=13 tong=co tu=2026-11-01 den=2026-11-17
+[XNK] dong=1 chia=233 chot=100 tl=41,2% dh=98/100 tldh=98,0% dt=116,2 tr ₫
+[XNK] dong=2 chia=246 chot=89 tl=33,7% dh=87/89 tldh=97,8% dt=108,2 tr ₫
+[XNK] dong=3 chia=197 chot=91 tl=45,7% dh=91/91 tldh=100,0% dt=107,1 tr ₫
+[XNK] dong=4 chia=233 chot=91 tl=38,2% dh=86/91 tldh=94,5% dt=104,6 tr ₫
+[XNK] dong=5 chia=231 chot=73 tl=31,2% dh=70/73 tldh=95,9% dt=88,0 tr ₫
+[XNK] dong=tong chia=2.623 chot=889 tl=33,1% dh=865/889 tldh=97,3% dt=1,03 tỷ ₫

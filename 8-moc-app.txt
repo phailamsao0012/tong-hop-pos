@@ -1,0 +1,26 @@
+Tai lai (MEGATECH_FAIL_NET=once, MEGATECH_TOUR=reload):
+[MOC] bat-dau 1167
+[MOC] khung-hinh-dau 1485
+[MOC] hoi-face-id 2053
+[MOC] face-id-dung 19074
+[MOC] vao-app 19151
+[MOC] tai canh-bao bat-dau 19778 | 3 req
+[MOC] tai canh-bao xong 19812 | 3/3 req, ca luot 34 ms, cong tung req 22 ms, cung luc toi da 3, loi 3
+[MOC] active-lai-sau-face-id 20307
+[MOC] tai canh-bao bat-dau 20716 | 3 req
+[MOC] tai canh-bao xong 20890 | 3/3 req, ca luot 174 ms, cong tung req 465 ms, cung luc toi da 3, loi 0
+[MOC] tai trang-chu bat-dau 37858 | 5 req
+[MOC] so-dau-tien 38170
+[MOC] tai trang-chu xong 38267 | 5/5 req, ca luot 409 ms, cong tung req 90 ms, cung luc toi da 4, loi 3
+[MOC] tai trang-chu bat-dau 42677 | 5 req
+[MOC] tai canh-bao bat-dau 42677 | 3 req
+[MOC] tai canh-bao xong 42864 | 3/3 req, ca luot 187 ms, cong tung req 330 ms, cung luc toi da 3, loi 0
+[MOC] tai trang-chu xong 43187 | 5/5 req, ca luot 510 ms, cong tung req 887 ms, cung luc toi da 5, loi 0
+[MOC] tai tong-quan bat-dau 48888 | 2 req
+[MOC] tai trung-tam bat-dau 48888 | 8 req
+[MOC] tai tien-do-thang bat-dau 48889 | 2 req
+[MOC] tai tham-chieu bat-dau 50920 | 1 req
+[MOC] tai tien-do-thang xong 51202 | 2/2 req, ca luot 2314 ms, cong tung req 2484 ms, cung luc toi da 2, loi 1
+[MOC] tai tong-quan xong 51206 | 2/2 req, ca luot 2318 ms, cong tung req 2467 ms, cung luc toi da 2, loi 1
+[MOC] tai trung-tam xong 51328 | 8/8 req, ca luot 2440 ms, cong tung req 6602 ms, cung luc toi da 6, loi 5
+[MOC] tai tham-chieu xong 51328 | 1/1 req, ca luot 409 ms, cong tung req 408 ms, cung luc toi da 1, loi 0

@@ -1,0 +1,50 @@
+[UI] moc=hom-nay
+[UI] moc=hom-nay-2
+[UI] moc=hom-nay-3
+[UI] moc=tong-quan
+[UI] moc=tong-quan-so-lieu
+[UI] moc=tong-quan-pos
+[UI] moc=don-hang
+[UI] moc=phong-ban
+[UI] moc=sale
+[UI] moc=nhan-vien
+[UI] moc=nhan-vien-mot
+[UIPOS] cskh pos=tat-ca dt=1.208.010.000 don=802
+[UI] moc=cskh
+[UIPOS] mkt pos=tat-ca dt=1.398.130.000 don=1.145
+[UI] moc=mkt
+[UIPOS] cskh pos=sieu-vo-gao dt=115.320.000 don=149
+[UI] moc=cskh-mot-pos
+[UIPOS] mkt pos=sieu-vo-gao dt=156.090.000 don=229
+[UI] moc=mkt-mot-pos
+[UI] moc=van-don
+[UI] moc=thong-bao
+[UI] moc=thong-bao-2
+[UI] moc=them
+[UI] moc=nhan-su
+[UI] moc=xong
+[UI] moc=hom-nay
+[UI] moc=hom-nay-2
+[UI] moc=hom-nay-3
+[UI] moc=tong-quan
+[UI] moc=tong-quan-so-lieu
+[UI] moc=tong-quan-pos
+[UI] moc=don-hang
+[UI] moc=phong-ban
+[UI] moc=sale
+[UI] moc=nhan-vien
+[UI] moc=nhan-vien-mot
+[UIPOS] cskh pos=tat-ca dt=1.208.010.000 don=802
+[UI] moc=cskh
+[UIPOS] mkt pos=tat-ca dt=1.398.130.000 don=1.145
+[UI] moc=mkt
+[UIPOS] cskh pos=sieu-vo-gao dt=115.320.000 don=149
+[UI] moc=cskh-mot-pos
+[UIPOS] mkt pos=sieu-vo-gao dt=156.090.000 don=229
+[UI] moc=mkt-mot-pos
+[UI] moc=van-don
+[UI] moc=thong-bao
+[UI] moc=thong-bao-2
+[UI] moc=them
+[UI] moc=nhan-su
+[UI] moc=xong

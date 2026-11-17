@@ -1,0 +1,3 @@
+[XNK] so mode=custom step=1 kind=wave cs=2026-09-01 ce=2026-09-30 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] so mode=custom step=1 kind=wave cs=2026-09-01 ce=2026-09-30 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
+[XNK] so mode=custom step=1 kind=wave cs=2026-09-01 ce=2026-09-30 nay=1.811 so=0 diem=31 ky=2026-10-01..2026-10-31
