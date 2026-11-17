@@ -40,17 +40,27 @@ export function estimatedWrites(db: DatabaseSync, sql: string, changes: number) 
   cached.sql.set(sql, 1 + touched);
   return changes * (1 + touched);
 }
+let batchNo = 0;
 export function d1(db: DatabaseSync, meter: WriteMeter = {}): D1Database {
   const stmt = (sql: string, args: Args = []) => ({
     sql, args, bind: (...a: Args) => stmt(sql, a),
+    allSync: () => ({ results: db.prepare(sql).all(...(args as never[])), meta: {} }),
     all: async () => ({ results: db.prepare(sql).all(...(args as never[])), meta: {} }),
     first: async (col?: string) => { const r = db.prepare(sql).get(...(args as never[])) as Record<string, unknown> | undefined; return r ? (col ? r[col] : r) : null; },
+    runSync: () => { const r = db.prepare(sql).run(...(args as never[])); const rows = meter.estimateIndexes ? estimatedWrites(db, sql, Number(r.changes)) : Number(r.changes); meter.onWrite?.(sql, rows); return { meta: { rows_written: rows, changes: Number(r.changes) } }; },
     run: async () => { const r = db.prepare(sql).run(...(args as never[])); const rows = meter.estimateIndexes ? estimatedWrites(db, sql, Number(r.changes)) : Number(r.changes); meter.onWrite?.(sql, rows); return { meta: { rows_written: rows, changes: Number(r.changes) } }; },
   });
   const isRead = (s: string) => /^\s*(SELECT|WITH)/i.test(s);
   return {
     prepare: (s: string) => stmt(s),
-    batch: async (list: ReturnType<typeof stmt>[]) => { const out = []; for (const s of list) out.push(isRead(s.sql) ? await s.all() : await s.run()); return out; },
+    // Giống D1 / web trên PC: cả lô là một giao dịch, câu nào lỗi thì quay lại toàn bộ (plan sửa web 1.1, 17/11/2026).
+    batch: async (list: ReturnType<typeof stmt>[]) => {
+      await Promise.resolve();
+      // Chạy đồng bộ trọn lô (không xen lô khác đang chạy song song).
+      const sp = 'd1batch' + (++batchNo); db.exec('SAVEPOINT ' + sp);
+      try { const out = []; for (const s of list) out.push(isRead(s.sql) ? s.allSync() : s.runSync()); db.exec('RELEASE ' + sp); return out; }
+      catch (e) { db.exec('ROLLBACK TO ' + sp); db.exec('RELEASE ' + sp); throw e; }
+    },
   } as unknown as D1Database;
 }
 

@@ -3,7 +3,7 @@
 // Cấu hình mục tiêu tháng: doanh thu đơn chốt và số đơn chốt cho từng POS và từng nhân viên.
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import { PosBadge } from './pos-badge';
-import { Copy, RotateCcw, RotateCw, Save, Target, X } from 'lucide-react';
+import { Copy, RotateCcw, RotateCw, Save, Target, Undo2, X } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,7 +20,8 @@ export type TargetItem = { scope: 'pos' | 'employee' | 'team'; refId: string; re
 type Shift = { shiftStart: number | null; shiftEnd: number | null };
 /** Số ngày trong tháng YYYY-MM (mặc định cho KPI ngày khi chưa nhập ngày làm việc). */
 export const daysInMonth = (m: string) => new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 0)).getUTCDate();
-type Resp = { month: string; items: TargetItem[]; previous: { month: string; items: TargetItem[] } };
+type Undo = { key: string; at: string; by: string; count: number } | null;
+type Resp = { month: string; items: TargetItem[]; previous: { month: string; items: TargetItem[] }; undo?: Undo };
 type Employee = { id: string; name: string; department: string | null; active: boolean };
 const key = (scope: string, refId: string) => `${scope}:${refId}`;
 const mmyyyy = (m: string) => `${m.slice(5)}/${m.slice(0, 4)}`;
@@ -42,6 +43,9 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
   const [pendingMonth, setPendingMonth] = useState<string | null>(null);
   const [items, setItems] = useState<Record<string, TargetItem>>({});
   const [previous, setPrevious] = useState<Resp['previous'] | null>(null);
+  // Bản đã tải từ máy chủ: lúc lưu chỉ gửi đúng dòng khác bản này (plan sửa web 1.1, 17/11/2026).
+  const [loadedItems, setLoadedItems] = useState<Record<string, TargetItem>>({});
+  const [undo, setUndo] = useState<Undo>(null);
   const [mktTeams, setMktTeams] = useState<{ id: string; name: string }[]>([]);
   useEffect(() => { if (canEdit) void fetch('/api/marketing-teams').then((r) => r.ok ? r.json() as Promise<{ teams: { id: string; name: string }[] }> : null).then((b) => setMktTeams(b?.teams ?? [])).catch(() => undefined); }, [canEdit]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -79,7 +83,8 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
       const r = await fetch(`/api/targets?month=${month}`, { cache: 'no-store' });
       const body = await r.json() as Resp & { error?: string };
       if (!r.ok) throw new Error(body.error ?? 'Không tải được mục tiêu.');
-      setItems(Object.fromEntries(body.items.map((i) => [key(i.scope, i.refId), i])));
+      const loadedMap = Object.fromEntries(body.items.map((i) => [key(i.scope, i.refId), i]));
+      setItems(loadedMap); setLoadedItems(loadedMap); setUndo(body.undo ?? null);
       setPrevious(body.previous); setDirty(false); setDraft({});
     } catch (e) { setError(e instanceof Error ? e.message : 'Không tải được mục tiêu.'); }
     finally { setLoaded(true); }
@@ -100,15 +105,20 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
   const save = async () => {
     setSaving(true); setError(null);
     try {
-      const r = await fetch('/api/targets', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ month, items: Object.values(items) }) });
-      const body = await r.json() as { error?: string };
-      if (!r.ok) throw new Error(body.error ?? 'Không lưu được.');
+      // Chỉ gửi dòng đã đổi; dòng có lúc tải mà nay không còn (vd sau "Sao chép tháng trước") gửi dạng trống để xoá đúng dòng đó.
+      const changed = Object.entries(items).filter(([k, it]) => JSON.stringify(it) !== JSON.stringify(loadedItems[k])).map(([, it]) => it);
+      const removed = Object.keys(loadedItems).filter((k) => !items[k]).map((k) => ({ scope: loadedItems[k].scope, refId: loadedItems[k].refId, revenue: 0, closedOrders: 0, workingDays: null }));
+      const send = [...changed, ...removed];
+      const r = send.length ? await fetch('/api/targets', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ month, only: send.map((it) => key(it.scope, it.refId)), items: send }) }) : null;
+      const body = r ? await r.json() as { error?: string } : {};
+      if (r && !r.ok) throw new Error(body.error ?? 'Không lưu được.');
       if (shiftsDirty) {
         const rs = await fetch('/api/staff-settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: Object.entries(shifts).map(([userId, s]) => ({ userId, ...s })) }) });
         if (!rs.ok) throw new Error(((await rs.json().catch(() => ({}))) as { error?: string }).error ?? 'Không lưu được ca làm việc.');
         setShiftsDirty(false);
       }
       setDirty(false); setMessage(null); toast(`Đã lưu mục tiêu tháng ${mmyyyy(month)}`);
+      void load();
     } catch (e) { setError(e instanceof Error ? e.message : 'Không lưu được.'); }
     finally { setSaving(false); }
   };
@@ -116,6 +126,18 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
     if (!previous?.items.length) return;
     setItems(Object.fromEntries(previous.items.map((i) => [key(i.scope, i.refId), { ...i }])));
     setDraft({}); setDirty(true); setMessage(`Đã sao chép từ tháng ${mmyyyy(previous.month)}, bấm Lưu để áp dụng.`);
+  };
+  // Hoàn tác lần lưu gần nhất (chủ hệ thống): trả đúng các dòng của lần lưu đó về như trước.
+  const undoLast = async () => {
+    if (!undo || !window.confirm(`Hoàn tác lần lưu lúc ${new Date(undo.at).toLocaleString('vi-VN')} (${undo.count} dòng KPI)?`)) return;
+    setSaving(true); setError(null);
+    try {
+      const r = await fetch('/api/targets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ month, action: 'undo' }) });
+      const b = await r.json() as { error?: string };
+      if (!r.ok) throw new Error(b.error ?? 'Không hoàn tác được.');
+      toast('Đã hoàn tác lần lưu trước'); await load();
+    } catch (e) { setError(e instanceof Error ? e.message : 'Không hoàn tác được.'); }
+    finally { setSaving(false); }
   };
   const discard = () => { void load(); if (shiftsDirty) void loadShifts(); };
   // Đổi tháng khi còn thay đổi chưa lưu → hỏi trước (hộp thoại), không âm thầm xoá.
@@ -170,6 +192,7 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
               <span className="inline-flex" tabIndex={previous?.items.length ? -1 : 0}><Button variant="outline" size="sm" onClick={copyPrevious} disabled={!previous?.items.length}><Copy size={14} />Sao chép tháng trước</Button></span>
             </Tooltip>
           )}
+          {canEdit && undo && !dirty && <Tooltip content={`Trả các dòng KPI của lần lưu lúc ${new Date(undo.at).toLocaleString('vi-VN')} về như trước`}><Button variant="outline" size="sm" onClick={() => void undoLast()} disabled={saving}><Undo2 size={14} />Hoàn tác lần lưu trước</Button></Tooltip>}
           {canEdit && dirty && <Button variant="ghost" size="sm" onClick={discard} disabled={saving}><RotateCcw size={14} />Hủy thay đổi</Button>}
           {canEdit && <Button size="sm" onClick={save} disabled={!dirty || saving}>{saving ? <RotateCw size={14} className="animate-spin" /> : <Save size={14} />}{saving ? 'Đang lưu…' : 'Lưu mục tiêu'}</Button>}
         </div>

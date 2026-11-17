@@ -1,5 +1,5 @@
 import { userByEmail } from '@/lib/auth/auth-db';
-import { LOCKED_MESSAGE, clearLoginFailures, loginBlocked, normalizeEmail, recordLoginFailure, verifyPassword } from '@/lib/auth/auth';
+import { LOCKED_MESSAGE, clearLoginFailures, loginBlocked, normalizeEmail, recordLoginFailure, upgradePasswordHash, verifyPassword } from '@/lib/auth/auth';
 import { createLoginRequest, hasActiveApp } from '@/lib/auth/login-requests';
 import { startSession } from '@/lib/auth/login-session';
 import { OTP_MINUTES, createChallenge, deviceTrusted, maskEmail, mfaState, noMfa, otpCode, sha256b64, sweepChallenges } from '@/lib/auth/mfa';
@@ -27,6 +27,8 @@ export async function POST(request: Request) {
   const ok = passOk && !!user && !user.disabled;
   if (!ok || !user) { recordLoginFailure(email); await audit({ action: 'login.fail', email, userId: user?.id, name: user?.name, detail: user ? (user.disabled ? 'Tài khoản đã khóa' : 'Sai mật khẩu') : 'Email không tồn tại', request, status: 401 }); return Response.json({ error: 'Email hoặc mật khẩu không đúng.' }, { status: 401 }); }
   clearLoginFailures(email);
+  // Mật khẩu băm theo mức cũ (30.000 vòng): băm lại theo mức mới ngay lúc đăng nhập đúng. Lỗi thì bỏ qua, lần sau thử lại.
+  await upgradePasswordHash(user.id, password, user.password_hash).catch(() => false);
   void sweepChallenges().catch(() => undefined);
   // Tắt 2 lớp (THP_NO_MFA=1, anh Vũ 10/11/2026): đúng mật khẩu là vào luôn.
   if (noMfa()) {

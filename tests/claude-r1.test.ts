@@ -70,7 +70,7 @@ void test('R1 cache: cùng ngày dùng cùng promise, đổi ngày dựng mới;
   db.prepare = ((sql: string) => {
     const wrap = (stmt: D1PreparedStatement, args: (string | number | null)[]): D1PreparedStatement => new Proxy(stmt, { get(target, key) {
       if (key === 'bind') return (...binds: (string | number | null)[]) => wrap(target.bind(...binds), binds);
-      if (key === 'all' || key === 'first' || key === 'run') return (...rest: unknown[]) => {
+      if (key === 'all' || key === 'first' || key === 'run' || key === 'allSync' || key === 'runSync') return (...rest: unknown[]) => {
         queries.push({ sql, args }); return (target[key] as (...a: unknown[]) => unknown)(...rest);
       };
       return Reflect.get(target, key);

@@ -2,7 +2,6 @@ import { env } from 'cloudflare:workers';
 import { isOwner, type Access } from '@/lib/auth/access';
 import { POS } from '@/lib/shared/report-model';
 import { staffScope } from '@/lib/teams/staff-scope';
-import { teamSubquery } from '@/lib/teams/team';
 
 export function parseTargetCosts(value?: string): Record<string, number> {
   try {
@@ -109,8 +108,9 @@ export async function visibleTargets(db: D1Database, user: Access & { email?: st
     const own = new Set(await ownPosUserIds(db, user.email));
     return items.filter((item) => item.scope === 'pos' || item.scope === 'dept_pos' || (item.scope === 'employee' && own.has(item.refId)));
   }
-  const cskh = new Set((await db.prepare(`SELECT user_id FROM ${teamSubquery('cskh', false)} AS t`).all<{ user_id: string }>()).results.map((row) => row.user_id));
-  return items.filter((item) => mine(item) || item.scope === 'pos' || item.scope === 'dept_pos' || (item.scope === 'employee' && (!cskh.has(item.refId) || (user.role !== 'staff' && !!ids?.includes(item.refId)))));
+  // Giám đốc / trưởng nhóm: KPI cá nhân chỉ của người mình quản lý (ids = targetStaff), cộng KPI team mình cầm (plan sửa web 1.3, 17/11/2026:
+  // trước đây trả KPI của mọi người không thuộc CSKH, kể cả người ngoài team).
+  return items.filter((item) => mine(item) || item.scope === 'pos' || item.scope === 'dept_pos' || (item.scope === 'employee' && !!ids?.includes(item.refId)));
 }
 
 /** refId KPI bộ phận × POS: 'sale:<pos>' | 'cskh:<pos>' | 'mkt:<pos>' (anh Vũ 12/11/2026). */
@@ -168,16 +168,57 @@ export function canWriteTarget(user: Access, ids: string[] | null, scope: string
 /** Một dòng app_settings của KPI: chi phí trần `target_cost:<tháng>`, tỷ lệ chốt `target_rate:<tháng>`. */
 export const readTargetSetting = (key: string) => env.DB.prepare('SELECT value FROM app_settings WHERE key=?').bind(key).first<{ value: string }>();
 
-/** Thay KPI của tháng (cả tháng, hoặc chỉ các khoá trong `only`) và lưu chi phí trần / tỷ lệ chốt; trả `only` để ghi nhật ký. */
-export async function writeTargets(user: { role: Access['role']; email: string }, body: { only?: string[]; items: { scope?: string; refId?: string; revenue?: number; closedOrders?: number; workingDays?: number | null; costCeiling?: number | null; closeRate?: number | null; aov?: number | null }[] }, month: string, caps: Record<string, number>, storedRates: { value: string } | null, now: string, storedAovJson: string | null = null) {
-  const only = Array.isArray(body.only) ? body.only.map(String).filter((k) => /^(pos|employee|team|dept_pos):[^\s]{1,100}$/.test(k)).slice(0, 500) : null;
-  const statements = only
-    ? only.map((k) => env.DB.prepare('DELETE FROM targets WHERE id=?').bind(`${month}:${k}`))
-    // KPI bộ phận × POS chỉ đổi qua `only` (trang Mục tiêu gửi riêng), lưu cả tháng không xoá nó.
-    : [env.DB.prepare("DELETE FROM targets WHERE month=? AND scope<>'dept_pos'").bind(month)];
-  if (isOwner(user)) {
-    if (only) { for (const k of only) if (k.startsWith('team:')) delete caps[k.slice(5)]; } else { for (const k of Object.keys(caps)) delete caps[k]; }
+/** Sao lưu KPI trước mỗi lần lưu trên web (plan sửa web 1.1, 17/11/2026): giữ 20 bản gần nhất mỗi tháng, hoàn tác lần lưu gần nhất. */
+export const TARGET_BACKUP_PREFIX = 'targets_backup:';
+const TARGET_BACKUP_KEEP = 20;
+type TargetBackup = { at: string; by: string; month: string; keys: string[]; rows: Record<string, unknown>[]; settings: Record<string, string | null> };
+const SETTING_KEYS = (month: string) => [`target_cost:${month}`, `target_rate:${month}`, `target_aov:${month}`];
+async function backupStatements(month: string, keys: string[], by: string, now: string) {
+  const ids = keys.map((k) => `${month}:${k}`);
+  const rows = ids.length ? (await env.DB.prepare(`SELECT * FROM targets WHERE id IN (SELECT value FROM json_each(?))`).bind(JSON.stringify(ids)).all<Record<string, unknown>>()).results : [];
+  const set = new Map((await env.DB.prepare('SELECT key,value FROM app_settings WHERE key IN (?,?,?)').bind(...SETTING_KEYS(month)).all<{ key: string; value: string }>()).results.map((r) => [r.key, r.value]));
+  const backup: TargetBackup = { at: now, by, month, keys, rows, settings: Object.fromEntries(SETTING_KEYS(month).map((k) => [k, set.get(k) ?? null])) };
+  const key = `${TARGET_BACKUP_PREFIX}${month}:${now}`;
+  return [
+    env.DB.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at').bind(key, JSON.stringify(backup), now),
+    // Giữ 20 bản gần nhất của tháng.
+    env.DB.prepare(`DELETE FROM app_settings WHERE key LIKE ? AND key NOT IN (SELECT key FROM app_settings WHERE key LIKE ? ORDER BY key DESC LIMIT ${TARGET_BACKUP_KEEP})`).bind(`${TARGET_BACKUP_PREFIX}${month}:%`, `${TARGET_BACKUP_PREFIX}${month}:%`),
+  ];
+}
+/** Bản sao lưu gần nhất của tháng (để hiện nút hoàn tác). */
+export async function lastTargetBackup(month: string) {
+  const r = await env.DB.prepare('SELECT key,value FROM app_settings WHERE key LIKE ? ORDER BY key DESC LIMIT 1').bind(`${TARGET_BACKUP_PREFIX}${month}:%`).first<{ key: string; value: string }>();
+  if (!r) return null;
+  try { const b = JSON.parse(r.value) as TargetBackup; return { key: r.key, at: b.at, by: b.by, count: b.keys.length }; } catch { return null; }
+}
+/** Hoàn tác lần lưu KPI gần nhất của tháng trên web: trả đúng các dòng và cài đặt (chi phí trần, tỉ lệ chốt, TB đơn) về bản trước. Ghi trọn một lần. */
+export async function undoTargets(month: string, now: string) {
+  const r = await env.DB.prepare('SELECT key,value FROM app_settings WHERE key LIKE ? ORDER BY key DESC LIMIT 1').bind(`${TARGET_BACKUP_PREFIX}${month}:%`).first<{ key: string; value: string }>();
+  if (!r) return null;
+  const b = JSON.parse(r.value) as TargetBackup;
+  const st: D1PreparedStatement[] = b.keys.map((k) => env.DB.prepare('DELETE FROM targets WHERE id=?').bind(`${month}:${k}`));
+  for (const row of b.rows) {
+    const cols = Object.keys(row);
+    st.push(env.DB.prepare(`INSERT INTO targets (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`).bind(...cols.map((c) => row[c] as string | number | null)));
   }
+  for (const [k, v] of Object.entries(b.settings)) {
+    st.push(v == null ? env.DB.prepare('DELETE FROM app_settings WHERE key=?').bind(k)
+      : env.DB.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at').bind(k, v, now));
+  }
+  st.push(env.DB.prepare('DELETE FROM app_settings WHERE key=?').bind(r.key));
+  await env.DB.batch(st);
+  return { at: b.at, count: b.keys.length };
+}
+
+/** Lưu KPI của tháng: CHỈ đổi đúng các dòng gửi lên (khoá trong `only`, hoặc khoá của các dòng gửi lên khi không có `only`);
+ *  dòng gửi lên mà để trống (0) là xoá dòng đó. Không bao giờ xoá cả tháng (plan sửa web 1.1, 17/11/2026: trước đây thiếu `only`
+ *  thì xoá hết KPI tháng rồi ghi lại theo lô 100 câu). Sao lưu các dòng sắp đổi rồi ghi trọn MỘT lần (lỗi giữa chừng thì không đổi gì).
+ *  Trả danh sách khoá đã đổi để ghi nhật ký. */
+export async function writeTargets(user: { role: Access['role']; email: string }, body: { only?: string[]; items: { scope?: string; refId?: string; revenue?: number; closedOrders?: number; workingDays?: number | null; costCeiling?: number | null; closeRate?: number | null; aov?: number | null }[] }, month: string, caps: Record<string, number>, storedRates: { value: string } | null, now: string, storedAovJson: string | null = null) {
+  const sentKeys = body.items.map((it) => `${it.scope}:${String(it.refId ?? '').slice(0, 100)}`).filter((k) => /^(pos|employee|team|dept_pos):[^\s]{1,100}$/.test(k));
+  const only = [...new Set(Array.isArray(body.only) ? body.only.map(String).filter((k) => /^(pos|employee|team|dept_pos):[^\s]{1,100}$/.test(k)) : sentKeys)].slice(0, 500);
+  const statements: D1PreparedStatement[] = [...await backupStatements(month, only, user.email, now), ...only.map((k) => env.DB.prepare('DELETE FROM targets WHERE id=?').bind(`${month}:${k}`))];
+  if (isOwner(user)) for (const k of only) if (k.startsWith('team:')) delete caps[k.slice(5)];
   const rates = mergeTargetRates(parseTargetCosts(storedRates?.value), body.items, only);
   const storedAov = parseTargetCosts(storedAovJson ?? undefined), aov = mergeTargetAov(storedAov, body.items, only);
   for (const it of body.items) {
@@ -195,7 +236,8 @@ export async function writeTargets(user: { role: Access['role']; email: string }
   statements.push(env.DB.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at').bind(`target_rate:${month}`, JSON.stringify(rates), now));
   // TB đơn chỉ ghi khi đổi: trang chưa biết TB đơn lưu KPI không tạo thêm khoá rỗng.
   if (JSON.stringify(aov) !== JSON.stringify(storedAov)) statements.push(env.DB.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at').bind(`target_aov:${month}`, JSON.stringify(aov), now));
-  for (let i = 0; i < statements.length; i += 100) await env.DB.batch(statements.slice(i, i + 100));
+  // Một lần ghi (batch là một giao dịch): lỗi ở câu nào thì không đổi gì.
+  await env.DB.batch(statements);
   return only;
 }
 
