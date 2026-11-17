@@ -2,6 +2,7 @@
 // (Zalo không gửi kèm đăng nhập); hết 3 ngày thì ảnh không mở được nữa và bị xoá ở lượt dọn 2h sáng.
 import type { MorningReport } from '@/lib/zalo/morning-report';
 import type { BossSlotReport } from '@/lib/zalo/slot-report';
+import type { BossImage } from '@/lib/zalo/boss-report';
 // Ảnh báo cáo theo ca 12h/17h/22h dùng chung kho này (03/11/2026), phân biệt bằng trường kind.
 
 const PREFIX = 'zalo_img:';
@@ -10,7 +11,7 @@ const iso = (ms: number) => new Date(ms).toISOString();
 
 export async function saveMorningImage(
   db: D1Database,
-  report: MorningReport | BossSlotReport,
+  report: MorningReport | BossSlotReport | BossImage,
   now = Date.now(),
 ) {
   const id = crypto.randomUUID().replace(/-/g, '');

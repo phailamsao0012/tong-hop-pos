@@ -9,8 +9,10 @@ void test('daily target and differences', () => {
   assert.equal(p.todayDiff, -2e6);
   assert.equal(p.paceTarget, 50e6);
   assert.equal(p.paceDiff, -3e6);
-  const w = kpiPace({ goal: 260e6, workingDays: 26, daysInMonth: 31, daysElapsed: 31, monthNet: 263e6, todayNet: 13e6 })!;
-  assert.equal(w.paceTarget, 260e6);
+  // 12/11/2026: số ngày làm (workingDays) không còn dùng, luôn chia đúng số ngày của tháng (anh Vũ: "Chủ nhật hay lễ cũng làm").
+  const w = kpiPace({ goal: 310e6, workingDays: 26, daysInMonth: 31, daysElapsed: 31, monthNet: 313e6, todayNet: 13e6 })!;
+  assert.equal(w.daily, 10e6);
+  assert.equal(w.paceTarget, 310e6);
   assert.equal(w.todayDiff, 3e6);
   assert.equal(kpiPace({ goal: 0, workingDays: null, daysInMonth: 30, daysElapsed: 1, monthNet: 0, todayNet: 0 }), null);
 });

@@ -1,5 +1,5 @@
 // Bậc thang mua lại (yêu cầu 29/09/2026): T0 = đơn ĐẦU TIÊN khách đã nhận hàng (Đã nhận / Đã thu tiền), T1 = lần mua (đã nhận) thứ 2,
-// T2 = lần thứ 3… trên cả 6 POS, ai bán cũng tính. Nhóm của khách = nhóm của đơn T0, chỉ 2 nhóm:
+// T2 = lần thứ 3… trên các POS đang chọn, ai bán cũng tính. Nhóm của khách = nhóm của đơn T0, chỉ 2 nhóm:
 //   Kháng sinh (BIO NANO SHIELD, GENTADOX, OXY + BỔ HUYẾT, thẻ "BIO NANO") · Combo (BIO NANO CLEAN, GODKILL, SK + GK, mua lẻ hay combo);
 //   đơn có cả hai → Kháng sinh; đơn chỉ có sản phẩm khác → không tính.
 // - CSKH: khách đang được phân công cho một nhân viên (Data cầm, hồ sơ khách Pancake).
@@ -44,9 +44,9 @@ const byRowid = <T>(sql: (ph: string) => string, rids: number[]) => {
   return batched<T>(st);
 };
 
-/** Mọi đơn đã nhận hàng của các SĐT (cả 6 POS), xếp theo thời điểm tạo. */
-async function deliveredHistory(phones: string[]) {
-  const all = POS.map((x) => x.id);
+/** Mọi đơn đã nhận hàng của các SĐT trên các POS đang chọn (quy tắc POS mục D, anh Vũ 12/11/2026; trước 12/11 là cả 6 POS), xếp theo thời điểm tạo. */
+async function deliveredHistory(phones: string[], posIds: string[]) {
+  const all = posIds.length ? posIds : POS.map((x) => x.id);
   const st: D1PreparedStatement[] = [];
   for (let i = 0; i < phones.length; i += 90) {
     const c = phones.slice(i, i + 90);
@@ -106,7 +106,7 @@ const addTo = (l: Line, hist: H[], g: LadderGroup, groups: Map<number, Set<Ladde
 };
 
 export const LADDER_DEFINITIONS = {
-  t: 'T0 = đơn đầu tiên khách đã nhận hàng (Đã nhận / Đã thu tiền); T1 = lần mua đã nhận thứ 2, T2 = lần thứ 3… tới lần mua nhiều nhất của khách, trên cả 6 POS, ai bán cũng tính. % = số khách tới bậc đó ÷ số khách T0; "so bậc trước" = ÷ số khách ở bậc liền trước.',
+  t: 'T0 = đơn đầu tiên khách đã nhận hàng (Đã nhận / Đã thu tiền); T1 = lần mua đã nhận thứ 2, T2 = lần thứ 3… tới lần mua nhiều nhất của khách, trên các POS đang chọn, ai bán cũng tính. % = số khách tới bậc đó ÷ số khách T0; "so bậc trước" = ÷ số khách ở bậc liền trước.',
   groups: 'Nhóm của khách = nhóm của đơn T0: Kháng sinh = BIO NANO SHIELD, GENTADOX, OXY + BỔ HUYẾT, thẻ "BIO NANO"; Combo = BIO NANO CLEAN, GODKILL, SK + GK (mua lẻ hay combo đều tính). Đơn có cả hai → Kháng sinh; đơn chỉ có sản phẩm khác → không tính.',
   cross: 'Up sang nhóm kia = khách T0 Kháng sinh sau đó có mua Combo (hoặc ngược lại) ở một lần mua tiếp.',
   gap: 'Khoảng cách giữa các lần mua (tính theo ngày tạo đơn): trong ô ghi TRUNG VỊ — một nửa số khách quay lại nhanh hơn số này (không bị vài khách rất lâu mới mua kéo lệch như trung bình); rê chuột xem trung bình và khoảng của 25% nhanh nhất / 25% chậm nhất.',
@@ -170,7 +170,7 @@ export function cskhLadder(opts: { staffId: string; posIds: string[] }) {
   return remember(`cskh|${opts.staffId}|${opts.posIds.join(',')}`, 15 * 60000, async () => {
     const custs = (await env.DB.prepare(`SELECT DISTINCT TRIM(phone) AS phone FROM pos_customers WHERE pos_id IN (${opts.posIds.map(() => '?').join(',')}) AND assigned_user_id=? AND phone IS NOT NULL AND TRIM(phone)<>''`)
       .bind(...opts.posIds, opts.staffId).all<{ phone: string }>()).results.map((r) => r.phone);
-    const hist = await deliveredHistory(custs);
+    const hist = await deliveredHistory(custs, opts.posIds);
     const t0s = [...hist.values()].map((h) => h[0]);
     const later = [...hist.values()].flatMap((h) => h.slice(1));
     const groups = await groupsFor([...t0s, ...later]);
@@ -211,7 +211,7 @@ export function saleLadder(opts: { posIds: string[]; staffId?: string | null; gr
     const anchors = (await env.DB.prepare(`SELECT DISTINCT o.phone AS p FROM raw_pos_orders o INDEXED BY idx_raw_orders_pos_status_phone_tags
       WHERE o.pos_id IN (${ph}) AND o.status_code IN (${DELIVERED}) AND o.created_at>=? AND o.phone IS NOT NULL AND o.phone<>''
         AND o.seller_id IN ${teamSubquery('sale')}${opts.staffId ? ' AND o.seller_id=?' : ''}`).bind(...opts.posIds, startUtc, ...(opts.staffId ? [opts.staffId] : [])).all<{ p: string }>()).results.map((r) => r.p);
-    const hist = await deliveredHistory(anchors);
+    const hist = await deliveredHistory(anchors, opts.posIds);
     const saleIds = new Set((await env.DB.prepare(teamSubquery('sale')!.slice(1, -1)).all<{ user_id: string }>()).results.map((r) => r.user_id));
     // Khách mới Sale đưa về: T0 (đơn đã nhận đầu tiên, cả 6 POS) trong 6 tháng, ở POS đang chọn, do người bán thuộc Sale (hoặc đúng Sale đang lọc).
     const cohort = [...hist.values()].filter((h) => h[0].t >= startUtc && opts.posIds.includes(h[0].pos) && (opts.staffId ? h[0].s === opts.staffId : saleIds.size ? saleIds.has(h[0].s ?? '') : true));
@@ -231,7 +231,7 @@ export function saleLadder(opts: { posIds: string[]; staffId?: string | null; gr
       months: months.map((mo) => ({ month: mo, followDays: Math.max(0, Math.round((now - Date.parse(`${mo}-01T00:00:00Z`)) / DAY)), ...packLine(byMonth.get(mo)!) })),
       total: packLine(total), steps, group: opts.group ?? null, staffId: opts.staffId ?? null,
       approx: (groups as { approx?: number }).approx ?? 0,
-      definitions: { ...LADDER_DEFINITIONS, cohort: 'Khách mới Sale đưa về = khách có đơn đã nhận ĐẦU TIÊN (trên cả 6 POS) do người bán thuộc bộ phận Sale, xếp theo tháng tạo đơn đó. Tháng gần đây mới theo dõi ít ngày nên các bậc sau còn thấp.' },
+      definitions: { ...LADDER_DEFINITIONS, cohort: 'Khách mới Sale đưa về = khách có đơn đã nhận ĐẦU TIÊN (trên các POS đang chọn) do người bán thuộc bộ phận Sale, xếp theo tháng tạo đơn đó. Tháng gần đây mới theo dõi ít ngày nên các bậc sau còn thấp.' },
     };
   });
 }
@@ -244,7 +244,7 @@ export function saleGroupLadder(opts: { posIds: string[]; staffId?: string | nul
     const anchors = (await env.DB.prepare(`SELECT DISTINCT o.phone AS p FROM raw_pos_orders o INDEXED BY idx_raw_orders_pos_status_phone_tags
       WHERE o.pos_id IN (${ph}) AND o.status_code IN (${DELIVERED}) AND o.created_at>=? AND o.created_at<? AND o.phone IS NOT NULL AND o.phone<>''
         AND o.seller_id IN ${teamSubquery('sale')}${opts.staffId ? ' AND o.seller_id=?' : ''}`).bind(...opts.posIds, opts.startUtc, opts.endUtc, ...(opts.staffId ? [opts.staffId] : [])).all<{ p: string }>()).results.map((r) => r.p);
-    const hist = await deliveredHistory(anchors);
+    const hist = await deliveredHistory(anchors, opts.posIds);
     const saleIds = new Set((await env.DB.prepare(teamSubquery('sale')!.slice(1, -1)).all<{ user_id: string }>()).results.map((r) => r.user_id));
     // T0 (đơn đã nhận đầu tiên, cả 6 POS) nằm trong kỳ, ở POS đang chọn, do người bán thuộc Sale (hoặc đúng Sale đang lọc).
     const cohort = [...hist.values()].filter((h) => h[0].t >= opts.startUtc && h[0].t < opts.endUtc && opts.posIds.includes(h[0].pos)
@@ -272,7 +272,7 @@ export function saleGroupLadder(opts: { posIds: string[]; staffId?: string | nul
     return {
       customers: cohort.length, other, approx: (groups as { approx?: number }).approx ?? 0, staffId: opts.staffId ?? null,
       groups: LADDER_GROUPS.map((g) => ({ label: g, ...packLine(lines.get(g)!) })), total: packLine(total), steps, members,
-      definitions: { ...LADDER_DEFINITIONS, cohort: 'Khách mới Sale đưa về = khách có đơn đã nhận ĐẦU TIÊN (trên cả 6 POS) tạo trong kỳ đang chọn, do người bán thuộc bộ phận Sale. Kỳ càng gần hôm nay thì khách càng ít thời gian quay lại nên các bậc sau còn thấp.' },
+      definitions: { ...LADDER_DEFINITIONS, cohort: 'Khách mới Sale đưa về = khách có đơn đã nhận ĐẦU TIÊN (trên các POS đang chọn) tạo trong kỳ đang chọn, do người bán thuộc bộ phận Sale. Kỳ càng gần hôm nay thì khách càng ít thời gian quay lại nên các bậc sau còn thấp.' },
     };
   });
 }

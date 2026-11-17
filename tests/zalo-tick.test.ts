@@ -23,7 +23,7 @@ async function fixture() {
   // Lượt gửi thử cho sếp chỉ chạy một lần; test giờ giấc coi như đã gửi.
   raw.prepare("INSERT INTO app_settings (key,value,updated_at) VALUES ('zalo_tick_v1','{\"morningTest\":\"anh-1\"}','2026-10-27T00:00:00Z')").run();
   let clock = at('07:59');
-  const tick = async (time: string) => { clock = at(time); await maybeZaloTick(clock, { db, send, snapshot, morningData, sendPhoto }); };
+  const tick = async (time: string) => { clock = at(time); await maybeZaloTick(clock, { db, send, snapshot, morningData, sendPhoto, legacyBossSlot: true }); };
   return { raw, db, boss, leader, messages, tick, send, photos, photoOk, morningData, sendPhoto };
 }
 void test('Z4 clock: morning once, slot deltas at 12/17/22, disabled reports', async () => {
@@ -78,7 +78,7 @@ void test('Z4 real demo D1 revenue equals overviewReport for exactly the same te
   const scope = await resolveHrUnit(new URLSearchParams({ hrTeam: team.department_id }), 'sale'); assert(!(scope instanceof Response));
   const report = await overviewReport({ posIds: [], start: '2026-10-27', end: '2026-10-27', team: scope.team, unit: scope.unit });
   const snapshot = await zaloTeamSnapshot(leader, '2026-10-27'); assert.equal(snapshot!.total, report.current.total.closedNet);
-  const messages: string[] = []; await maybeZaloTick(at('12:00'), { db: f.db, send: async (_chat, text) => { messages.push(text); }, sendPhoto: async (_chat, _url, caption) => { messages.push(caption); return true; } });
+  const messages: string[] = []; await maybeZaloTick(at('12:00'), { db: f.db, legacyBossSlot: true, send: async (_chat, text) => { messages.push(text); }, sendPhoto: async (_chat, _url, caption) => { messages.push(caption); return true; } });
   assert.match(messages[0], new RegExp(`Doanh số tới 12h: ${millions(report.current.total.closedNet)}`));
   // Báo cáo 8h: doanh số hôm qua khớp báo cáo tổng quan cùng team, cùng ngày.
   const morning = await zaloMorningData(leader, '2026-10-28');
@@ -143,4 +143,47 @@ void test('báo cáo ca: Leader gắn tài khoản nhận ảnh của từng tea
   const mine = f.photos.filter((p) => p.chat === f.leader.id).map((p) => p.caption.split('\n')[0]);
   assert.deepEqual(mine, ['📊 Team A', '📊 Team B']);
   assert.match(f.photos.find((p) => p.chat === f.boss.id)!.caption, /Team A[\s\S]*Team B|Team B[\s\S]*Team A/);
+});
+
+void test('báo cáo tổng quan cho sếp (14/11/2026): 8h và mỗi ca, sếp nhận 2 ảnh bossReport, không còn ảnh gộp cũ', async () => {
+  const f = await fixture();
+  const calls: { day: string; hour: string; morning: boolean }[] = [];
+  const bossData = async (day: string, hour: string, morning: boolean) => {
+    calls.push({ day, hour, morning });
+    return { day, until: morning ? null : `${Number(hour)}h`, title: 't', range: 'r', company: { net: 0, orders: 0, yesterday: 0 },
+      sale: { kpi: { goal: null, monthNet: 0, todayNet: 0 }, base: 0, closed: 0, prevBase: 0, prevClosed: 0, packed: 0, returned: 0, cancelled: 0, teams: [], people: [] },
+      cskh: { kpi: { goal: null, monthNet: 0, todayNet: 0 }, orders: 0, prevOrders: 0, base: 0, closed: 0, prevBase: 0, prevClosed: 0, teams: [], people: [] },
+      mkt: { kpi: { goal: null, monthNet: 0, todayNet: 0 }, leads: 0, monthLeads: 0, leadsGoal: null, cost: 0, teams: [], people: [] },
+      pos: [], ship: { packed: 0, closed: 0, vtp: 0, spx: 0 }, overdueTasks: 0 };
+  };
+  f.photoOk.value = true;
+  const tick = (time: string) => maybeZaloTick(at(time), { db: f.db, send: f.send, snapshot: async () => ({ total: 100, orders: 1, people: {} }), morningData: f.morningData, sendPhoto: f.sendPhoto, bossData });
+  await tick('08:00');
+  await tick('12:00');
+  // 8h: 2 báo cáo riêng — trọn ngày hôm qua và hôm nay 0h→8h (anh Vũ 15/11/2026); 12h: 1 báo cáo.
+  assert.deepEqual(calls.map((c) => [c.hour, c.morning]), [['08', true], ['08', false], ['12', false]]);
+  const toBoss = f.photos.filter((p) => p.chat === f.boss.id);
+  assert.equal(toBoss.length, 6, '2 ảnh mỗi báo cáo');
+  const kinds = f.raw.prepare("SELECT value FROM app_settings WHERE key LIKE 'zalo_img:%'").all().map((r) => JSON.parse((r as { value: string }).value).kind);
+  assert.ok(kinds.includes('bossReport'));
+  assert.ok(!kinds.includes('bossSlot'), 'không gửi ảnh gộp cũ');
+});
+
+void test('gửi ngay báo cáo sếp (14/11/2026): sendBossReportNow gửi 2 ảnh mốc 22h, cắt số đúng 22h', async () => {
+  const f = await fixture();
+  const { sendBossReportNow } = await import('../lib/zalo/zalo-tick');
+  const calls: { day: string; hour: string; morning: boolean; now: number }[] = [];
+  const bossData = async (day: string, hour: string, morning: boolean, now?: number) => {
+    calls.push({ day, hour, morning, now: now ?? 0 });
+    return { day, until: `${Number(hour)}h`, title: 't', range: 'r', company: { net: 0, orders: 0, yesterday: 0 },
+      sale: { kpi: { goal: null, monthNet: 0, todayNet: 0 }, base: 0, closed: 0, prevBase: 0, prevClosed: 0, packed: 0, returned: 0, cancelled: 0, teams: [], people: [] },
+      cskh: { kpi: { goal: null, monthNet: 0, todayNet: 0 }, orders: 0, prevOrders: 0, base: 0, closed: 0, prevBase: 0, prevClosed: 0, teams: [], people: [] },
+      mkt: { kpi: { goal: null, monthNet: 0, todayNet: 0 }, leads: 0, monthLeads: 0, leadsGoal: null, cost: 0, teams: [], people: [] },
+      pos: [], ship: { packed: 0, closed: 0, vtp: 0, spx: 0 }, overdueTasks: 0 };
+  };
+  f.photoOk.value = true;
+  const out = await sendBossReportNow(f.db, '2026-11-14', '22', { sendPhoto: f.sendPhoto, send: f.send, bossData });
+  assert.deepEqual(calls.map((c) => [c.day, c.hour, c.morning, new Date(c.now).toISOString()]), [['2026-11-14', '22', false, '2026-11-14T15:00:00.000Z']]);
+  assert.equal(f.photos.filter((p) => p.chat === f.boss.id).length, 2);
+  assert.ok(out.every((o) => o.photo) && out.length === 2);
 });

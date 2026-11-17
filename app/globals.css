@@ -140,7 +140,8 @@
   }
 
   /* Bảng: tiêu đề nhỏ, in hoa, không xuống dòng; ô số không xuống dòng. Chỗ cần xuống dòng tự khai báo whitespace-normal / line-clamp. */
-  table th { white-space: nowrap; font-weight: 600; font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-3); }
+  /* Tiêu đề bảng gọn (anh Vũ 12/11/2026): chữ thường, không giãn chữ, chiếm ít chỗ nhất. */
+table th { white-space: nowrap; font-weight: 600; font-size: 11.5px; letter-spacing: 0; text-transform: none; color: var(--ink-3); }
   table td { white-space: nowrap; }
   table td .line-clamp-1, table td .line-clamp-2, table td .line-clamp-3, table td .whitespace-normal, table td.whitespace-normal, table td.whitespace-pre-wrap, table td .whitespace-pre-wrap { white-space: normal; }
   table td.whitespace-pre-wrap, table td .whitespace-pre-wrap { white-space: pre-wrap; }
@@ -209,6 +210,8 @@
   table.tbl { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
   table.tbl th, table.tbl td { height: 48px; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
   table.tbl th { position: sticky; top: 0; z-index: 2; background: var(--surface-2); text-align: left; user-select: none; box-shadow: inset 0 -1px 0 var(--line); }
+  /* Hàng tiêu đề thấp hơn hàng số (anh Vũ 12/11/2026: chữ trên chiếm ít diện tích nhất). */
+  table.tbl th { height: 34px; padding-top: 5px; padding-bottom: 5px; line-height: 1.25; }
   table.tbl td.n, table.tbl th.n { text-align: right; }
   table.tbl td.n { font-family: var(--font-ui); font-variant-numeric: tabular-nums; font-weight: 600; letter-spacing: -.01em; }
   table.tbl td.mut { color: var(--ink-3); }
@@ -235,6 +238,8 @@
   th.sort > button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
   /* Cột số căn phải: mũi tên sắp xếp đứng trước chữ để chữ đầu cột thẳng mép phải với số bên dưới (anh Vũ 21/10/2026 "lệch lệch khó chịu"). */
   th.sort.r > button { flex-direction: row-reverse; }
+  /* Tiêu đề cột số tự co giãn: chữ tắt hoặc đầy đủ do app/ui-kit.tsx useFitLabel chọn theo bề rộng số trong cột. */
+  table.tbl th.fit .th-label { white-space: nowrap; }
   th.sort .ar { display: inline-grid; place-items: center; width: 12px; height: 12px; flex: none; opacity: 0; transform: translateY(2px); color: var(--ink-3); transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
   th.sort:hover .ar { opacity: .7; transform: none; }
   th.sort[aria-sort] { color: var(--ink); }

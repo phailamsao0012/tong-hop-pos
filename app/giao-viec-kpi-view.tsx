@@ -11,7 +11,7 @@ import { Pencil, Save, Target } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { parseRate } from '@/lib/kpi/kpi-pace';
 import {
-  QUICK_PERIODS, elapsedShare, matchQuick, monthsBetween, percentOf, periodLabel, periodTarget, quickPeriod, teamActual, validPeriod,
+  QUICK_PERIODS, elapsedShare, matchQuick, monthsBetween, percentOf, periodLabel, periodTarget, quickPeriod, teamActual, teamAov, validPeriod,
   type Period, type PeriodKpi, type TeamActual,
 } from '@/lib/kpi/team-kpi';
 import { POS } from '@/lib/shared/report-model';
@@ -21,12 +21,14 @@ import { apiJson } from './api-fetch';
 import { useMetricSettings } from './metric-settings';
 import type { OverviewReport } from './overview-view';
 import { setPeriodRange } from './period-store';
-import { setPosIds } from './pos-store';
+import { setPosIds, usePosIds } from './pos-store';
+import { useGoalShare } from './goal-share-store';
 import { parseMoney, type TargetItem } from './targets-panel';
 import { setHrUnit, useBranch, useHrUnit, useTeamChoice } from './team-store';
 import { ChartCard, Definitions, EmptyState, ErrorBox, SkeletonTable, pct, shortMoney, toast, vi } from './ui-kit';
 import { useApi } from './use-api';
 import { Kpi2Panel, ProductQtyCard } from './kpi2-panel';
+import { MktLeadsKpiPanel } from './mkt-leads-kpi-panel';
 
 type Dept = 'sale' | 'cskh';
 const LABEL: Record<Dept, string> = { sale: 'Sale', cskh: 'CSKH' };
@@ -76,7 +78,7 @@ function KpiLine({ label, value, goal, p, pace, onOpen }: { label: string; value
   );
 }
 
-function TeamCard({ team, actual, goal, sale, pace, onOpen }: { team: Team; actual: TeamActual | null; goal: PeriodKpi; sale: boolean; pace: number; onOpen?: () => void }) {
+function TeamCard({ team, actual, goal, sale, pace, onOpen, aovNote }: { team: Team; actual: TeamActual | null; goal: PeriodKpi; sale: boolean; pace: number; onOpen?: () => void; aovNote?: string }) {
   return (
     <article className="rounded-xl border border-line bg-surface p-3">
       <header className="mb-2 flex flex-wrap items-baseline justify-between gap-x-2">
@@ -88,6 +90,7 @@ function TeamCard({ team, actual, goal, sale, pace, onOpen }: { team: Team; actu
           p={actual ? percentOf(actual.revenue, goal.revenue) : null} pace={pace} onOpen={actual ? onOpen : undefined} />
         <KpiLine label="TB đơn chốt" value={actual?.aov == null ? '—' : shortMoney(actual.aov)} goal={goal.aov === null ? null : shortMoney(goal.aov)}
           p={actual ? percentOf(actual.aov, goal.aov) : null} onOpen={actual ? onOpen : undefined} />
+        {aovNote && <p className="-mt-1 text-right text-[11px] text-ink-3">KPI TB đơn tính từ từng người · {aovNote}</p>}
         {sale && (
           <KpiLine label="Tỉ lệ chốt" value={actual ? pct(actual.closeRate, 1) : '—'} goal={goal.closeRate === null ? null : pct(goal.closeRate, 1)}
             p={actual ? percentOf(actual.closeRate, goal.closeRate) : null} onOpen={actual ? onOpen : undefined} />
@@ -128,6 +131,8 @@ function useDept(enabled: boolean, dept: Dept, reportUrl: string | null) {
 }
 
 export function GiaoViecKpiView({ owner, onOpen }: { owner: boolean; onOpen?: (view: 'sale-overview' | 'cskh-overview') => void }) {
+  // Quy tắc POS (anh Vũ 12/11/2026): số đã đạt / thực đạt tính trên POS đang chọn.
+  const [kpiPos] = usePosIds();
   const today = todayVn(), uid = useId();
   const choice = useTeamChoice(), branch = useBranch(), unit = useHrUnit();
   const [period, setPeriod] = useState<Period>(() => quickPeriod('month', today));
@@ -136,7 +141,7 @@ export function GiaoViecKpiView({ owner, onOpen }: { owner: boolean; onOpen?: (v
   const monthsKey = ok ? monthsBetween(period.start, period.end).join(',') : '';
   const months = useMemo(() => (monthsKey ? monthsKey.split(',') : []), [monthsKey]);
   const reportUrl = (dept: Dept) => (ok && !future
-    ? `/api/reports/overview?${new URLSearchParams({ start: period.start, end, posIds: POS.map((p) => p.id).join(','), team: dept, compare: 'none' })}`
+    ? `/api/reports/overview?${new URLSearchParams({ start: period.start, end, posIds: kpiPos.join(','), team: dept, compare: 'none' })}`
     : null);
   const depts = [useDept(choice !== 'cskh', 'sale', reportUrl('sale')), useDept(choice !== 'sale', 'cskh', reportUrl('cskh'))]
     .filter((d) => (d.dept === 'sale' ? choice !== 'cskh' : choice !== 'sale'));
@@ -170,7 +175,12 @@ export function GiaoViecKpiView({ owner, onOpen }: { owner: boolean; onOpen?: (v
   }, [monthsKey, reloadKey]);
   const targetsReady = months.every((m) => targets[m]) && (owner || mine !== null);
   const stored = (month: string, teamId: string) => targets[month]?.find((i) => i.scope === 'team' && i.refId === teamId);
-  const goalOf = (teamId: string) => periodTarget(Object.fromEntries(months.map((m) => [m, stored(m, teamId)])), period);
+  // TB đơn KPI của team: tính từ TB đơn từng người (plan Đầu não 14/11/2026, bước 3); chưa ai có thì dùng TB đơn cấp team cũ.
+  const aovOf = (month: string, t: Team) => teamAov(t.ids.map((id) => { const r = targets[month]?.find((i) => i.scope === 'employee' && i.refId === id); return { aov: r?.aov ?? null, revenue: r?.revenue ?? null }; }), stored(month, t.id)?.aov ?? null);
+  const goalOf = (t: Team) => periodTarget(Object.fromEntries(months.map((m) => [m, { ...stored(m, t.id), aov: aovOf(m, t).aov }])), period);
+  // Chọn ít hơn mọi POS: mục tiêu doanh thu team chia theo tỉ lệ doanh thu tháng trước của team ở các POS đang chọn (anh Vũ 12/11/2026, câu 2 chọn A).
+  const share = useGoalShare(months[0] ?? today.slice(0, 7));
+  const goalOfTeam = (t: Team) => { const g = goalOf(t); return g.revenue === null ? g : { ...g, revenue: share.scale(g.revenue, t.ids) }; };
   const pace = elapsedShare(period, today);
 
   // Ô đặt KPI: tháng đang sửa (kỳ đi qua nhiều tháng thì chọn tháng), nháp theo "tháng:team".
@@ -236,13 +246,13 @@ export function GiaoViecKpiView({ owner, onOpen }: { owner: boolean; onOpen?: (v
         const rows = ok && !future ? d.report.data?.current.byEmployee : undefined;
         const actualOf = (ids: string[]) => (rows ? teamActual(rows, ids, ms.rateBase) : null);
         const total = actualOf(teams.flatMap((t) => t.ids));
-        const goals = teams.map((t) => goalOf(t.id).revenue);
+        const goals = teams.map((t) => goalOfTeam(t).revenue);
         const totalGoal = goals.length && goals.every((g) => g !== null) ? goals.reduce<number>((a, g) => a + (g ?? 0), 0) : null;
         const missing = targetsReady ? months.filter((m) => !teams.some((t) => stored(m, t.id)?.revenue)) : [];
         const sumName = scopeName ? 'các team đang xem' : 'cả bộ phận';
         return (
           <ChartCard key={d.dept} icon={Target} title={`Tổng quan KPI ${label}`}
-            subtitle={ok ? `${periodLabel(period)} · ${future ? 'kỳ chưa tới' : `số tới ${dmy(end)}`} · mọi POS${scopeName ? ` · ${scopeName}` : ''}` : undefined}>
+            subtitle={ok ? `${periodLabel(period)} · ${future ? 'kỳ chưa tới' : `số tới ${dmy(end)}`} · ${share.note ?? 'mọi POS'}${scopeName ? ` · ${scopeName}` : ''}` : undefined}>
             {d.teams.error && !d.teams.data ? <ErrorBox error={d.teams.error} onRetry={d.teams.reload} />
               : d.report.error && !d.report.data ? <ErrorBox error={d.report.error} onRetry={d.report.reload} />
               : targetError ? <ErrorBox error={targetError} onRetry={() => { setTargetError(''); setReloadKey((k) => k + 1); }} />
@@ -261,7 +271,7 @@ export function GiaoViecKpiView({ owner, onOpen }: { owner: boolean; onOpen?: (v
                   </div>
                   {missing.length > 0 && <p className="text-[12px] text-warn">Chưa đặt KPI doanh thu team {label} tháng {missing.map(mmyyyy).join(', ')}.</p>}
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    {teams.map((t) => <TeamCard key={t.id} team={t} actual={actualOf(t.ids)} goal={goalOf(t.id)} sale={sale} pace={pace} onOpen={open(d.dept, t)} />)}
+                    {teams.map((t) => <TeamCard key={t.id} team={t} actual={actualOf(t.ids)} goal={goalOfTeam(t)} aovNote={editMonth && aovOf(editMonth, t).fromPeople ? `đã đặt ${aovOf(editMonth, t).set}/${aovOf(editMonth, t).total} người` : undefined} sale={sale} pace={pace} onOpen={open(d.dept, t)} />)}
                   </div>
                 </div>
               )}
@@ -281,6 +291,9 @@ export function GiaoViecKpiView({ owner, onOpen }: { owner: boolean; onOpen?: (v
           </div>
         );
       })}
+
+      {/* KPI số đưa về của Marketing (anh Vũ 14/11/2026), báo cáo sếp qua Zalo đọc số này. */}
+      {ok && !future && editMonth && owner && <MktLeadsKpiPanel month={editMonth} owner={owner} />}
 
       {owner && ok && targetsReady && scopeReady && editMonth && depts.map((d) => {
         const sale = d.dept === 'sale', label = LABEL[d.dept], teams = teamsOf(d);

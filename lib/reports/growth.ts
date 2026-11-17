@@ -12,8 +12,9 @@ import { plausibleJoin, type GrowthData, type GrowthDept, type GrowthPerson, typ
 export const PEOPLE_META_KEY = 'people_meta';
 type Point = { day: string; id: string; value: number; n: number };
 
-export function growthQuery(dept: GrowthDept, startUtc: string, endUtc: string) {
-  const posIds = POS.map((p) => p.id);
+export function growthQuery(dept: GrowthDept, startUtc: string, endUtc: string, selected: string[] = []) {
+  // Quy tắc POS (anh Vũ 12/11/2026): chỉ POS đang chọn; rỗng = mọi POS.
+  const posIds = selected.length ? selected : POS.map((p) => p.id);
   if (dept !== 'vandon') return trendQuery(dept, posIds, startUtc, endUtc, '', [], false, true);
   const sql = `SELECT date(o.first_confirmed_at,'+7 hours') AS day, 0 AS hour, o.first_confirmed_by AS id, COUNT(*) AS value, COUNT(*) AS n
     FROM raw_pos_orders o WHERE o.pos_id IN (${posIds.map(() => '?').join(',')}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<?
@@ -24,9 +25,9 @@ export function growthQuery(dept: GrowthDept, startUtc: string, endUtc: string) 
 const vnDay = (iso: string | null) => iso ? new Date(Date.parse(iso) + 7 * 3600000).toISOString().slice(0, 10) : null;
 const DAY = /^\d{4}-\d{2}-\d{2}/;
 
-export async function growthData(db: D1Database, dept: GrowthDept, start: string, end: string, today: string): Promise<GrowthData> {
+export async function growthData(db: D1Database, dept: GrowthDept, start: string, end: string, today: string, posIds: string[] = []): Promise<GrowthData> {
   const { startUtc, endUtc } = vnRangeUtc(start, end);
-  const q = growthQuery(dept, startUtc, endUtc);
+  const q = growthQuery(dept, startUtc, endUtc, posIds);
   const [points, users, hr, meta] = await Promise.all([
     db.prepare(q.sql).bind(...q.binds).all<Point>(),
     db.prepare('SELECT user_id, name, source_created_at FROM pos_users').all<{ user_id: string; name: string | null; source_created_at: string | null }>(),

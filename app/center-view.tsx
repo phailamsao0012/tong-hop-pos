@@ -265,7 +265,9 @@ export function CenterView({ onNavigate, canRegenerateAi = false, canForecast = 
   const alerts = shift?.alerts ?? [];
   // Màn Điều hành (giai đoạn 2b): tiến độ tháng hiện tại + ba bộ phận + việc cần xử lý gom từ các khối đã tải.
   const exec = useExec(posIds, targetMonth);
-  const aiApi = useApi<{ summary: AiSummaryView }>('/api/ai/summary', { refreshMs: 10 * 60000 });
+  // Tóm tắt AI là số toàn công ty: chỉ hiện khi chọn đủ mọi POS (quy tắc POS mục E, anh Vũ 12/11/2026).
+  const allPos = posIds.length === POS.length;
+  const aiApi = useApi<{ summary: AiSummaryView }>(allPos ? '/api/ai/summary' : null, { refreshMs: 10 * 60000 });
   const regenerateAi = async () => { toast('AI đang viết tóm tắt…'); const res = await fetch('/api/ai/summary', { method: 'POST' }); if (!res.ok) toast('Không tạo được tóm tắt', { kind: 'error' }); aiApi.reload(); };
   const ex = exec.data;
   const monthGoal = ex && targetMonth === ex.month ? goal : 0;
@@ -507,7 +509,7 @@ export function CenterView({ onNavigate, canRegenerateAi = false, canForecast = 
       </div>
       {canForecast && <ForecastCard onOpen={canRegenerateAi ? () => { onNavigate('ai-ask'); focusAfterNav('ai-yesterday', { 'ai-tab': 'day' }); } : undefined} />}
       {canRegenerateAi && <ForecastReview onNavigate={onNavigate} />}
-      <Attention items={attention} summary={summary} onNavigate={onNavigate} ai={aiApi.data?.summary ?? null} onRegenerate={canRegenerateAi ? () => void regenerateAi() : undefined} />
+      <Attention items={attention} summary={summary} onNavigate={onNavigate} ai={allPos ? aiApi.data?.summary ?? null : null} onRegenerate={canRegenerateAi && allPos ? () => void regenerateAi() : undefined} />
       <PancakeReference posIds={posIds} start={start} end={end} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">

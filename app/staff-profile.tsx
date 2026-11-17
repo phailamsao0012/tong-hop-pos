@@ -18,6 +18,8 @@ import { useStaffStatus, STATUS_CLASS } from './staff-name';
 import { SegmentedControl, money, pct, shortMoney, vi } from './ui-kit';
 import { BadgeShelf } from './staff-badges';
 import { apiJson } from './api-fetch';
+import { usePosIds } from './pos-store';
+import { POS } from '@/lib/shared/report-model';
 
 const DEPT: Record<string, string> = { sale: 'Sale', cskh: 'CSKH', mkt: 'Marketing' };
 const mLabel = (m: string) => `${m.slice(5)}/${m.slice(2, 4)}`;
@@ -232,7 +234,9 @@ export function StaffProfilePage({ onBack }: { onBack?: () => void }) {
 
   const [state, setState] = useState<{ id: string; key: string; data?: StaffProfile; error?: string } | null>(null);
   const [pick, setPick] = useState<{ id: string; pos: string[] }>({ id: '', pos: [] });
-  const pos = id && pick.id === id ? pick.pos : [];
+  // Quy tắc POS (anh Vũ 12/11/2026): mặc định theo POS đang chọn ở đầu trang; ô POS riêng của hồ sơ vẫn đổi được.
+  const [globalPos] = usePosIds();
+  const pos = id && pick.id === id ? pick.pos : globalPos.length === POS.length ? [] : globalPos;
   const key = pos.join(',');
   useEffect(() => {
     if (!id) return;

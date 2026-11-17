@@ -127,7 +127,7 @@ export function MktRoasView({ owner = false }: { owner?: boolean }) {
       <PosChips posIds={posIds} onChange={setPosIds} />
       <SegmentHintNote />
       {error && !r && <ErrorBox error={error} onRetry={reload} />}
-      {posIds.length < POS.length && <p className="notice warn m-0 text-[12.5px]">Chi phí được nhập theo marketer cho mọi POS, còn doanh thu đang lọc {posIds.length}/{POS.length} POS, nên ROAS lúc này thấp hơn thực tế. Chọn "Tất cả" POS để xem ROAS đúng.</p>}
+      {posIds.length < POS.length && <p className="notice m-0 text-[12.5px]">Đang xem {posIds.length}/{POS.length} POS: chi phí mỗi marketer mỗi ngày được chia theo tỉ lệ số điện thoại marketer đó về từng POS trong ngày (marketer chỉ chạy một POS thì chi phí về đúng POS đó). Chọn "Tất cả" POS để xem chi phí gốc.</p>}
       {!r && !error && <><SkeletonKpis count={5} /><SkeletonTable rows={5} cols={6} /></>}
       {r && (
         <>

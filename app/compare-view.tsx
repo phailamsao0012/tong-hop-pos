@@ -439,7 +439,7 @@ export function CompareView() {
                             <span className="num block text-[11px] font-semibold text-ink-3">{goalText}</span>
                             {(() => {
                               if (!t?.revenue || today < start || today > end) return null;
-                              const days = t.workingDays || daysInMonth(start.slice(0, 7));
+                              const days = daysInMonth(start.slice(0, 7));
                               const daily = t.revenue / days;
                               const todayNet = report.current.byEmployeeDay.filter((d) => d.sellerId === r.sellerId && d.day === today).reduce((a, d) => a + d.closedNet, 0);
                               const dp = todayNet / daily * 100;

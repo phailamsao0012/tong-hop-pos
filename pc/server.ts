@@ -9,7 +9,7 @@
 //   THP_VARS    file .dev.vars (bí mật, KHOÁ=giá trị)     THP_DIST    thư mục build (mặc định thư mục dist của repo)
 //   PORT=8787   HOST=127.0.0.1   THP_READERS=6 (số luồng đọc)   THP_CRON=0 để tắt đồng hồ mỗi phút
 import { createServer } from 'node:http';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { register } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -111,3 +111,11 @@ async function shutdown(signal: string) {
 }
 process.on('SIGINT', () => void shutdown('SIGINT'));
 process.on('SIGTERM', () => void shutdown('SIGTERM'));
+// Khởi động lại không cần quyền admin (anh Vũ 14/11/2026): web chạy bằng tác vụ THP Web (S4U, phiên 0) nên tài khoản thường không tắt được tiến trình.
+// Tạo file C:\thp\khoi-dong-lai-web-<cổng>.txt thì web dừng gọn (chờ việc nền xong), vòng lặp chay-node.ps1 chạy lại sau 5 giây.
+const RESTART_FILE = process.env.THP_RESTART_FILE ?? `C:\\thp\\khoi-dong-lai-web-${PORT}.txt`;
+setInterval(() => {
+  if (!existsSync(RESTART_FILE)) return;
+  try { unlinkSync(RESTART_FILE); } catch { /* bỏ qua */ }
+  void shutdown('FILE');
+}, 5000).unref();

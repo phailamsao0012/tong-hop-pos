@@ -1,4 +1,5 @@
 'use client';
+import { usePosIds } from './pos-store';
 
 // Chỉ tiêu KPI mới của từng team và phần chia cho từng người (anh Vũ 07/11/2026: "giao tổng 1 cái cho cả team, các đầu lead và mentor
 // sẽ tự chia"). Sale: số nhận, số chốt, doanh số, số đơn, số lượng sản phẩm. CSKH: doanh số, tỷ lệ tự upsell, số lượng sản phẩm.
@@ -9,7 +10,7 @@ import { Save, UsersRound } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { parseRate } from '@/lib/kpi/kpi-pace';
 import { KPI2_LINES, kpi2Value, periodGoal, splitStatus, type Kpi2, type Kpi2Map } from '@/lib/kpi/kpi2';
-import { dayCount, monthDays, monthsBetween, type Period, type SellerRow } from '@/lib/kpi/team-kpi';
+import { dayCount, monthDays, monthsBetween, teamAov, type Period, type SellerRow } from '@/lib/kpi/team-kpi';
 import { LINE_LABEL, type LineKey } from '@/lib/reports/mkt-product-split';
 import { upsellOf, type UpsellRow } from '@/lib/reports/cskh-upsell';
 import { qtyOf, type QtyBySeller } from '@/lib/reports/seller-product-qty';
@@ -27,11 +28,11 @@ type Field = { key: string; label: string; kind: 'count' | 'money' | 'rate' };
 const FIELDS: Record<Dept, Field[]> = {
   sale: [
     { key: 'assigned', label: 'Số nhận', kind: 'count' }, { key: 'closed', label: 'Số chốt', kind: 'count' },
-    { key: 'revenue', label: 'Doanh số', kind: 'money' }, { key: 'orders', label: 'Số đơn', kind: 'count' },
+    { key: 'revenue', label: 'Doanh số', kind: 'money' }, { key: 'aov', label: 'TB đơn', kind: 'money' }, { key: 'orders', label: 'Số đơn', kind: 'count' },
     ...KPI2_LINES.map((l): Field => ({ key: `products.${l}`, label: LINE_LABEL[l], kind: 'count' })),
   ],
   cskh: [
-    { key: 'revenue', label: 'Doanh số', kind: 'money' }, { key: 'upsellRate', label: 'Tỷ lệ tự upsell', kind: 'rate' },
+    { key: 'revenue', label: 'Doanh số', kind: 'money' }, { key: 'aov', label: 'TB đơn', kind: 'money' }, { key: 'upsellRate', label: 'Tỷ lệ tự upsell', kind: 'rate' },
     ...KPI2_LINES.map((l): Field => ({ key: `products.${l}`, label: LINE_LABEL[l], kind: 'count' })),
   ],
 };
@@ -43,7 +44,7 @@ const parseCount = (v: string) => { const n = Number(v.replace(/[.\s]/g, '').rep
 function toKpi2(values: Record<string, string>): Kpi2 {
   const out: Kpi2 = {}, products: Partial<Record<LineKey, number>> = {};
   for (const [k, v] of Object.entries(values)) {
-    if (k === 'revenue') continue;
+    if (k === 'revenue' || k === 'aov') continue;
     if (k === 'upsellRate') { const r = parseRate(v); if (r) out.upsellRate = r; continue; }
     const n = parseCount(v);
     if (!n) continue;
@@ -58,6 +59,8 @@ export function Kpi2Panel({ dept, teams, rows, period, end, editMonth, owner, ta
   /** KPI doanh số các tháng (bảng targets), dùng chung với trang KPI team. */ targets: Record<string, TargetItem[]>;
   onTargets: (month: string, items: TargetItem[]) => void;
 }) {
+  // Quy tắc POS (anh Vũ 12/11/2026): số đã đạt / thực đạt tính trên POS đang chọn.
+  const [kpiPos] = usePosIds();
   const uid = useId(), fields = FIELDS[dept], label = dept === 'sale' ? 'Sale' : 'CSKH';
   const months = useMemo(() => monthsBetween(period.start, period.end), [period.start, period.end]);
   const [kpi, setKpi] = useState<Record<string, Kpi2Map>>({});
@@ -72,22 +75,29 @@ export function Kpi2Panel({ dept, teams, rows, period, end, editMonth, owner, ta
       .catch((e: Error) => { if (live) setErr(e.message); });
     return () => { live = false; };
   }, [monthsKey, reload]);
-  const extra = useApi<Extra>(end >= period.start ? `/api/reports/kpi-extra?${new URLSearchParams({ start: period.start, end })}` : null, { keep: false });
+  const extra = useApi<Extra>(end >= period.start ? `/api/reports/kpi-extra?${new URLSearchParams({ start: period.start, end, posIds: kpiPos.join(',') })}` : null, { keep: false });
 
   // Chỉ tiêu tháng của một khoá ("team:x" / "employee:y"), doanh số đọc từ bảng targets.
-  const monthValue = (m: string, key: string, field: string) => {
-    if (field === 'revenue') { const at = key.indexOf(':'); return targets[m]?.find((t) => t.scope === key.slice(0, at) && t.refId === key.slice(at + 1))?.revenue || undefined; }
+  const monthValue = (m: string, key: string, field: string, ids: string[] = []): number | undefined => {
+    if (field === 'revenue' || field === 'aov') {
+      const at = key.indexOf(':'); const t = targets[m]?.find((x) => x.scope === key.slice(0, at) && x.refId === key.slice(at + 1)) as (TargetItem & { aov?: number | null }) | undefined;
+      // TB đơn của team tính từ TB đơn từng người (plan Đầu não 14/11/2026); chưa ai có thì dùng số cấp team cũ.
+      if (field === 'aov' && key.startsWith('team:')) return teamAov(ids.map((id) => ({ aov: monthValue(m, `employee:${id}`, 'aov'), revenue: monthValue(m, `employee:${id}`, 'revenue') })), t?.aov ?? null).aov ?? undefined;
+      return (field === 'revenue' ? t?.revenue : t?.aov) || undefined;
+    }
     return kpi2Value(kpi[m]?.[key], field);
   };
-  const goalOfPeriod = (key: string, f: Field) => periodGoal(months.map((m) => {
+  // TB đơn là tỉ số (trung bình theo số ngày), không cộng dồn như doanh số.
+  const goalOfPeriod = (key: string, f: Field, ids: string[] = []) => periodGoal(months.map((m) => {
     const from = period.start > `${m}-01` ? period.start : `${m}-01`, last = `${m}-${String(monthDays(m)).padStart(2, '0')}`, to = period.end < last ? period.end : last;
-    return { month: m, value: monthValue(m, key, f.key), overlap: dayCount(from, to), days: monthDays(m) };
-  }), f.kind === 'rate');
+    return { month: m, value: monthValue(m, key, f.key, ids), overlap: dayCount(from, to), days: monthDays(m) };
+  }), f.kind === 'rate' || f.key === 'aov');
   const actual = (ids: string[], f: Field): number | null => {
     if (f.key.startsWith('products.')) return extra.data ? qtyOf(extra.data.qty, ids)[f.key.slice(9) as LineKey] ?? 0 : null;
     if (f.key === 'upsellRate') return extra.data ? upsellOf(extra.data.upsell, ids).rate : null;
     if (!rows) return null;
     const mine = rows.filter((r) => ids.includes(r.sellerId)), sum = (g: (r: SellerRow) => number | undefined) => mine.reduce((a, r) => a + (g(r) ?? 0), 0);
+    if (f.key === 'aov') { const o = sum((r) => r.closedOrders); return o ? sum((r) => r.closedNet) / o : null; }
     return f.key === 'assigned' ? sum((r) => r.assignedOrders) : f.key === 'closed' ? sum((r) => r.assignedClosedOrders) : f.key === 'orders' ? sum((r) => r.closedOrders) : sum((r) => r.closedNet);
   };
 
@@ -110,11 +120,13 @@ export function Kpi2Panel({ dept, teams, rows, period, end, editMonth, owner, ta
       const saved = await apiJson<Kpi2Resp>('/api/kpi2', 'PUT', { month: editMonth, items: keys.map((k) => ({ key: k, value: toKpi2(all(k)) })) });
       setKpi((x) => ({ ...x, [editMonth]: { ...x[editMonth], ...saved.items } }));
       // Doanh số người: lưu ở bảng targets, giữ phần khác của dòng đó (số đơn, ngày công, tỷ lệ chốt).
-      const revKeys = keys.filter((k) => k.startsWith('employee:') && draft[k]?.revenue !== undefined && fields.some((f) => f.key === 'revenue'));
+      const revKeys = keys.filter((k) => k.startsWith('employee:') && (draft[k]?.revenue !== undefined || draft[k]?.aov !== undefined));
       if (revKeys.length) {
         const items = revKeys.map((k) => {
           const s = targets[editMonth]?.find((t) => t.scope === 'employee' && t.refId === k.slice(9));
-          return { scope: 'employee' as const, refId: k.slice(9), revenue: parseMoney(draft[k].revenue), closedOrders: s?.closedOrders ?? 0, workingDays: s?.workingDays ?? null, closeRate: s?.closeRate ?? null };
+          const sa = s as (TargetItem & { aov?: number | null }) | undefined;
+          return { scope: 'employee' as const, refId: k.slice(9), revenue: draft[k].revenue !== undefined ? parseMoney(draft[k].revenue) : s?.revenue ?? 0, closedOrders: s?.closedOrders ?? 0, workingDays: s?.workingDays ?? null, closeRate: s?.closeRate ?? null,
+            aov: draft[k].aov !== undefined ? (parseMoney(draft[k].aov) || null) : sa?.aov ?? null };
         });
         const res = await apiJson<{ items: TargetItem[] }>('/api/targets', 'PUT', { month: editMonth, only: revKeys, items });
         onTargets(editMonth, res.items);
@@ -126,9 +138,9 @@ export function Kpi2Panel({ dept, teams, rows, period, end, editMonth, owner, ta
 
   // Hàm thường (không phải component) để ô nhập không bị dựng lại, mất con trỏ khi gõ.
   const cell = (k: string, f: Field, ids: string[]) => {
-    const goal = goalOfPeriod(k, f), got = actual(ids, f);
+    const goal = goalOfPeriod(k, f, ids), got = actual(ids, f);
     const p = got !== null && goal ? got / goal * 100 : null;
-    const editableHere = canEdit(k) && !(k.startsWith('team:') && f.key === 'revenue');
+    const editableHere = canEdit(k) && !(k.startsWith('team:') && (f.key === 'revenue' || f.key === 'aov'));
     const id = `${uid}-${k}-${f.key}`;
     return (
       <div key={f.key} className="min-w-0 rounded-lg bg-surface-2 px-2 py-1.5">
@@ -136,7 +148,7 @@ export function Kpi2Panel({ dept, teams, rows, period, end, editMonth, owner, ta
         {editableHere
           ? <Input id={id} className="num mt-0.5 h-7 px-1.5 text-right text-[13px]" inputMode="decimal" value={shown(k, f)} placeholder="KPI tháng"
               onChange={(e) => setDraft((d) => ({ ...d, [k]: { ...d[k], [f.key]: e.target.value } }))} />
-          : <p id={id} className="num mt-0.5 text-right text-[13px] font-semibold">{fmt(f, monthValue(editMonth, k, f.key))}</p>}
+          : <p id={id} className="num mt-0.5 text-right text-[13px] font-semibold">{fmt(f, monthValue(editMonth, k, f.key, ids))}</p>}
         <p className="num mt-0.5 text-right text-[11px] text-ink-3">đạt {fmt(f, got)}{p !== null && <span className={p >= 100 ? 'text-good' : 'text-warn'}> · {pct(p, 0)}</span>}</p>
       </div>
     );
@@ -199,7 +211,9 @@ export function Kpi2Panel({ dept, teams, rows, period, end, editMonth, owner, ta
 
 /** Bảng số lượng sản phẩm tháng này của Sale / CSKH, so cùng mốc kỳ trước, để cân nên bán gì. */
 export function ProductQtyCard({ dept, teams, period, end }: { dept: Dept; teams: Kpi2Team[]; period: Period; end: string }) {
-  const extra = useApi<Extra>(end >= period.start ? `/api/reports/kpi-extra?${new URLSearchParams({ start: period.start, end })}` : null, { keep: false });
+  // Quy tắc POS (anh Vũ 12/11/2026): số đã đạt / thực đạt tính trên POS đang chọn.
+  const [kpiPos] = usePosIds();
+  const extra = useApi<Extra>(end >= period.start ? `/api/reports/kpi-extra?${new URLSearchParams({ start: period.start, end, posIds: kpiPos.join(',') })}` : null, { keep: false });
   const label = dept === 'sale' ? 'Sale' : 'CSKH';
   const ids = teams.flatMap((t) => t.members.map((m) => m.id));
   const lines: LineKey[] = [...KPI2_LINES, 'khac'];

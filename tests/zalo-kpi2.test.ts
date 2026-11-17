@@ -35,7 +35,7 @@ void test('báo cáo ca Zalo có dòng chỉ tiêu tháng khi team đã đặt',
   const seen: string[] = [];
   const kpi2 = async (_c: Contact, toDay: string) => { seen.push(toDay); return kpi2Rows({ assigned: 900 }, got, 'sale', 27, 31); };
   const snapshot = async () => ({ total: 100, orders: 1, people: {} });
-  await maybeZaloTick(Date.parse('2026-10-27T12:00:00+07:00'), { db, send: async (_chat, text) => { messages.push(text); }, snapshot, sendPhoto: async () => false, kpi2 });
+  await maybeZaloTick(Date.parse('2026-10-27T12:00:00+07:00'), { db, send: async (_chat, text) => { messages.push(text); }, snapshot, sendPhoto: async () => false, kpi2, legacyBossSlot: true });
   assert.deepEqual(seen, ['2026-10-27']);
   assert.match(messages[0], /Chỉ tiêu tháng: Số nhận 300\/900 \(33%\) ✗/);
 });

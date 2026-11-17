@@ -18,6 +18,7 @@ import { usePeriod } from './period-store';
 import { ManagerChip } from './manager-chip';
 import { managedBy } from '@/lib/teams/managed-by';
 import { usePosIds, usePosStaffFilter } from './pos-store';
+import { useGoalShare } from './goal-share-store';
 import { useMetricSettings } from './metric-settings';
 import { PeriodToolbar, PosChips, type OverviewReport } from './overview-view';
 import { GlobalStatusFilter } from './status-filter';
@@ -92,6 +93,8 @@ function buildRows(allTeams: HrTeamGroup[], cur: Emp[], prev: Emp[] | null, care
 }
 
 export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) {
+  // Quy tắc POS (anh Vũ 12/11/2026): số đã đạt / thực đạt tính trên POS đang chọn.
+  const [kpiPos] = usePosIds();
   const kpiMonth = todayVn().slice(0, 7);
   const [personalTargets, setPersonalTargets] = useState<Record<string, TargetItem>>({});
   const [editableStaff, setEditableStaff] = useState<string[]>([]);
@@ -101,9 +104,12 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
     }).catch(() => undefined);
   }, [kpiMonth]);
   useEffect(() => { void fetchTargets(kpiMonth).then(setPersonalTargets).catch(() => toast('Không tải được KPI cá nhân.')); }, [kpiMonth]);
-  const kpiReport = useApi<OverviewReport>(`/api/reports/overview?${new URLSearchParams({ start: `${kpiMonth}-01`, end: todayVn(), team, posIds: POS.map((p) => p.id).join(',') })}`);
+  const kpiReport = useApi<OverviewReport>(`/api/reports/overview?${new URLSearchParams({ start: `${kpiMonth}-01`, end: todayVn(), team, posIds: kpiPos.join(',') })}`);
+  const kpiShare = useGoalShare(kpiMonth);
   const personalProgress = (id: string) => {
-    const goal = personalTargets[`employee:${id}`]?.revenue;
+    // Mục tiêu đã chia theo POS khi chọn ít hơn mọi POS (anh Vũ 12/11/2026, câu 2 chọn A).
+    const raw = personalTargets[`employee:${id}`]?.revenue;
+    const goal = raw ? kpiShare.scale(raw, [id]) : raw;
     const actual = kpiReport.data?.current.byEmployee.find((row) => row.sellerId === id)?.closedNet ?? 0;
     return goal && kpiReport.data ? pct(actual / goal * 100, 0) : '—';
   };
@@ -292,7 +298,7 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
                               <td className="r num">{vi.format(p.cur.closed)}</td>
                               <td className="r num">{shortMoney(aov(p.cur))}</td>
                               <td className="r num">{pct(rate(p.cur, ms.rateBase))}</td>
-                              <td>—</td><td className="r" title="Cách tính: doanh thu đơn chốt tháng hiện tại trong mọi POS được cấp ÷ KPI doanh thu tháng"><span>{personalProgress(p.id)}</span> {(owner || editableStaff.includes(p.id)) && (kpiEditing === p.id
+                              <td>—</td><td className="r" title={`Cách tính: doanh thu đơn chốt tháng hiện tại ở POS đang chọn ÷ KPI doanh thu tháng${kpiShare.note ? ` (${kpiShare.note})` : ''}`}><span>{personalProgress(p.id)}</span> {(owner || editableStaff.includes(p.id)) && (kpiEditing === p.id
                                 ? <KpiInlineEditor withRate={team === 'sale'} initialRevenue={personalTargets[`employee:${p.id}`]?.revenue} initialRate={personalTargets[`employee:${p.id}`]?.closeRate}
                                   onSave={(revenue, rate) => editPersonal(p.id, revenue, rate)} onCancel={() => setKpiEditing(null)} />
                                 : <button type="button" className="link" onClick={() => setKpiEditing(p.id)}>Đặt KPI</button>)}</td>
@@ -328,6 +334,8 @@ export function TeamKpiPanel({ team }: { team: Dept }) {
 }
 
 function TeamKpi({ team, teams }: { team: Dept; teams: KpiTeam[] }) {
+  // Quy tắc POS (anh Vũ 12/11/2026): số đã đạt / thực đạt tính trên POS đang chọn.
+  const [kpiPos] = usePosIds();
   const today = todayVn();
   const [month, setMonth] = useState(today.slice(0, 7));
   const managed = useMemo(() => {
@@ -339,7 +347,7 @@ function TeamKpi({ team, teams }: { team: Dept; teams: KpiTeam[] }) {
   const end = last < today ? last : today;
   const elapsed = month < today.slice(0, 7) ? daysInMonth(month) : Math.max(1, Number(today.slice(8, 10)));
   const monthApi = useApi<OverviewReport>(month <= today.slice(0, 7)
-    ? `/api/reports/overview?${new URLSearchParams({ start: `${month}-01`, end, posIds: POS.map((p) => p.id).join(','), team })}`
+    ? `/api/reports/overview?${new URLSearchParams({ start: `${month}-01`, end, posIds: kpiPos.join(','), team })}`
     : null);
   const [items, setItems] = useState<TargetItem[] | null>(null);
   const [draft, setDraft] = useState<Record<string, { revenue: string; rate: string }>>({});

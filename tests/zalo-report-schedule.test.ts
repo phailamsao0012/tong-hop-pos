@@ -33,7 +33,7 @@ async function fixture(schedule?: ReportSchedule) {
   // Lượt gửi thử cho sếp chỉ chạy một lần; coi như đã gửi.
   raw.prepare("INSERT INTO app_settings (key,value,updated_at) VALUES ('zalo_tick_v1','{\"morningTest\":\"anh-1\"}','2026-10-27T00:00:00Z')").run();
   if (schedule) await writeZaloSetting(db, REPORT_SCHEDULE_KEY, schedule);
-  const tick = async (time: string, day?: string) => { clock = at(time, day); await maybeZaloTick(clock, { db, send, snapshot, morningData, sendPhoto }); };
+  const tick = async (time: string, day?: string) => { clock = at(time, day); await maybeZaloTick(clock, { db, send, snapshot, morningData, sendPhoto, legacyBossSlot: true }); };
   const state = () => JSON.parse((raw.prepare("SELECT value FROM app_settings WHERE key='zalo_tick_v1'").get() as { value: string }).value) as Record<string, unknown> & { slots?: Record<string, string>; hist?: Record<string, Record<string, Record<string, unknown>>> };
   return { raw, db, boss, leader, messages, tick, state };
 }

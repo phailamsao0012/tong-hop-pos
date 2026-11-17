@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers';
 import { sameSecret } from '@/lib/bot/bot-guard-core';
 import { createZaloSender, webhookSecret } from '@/lib/zalo/zalo';
 import { handleZaloUpdate } from '@/lib/zalo/zalo-work';
+import { bossKpiCommand } from '@/lib/zalo/kpi-bot';
 
 export async function POST(request: Request) {
   const token = env.ZALO_BOT_TOKEN?.trim();
@@ -9,7 +10,7 @@ export async function POST(request: Request) {
     return new Response('unauthorized', { status: 401 });
   try {
     const now = Date.now();
-    await handleZaloUpdate(env.DB, await request.json(), createZaloSender(env.DB, now), now);
+    await handleZaloUpdate(env.DB, await request.json(), createZaloSender(env.DB, now), now, bossKpiCommand);
   } catch { console.error('zalo webhook failed'); }
   return Response.json({ ok: true });
 }

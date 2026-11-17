@@ -2,6 +2,7 @@
 import { vanDonLabel } from '@/lib/shared/van-don-label';
 import { usePeriod } from './period-store';
 import { usePosIds } from './pos-store';
+import { POS } from '@/lib/shared/report-model';
 import { useTeam, useHrUnit, useBranch, useMktTeam, withUnit, unitFor } from './team-store';
 import { useApi, useLazySeen } from './use-api';
 import { staffGap, bucketBars, reasonBars, type AdvisorReport } from '@/lib/bot/advisor';
@@ -26,7 +27,9 @@ export function AdvisorPanel({ dept }: { dept?: TrendDept }) {
   // Khung này thường ở dưới màn hình đầu: chỉ gọi khi kéo gần tới (28/10/2026).
   const [ref, seen] = useLazySeen<HTMLElement>();
   const { data, error, loading, reload } = useApi<AdvisorReport>(url, { defer: !seen });
-  const deep = useApi<{ insight: DisplayInsight | null }>('/api/ai/insights', { defer: !seen });
+  // Phân tích sâu là của toàn công ty: chỉ khi chọn đủ mọi POS (quy tắc POS mục E, anh Vũ 12/11/2026).
+  const allPos = posIds.length === POS.length;
+  const deep = useApi<{ insight: DisplayInsight | null }>(allPos ? '/api/ai/insights' : null, { defer: !seen });
   const number = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 1 });
   const percent = (n: number) => `${(n * 100).toLocaleString('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
   const why = (title: string) => data?.items.filter(i => i.title === title).map(i => i.why).join(' ') ?? '';
@@ -73,7 +76,8 @@ export function AdvisorPanel({ dept }: { dept?: TrendDept }) {
       {data.reasons && tile('Lý do không mua', chip(data.reasons.coverage === null || data.reasons.coverage < .3 ? 'Ít ghi chú, chỉ tham khảo' : `${percent(data.reasons.coverage)} có ghi chú phân loại được`, data.reasons.coverage === null || data.reasons.coverage < .3),
         <div className="space-y-2">{reasonBars(data.reasons.groups).map(g => <div key={g.reason} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2 text-xs"><span className="break-words">{label(g.reason)}</span><div className="h-2 rounded bg-surface-3"><div className={`h-full rounded ${g.reason === 'Khác' ? 'bg-ink-3' : 'bg-primary'}`} style={{ width: `${g.share * 100}%` }} /></div><span className="num">{number(g.count)} đơn</span></div>)}</div>, `${number(data.reasons.total)} đơn hủy/hoàn/không xác nhận`, <>{data.reasons.classified}/{data.reasons.total} đơn. {label(data.reasonScope)}</>)}
     </div>}
-    {!deep.error && deep.data && <div className="space-y-2 text-sm">
+    {!allPos && <p className="text-xs text-ink-3">Phân tích sâu là số toàn công ty, chỉ hiện khi chọn đủ {POS.length} POS.</p>}
+          {allPos && !deep.error && deep.data && <div className="space-y-2 text-sm">
       {!deep.data.insight ? <p className="text-xs text-ink-3">Phân tích sâu: hôm nay chưa có</p> : <>
         <div className="flex flex-wrap items-center gap-2"><h3 className="font-medium">Phân tích sâu sáng nay</h3>{chip('Chỉ chủ hệ thống')}</div>
         <p className="text-xs text-ink-3">{label(deep.data.insight.summary)}</p>

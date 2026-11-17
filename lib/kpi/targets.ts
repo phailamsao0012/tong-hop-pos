@@ -57,8 +57,9 @@ export async function ownPosUserIds(db: D1Database, email: string | undefined): 
 export function mergeTargetAov(stored: Record<string, number>, items: { scope?: string; refId?: string; aov?: number | null }[], only: string[] | null): Record<string, number> {
   const next: Record<string, number> = { ...stored };
   for (const it of items) {
-    if (it.scope !== 'team' || !it.refId || it.aov === undefined) continue;
-    const k = `team:${it.refId}`;
+    // Từ 14/11/2026 TB đơn đặt cho từng người (khoá "employee:<mã>"); khoá team cũ giữ nguyên tới khi team có TB đơn từng người.
+    if ((it.scope !== 'team' && it.scope !== 'employee') || !it.refId || it.aov === undefined) continue;
+    const k = `${it.scope}:${it.refId}`;
     if (only && !only.includes(k)) continue;
     const v = Number(it.aov);
     if (it.aov !== null && Number.isFinite(v) && v > 0) next[k] = Math.round(v); else delete next[k];
@@ -69,14 +70,17 @@ export function mergeTargetAov(stored: Record<string, number>, items: { scope?: 
 /** Gắn KPI TB đơn vào dòng team; team chỉ có TB đơn (chưa có doanh thu) vẫn thành một dòng. */
 export function withTargetAov(rows: TargetRow[], aov: Record<string, number>, updatedAt = ''): TargetRow[] {
   const seen = new Set<string>();
+  // Gắn TB đơn cho dòng team và dòng người (khoá employee: từ 14/11/2026); chỉ có TB đơn vẫn thành một dòng.
   const out = rows.map((r) => {
-    if (r.scope !== 'team') return r;
-    seen.add(r.refId);
-    return { ...r, aov: typeof aov[`team:${r.refId}`] === 'number' ? aov[`team:${r.refId}`] : null };
+    if (r.scope !== 'team' && r.scope !== 'employee') return r;
+    const k = `${r.scope}:${r.refId}`;
+    seen.add(k);
+    return { ...r, aov: typeof aov[k] === 'number' ? aov[k] : null };
   });
   for (const [k, v] of Object.entries(aov)) {
-    if (!k.startsWith('team:') || seen.has(k.slice(5)) || typeof v !== 'number') continue;
-    out.push({ scope: 'team', refId: k.slice(5), revenue: 0, closedOrders: 0, workingDays: null, updatedAt, closeRate: null, aov: v });
+    const scope = k.slice(0, k.indexOf(':'));
+    if ((scope !== 'team' && scope !== 'employee') || seen.has(k) || typeof v !== 'number') continue;
+    out.push({ scope: scope as 'team' | 'employee', refId: k.slice(scope.length + 1), revenue: 0, closedOrders: 0, workingDays: null, updatedAt, closeRate: null, aov: v });
   }
   return out;
 }
@@ -103,17 +107,24 @@ export async function visibleTargets(db: D1Database, user: Access & { email?: st
   // Nhân viên thường: KPI cá nhân chỉ của chính mình (không thấy KPI người khác, không thấy KPI team); KPI cấp POS giữ như cũ.
   if (user.role === 'staff') {
     const own = new Set(await ownPosUserIds(db, user.email));
-    return items.filter((item) => item.scope === 'pos' || (item.scope === 'employee' && own.has(item.refId)));
+    return items.filter((item) => item.scope === 'pos' || item.scope === 'dept_pos' || (item.scope === 'employee' && own.has(item.refId)));
   }
   const cskh = new Set((await db.prepare(`SELECT user_id FROM ${teamSubquery('cskh', false)} AS t`).all<{ user_id: string }>()).results.map((row) => row.user_id));
-  return items.filter((item) => mine(item) || item.scope === 'pos' || (item.scope === 'employee' && (!cskh.has(item.refId) || (user.role !== 'staff' && !!ids?.includes(item.refId)))));
+  return items.filter((item) => mine(item) || item.scope === 'pos' || item.scope === 'dept_pos' || (item.scope === 'employee' && (!cskh.has(item.refId) || (user.role !== 'staff' && !!ids?.includes(item.refId)))));
 }
 
-export type TargetRow = { scope: 'pos' | 'employee' | 'team'; refId: string; revenue: number; closedOrders: number; workingDays: number | null; updatedAt: string; costCeiling?: number | null; closeRate?: number | null; aov?: number | null };
+/** refId KPI bộ phận × POS: 'sale:<pos>' | 'cskh:<pos>' | 'mkt:<pos>' (anh Vũ 12/11/2026). */
+export const DEPT_POS_DEPTS = ['sale', 'cskh', 'mkt'] as const;
+export type DeptPosDept = typeof DEPT_POS_DEPTS[number];
+export function isDeptPosRef(refId: string): boolean {
+  const at = refId.indexOf(':');
+  return at > 0 && (DEPT_POS_DEPTS as readonly string[]).includes(refId.slice(0, at)) && POS.some((p) => p.id === refId.slice(at + 1));
+}
+export type TargetRow = { scope: 'pos' | 'employee' | 'team' | 'dept_pos'; refId: string; revenue: number; closedOrders: number; workingDays: number | null; updatedAt: string; costCeiling?: number | null; closeRate?: number | null; aov?: number | null };
 /** Mục tiêu của một tháng (YYYY-MM). */
 export async function listTargets(month: string): Promise<TargetRow[]> {
   const rows = await env.DB.prepare('SELECT scope,ref_id,revenue,closed_orders,working_days,updated_at FROM targets WHERE month=?').bind(month)
-    .all<{ scope: 'pos' | 'employee' | 'team'; ref_id: string; revenue: number; closed_orders: number; working_days: number | null; updated_at: string }>();
+    .all<{ scope: 'pos' | 'employee' | 'team' | 'dept_pos'; ref_id: string; revenue: number; closed_orders: number; working_days: number | null; updated_at: string }>();
   // Chi phí trần, tỉ lệ chốt, TB đơn: một lần đọc app_settings.
   const settings = new Map((await env.DB.prepare('SELECT key,value,updated_at FROM app_settings WHERE key IN (?,?,?)').bind(`target_cost:${month}`, `target_rate:${month}`, `target_aov:${month}`)
     .all<{ key: string; value: string; updated_at: string }>()).results.map((r) => [r.key.slice(0, r.key.indexOf(':')), r]));
@@ -159,21 +170,22 @@ export const readTargetSetting = (key: string) => env.DB.prepare('SELECT value F
 
 /** Thay KPI của tháng (cả tháng, hoặc chỉ các khoá trong `only`) và lưu chi phí trần / tỷ lệ chốt; trả `only` để ghi nhật ký. */
 export async function writeTargets(user: { role: Access['role']; email: string }, body: { only?: string[]; items: { scope?: string; refId?: string; revenue?: number; closedOrders?: number; workingDays?: number | null; costCeiling?: number | null; closeRate?: number | null; aov?: number | null }[] }, month: string, caps: Record<string, number>, storedRates: { value: string } | null, now: string, storedAovJson: string | null = null) {
-  const only = Array.isArray(body.only) ? body.only.map(String).filter((k) => /^(pos|employee|team):[^\s]{1,100}$/.test(k)).slice(0, 500) : null;
+  const only = Array.isArray(body.only) ? body.only.map(String).filter((k) => /^(pos|employee|team|dept_pos):[^\s]{1,100}$/.test(k)).slice(0, 500) : null;
   const statements = only
     ? only.map((k) => env.DB.prepare('DELETE FROM targets WHERE id=?').bind(`${month}:${k}`))
-    : [env.DB.prepare('DELETE FROM targets WHERE month=?').bind(month)];
+    // KPI bộ phận × POS chỉ đổi qua `only` (trang Mục tiêu gửi riêng), lưu cả tháng không xoá nó.
+    : [env.DB.prepare("DELETE FROM targets WHERE month=? AND scope<>'dept_pos'").bind(month)];
   if (isOwner(user)) {
     if (only) { for (const k of only) if (k.startsWith('team:')) delete caps[k.slice(5)]; } else { for (const k of Object.keys(caps)) delete caps[k]; }
   }
   const rates = mergeTargetRates(parseTargetCosts(storedRates?.value), body.items, only);
   const storedAov = parseTargetCosts(storedAovJson ?? undefined), aov = mergeTargetAov(storedAov, body.items, only);
   for (const it of body.items) {
-    const scope = it.scope === 'pos' || it.scope === 'employee' || it.scope === 'team' ? it.scope : null;
+    const scope = it.scope === 'pos' || it.scope === 'employee' || it.scope === 'team' || it.scope === 'dept_pos' ? it.scope : null;
     const refId = String(it.refId ?? '').slice(0, 100);
     const revenue = Math.max(0, Math.round(Number(it.revenue) || 0)), closed = Math.max(0, Math.round(Number(it.closedOrders) || 0));
     const workingDays = scope === 'employee' && it.workingDays != null && Number(it.workingDays) > 0 ? Math.min(31, Math.round(Number(it.workingDays))) : null;
-    if (!scope || !refId || (scope === 'pos' && !POS.some((p) => p.id === refId)) || (!revenue && !closed && !workingDays && it.costCeiling == null)) continue;
+    if (!scope || !refId || (scope === 'pos' && !POS.some((p) => p.id === refId)) || (scope === 'dept_pos' && !isDeptPosRef(refId)) || (!revenue && !closed && !workingDays && it.costCeiling == null)) continue;
     if (only && !only.includes(`${scope}:${refId}`)) continue;
     if (scope === 'team' && it.costCeiling != null) caps[refId] = it.costCeiling;
     statements.push(env.DB.prepare('INSERT INTO targets (id,month,scope,ref_id,revenue,closed_orders,working_days,updated_by,updated_at) VALUES (?,?,?,?,?,?,?,?,?)')

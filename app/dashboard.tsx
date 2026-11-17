@@ -1,4 +1,5 @@
 'use client';
+import { usePosIds } from './pos-store';
 
 import { currentStaffProfile, setProfileEnabled, subscribeStaffProfile } from './staff-profile-link';
 import { focusAfterNav } from './nav-focus';
@@ -175,6 +176,8 @@ const DispatchView = lazy(() => import('./dispatch-view').then((m) => ({ default
 const AuditView = lazy(() => import('./audit-view').then((m) => ({ default: m.AuditView })));
 const CatalogPanel = lazy(() => import('./catalog-panel').then((m) => ({ default: m.CatalogPanel })));
 const TargetsPanel = lazy(() => import('./targets-panel').then((m) => ({ default: m.TargetsPanel })));
+const DeptPosKpiPanel = lazy(() => import('./kpi-dept-pos-panel').then((m) => ({ default: m.DeptPosKpiPanel })));
+const HolidaysPanel = lazy(() => import('./kpi-dept-pos-panel').then((m) => ({ default: m.HolidaysPanel })));
 const AlertPanel = lazy(() => import('./alert-panel').then((m) => ({ default: m.AlertPanel })));
 const WatchPanel = lazy(() => import('./watch-panel').then((m) => ({ default: m.WatchPanel })));
 import { clearSnapshots, setSnapshotScope, useRefreshStatus } from './use-api';
@@ -943,12 +946,15 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
   const [cskhBadge, setCskhBadge] = useState<{ callsToday: number; over20: number } | null>(null);
+  // Số trên menu CSKH theo POS đang chọn (quy tắc POS, anh Vũ 12/11/2026).
+  const [badgePos] = usePosIds();
+  const badgePosKey = badgePos.join(',');
   useEffect(() => {
     if (user.role === 'mentor' && !user.teamScope) return;
     const tick = () => {
-      void fetch('/api/reports/cskh-badge', { cache: 'no-store' }).then((r) => r.ok ? r.json() as Promise<{ callsToday: number; over20: number }> : null).then((b) => { if (b) setCskhBadge(b); }).catch(() => undefined); };
+      void fetch(`/api/reports/cskh-badge?posIds=${encodeURIComponent(badgePosKey)}`, { cache: 'no-store' }).then((r) => r.ok ? r.json() as Promise<{ callsToday: number; over20: number }> : null).then((b) => { if (b) setCskhBadge(b); }).catch(() => undefined); };
     tick(); const t = setInterval(tick, 120000); return () => clearInterval(t);
-  }, [user.role, user.teamScope]);
+  }, [user.role, user.teamScope, badgePosKey]);
   const [data, setData] = useState<Dataset>(emptyData);
   const [filters, setFilters] = useState<Filters>(() => ({
     start: today(),
@@ -1770,7 +1776,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
             <div className="space-y-5">
               <SettingsSectionHeader section={cfgSection} onBack={() => setCfgSection(null)} pill={pills[cfgSection]} />
               {cfgSection === 'team' && <><TeamSheetPanel /><StaffStatusPanel /><PermissionTreePanel /><MarketingTeamsPanel /><UsersPanel currentUser={user} Surface={Surface} /><HrSyncPanel /></>}
-              {cfgSection === 'kpi' && <><TargetsPanel canEdit={isOwner(user)} /><MetricChangesCard /></>}
+              {cfgSection === 'kpi' && <><DeptPosKpiPanel canEdit={isOwner(user)} /><TargetsPanel canEdit={isOwner(user)} /><HolidaysPanel canEdit={isOwner(user)} /><MetricChangesCard /></>}
           {cfgSection === 'data' && (<Surface
             title="Kết nối 6 POS"
             description="Kiểm tra API trước, sau đó chọn đúng mã cửa hàng cho từng POS"

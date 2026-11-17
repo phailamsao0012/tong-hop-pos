@@ -10,13 +10,16 @@ import { useMemo, useState } from 'react';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { usePosStaffFilter } from './pos-store';
 import { ProfileLink, useProfileEnabled } from './staff-profile-link';
-import { ArrowRight, BadgeDollarSign, CalendarDays, Check, Filter, CheckCircle2, Coins, Megaphone, Package, Percent, Phone, TrendingUp, UsersRound, UserRound, Wallet, X } from 'lucide-react';
+import { ArrowRight, BadgeDollarSign, CalendarDays, Check, FileSpreadsheet, Filter, CheckCircle2, Coins, Megaphone, Package, Percent, Phone, TrendingUp, UsersRound, UserRound, Wallet, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Area, Bar, BarChart, CartesianGrid, ComposedChart, LabelList, XAxis, YAxis } from 'recharts';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip } from '@/components/ui/chart';
 import { CountUp } from './ui/count-up';
 import { Th, DeltaPill, EmptyState, StatusChip, orderStatusTone, SegmentedControl, SortTh, TableWrap, delta, dmy, money, short, shortMoney, useSort, vi } from './ui-kit';
 import { useApi } from './use-api';
+import { closeRateClass, ratePctCapped } from '@/lib/shared/close-rate';
+import { compareSheet, gapOf, verdict, type SheetCheckData, type SheetCompare } from '@/lib/shared/mkt-sheet-compare';
+import { MktSheetCheck } from './mkt-sheet-check';
 import { useMotionOK } from './ui/motion';
 import { setTeam, useTeam, type Team as Seg } from './team-store';
 
@@ -148,7 +151,7 @@ function RankChart({ rows, onPick, motionOn, seg }: { rows: Row[]; onPick: (id: 
   );
 }
 
-type SortKey = 'name' | 'cost' | 'net' | 'newNet' | 'cskhNet' | 'roas' | 'closed' | 'phones' | 'cpc' | 'cpl' | 'share';
+type SortKey = 'name' | 'cost' | 'net' | 'newNet' | 'cskhNet' | 'roas' | 'closed' | 'phones' | 'cpc' | 'cpl' | 'share' | 'rate' | 'cpcLow';
 
 type OrderKind = 'new' | 'cskh';
 type MktOrder = { id: string; orderId: string; posName: string; phone: string | null; confirmedAt: string; status: string; statusCode?: number; marketer: string | null; seller: string | null; net: number };
@@ -185,11 +188,28 @@ const vnTime = (iso: string) => vnDate(iso).slice(11, 16);
 
 // Doanh thu tách từng dòng (anh Vũ 28/10/2026: thấy doanh thu CSKH của từng marketer, không chỉ tổng). Dòng theo thời gian không có số tách.
 const splitOfRow = (m: Row['m']) => 'newNet' in m ? m as Metrics & NewSplit : null;
-/** profile: dòng là một marketer → bấm tên mở hồ sơ làm việc, nút phễu cạnh tên để lọc (anh Vũ 09/11/2026: bấm tên phải ra hồ sơ). */
-function BreakdownTable({ rows, first, onPick, onOrders, totalCost: _totalCost, keepOrder, showSplit = false, profile = false }: { rows: Row[]; first: string; onPick?: (id: string) => void; onOrders?: (row: Row, kind: OrderKind) => void; totalCost: number; keepOrder?: boolean; showSplit?: boolean; profile?: boolean }) {
+/** profile: dòng là một marketer → bấm tên mở hồ sơ làm việc, nút phễu cạnh tên để lọc (anh Vũ 09/11/2026: bấm tên phải ra hồ sơ).
+ *  rankBar: hàng nút "Xếp hạng theo" + số hạng (hạng 1–3 tô màu), anh Vũ 11/11/2026 phương án A, không có thẻ Top.
+ *  sheet: bật "So với sheet" thì dưới Chi phí / Doanh thu / Đơn chốt / Số có dòng phụ số sheet và lệch (chỉ khi dòng là marketer). */
+const RANK_KEYS: { k: SortKey; label: string; cost?: boolean; split?: boolean }[] = [
+  { k: 'net', label: 'Doanh thu' }, { k: 'newNet', label: 'DT New', split: true }, { k: 'cskhNet', label: 'DT CSKH', split: true }, { k: 'rate', label: 'TL chốt' },
+  { k: 'roas', label: 'ROAS', cost: true }, { k: 'closed', label: 'Đơn chốt' }, { k: 'phones', label: 'Số' }, { k: 'cpcLow', label: 'CP/đơn thấp', cost: true },
+];
+const RANK_TONE = ['', 'bg-[#fbf1cf] text-[#9a7400] dark:bg-[#3d3414] dark:text-[#f2c94c]', 'bg-surface-3 text-ink-2', 'bg-t-orange-bg text-t-orange'];
+const rateOf = (m: Row['m']) => ratePctCapped(m.closed, m.phones);
+function SheetLine({ sheet, pos, fmt, label = 'sheet' }: { sheet: number; pos: number; fmt: (n: number) => string; label?: string }) {
+  const g = gapOf(sheet, pos), v = verdict(g.pct);
+  const sign = g.diff > 0 ? '+' : g.diff < 0 ? '−' : '';
+  return <span className="block w-0 min-w-full whitespace-normal text-[11px] font-normal text-ink-3" title={`Sheet ghi ${fmt(sheet)}, POS ${fmt(pos)}, lệch ${sign}${fmt(Math.abs(g.diff))} (${g.pct > 0 ? '+' : ''}${g.pct.toFixed(1).replace('.', ',')}%)`}>
+    {label} {fmt(sheet)} · {sign}{fmt(Math.abs(g.diff))} <StatusChip tone={v.tone}>{v.text}</StatusChip>
+  </span>;
+}
+function BreakdownTable({ rows, first, onPick, onOrders, totalCost: _totalCost, keepOrder, showSplit = false, profile = false, noCost = false, onDetail, rankBar = false, sheet = null }: { rows: Row[]; first: string; onPick?: (id: string) => void; onOrders?: (row: Row, kind: OrderKind) => void; totalCost: number; keepOrder?: boolean; showSplit?: boolean; profile?: boolean; noCost?: boolean; onDetail?: (id: string) => void; rankBar?: boolean; sheet?: SheetCompare | null }) {
   const profileOn = useProfileEnabled();
   const sort = useSort<SortKey>('net');
   const shown = keepOrder && sort.key === 'net' && sort.desc ? rows : sort.apply(rows, (r, k) => {
+    // Dòng gom ("__…", vd Chưa phân team) luôn đứng cuối và không có hạng.
+    if (r.id.startsWith('__') && k !== 'name') return sort.desc ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
     switch (k) {
       case 'name': return r.name;
       case 'cost': return r.m.cost;
@@ -202,48 +222,68 @@ function BreakdownTable({ rows, first, onPick, onOrders, totalCost: _totalCost, 
       case 'phones': return r.m.phones;
       case 'cpc': return r.m.costPerClosed;
       case 'cpl': return r.m.costPerLead;
+      case 'rate': return rateOf(r.m);
+      // CP/đơn thấp xếp tăng dần; người chưa có chi phí xếp cuối.
+      case 'cpcLow': return r.m.costPerClosed ?? Number.POSITIVE_INFINITY;
       default: return 0;
     }
   });
   if (!rows.length) return <EmptyState text="Không có chi phí hoặc đơn Marketing trong phạm vi đang chọn." />;
   const split = showSplit && rows.some((r) => splitOfRow(r.m));
-  return (
+  const on = (k: SortKey) => rankBar && sort.key === k ? 'bg-tint-2/60' : '';
+  const bar = RANK_KEYS.filter((x) => (!x.cost || !noCost) && (!x.split || split));
+  let rank = 0;
+  const sh = (id: string) => sheet?.byMarketer.get(id);
+  return (<>
+    {rankBar && <div className="mb-2 flex min-w-0 flex-wrap items-center gap-2">
+      <span className="text-[12.5px] font-semibold text-ink-2">Xếp hạng theo</span>
+      <div className="max-w-full overflow-x-auto"><SegmentedControl<SortKey> size="sm" ariaLabel="Xếp hạng theo" value={bar.some((x) => x.k === sort.key) ? sort.key : ('' as SortKey)} onChange={(k) => { sort.setKey(k); sort.setDesc(k !== 'cpcLow'); }} options={bar.map((x) => ({ value: x.k, label: x.label }))} /></div>
+    </div>}
     <TableWrap stickyFirst><table className="tbl [&_td]:px-2 [&_th]:px-2">
-      <thead><tr><SortTh k="name" label={first} sort={sort} align="left" /><SortTh k="cost" label="Chi phí" sort={sort} /><SortTh k="net" label="Doanh thu" sort={sort} />{split && <><SortTh k="newNet" label="DT New" sort={sort} /><SortTh k="cskhNet" label="DT CSKH" sort={sort} /></>}<SortTh k="roas" label="ROAS" sort={sort} /><SortTh k="closed" label="Đơn chốt" sort={sort} /><SortTh k="phones" label="Số" sort={sort} /><SortTh k="cpc" label="CP/đơn New" sort={sort} /><SortTh k="cpl" label="CP/số" sort={sort} /><SortTh k="share" label="% CP/DT New" sort={sort} /></tr></thead>
+      <thead><tr><SortTh k="name" label={first} sort={sort} align="left" />{!noCost && <SortTh k="cost" label="Chi phí" sort={sort} className={on('cost')} />}<SortTh k="net" label="Doanh thu" sort={sort} className={on('net')} />{split && <><SortTh k="newNet" label="DT New" sort={sort} className={on('newNet')} /><SortTh k="cskhNet" label="DT CSKH" sort={sort} className={on('cskhNet')} /></>}{!noCost && <SortTh k="roas" label="ROAS" sort={sort} className={on('roas')} />}<SortTh k="closed" label="Đơn chốt" sort={sort} className={on('closed')} /><SortTh k="phones" label="Số" sort={sort} className={on('phones')} /><SortTh k="rate" label="TL chốt" hint="Đơn chốt ÷ Số, tối đa 100%. Dưới 40% tô đỏ." sort={sort} className={on('rate')} />{!noCost && <><SortTh k="cpc" label="CP/đơn New" sort={sort} className={on('cpcLow')} /><SortTh k="cpl" label="CP/số" sort={sort} /><SortTh k="share" label="% CP/DT New" sort={sort} /></>}</tr></thead>
       <tbody>{shown.map((r) => {
         const share = r.m.costShare == null ? null : r.m.costShare * 100;
+        const rk = rankBar && !r.id.startsWith('__') ? ++rank : null;
+        const x = sh(r.id);
+        const cmp = !!sheet && !!x && !r.id.startsWith('__');
+        const rate = rateOf(r.m);
         return (
           <tr key={r.id} className={`${r.active ? 'bg-tint-2' : ''} ${r.dim ? 'opacity-55' : ''}`}>
             <td className="min-w-40">
-              {profile && profileOn && !r.id.startsWith('__') ? <span className="flex items-center gap-1.5">
-                {onPick && <button type="button" onClick={() => onPick(r.id)} aria-pressed={r.active} aria-label={r.active ? `Bỏ lọc ${r.name}` : `Lọc cả khối theo ${r.name}`} title={r.active ? 'Bỏ lọc' : 'Lọc cả khối theo người này'}
-                  className={`grid size-6 shrink-0 place-items-center rounded-md tap hover:bg-tint-2 hover:text-primary ${r.active ? 'text-primary' : 'text-ink-3'}`}>{r.active ? <Check size={14} /> : <Filter size={13} />}</button>}
-                <ProfileLink id={r.id} name={r.name} className="font-semibold text-ink" />
-              </span> : onPick ? <button type="button" onClick={() => onPick(r.id)} className="flex items-center gap-1.5 text-left font-semibold text-ink tap hover:text-primary" title={r.active ? 'Bỏ lọc' : 'Bấm để lọc cả khối theo dòng này'}>
-                {r.active && <Check size={14} className="shrink-0 text-primary" />}{r.name}
-              </button> : <span className="font-semibold">{r.name}</span>}
+              <span className="flex items-center gap-1.5">
+                {rankBar && <span className={`grid h-5 min-w-5 shrink-0 place-items-center rounded-full px-1 text-[11px] font-bold ${rk && rk <= 3 ? RANK_TONE[rk] : 'text-ink-3'}`}>{rk ?? '–'}</span>}
+                {profile && profileOn && !r.id.startsWith('__') ? <>
+                  {onPick && <button type="button" onClick={() => onPick(r.id)} aria-pressed={r.active} aria-label={r.active ? `Bỏ lọc ${r.name}` : `Lọc cả khối theo ${r.name}`} title={r.active ? 'Bỏ lọc' : 'Lọc cả khối theo người này'}
+                    className={`grid size-6 shrink-0 place-items-center rounded-md tap hover:bg-tint-2 hover:text-primary ${r.active ? 'text-primary' : 'text-ink-3'}`}>{r.active ? <Check size={14} /> : <Filter size={13} />}</button>}
+                  {onDetail ? <button type="button" className="text-left font-semibold text-ink underline-offset-2 hover:text-primary hover:underline tap" title="Xem chi tiết marketer" onClick={() => onDetail(r.id)}>{r.name}</button> : <ProfileLink id={r.id} name={r.name} className="font-semibold text-ink" />}
+                </> : onPick ? <button type="button" onClick={() => onPick(r.id)} className="flex items-center gap-1.5 text-left font-semibold text-ink tap hover:text-primary" title={r.active ? 'Bỏ lọc' : 'Bấm để lọc cả khối theo dòng này'}>
+                  {r.active && <Check size={14} className="shrink-0 text-primary" />}{r.name}
+                </button> : <span className="font-semibold">{r.name}</span>}
+              </span>
               {(r.sub || r.note) && <span className="block max-w-72 whitespace-normal text-[11px] font-normal leading-snug text-ink-3">{[r.sub, r.note].filter(Boolean).join(' · ')}</span>}
             </td>
-            <td className="n"><span title={money(r.m.cost)}>{shortMoney(r.m.cost)}</span></td>
-            <td className="n font-semibold"><span title={money(r.m.net)}>{shortMoney(r.m.net)}</span>{r.prevNet !== undefined && (r.prevNet || r.m.net) > 0 && <span className="block"><DeltaPill value={delta(r.m.net, r.prevNet)} variant="plain" /></span>}</td>
+            {!noCost && <td className={`n ${on('cost')}`}><span title={money(r.m.cost)}>{shortMoney(r.m.cost)}</span>{cmp && <span className="block w-0 min-w-full whitespace-normal text-[11px] font-normal text-ink-3" title={`Chi phí QC marketer ghi trên sheet: ${money(x.sheet.cost)}`}>CP sheet {shortMoney(x.sheet.cost)}</span>}</td>}
+            <td className={`n font-semibold ${on('net')}`}><span title={money(r.m.net)}>{shortMoney(r.m.net)}</span>{r.prevNet !== undefined && (r.prevNet || r.m.net) > 0 && <span className="block"><DeltaPill value={delta(r.m.net, r.prevNet)} variant="plain" /></span>}
+              {cmp && (!x.counted ? <span className="block text-[11px] font-normal text-warn">không so (chưa có hậu tố MKT)</span> : x.noSheet ? <span className="block text-[11px] font-normal text-ink-3">sheet chưa ghi</span> : <SheetLine sheet={x.sheet.revenue} pos={x.posNet} fmt={shortMoney} />)}</td>
             {split && (() => {
-              const x = splitOfRow(r.m);
+              const y = splitOfRow(r.m);
               const count = (n: number, kind: OrderKind) => onOrders && n > 0 && r.id !== '__unassigned'
                 ? <button type="button" onClick={() => onOrders(r, kind)} className="block w-full text-right text-[11px] text-primary underline decoration-dotted underline-offset-2 tap" title="Bấm xem danh sách đơn">{vi.format(n)} đơn</button>
                 : <span className="block text-[11px] text-ink-3">{vi.format(n)} đơn</span>;
-              return <><td className="n">{x ? shortMoney(x.newNet) : '—'}{x && count(x.newOrders, 'new')}</td><td className="n">{x ? shortMoney(x.cskhNet) : '—'}{x && count(x.cskhOrders, 'cskh')}</td></>;
+              return <><td className={`n ${on('newNet')}`}>{y ? shortMoney(y.newNet) : '—'}{y && count(y.newOrders, 'new')}</td><td className={`n ${on('cskhNet')}`}>{y ? shortMoney(y.cskhNet) : '—'}{y && count(y.cskhOrders, 'cskh')}</td></>;
             })()}
-            <td className="n font-semibold">{roasText(r.m.roas)}</td>
-            <td className="n">{vi.format(r.m.closed)}</td>
-            <td className="n">{vi.format(r.m.phones)}</td>
-            <td className="n">{r.m.costPerClosed === null ? '—' : shortMoney(r.m.costPerClosed)}</td>
+            {!noCost && <td className={`n font-semibold ${on('roas')}`}>{roasText(r.m.roas)}</td>}
+            <td className={`n ${on('closed')}`}>{vi.format(r.m.closed)}{cmp && x.counted && !x.noSheet && <SheetLine sheet={x.sheet.orders} pos={x.posClosed} fmt={(n) => vi.format(n)} />}</td>
+            <td className={`n ${on('phones')}`}>{vi.format(r.m.phones)}{cmp && x.counted && !x.noSheet && <SheetLine sheet={x.sheet.phones} pos={x.posPhones} fmt={(n) => vi.format(n)} />}</td>
+            <td className={`n ${on('rate')} ${closeRateClass(rate)}`} title={`${vi.format(r.m.closed)} đơn chốt / ${vi.format(r.m.phones)} số`}>{rate === null ? '—' : `${rate.toFixed(1).replace('.', ',')}%`}</td>
+            {!noCost && <><td className={`n ${on('cpcLow')}`}>{r.m.costPerClosed === null ? '—' : shortMoney(r.m.costPerClosed)}</td>
             <td className="n">{r.m.costPerLead === null ? '—' : shortMoney(r.m.costPerLead)}</td>
-            <td className="n" aria-label={`${(share ?? 0).toFixed(1)}% chi phí`}><span className="num">{share === null ? '—' : `${share.toFixed(1).replace('.', ',')}%`}</span></td>
+            <td className="n" aria-label={`${(share ?? 0).toFixed(1)}% chi phí`}><span className="num">{share === null ? '—' : `${share.toFixed(1).replace('.', ',')}%`}</span></td></>}
           </tr>
         );
       })}</tbody>
     </table></TableWrap>
-  );
+  </>);
 }
 
 /** Tách doanh thu MKT khi xem Tất cả: New (Sale chốt), CSKH chốt, và người bán ngoài hai bộ phận nếu có. Bấm một ô thì đổi nút đầu trang sang bộ phận đó. */
@@ -275,8 +315,8 @@ function SplitStrip({ cur, prev, total }: { cur: Split; prev: Split; total: numb
   );
 }
 
-export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer, onTeam, onOpen }: {
-  start: string; end: string; posIds: string[]; marketerId: string | null; teamId: string | null;
+export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer, onTeam, onOpen, saleTeam = null, onDetail }: {
+  start: string; end: string; posIds: string[]; marketerId: string | null; teamId: string | null; /** Team Sale đang chọn: lọc đơn, ẩn chi phí. */ saleTeam?: string | null; /** Bấm tên marketer: mở khung chi tiết. */ onDetail?: (id: string) => void;
   onMarketer: (id: string | null) => void; onTeam: (id: string | null) => void; onOpen: () => void;
 }) {
   const [product, setProduct] = useState<string | null>(null);
@@ -291,8 +331,16 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
     if (marketerId) p.set('marketerId', marketerId);
     else if (teamId) p.set('teamId', teamId);
     if (product !== null) p.set('product', product);
+    if (saleTeam) p.set('saleTeam', saleTeam);
     return `/api/marketing/analytics?${p}`;
-  }, [start, end, posIds, seg, marketerId, teamId, product]);
+  }, [start, end, posIds, seg, marketerId, teamId, product, saleTeam]);
+  const noCost = !!saleTeam;
+  // So với sheet (phương án A): chỉ tải số sheet khi bật; tắt thì không gọi.
+  const [cmpOn, setCmpOn] = useState(false);
+  const [dayView, setDayView] = useState(false);
+  const sheetUrl = cmpOn && !noCost ? `/api/marketing/sheet-check?${new URLSearchParams({ start, end, posIds: posIds.join(',') })}` : null;
+  const sheetApi = useApi<SheetCheckData>(sheetUrl, { keep: true });
+  const sheet = useMemo(() => sheetApi.data && cmpOn ? compareSheet(sheetApi.data, seg === 'sale' ? 'sale' : seg === 'cskh' ? 'cskh' : 'net') : null, [sheetApi.data, cmpOn, seg]);
   const { data, loading, error, reload } = useApi<Analytics>(url, { keep: true });
   const motionOn = useMotionOK();
   const timeRows = useMemo<ChartRow[]>(() => (data?.timeline ?? []).map((r) => ({ key: r.key, label: bucketLabel(r.key, data!.bucket), cost: r.cost, net: r.net, costM: r.cost / 1e6, netM: r.net / 1e6, closed: r.closed, roas: r.roas })), [data]);
@@ -356,28 +404,28 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
         {filtered && <button type="button" onClick={() => { onMarketer(null); onTeam(null); setProduct(null); }} className="text-[12px] text-ink-3 underline-offset-2 hover:text-primary hover:underline">Bỏ hết lọc</button>}
       </div>}
 
-      <div className="grid gap-3 md:grid-cols-3">
-        <Giant icon={Wallet} tone="var(--t-orange)" label="Chi phí quảng cáo" value={shortMoney(c.cost)} raw={c.cost} format={short} unit="₫"
+      <div className={`grid gap-3 ${noCost ? 'md:grid-cols-1' : 'md:grid-cols-3'}`}>
+        {!noCost && <Giant icon={Wallet} tone="var(--t-orange)" label="Chi phí quảng cáo" value={shortMoney(c.cost)} raw={c.cost} format={short} unit="₫"
           d={delta(c.cost, p.cost)} invert prevText={was(shortMoney(p.cost))} spark={spark((m) => m.cost, shortMoney)}
-          note={!c.cost ? 'Chưa có chi phí trong phạm vi này (sheet chưa gửi hoặc chưa nhập).' : `${vi.format(c.marketers)} marketer có chi phí`} onClick={onOpen} />
+          note={!c.cost ? 'Chưa có chi phí trong phạm vi này (sheet chưa gửi hoặc chưa nhập).' : `${vi.format(c.marketers)} marketer có chi phí`} onClick={onOpen} />}
         <Giant icon={BadgeDollarSign} tone="var(--primary)" label={`${revLabel} (${REV_WHO[shown]})`} value={shortMoney(c.net)} raw={c.net} format={short} unit="₫"
           d={delta(c.net, p.net)} prevText={was(shortMoney(p.net))} spark={spark((m) => m.net, shortMoney)}
           note={`${vi.format(c.closed)} đơn ${shown === 'all' ? 'trên data MKT · gồm New, CSKH và người bán chưa có hậu tố' : `${REV_WHO[shown]} trên data MKT`} · theo ngày xác nhận, sau giảm trừ`} onClick={onOpen} />
-        <Giant icon={TrendingUp} tone="var(--t-purple)" label="ROAS · theo đơn New" value={roasText(c.roas)} raw={c.roas} format={(n) => roasText(n)}
+        {!noCost && <Giant icon={TrendingUp} tone="var(--t-purple)" label="ROAS · theo đơn New" value={roasText(c.roas)} raw={c.roas} format={(n) => roasText(n)}
           d={roasD} prevText={was(roasText(p.roas))} spark={spark((m) => m.roas, roasText)}
           note={shown === 'cskh' ? 'Chi phí QC tính cho đơn New, xem nút Sale' : c.roas === null ? 'Cần chi phí trong phạm vi này để tính ROAS.' : `1 ₫ quảng cáo mang về ${c.roas.toFixed(2).replace('.', ',')} ₫ doanh thu New${partial ? ` · chỉ tính ${shortMoney(c.coveredNet)} doanh thu của marketer có chi phí` : ''}`}
-          onClick={onOpen} />
+          onClick={onOpen} />}
       </div>
 
       {split && shown === 'all' && <SplitStrip cur={split.current} prev={split.prev} total={c.net} />}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <div className={`grid grid-cols-2 gap-3 ${noCost ? 'lg:grid-cols-2' : 'lg:grid-cols-5'}`}>
         <Stat icon={CheckCircle2} label="Đơn chốt" value={vi.format(c.closed)} d={delta(c.closed, p.closed)} prevText={`trước ${vi.format(p.closed)}`} spark={spark((m) => m.closed, (n) => vi.format(n))} onClick={onOpen} />
         <Stat icon={Phone} label="Số (SĐT khác nhau)" value={vi.format(c.phones)} d={delta(c.phones, p.phones)} prevText={`trước ${vi.format(p.phones)}`} spark={spark((m) => m.phones, (n) => vi.format(n))} onClick={onOpen} />
-        <Stat icon={Coins} label="Chi phí / đơn New" value={c.costPerClosed === null ? '—' : shortMoney(c.costPerClosed)} d={c.costPerClosed !== null && p.costPerClosed !== null ? delta(c.costPerClosed, p.costPerClosed) : null} invert prevText={`trước ${p.costPerClosed === null ? '—' : shortMoney(p.costPerClosed)}`} spark={spark((m) => m.costPerClosed, shortMoney)} onClick={onOpen} />
+        {!noCost && <><Stat icon={Coins} label="Chi phí / đơn New" value={c.costPerClosed === null ? '—' : shortMoney(c.costPerClosed)} d={c.costPerClosed !== null && p.costPerClosed !== null ? delta(c.costPerClosed, p.costPerClosed) : null} invert prevText={`trước ${p.costPerClosed === null ? '—' : shortMoney(p.costPerClosed)}`} spark={spark((m) => m.costPerClosed, shortMoney)} onClick={onOpen} />
         <Stat icon={Megaphone} label="Chi phí / số" value={c.costPerLead === null ? '—' : shortMoney(c.costPerLead)} d={c.costPerLead !== null && p.costPerLead !== null ? delta(c.costPerLead, p.costPerLead) : null} invert prevText={`trước ${p.costPerLead === null ? '—' : shortMoney(p.costPerLead)}`} spark={spark((m) => m.costPerLead, shortMoney)} onClick={onOpen} />
         {/* % chi phí / DT New lên ô riêng cho dễ thấy (anh Vũ 07/11/2026: "phần trăm chi phí trên doanh thu đâu"). */}
-        <Stat icon={Percent} label="% chi phí / DT New" value={c.costShare == null ? '—' : pctText(c.costShare)} d={c.costShare != null && p.costShare != null ? delta(c.costShare, p.costShare) : null} invert prevText={`trước ${p.costShare == null ? '—' : pctText(p.costShare)}`} spark={spark((m) => m.costShare ?? null, pctText)} onClick={onOpen} />
+        <Stat icon={Percent} label="% chi phí / DT New" value={c.costShare == null ? '—' : pctText(c.costShare)} d={c.costShare != null && p.costShare != null ? delta(c.costShare, p.costShare) : null} invert prevText={`trước ${p.costShare == null ? '—' : pctText(p.costShare)}`} spark={spark((m) => m.costShare ?? null, pctText)} onClick={onOpen} /></>}
       </div>
 
       {timeRows.length > 1 && (
@@ -408,9 +456,28 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
         {tab === 'products' && <p className="text-[11.5px] leading-snug text-ink-3">Sản phẩm theo cột Sản phẩm của sheet chi phí. Doanh thu, đơn, số lấy từ đơn Pancake có nhãn hoặc tên sản phẩm khớp (dòng nào khớp ghi ngay dưới tên). Một đơn có nhiều sản phẩm được tính ở mỗi sản phẩm.</p>}
         {tab === 'teams' && !data.teams.some((t) => t.id !== '__unassigned') && <p className="text-[11.5px] text-ink-3">Chưa chia team Marketing. Chia ở nút <b>Quản lý team MKT</b> đầu trang.</p>}
         {tab !== 'time' && onPick && <RankChart seg={shown} rows={[...tabRows].sort((a, b) => (b.m.net + b.m.cost) - (a.m.net + a.m.cost))} onPick={onPick} motionOn={motionOn} />}
+        {tab === 'people' && !noCost && <div className="flex flex-wrap items-center gap-2">
+          <button type="button" aria-pressed={cmpOn} onClick={() => setCmpOn((v) => !v)} className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[12.5px] font-semibold tap ${cmpOn ? 'border-primary bg-primary text-primary-ink' : 'border-line-3 text-ink-2 hover:border-primary'}`}><FileSpreadsheet size={14} />So với sheet</button>
+          {cmpOn && sheetApi.loading && !sheet && <span className="text-[11.5px] text-ink-3">Đang tải số sheet…</span>}
+          {cmpOn && sheetApi.error && !sheet && <span className="text-[11.5px] text-bad">Không tải được số sheet. <button type="button" className="underline" onClick={sheetApi.reload}>Tải lại</button></span>}
+          {sheet && !(sheet.total.sheet.phones || sheet.total.sheet.orders || sheet.total.sheet.revenue) && <span className="text-[12px] text-ink-3">{sheetApi.data?.sheet.connected ? 'Sheet chưa có số SĐT / Đơn / DT trong kỳ này (sheet gửi mỗi giờ).' : 'Chưa nối Google Sheet chi phí (nối ở trang Chi phí & ROAS).'}</span>}
+          {sheet && !!(sheet.total.sheet.phones || sheet.total.sheet.orders || sheet.total.sheet.revenue) && <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-ink-3">
+            <span>Sheet tới hết <b className="text-ink-2">{dmy(sheet.cutoff)}</b></span>
+            {([['SĐT', sheet.total.sheet.phones, sheet.total.posPhones, (n: number) => vi.format(n)], ['Đơn', sheet.total.sheet.orders, sheet.total.posClosed, (n: number) => vi.format(n)], ['DT', sheet.total.sheet.revenue, sheet.total.posNet, shortMoney]] as const).map(([l, sv, pv, fm]) => {
+              const g = gapOf(sv, pv), v = verdict(g.pct);
+              return <span key={l}>{l} <b className="text-ink-2">{fm(sv)}</b> / POS <b className="text-ink-2">{fm(pv)}</b> <StatusChip tone={v.tone}>{v.text} {g.pct > 0 ? '+' : ''}{g.pct.toFixed(1).replace('.', ',')}%</StatusChip></span>;
+            })}
+          </span>}
+        </div>}
         <BreakdownTable rows={tabRows} first={tab === 'people' ? 'Marketer' : tab === 'teams' ? 'Team' : tab === 'products' ? 'Sản phẩm' : data.bucket === 'day' ? 'Ngày' : data.bucket === 'week' ? 'Tuần' : 'Tháng'}
-          onPick={onPick} totalCost={totalCost} keepOrder={tab === 'time'} showSplit={shown === 'all'} profile={tab === 'people'}
+          rankBar={tab === 'people' || tab === 'teams'} sheet={tab === 'people' ? sheet : null}
+          onPick={onPick} totalCost={totalCost} keepOrder={tab === 'time'} showSplit={shown === 'all'} profile={tab === 'people'} noCost={noCost} onDetail={tab === 'people' ? onDetail : undefined}
           onOrders={product === null && (tab === 'people' || tab === 'teams') ? (row, kind) => setOrders({ row, kind, team: tab === 'teams' }) : undefined} />
+        {tab === 'people' && sheet && <div className="flex flex-col gap-1.5 text-[12px] text-ink-3">
+          {sheet.unmatched.length > 0 && <span>Tên trên sheet chưa ghép với POS: {sheet.unmatched.map((u) => `${u.name.replace(/ \(Sheet\)$/, '')} (CP ${shortMoney(u.cost)} · DT ${shortMoney(u.revenue)})`).join(', ')} · ghép ở trang Chi phí &amp; ROAS.</span>}
+          <button type="button" className="self-start font-semibold text-primary underline decoration-dotted underline-offset-2" aria-expanded={dayView} onClick={() => setDayView((v) => !v)}>{dayView ? 'Ẩn lệch theo từng ngày' : 'Xem lệch theo từng ngày'}</button>
+          {dayView && <MktSheetCheck start={start} end={end} posIds={posIds} />}
+        </div>}
         <OrdersSheet pick={orders} start={start} end={end} posIds={posIds} team={false} onClose={() => setOrders(null)} />
       </div>
     </section>

@@ -5,14 +5,14 @@
 // Luôn theo tháng hiện tại, không theo bộ lọc ngày của trang. Chỉ chủ hệ thống (API /api/targets chặn người khác).
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Target } from 'lucide-react';
-import { POS } from '@/lib/shared/report-model';
 import type { Team } from '@/lib/teams/team';
 import { todayVn } from '@/lib/shared/report-time';
 import { useOrderOrigin } from './order-origin-filter';
 import { useMetricSettings } from './metric-settings';
-import { usePosStaffFilter } from './pos-store';
+import { usePosStaffFilter, usePosIds } from './pos-store';
 import { closeRateOfMany } from '@/lib/reports/metrics';
 import { daysInMonth, type TargetItem } from './targets-panel';
+import { useGoalShare } from './goal-share-store';
 import { ChartCard, ErrorBox, SkeletonTable, money, pct, short, vi } from './ui-kit';
 import { useApi } from './use-api';
 
@@ -25,14 +25,18 @@ const LABEL: Record<KpiTeam, string> = { cskh: 'CSKH', sale: 'Sale' };
 const tone = (p: number) => p >= 100 ? 'var(--good)' : p >= 60 ? 'var(--t-lime)' : p >= 30 ? 'var(--warn)' : 'var(--bad)';
 
 export function TeamKpiProgress({ team, focusId, onOpen }: { team: KpiTeam; focusId?: string | null; onOpen: () => void }) {
+  // Quy tắc POS (anh Vũ 12/11/2026): số đã đạt tính trên POS đang chọn.
+  const [posIds] = usePosIds();
   const today = todayVn(), month = today.slice(0, 7), dim = daysInMonth(month), day = Number(today.slice(8, 10));
   const { orderOrigin, marketerId } = useOrderOrigin(team);
   const [employees, setEmployees] = useState<Employee[] | null>(null);
   useEffect(() => { void fetch(`/api/employees?team=${team}`, { cache: 'no-store' }).then((r) => r.ok ? r.json() as Promise<Employee[]> : []).then(setEmployees).catch(() => setEmployees([])); }, [team]);
   const targets = useApi<{ items: TargetItem[] }>(`/api/targets?month=${month}`);
-  const report = useApi<Report>(useMemo(() => `/api/reports/overview?${new URLSearchParams({ start: `${month}-01`, end: today, posIds: POS.map((p) => p.id).join(','), groupBy: 'day', compare: 'none', team, orderOrigin, marketerId })}`, [month, today, team, orderOrigin, marketerId]));
+  const report = useApi<Report>(useMemo(() => `/api/reports/overview?${new URLSearchParams({ start: `${month}-01`, end: today, posIds: posIds.join(','), groupBy: 'day', compare: 'none', team, orderOrigin, marketerId })}`, [posIds, month, today, team, orderOrigin, marketerId]));
 
-  const goals = useMemo(() => new Map((targets.data?.items ?? []).filter((i) => i.scope === 'employee').map((i) => [i.refId, i])), [targets.data]);
+  // Chọn ít hơn mọi POS: mục tiêu từng người chia theo tỉ lệ doanh thu tháng trước của người đó ở các POS đang chọn (anh Vũ 12/11/2026, câu 2 chọn A).
+  const share = useGoalShare(month);
+  const goals = useMemo(() => new Map((targets.data?.items ?? []).filter((i) => i.scope === 'employee').map((i) => [i.refId, { ...i, revenue: share.scale(i.revenue, [i.refId]) }])), [targets.data, share]);
   const inPos = usePosStaffFilter();
   const staff = (employees ?? []).filter((e) => !isSystem(e) && (e.active || goals.has(e.id)) && (!focusId || e.id === focusId) && (!inPos || inPos(e.id)));
   const byId = new Map((report.data?.current.byEmployee ?? []).map((r) => [r.sellerId, r]));
@@ -46,7 +50,7 @@ export function TeamKpiProgress({ team, focusId, onOpen }: { team: KpiTeam; focu
   const goalRates = staff.map((e) => goals.get(e.id)?.closeRate).filter((v): v is number => !!v);
   const goalRate = goalRates.length ? goalRates.reduce((a, v) => a + v, 0) / goalRates.length : null;
   const todayNet = (report.data?.current.byEmployeeDay ?? []).filter((d) => d.day === today && ids.has(d.sellerId)).reduce((a, d) => a + d.closedNet, 0);
-  const daily = staff.reduce((a, e) => { const g = goals.get(e.id); return a + (g?.revenue ? g.revenue / (g.workingDays || dim) : 0); }, 0);
+  const daily = staff.reduce((a, e) => { const g = goals.get(e.id); return a + (g?.revenue ? g.revenue / dim : 0); }, 0);
   const withGoal = staff.filter((e) => goals.get(e.id)?.revenue);
   const onTrack = withGoal.filter((e) => (byId.get(e.id)?.closedNet ?? 0) / goals.get(e.id)!.revenue >= day / dim).length;
   const p = goal ? done / goal * 100 : 0, expected = day / dim * 100, should = goal * day / dim, gap = done - should;
@@ -55,7 +59,7 @@ export function TeamKpiProgress({ team, focusId, onOpen }: { team: KpiTeam; focu
   const label = LABEL[team], monthLabel = `${month.slice(5)}/${month.slice(0, 4)}`;
 
   return (
-    <ChartCard icon={Target} title={`KPI ${label} tháng ${monthLabel}`} subtitle={`Doanh thu đơn chốt từ đầu tháng so với KPI cả đội · ngày ${day}/${dim}${focusId ? ' · đang xem riêng một người' : ''}${inPos ? ' · người của POS đang chọn' : ''}`}
+    <ChartCard icon={Target} title={`KPI ${label} tháng ${monthLabel}`} subtitle={`Doanh thu đơn chốt từ đầu tháng so với KPI cả đội · ngày ${day}/${dim}${focusId ? ' · đang xem riêng một người' : ''}${inPos ? ' · người của POS đang chọn' : ''}${share.note ? ` · ${share.note}` : ''}`}
       action={<button type="button" className="btn sm" onClick={onOpen}>KPI từng người<ArrowRight size={13} /></button>}>
       {targets.error && !targets.data ? <ErrorBox error={targets.error} onRetry={targets.reload} />
         : loading ? <SkeletonTable rows={2} cols={4} />

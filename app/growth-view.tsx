@@ -32,7 +32,9 @@ const signed = (p: number | null) => p === null ? '—' : `${p > 0 ? '+' : ''}${
 
 export function GrowthView({ navDept }: { navDept?: string }) {
   const [dept, setDept] = useState<GrowthDept>(NAV_DEPT[navDept ?? ''] ?? 'sale');
-  const { data, loading, error, reload } = useApi<GrowthData>(`/api/reports/growth?dept=${dept}`, { keep: false });
+  // Quy tắc POS (anh Vũ 12/11/2026): số tăng trưởng tính trên POS đang chọn, không chỉ ẩn người.
+  const [posSel] = usePosIds();
+  const { data, loading, error, reload } = useApi<GrowthData>(`/api/reports/growth?dept=${dept}&posIds=${encodeURIComponent(posSel.join(','))}`, { keep: false });
   const [pickedId, setPickedId] = useState('');
   const [metric, setMetric] = useState<Metric>('v');
   const idx = useMemo(() => data ? indexSeries(data) : null, [data]);

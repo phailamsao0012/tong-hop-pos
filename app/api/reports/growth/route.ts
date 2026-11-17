@@ -5,6 +5,7 @@ import { DATE_RE, addDays, daysBetween, todayVn } from '@/lib/shared/report-time
 import { GROWTH_DEPTS, type GrowthDept } from '@/lib/reports/growth-calc';
 import { growthData, posUserExists, saveJoined } from '@/lib/reports/growth';
 import { audit } from '@/lib/ops/audit';
+import { POS } from '@/lib/shared/report-model';
 
 // Tăng trưởng nhân viên: chỉ chủ hệ thống (anh Vũ 28/10/2026 "hiện tại chỉ theo a" = chỉ anh Vũ và anh Nghĩa xem).
 const MAX_DAYS = 400;
@@ -21,7 +22,10 @@ export async function GET(request: Request) {
   const end = p.get('end') ?? today, start = p.get('start') ?? addDays(end, -364);
   if (!validDay(start) || !validDay(end) || start > end || daysBetween(start, end) > MAX_DAYS)
     return Response.json({ error: `Khoảng ngày không hợp lệ (tối đa ${MAX_DAYS} ngày).` }, { status: 400 });
-  const data = await growthData(env.DB, dept, start, end, today);
+  const valid = new Set<string>(POS.map((x) => x.id));
+  const requested = (p.get('posIds') ?? '').split(',').filter(Boolean);
+  if (requested.some((id) => !valid.has(id))) return Response.json({ error: 'POS không hợp lệ.' }, { status: 400 });
+  const data = await growthData(env.DB, dept, start, end, today, requested);
   return Response.json(data, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 

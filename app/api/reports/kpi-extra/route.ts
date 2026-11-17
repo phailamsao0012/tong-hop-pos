@@ -15,7 +15,11 @@ export async function GET(request: Request) {
   const p = new URL(request.url).searchParams;
   const start = p.get('start') ?? '', end = p.get('end') ?? '';
   if (!DATE_RE.test(start) || !DATE_RE.test(end) || start > end) return Response.json({ error: 'Khoảng ngày không hợp lệ.' }, { status: 400 });
-  const posIds = POS.map((x) => x.id);
+  // Quy tắc POS (anh Vũ 12/11/2026): chỉ POS đang chọn; thiếu posIds = mọi POS.
+  const valid = new Set<string>(POS.map((x) => x.id));
+  const requested = (p.get('posIds') ?? '').split(',').filter(Boolean);
+  if (requested.some((id) => !valid.has(id))) return Response.json({ error: 'POS không hợp lệ.' }, { status: 400 });
+  const posIds = requested.length ? requested : [...valid];
   const prev = compareWindow(end, comparePeriod(start, end, 'previous'));
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const [qty, prevQty, upsell] = await Promise.all([

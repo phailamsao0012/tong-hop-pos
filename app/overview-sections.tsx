@@ -21,6 +21,8 @@ import { segmentDrillHint } from '@/lib/shared/drill-hint';
 import { useApi } from './use-api';
 import { PeriodBars, useTrendCards, type NoteDept } from './overview-trends';
 import { Th, DeltaPill, ErrorBox, InfoTip, SkeletonKpis, TableWrap, money, pct, shortMoney, vi } from './ui-kit';
+import { KpiDayStrip, useKpiDay } from './kpi-day-strip';
+import type { KpiDayReport } from '@/lib/kpi/kpi-day-report';
 
 export type SectionsReport = Sections & { sale: Sections['sale'] & { packedNet?: number; packedOrders?: number }; mkt: Sections['mkt'] & { newNet?: number; cskhNet?: number; otherNet?: number }; definitions: Record<string, string>; syncedAt: string | null; period: { start: string; end: string };
   /** 'sent': Vận đơn theo ngày gửi hàng; thiếu (số lưu cũ) hoặc 'closed': trong các đơn vào Chờ XN. */ sentBasis?: 'sent' | 'closed' };
@@ -106,6 +108,8 @@ export function OverviewSections({ start, end, posIds, productSegment, onNavigat
   const team = useTeam();
   const params = new URLSearchParams({ team, start, end, posIds: posIds.join(','), productSegment });
   const { data, error, reload } = useApi<SectionsReport>(`/api/reports/sections?${params}`, { refreshMs: 10 * 60000, keep: false });
+  // KPI tháng chia ngày theo POS đang chọn (anh Vũ 12/11/2026), luôn là tháng hiện tại, không theo kỳ đang xem.
+  const kpi = useKpiDay(posIds);
   if (error && !data) return part === 'split' ? null : <ErrorBox error={error} onRetry={reload} />;
   if (!data) return part === 'split' ? null : <SkeletonKpis count={4} className="lg:grid-cols-2" />;
   // Kỳ và POS là bộ lọc chung nên trang đích mở đúng kỳ, đúng POS đang xem; nhóm đơn đang lọc đi kèm qua gợi ý (lib/shared/drill-hint.ts).
@@ -119,7 +123,7 @@ export function OverviewSections({ start, end, posIds, productSegment, onNavigat
   return (
     <div className="space-y-3">
       {part !== 'grid' && <RevenueSplit data={data} start={start} end={end} posIds={posIds} productSegment={productSegment} onDrill={open} />}
-      {part !== 'split' && <SectionsGrid data={data} onDrill={open} packedParams={new URLSearchParams({ start, end, posIds: posIds.join(","), productSegment })} />}
+      {part !== 'split' && <SectionsGrid data={data} onDrill={open} kpi={kpi.data ?? undefined} packedParams={new URLSearchParams({ start, end, posIds: posIds.join(","), productSegment })} />}
     </div>
   );
 }
@@ -189,7 +193,7 @@ function RevenueSplit({ data, start, end, posIds, productSegment, onDrill }: {
   );
 }
 
-export function SectionsGrid({ data, onDrill, packedParams }: { data: SectionsReport; onDrill?: OnDrill; packedParams?: URLSearchParams }) {
+export function SectionsGrid({ data, onDrill, packedParams, kpi }: { data: SectionsReport; onDrill?: OnDrill; packedParams?: URLSearchParams; kpi?: KpiDayReport }) {
   const go = (k: TargetKey) => onDrill ? { onClick: () => onDrill(k), hint: hintOf(k) } : {};
   const hero = (k: TargetKey) => onDrill ? { onHero: () => onDrill(k), heroHint: hintOf(k) } : {};
   const team = useTeam();
@@ -217,6 +221,7 @@ export function SectionsGrid({ data, onDrill, packedParams }: { data: SectionsRe
     <div className="stagger grid grid-cols-1 gap-3 lg:grid-cols-2">
       <Board tone="green" icon={ShoppingCart} title="Sale" caption="Bộ phận Sale · chốt từ Chờ xác nhận" info={d['Sale']}
         heroLabel="Doanh thu" hero={money(sale.net)} heroNote={<><b className="num">{vi.format(sale.orders)}</b> đơn chốt</>} {...hero('sale.revenue')}>
+        <KpiDayStrip dept={kpi?.depts.sale} report={kpi} />
         <div className="grid grid-cols-3 gap-2">
           <Tile icon={CheckCircle2} label="Đơn chốt" value={vi.format(sale.orders)} note="chờ XN + đã XN trở đi" {...go('sale.closed')} />
           <Tile icon={Target} label="Tỷ lệ chốt" value={pct(sale.rate)} note={`${vi.format(sale.closedNow)} ÷ ${vi.format(sale.created)} đơn lên`} bar={<Bar value={sale.rate} color="var(--t-green)" />} {...go('sale.rate')} />
@@ -228,6 +233,7 @@ export function SectionsGrid({ data, onDrill, packedParams }: { data: SectionsRe
 
       <Board tone="teal" icon={HeartHandshake} title="CSKH" caption="Bộ phận CSKH · khách cũ và khách MKT đưa về" info={d['CSKH']}
         heroLabel="Doanh thu" hero={money(cskh.net)} heroNote={<><b className="num">{vi.format(cskh.orders)}</b> đơn chốt</>} {...hero('cskh.revenue')}>
+        <KpiDayStrip dept={kpi?.depts.cskh} report={kpi} />
         <div className="grid grid-cols-3 gap-2">
           <Tile icon={Coins} label="AOV" value={moneyOrDash(cskh.aov)} note="doanh thu ÷ đơn chốt" {...go('cskh.aov')} />
           <Tile icon={Repeat2} label={`Tự upsell · ${pct(selfShare, 0)}`} value={vi.format(cskh.self.orders)} note={money(cskh.self.net)}
@@ -240,6 +246,7 @@ export function SectionsGrid({ data, onDrill, packedParams }: { data: SectionsRe
 
       <Board tone="blue" icon={Megaphone} title="MKT" caption="Đưa số về · chốt = đã xác nhận trên Pancake" info={d['MKT']}
         heroLabel="Doanh thu MKT" hero={money(mkt.net)} heroNote={<><b className="num">{vi.format(mkt.orders)}</b> đơn đã xác nhận {team === 'all' && <>· New {shortMoney(mkt.newNet ?? 0)} · CSKH {shortMoney(mkt.cskhNet ?? 0)} · Khác {shortMoney(mkt.otherNet ?? 0)}</>}</>} {...hero('mkt.revenue')}>
+        <KpiDayStrip dept={kpi?.depts.mkt} report={kpi} />
         {/* MKT đo bằng số về, đơn chốt, chi phí (anh Vũ 10/10/2026); cùng số với trang Chi phí & ROAS. Số lưu cũ chưa có số về thì hiện "—". */}
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           <Tile icon={Phone} label="Số về" value={mkt.phones == null ? '—' : vi.format(mkt.phones)} note="SĐT khác nhau trên đơn tạo" {...go('mkt.leads')} />

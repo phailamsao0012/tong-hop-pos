@@ -92,6 +92,13 @@ const COUNTED_IN_TEAM = `user_id IN (SELECT m.value FROM app_settings s, json_ea
 /** Điều kiện trên một dòng pos_users: người này được tính doanh số. */
 export const COUNTED = `(${COUNTED_NAME} OR ${COUNTED_EXTRA} OR ${COUNTED_IN_TEAM})`;
 export const COUNTED_STAFF = `(SELECT DISTINCT user_id FROM pos_users WHERE ${COUNTED})`;
+/** Tài khoản bộ phận Sàn (anh Vũ 16/11/2026: "<tên> sàn là bộ phận sàn, không liên quan tới mkt, bỏ hết mọi thứ liên quan tới sàn"):
+ *  tên có nguyên từ "Sàn" (dựng sẵn hoặc tách dấu, không bắt "Sàng"). Luôn bị loại khỏi mọi số Marketing (số về, đơn, doanh thu, chi phí). */
+export const SAN_WORDS = ['sàn', 'Sàn', 'SÀN'].flatMap((w) => [w, w.normalize('NFD')]);
+/** Nguyên từ "Sàn" ở bất kỳ vị trí nào trong tên (tách từ như nhận hậu tố MKT / CSKH / SALE: bỏ phần trong ngoặc, '-' '_' là khoảng trắng). "Sàng" không tính. */
+export const SAN_ACCOUNTS = `(SELECT DISTINCT user_id FROM pos_users WHERE ${SAN_WORDS.map((w) => `${NAME_WORDS} LIKE '% ${w} %'`).join(' OR ')})`;
+/** ` AND <cột marketer> không phải tài khoản Sàn` (đơn chưa có marketer giữ nguyên). */
+export const notSan = (column: string) => ` AND COALESCE(${column},'') NOT IN ${SAN_ACCOUNTS}`;
 /** ` AND <cột người> được tính` (đơn chưa có người giữ nguyên, vì không thuộc ai). Dùng cho số doanh thu khi xem tất cả. */
 export const countedFilter = (column: string) => ` AND (NULLIF(${column},'') IS NULL OR ${column} IN ${COUNTED_STAFF})`;
 /** Biểu thức 1/0: người trên cột này được tính doanh số (chưa có người = 1). */

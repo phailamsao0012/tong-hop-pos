@@ -1,4 +1,5 @@
 // Logic giao việc độc lập với HTTP, React và môi trường Worker.
+import { MEMO_HELP, memoCommand, memoOn } from '@/lib/zalo/memo';
 import { logMessage, type ChatKind } from '@/lib/zalo/zalo-chat';
 export const STATUS_LABELS = { moi: 'Mới giao', da_nhan: 'Đã nhận', dang_lam: 'Đang triển khai', xong: 'Đã hoàn thành', chua_xong: 'Chưa hoàn thành', huy: 'Đã huỷ' } as const;
 export type Status = keyof typeof STATUS_LABELS;
@@ -256,13 +257,26 @@ async function notifyContact(db: D1Database, id: string, text: string, send?: Za
   } catch { console.error('zalo notification failed'); }
 }
 
-export async function handleZaloUpdate(db: D1Database, update: unknown, send: ZaloSend, now = Date.now()) {
+/** bossCommand: lệnh riêng của sếp (đặt / xem KPI, lib/zalo/kpi-bot.ts), route phía máy chủ truyền vào để file này không kéo code máy chủ vào trang web. */
+export type BossCommand = (db: D1Database, actor: Contact, chatId: string, text: string, now: number) => Promise<string | null>;
+/** Luồng đặt KPI qua Zalo đang mở (lib/zalo/kpi-bot.ts, tự huỷ sau 10 phút): KPI đi trước sổ nhắc việc. */
+async function kpiFlowOpen(db: D1Database, chatId: string, now: number) {
+  const rows = (await db.prepare('SELECT value FROM app_settings WHERE key IN (?,?)').bind(`zalo_kpi_flow:${chatId}`, `zalo_kpi_pending:${chatId}`).all<{ value: string }>()).results;
+  return rows.some((x) => { try { return now - Number((JSON.parse(x.value) as { at?: number }).at ?? 0) < 10 * 60000; } catch { return false; } });
+}
+export async function handleZaloUpdate(db: D1Database, update: unknown, send: ZaloSend, now = Date.now(), bossCommand?: BossCommand) {
   // Zalo gửi webhook dạng { ok, result: { message, event_name } }; vẫn nhận dạng { message } cũ.
   const root = update && typeof update === 'object' && 'result' in update && update.result && typeof update.result === 'object' ? update.result : update;
   if (!root || typeof root !== 'object' || !('message' in root)) return;
   const message = root.message as { chat?: { id?: unknown; type?: unknown; chat_type?: unknown }; text?: unknown } | null;
   const id = message?.chat?.id;
-  if ((typeof id !== 'string' && typeof id !== 'number') || !String(id) || typeof message?.text !== 'string') return;
+  if ((typeof id !== 'string' && typeof id !== 'number') || !String(id)) return;
+  if (typeof message?.text !== 'string') {
+    // Sổ nhắc việc chỉ lưu chữ (plan bản 5): sếp gửi ảnh, ghi âm, nhãn dán thì báo lại để gõ chữ.
+    const who = message && (message.chat?.chat_type ?? message.chat?.type ?? 'private') === 'private' ? await contactByChat(db, String(id)) : null;
+    if (who?.kind === 'boss' && await memoOn(db)) await safeSend(send, String(id), 'Em chỉ lưu được chữ. Sếp gõ lại bằng chữ giúp em.');
+    return;
+  }
   const chatType = message.chat?.chat_type ?? message.chat?.type;
   if (chatType && String(chatType).toLowerCase() !== 'private') return;
   const chatId = String(id), text = message.text.trim();
@@ -270,15 +284,28 @@ export async function handleZaloUpdate(db: D1Database, update: unknown, send: Za
   const actor = await contactByChat(db, chatId), command = parseCommand(text);
   // Tin của người đã nối (trừ mã nối) và lời bot trả lời họ được ghi vào chat trên web.
   const logged = actor && actor.kind !== 'boss' && command.cmd !== 'pair' ? actor : null;
-  const reply = async (body: string) => { const delivered = await safeSend(send, chatId, body); if (logged) await logMessage(db, { contactId: logged.id, dir: 'out', kind: 'text', body: limited(body), delivered, now }); };
+  // Câu trả lời dài (bản xem trước KPI) có thể gồm nhiều tin, ngăn bởi MSG_BREAK của lib/zalo/kpi-bot.ts: gửi lần lượt từng tin.
+  const reply = async (body: string) => { for (const part of body.split('\n\f\n')) { const delivered = await safeSend(send, chatId, part); if (logged) await logMessage(db, { contactId: logged.id, dir: 'out', kind: 'text', body: limited(part), delivered, now }); } };
   if (logged) await logMessage(db, { contactId: logged.id, dir: 'in', kind: ['status', 'note', 'meeting'].includes(command.cmd) ? 'status' : 'text', refNo: 'no' in command ? command.no : null, body: text, now });
   if (command.cmd === 'pair') {
     const result = await redeemPairCode(db, command.code, chatId, now);
-    if (result.ok) await reply('Đã nối Zalo với hệ thống giao việc.\n' + formatHelp(result.contact.kind));
+    if (result.ok) await reply('Đã nối Zalo với hệ thống giao việc.\n' + formatHelp(result.contact.kind) + (result.contact.kind === 'boss' ? `\n\n${MEMO_HELP}\n\nKPI: set kpi · xem kpi · hoàn tác kpi\nBáo cáo sếp gửi lúc 8h (2 báo cáo), 12h, 17h, 22h.` : ''));
     else if (!result.silent) await reply('Mã nối sai hoặc đã hết hạn.');
     return;
   }
   if (!actor) { await reply('Chào anh/chị. Gửi mã 6 số được cấp để nối với hệ thống giao việc.'); return; }
+  // Sổ nhắc việc (anh Vũ 15/11/2026, lib/zalo/memo.ts): đang đặt KPI thì KPI trước; rồi sổ đang mở / lệnh của sổ; rồi các lệnh cũ.
+  if (actor.kind === 'boss' && !await kpiFlowOpen(db, chatId, now)) {
+    const isOther = (t: string) => ['list', 'week', 'help', 'status', 'note', 'meeting'].includes(parseCommand(t).cmd);
+    const runOther = async (t: string) => (bossCommand ? await bossCommand(db, actor, chatId, t, now).catch(() => null) : null) ?? 'Sổ vẫn đang mở. Sếp gõ "hết" để đóng sổ rồi gõ lại lệnh.';
+    const memo = await memoCommand(db, actor, text, now, 'before', { isOtherCommand: isOther, runOther }).catch(() => null);
+    if (memo) { await reply(memo); return; }
+  }
+  // Sếp đặt / xem KPI qua Zalo (anh Vũ 14/11/2026, lib/zalo/kpi-bot.ts): xem trước rồi "OK" mới lưu.
+  if (actor.kind === 'boss' && bossCommand) {
+    const r = await bossCommand(db, actor, chatId, text, now).catch(() => 'Chưa đặt được KPI. Thử lại hoặc đặt trên web: Giao việc → KPI.');
+    if (r) { await reply(r); return; }
+  }
   try {
     if (command.cmd === 'status') {
       if (command.to === 'chua_xong' && !command.reason) { await reply(missingReason(command.no)); return; }
@@ -311,7 +338,12 @@ export async function handleZaloUpdate(db: D1Database, update: unknown, send: Za
       const c = await saveContact(db, { name: command.name, kind: 'staff', leader_id: actor.id }, now);
       const code = await createPairCode(db, c.id, now);
       await reply(`Đã thêm ${c.name}. Mở Zalo, tìm bot và nhắn mã ${code} để nối.`);
-    } else await reply(formatHelp(actor.kind));
+    } else {
+      // Sổ nhắc việc: câu báo xong kiểu tự nhiên ("vụ phí hoàn xử lý rồi nhé") → hỏi lại đúng việc nào.
+      const guess = actor.kind === 'boss' ? await memoCommand(db, actor, text, now, 'after').catch(() => null) : null;
+      if (guess) await reply(guess);
+      else await reply(formatHelp(actor.kind) + (actor.kind === 'boss' && await memoOn(db) ? `\n\n${MEMO_HELP}` : '') + (actor.kind === 'boss' && bossCommand ? '\n\n' + ((await bossCommand(db, actor, chatId, 'kpi', now).catch(() => null)) ?? '') : ''));
+    }
   } catch { await reply('Chưa làm được lệnh này. Kiểm tra lại số việc/họp và trạng thái hiện tại. Gõ "hướng dẫn" để xem cách nhắn.'); }
 }
 

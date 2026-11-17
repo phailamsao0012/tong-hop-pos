@@ -3,6 +3,7 @@
 // nên trả cả hai mốc ngày và tách POS ra Sale (New) / CSKH / khác để người xem thấy cột nào khớp sheet.
 // Cách tính POS giống số chính Marketing (lib/mkt-analytics.ts): doanh thu sau giảm trừ, chỉ Marketer được tính doanh số; số = SĐT khác nhau mỗi ngày.
 import { env } from 'cloudflare:workers';
+import { adCostSource, sheetStatsSource } from '@/lib/ops/cost-allocation';
 import { ensureSheetCostSchema } from '@/lib/ops/sheet-costs';
 import { NET } from '@/lib/reports/stats';
 import { COUNTED_STAFF, type Team, leadSellerFilter, teamFilter, teamSubquery } from '@/lib/teams/team';
@@ -38,7 +39,7 @@ export async function mktSheetCheck(opts: { posIds: string[]; start: string; end
   const base = `o.pos_id IN (${ph}) AND ${mk} IS NOT NULL`;
 
   const [sheetRows, confRows, createdRows, nameRows, sources, costRows] = await db.batch([
-    db.prepare('SELECT marketer_id AS m, day AS d, SUM(phones) AS phones, SUM(orders) AS orders, SUM(revenue) AS revenue FROM sheet_mkt_stats WHERE day>=? AND day<=? GROUP BY 1,2')
+    db.prepare(`SELECT marketer_id AS m, day AS d, SUM(phones) AS phones, SUM(orders) AS orders, SUM(revenue) AS revenue FROM ${sheetStatsSource(opts.posIds, opts.start, opts.end)} WHERE day>=? AND day<=? GROUP BY 1,2`)
       .bind(opts.start, opts.end),
     // Mốc ngày xác nhận lần đầu: đúng như ô Doanh thu MKT.
     db.prepare(`SELECT ${mk} AS m, ${bucketExpr('o.first_confirmed_at', 'day')} AS d, COUNT(*) AS closed, COALESCE(SUM(${net}),0) AS net, ${split('1')}
@@ -52,7 +53,7 @@ export async function mktSheetCheck(opts: { posIds: string[]; start: string; end
     db.prepare(`SELECT user_id, MAX(name) AS name, MAX(user_id IN ${COUNTED_STAFF}) AS counted FROM pos_users WHERE name<>'' GROUP BY user_id`),
     db.prepare("SELECT MAX(received_at) AS at, COUNT(*) AS n FROM sheet_cost_sources"),
     // Chi phí QC từ sheet báo cáo (cùng bảng ad_costs mà ô Chi phí của trang Marketing đọc), theo marketer × ngày.
-    db.prepare('SELECT marketer_id AS m, day AS d, COALESCE(SUM(amount),0) AS cost FROM ad_costs WHERE day>=? AND day<=? GROUP BY 1,2')
+    db.prepare(`SELECT marketer_id AS m, day AS d, COALESCE(SUM(amount),0) AS cost FROM ${adCostSource(opts.posIds, opts.start, opts.end)} WHERE day>=? AND day<=? GROUP BY 1,2`)
       .bind(opts.start, opts.end),
   ]);
 

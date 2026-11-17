@@ -135,7 +135,6 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
   const visTotal = visibleEmployees.reduce((a, e) => a + (items[key('employee', e.id)]?.revenue ?? 0), 0);
   const visRates = visibleEmployees.map((e) => items[key('employee', e.id)]?.closeRate).filter((v): v is number => !!v);
   const visRate = visRates.length ? visRates.reduce((a, v) => a + v, 0) / visRates.length : null;
-  const dim = daysInMonth(month);
   const monthLabel = mmyyyy(month);
 
   const moneyInput = (scope: 'pos' | 'employee' | 'team', refId: string, name: string) => {
@@ -162,7 +161,7 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
   );
 
   return (
-    <ChartCard icon={Target} title="Mục tiêu tháng" subtitle="KPI tháng cho từng POS và nhân viên. KPI ngày = mục tiêu ÷ số ngày làm việc (mặc định = số ngày của tháng). Ca làm việc theo giờ, đổi được bất kỳ lúc nào."
+    <ChartCard icon={Target} title="Mục tiêu tháng" subtitle="KPI tháng cho từng POS và nhân viên. KPI ngày = mục tiêu ÷ số ngày của tháng (Chủ nhật, lễ cũng tính). Ca làm việc theo giờ, đổi được bất kỳ lúc nào."
       action={
         <div className="flex flex-wrap items-center gap-2">
           <Input type="month" className="w-auto" aria-label="Tháng mục tiêu" value={month} onChange={(e) => requestMonth(e.target.value)} />
@@ -214,7 +213,7 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
               <table className="tbl sticky-first">
                 <thead><tr>
                   <Th>Nhân viên</Th><Th>Bộ phận</Th><Th className="n">Doanh thu (₫)</Th><Th className="n">Tỉ lệ chốt</Th>
-                  <Th className="n"><span className="inline-flex items-center gap-0.5">Ngày làm<InfoTip text="Số ngày làm việc trong tháng, để chia KPI ngày. Bỏ trống = số ngày của tháng." /></span></Th>
+                  
                   <Th><span className="inline-flex items-center gap-0.5">Ca (giờ)<InfoTip text="Ca làm việc: giờ bắt đầu – giờ kết thúc (0–24). Dùng ở Trong ngày · chốt nóng, chế độ Ca cá nhân." /></span></Th>
                 </tr></thead>
                 <tbody>
@@ -224,8 +223,6 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
                       <td className="mut text-xs">{e.department ?? '—'}</td>
                       <td className="n">{moneyInput('employee', e.id, e.name)}</td>
                       <td className="n">{rateInput(e.id, e.name)}</td>
-                      <td className="n"><Input type="number" min={1} max={31} className={`${NUM_INPUT} w-16`} placeholder={String(dim)} disabled={!canEdit} aria-label={`Ngày làm việc ${e.name}`} value={items[key('employee', e.id)]?.workingDays ?? ''}
-                        onChange={(ev) => set('employee', e.id, 'workingDays', ev.target.value === '' ? null : Math.max(1, Math.min(31, Math.round(Number(ev.target.value) || 0))))} /></td>
                       <td><span className="inline-flex items-center gap-1"><Input type="number" min={0} max={23} className={`${NUM_INPUT} w-14`} placeholder="8" disabled={!canEdit} aria-label={`Giờ bắt đầu ca ${e.name}`} value={shifts[e.id]?.shiftStart ?? ''} onChange={(ev) => setShift(e.id, 'shiftStart', ev.target.value)} /><span className="text-xs text-ink-3">–</span><Input type="number" min={1} max={24} className={`${NUM_INPUT} w-14`} placeholder="17" disabled={!canEdit} aria-label={`Giờ kết thúc ca ${e.name}`} value={shifts[e.id]?.shiftEnd ?? ''} onChange={(ev) => setShift(e.id, 'shiftEnd', ev.target.value)} /></span></td>
                     </tr>
                   ))}

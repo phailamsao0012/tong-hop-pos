@@ -5,7 +5,7 @@
 // Mọi màu lấy từ token trong globals.css (var(--…)); mọi chữ số dùng lớp .num (Be Vietnam Pro 600, tabular). Hướng dẫn: scratchpad/ui-apply/ui-kit-v2.md.
 import { Children, cloneElement, isValidElement, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { ArrowDown, ArrowDownRight, ArrowRight, ArrowUp, ArrowUpDown, ArrowUpRight, ChevronDown, Info, Monitor, Moon, RotateCw, Sun } from 'lucide-react';
+import { ArrowDown, ArrowDownRight, ArrowRight, ArrowUp, ArrowUpDown, ArrowUpRight, ChevronDown, ChevronRight, Info, Monitor, Moon, RotateCw, Sun } from 'lucide-react';
 import { colLabel } from '@/lib/shared/column-labels';
 import { POS } from '@/lib/shared/report-model';
 import { TEAM_LABELS, setTeam, useTeamChoice, type Team } from './team-store';
@@ -185,35 +185,65 @@ function MoreLink({ label = 'Xem thêm', onClick, href }: { label?: string; onCl
   return href ? <a className={cls} href={href}>{label}{arrow}</a> : <button type="button" className={cls} onClick={onClick}>{label}{arrow}</button>;
 }
 
-export function ChartCard({ icon: Icon, title, subtitle, action, info, children, className = '', more, lift, loading, bodyClassName = '', id }: {
+/** Đóng / mở thẻ, nhớ theo từng máy (localStorage); mặc định đóng. Lỗi bộ nhớ trình duyệt thì vẫn chạy, chỉ không nhớ. */
+function useCollapsed(storageKey: string | undefined) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!storageKey) return;
+    try { if (window.localStorage.getItem(storageKey) === 'open') setOpen(true); } catch { /* không nhớ được thì thôi */ }
+  }, [storageKey]);
+  const toggle = () => setOpen((v) => {
+    try { if (storageKey) window.localStorage.setItem(storageKey, v ? 'closed' : 'open'); } catch { /* bỏ qua */ }
+    return !v;
+  });
+  return { open, toggle };
+}
+
+export function ChartCard({ icon: Icon, title, subtitle, action, info, children, className = '', more, lift, loading, bodyClassName = '', id, collapse }: {
   icon?: LucideIcon; title: string; subtitle?: string; action?: ReactNode; info?: string; children: ReactNode; className?: string;
   /** Liên kết "Xem thêm" ở góc phải đầu thẻ. */ more?: { label?: string; onClick?: () => void; href?: string };
   /** Nhấc thẻ + viền xanh khi rê chuột. */ lift?: boolean;
   /** Che thân thẻ bằng xương lấp lánh khi đang tải. */ loading?: boolean;
   bodyClassName?: string; /** id DOM (để trang khác cuộn tới, xem nav-focus.ts). */ id?: string;
+  /** Thu cả thẻ vào dòng tiêu đề, bấm mới xổ ra (anh Vũ 12/11/2026). `summary` hiện cạnh tiêu đề khi đóng. */
+  collapse?: { storageKey: string; summary?: ReactNode };
 }) {
   const tableRef = useTableCardLabels();
+  const fold = useCollapsed(collapse?.storageKey);
+  const shut = !!collapse && !fold.open;
   // Con vật chờ tải: chỉ gắn khi thẻ từng ở trạng thái tải (giữ lại sau đó để con vật làm nhịp kết khi số về).
   const [critter, setCritter] = useState(!!loading);
   if (loading && !critter) setCritter(true);
+  const heading = <>
+    <span className="truncate" title={title}>{title}</span>
+    {(info || (subtitle && subtitle.length > 90)) && !collapse && <InfoTip text={info ?? subtitle} />}
+  </>;
   return (
-    <section id={id} className={`card flex flex-col gap-3 p-5 max-sm:p-4 ${lift ? 'lift' : ''} ${loading ? 'is-loading is-thinking' : ''} ${className}`}>
-      {critter && <CritterSlot kind="card" active={!!loading} />}
+    <section id={id} className={`card flex flex-col ${shut ? 'gap-0 py-3' : 'gap-3 py-5'} px-5 max-sm:px-4 ${shut ? '' : 'max-sm:py-4'} ${lift ? 'lift' : ''} ${loading ? 'is-loading is-thinking' : ''} ${className}`}>
+      {critter && !shut && <CritterSlot kind="card" active={!!loading} />}
       <header className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex min-w-[min(100%,14rem)] flex-1 items-start gap-2">
-          {Icon && <Icon size={15} className="mt-0.5 shrink-0 text-ink-3" aria-hidden="true" />}
-          {/* Tiêu đề và dòng phụ (kỳ, phạm vi) chung một dòng; lời giải thích dài chỉ nằm trong dấu (i) (anh Vũ 21/10/2026). */}
-          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
-            <h3 className="flex min-w-0 items-center gap-1.5 text-[15px] font-semibold leading-[1.35] tracking-[-.01em] text-ink">
-              <span className="truncate" title={title}>{title}</span>
-              {(info || (subtitle && subtitle.length > 90)) && <InfoTip text={info ?? subtitle} />}
-            </h3>
-            {subtitle && subtitle.length <= 90 && <p className="line-clamp-1 min-w-0 max-w-[70ch] text-[11.5px] leading-snug text-ink-3" title={subtitle}><Segments text={subtitle} /></p>}
-          </div>
+          {collapse
+            ? <button type="button" onClick={fold.toggle} aria-expanded={fold.open} className="flex min-w-0 flex-1 items-center gap-2 text-left tap">
+                <ChevronRight size={15} className={`shrink-0 text-ink-3 transition-transform ${fold.open ? 'rotate-90' : ''}`} aria-hidden="true" />
+                {Icon && <Icon size={15} className="shrink-0 text-ink-3" aria-hidden="true" />}
+                <span className="flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+                  <span className="flex min-w-0 items-center gap-1.5 text-[15px] font-semibold leading-[1.35] tracking-[-.01em] text-ink">{heading}</span>
+                  {collapse.summary && <span className="num text-[12px] font-medium text-ink-3">{collapse.summary}</span>}
+                </span>
+              </button>
+            : <>
+                {Icon && <Icon size={15} className="mt-0.5 shrink-0 text-ink-3" aria-hidden="true" />}
+                {/* Tiêu đề và dòng phụ (kỳ, phạm vi) chung một dòng; lời giải thích dài chỉ nằm trong dấu (i) (anh Vũ 21/10/2026). */}
+                <div className="flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+                  <h3 className="flex min-w-0 items-center gap-1.5 text-[15px] font-semibold leading-[1.35] tracking-[-.01em] text-ink">{heading}</h3>
+                  {subtitle && subtitle.length <= 90 && <p className="line-clamp-1 min-w-0 max-w-[70ch] text-[11.5px] leading-snug text-ink-3" title={subtitle}><Segments text={subtitle} /></p>}
+                </div>
+              </>}
         </div>
-        {(action || more) && <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">{action}{more && <MoreLink {...more} />}</div>}
+        {!shut && (action || more) && <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">{action}{more && <MoreLink {...more} />}</div>}
       </header>
-      <div className={`card-body min-w-0 ${bodyClassName}`}><div ref={tableRef} className="tbl-wrap">{children}</div></div>
+      {!shut && <div className={`card-body min-w-0 ${bodyClassName}`}><div ref={tableRef} className="tbl-wrap">{children}</div></div>}
     </section>
   );
 }
@@ -452,7 +482,61 @@ function columnHeader(label: ReactNode, full?: string, hint?: string, title?: st
   const abbreviate = entry.full.split(/\s+/).filter((word) => /[\p{L}\p{N}]/u.test(word)).length >= 3 && entry.short !== entry.full;
   const name = full ?? entry.full;
   const details = [...new Set([hint ?? entry.hint, ...headerHints(label), title ?? ''].filter(Boolean))];
-  return { name, label: !full && abbreviate ? shortHeader(label, entry.short) : label, title: [name, ...details].filter(Boolean).join('\n') };
+  return {
+    name, label: !full && abbreviate ? shortHeader(label, entry.short) : label, title: [name, ...details].filter(Boolean).join('\n'),
+    /** Cho tiêu đề tự co giãn: chữ đầy đủ và chữ tắt (chỉ khi nhãn là chữ thuần). */ fit: typeof label === 'string' ? { full: full ?? label, short: abbreviate ? entry.short : label } : null,
+  };
+}
+
+/** Đo bề rộng chữ bằng canvas (cùng font với ô tiêu đề). */
+let measureCtx: CanvasRenderingContext2D | null = null;
+function textWidth(text: string, el: Element) {
+  measureCtx ??= document.createElement('canvas').getContext('2d');
+  if (!measureCtx) return 0;
+  const cs = getComputedStyle(el);
+  measureCtx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+  return measureCtx.measureText(text).width;
+}
+/**
+ * Tiêu đề cột số tự co giãn (anh Vũ 12/11/2026): bề rộng cột do số trong ô quyết định; tiêu đề hiện tên tắt (luôn đọc được),
+ * và chỉ hiện tên đầy đủ khi số trong cột đã đủ rộng để chứa nó (không vì tiêu đề mà cột rộng thêm). Lần vẽ đầu dùng tên tắt.
+ */
+function cellsWidth(th: HTMLTableCellElement) {
+  const table = th.closest('table');
+  if (!table) return 0;
+  const col = th.cellIndex;
+  let max = 0;
+  const range = document.createRange();
+  for (const row of Array.from(table.tBodies[0]?.rows ?? []).slice(0, 60)) {
+    const td = row.cells[col];
+    if (!td || td.colSpan > 1) continue;
+    range.selectNodeContents(td);
+    max = Math.max(max, range.getBoundingClientRect().width);
+  }
+  return max;
+}
+function useFitLabel(fit: { full: string; short: string } | null, extra = 0) {
+  const ref = useRef<HTMLTableCellElement>(null);
+  const [useFull, setUseFull] = useState(false);
+  useLayoutEffect(() => {
+    const th = ref.current;
+    if (!th || !fit || fit.full === fit.short || typeof ResizeObserver === 'undefined') return;
+    let raf = 0;
+    const check = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        // Chỗ có sẵn = bề rộng số rộng nhất trong cột (không tính chính tiêu đề, nên không tự nuôi chữ dài).
+        const room = cellsWidth(th) - extra;
+        const next = textWidth(fit.full, th) <= room;
+        setUseFull((v) => (v === next ? v : next));
+      });
+    };
+    const ro = new ResizeObserver(check);
+    ro.observe(th);
+    check();
+    return () => { ro.disconnect(); cancelAnimationFrame(raf); };
+  }, [fit?.full, fit?.short, extra]);
+  return { ref, text: fit ? (useFull ? fit.full : fit.short) : null };
 }
 
 export function SortTh({ k, label, full, hint, sort, align = 'right', className = '', title }: { k: string; label: ReactNode; full?: string; hint?: string; sort: SortState; align?: 'left' | 'right'; className?: string; title?: string }) {
@@ -461,9 +545,12 @@ export function SortTh({ k, label, full, hint, sort, align = 'right', className 
   const Icon = !on ? ArrowUpDown : asc ? ArrowUp : ArrowDown;
   const header = columnHeader(label, full, hint, title === 'Bấm để sắp xếp' ? undefined : title);
   const tooltip = [header.title, 'Bấm để sắp xếp'].filter(Boolean).join('\n');
+  // Cột số (căn phải) tự co giãn: chữ tiêu đề không làm cột rộng thêm.
+  const fitOn = align === 'right' && !!header.fit;
+  const fit = useFitLabel(fitOn ? header.fit : null, 16);
   return (
-    <th data-full={header.name || undefined} title={tooltip} className={`sort select-none whitespace-nowrap ${align === 'right' ? 'r text-right' : 'text-left'} ${className}`} aria-sort={on ? (asc ? 'ascending' : 'descending') : undefined} onClick={() => sort.toggle(k as never)}>
-      <button type="button" title={tooltip} aria-label={header.name || undefined}>{header.label}<span className="ar" aria-hidden="true"><Icon size={12} /></span></button>
+    <th ref={fit.ref} data-full={header.name || undefined} title={tooltip} className={`sort select-none whitespace-nowrap ${fitOn ? 'fit' : ''} ${align === 'right' ? 'r text-right' : 'text-left'} ${className}`} aria-sort={on ? (asc ? 'ascending' : 'descending') : undefined} onClick={() => sort.toggle(k as never)}>
+      <button type="button" title={tooltip} aria-label={header.name || undefined}>{fit.text !== null ? <span className="th-label">{fit.text}</span> : header.label}<span className="ar" aria-hidden="true"><Icon size={12} /></span></button>
     </th>
   );
 }
@@ -471,7 +558,10 @@ export function SortTh({ k, label, full, hint, sort, align = 'right', className 
 /** Tiêu đề thường: cùng từ điển, giữ nguyên thuộc tính và nội dung tương tác có sẵn. */
 export function Th({ children, full, hint, title, ...props }: React.ComponentProps<'th'> & { full?: string; hint?: string }) {
   const header = columnHeader(children, full, hint, title);
-  return <th {...props} data-full={header.name || undefined} aria-label={header.name || undefined} title={header.title || undefined}>{header.label}</th>;
+  // Cột số (class n) tự co giãn như SortTh.
+  const fitOn = /(^|\s)n(\s|$)/.test(String(props.className ?? '')) && !!header.fit;
+  const fit = useFitLabel(fitOn ? header.fit : null);
+  return <th {...props} ref={fit.ref} className={`${props.className ?? ''} ${fitOn ? 'fit' : ''}`} data-full={header.name || undefined} aria-label={header.name || undefined} title={header.title || undefined}>{fit.text !== null ? <span className="th-label">{fit.text}</span> : header.label}</th>;
 }
 
 /** Gắn tên cột vào ô hiện có để CSS hiển thị dạng thẻ, giữ nguyên nút và dữ liệu. */

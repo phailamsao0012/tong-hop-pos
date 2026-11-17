@@ -1,4 +1,5 @@
 import { COUNTED_STAFF, leadSellerFilter, teamSubquery, type Team } from '@/lib/teams/team';
+import { adCostSource } from '@/lib/ops/cost-allocation';
 import { NET } from '@/lib/reports/stats';
 import { mktStatsReady } from '@/lib/reports/stats-mkt';
 import { MARKETING_TEAMS_KEY, UNASSIGNED_TEAM, parseMarketingTeams } from '@/lib/teams/marketing-teams';
@@ -70,7 +71,7 @@ export async function mktTrend(opts: { start: string; end: string; posIds: strin
   const db = env.DB;
   const fromStats = await mktStatsReady(db);
   const [costs, leads, closed, setting] = await db.batch([
-    db.prepare('SELECT marketer_id AS m, day, SUM(amount) AS cost FROM ad_costs WHERE day>=? AND day<=? GROUP BY 1,2').bind(opts.start, opts.end),
+    db.prepare(`SELECT marketer_id AS m, day, SUM(amount) AS cost FROM ${adCostSource(opts.posIds, opts.start, opts.end)} WHERE day>=? AND day<=? GROUP BY 1,2`).bind(opts.start, opts.end),
     ...trendQueries(opts.posIds, opts.start, opts.end, fromStats, opts.team === 'sale' || opts.team === 'cskh' ? opts.team : 'all').map(q => db.prepare(q.sql).bind(...q.binds)),
     db.prepare('SELECT value FROM app_settings WHERE key=?').bind(MARKETING_TEAMS_KEY),
   ]);

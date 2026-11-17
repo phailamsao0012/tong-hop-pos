@@ -18,6 +18,33 @@ export const isWhConfirmed = (o: {
 export const PACKED_SQL = (a = 'o') =>
   `(CASE WHEN ${a}.status_code IN (8,9,2,3,16,4,15,5) THEN 1 WHEN ${a}.status_code=6 THEN EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(${a}.status_history_json) THEN CASE WHEN json_type(${a}.status_history_json)='array' THEN ${a}.status_history_json ELSE '[]' END ELSE '[]' END) h WHERE CASE WHEN h.type='object' THEN json_extract(h.value,'$.status')=8 ELSE 0 END) ELSE 0 END)`;
 
+/** Lịch sử đơn (alias a) từng có một trong các trạng thái `codes`. */
+const historyHas = (a: string, codes: string) =>
+  `EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(${a}.status_history_json) AND json_type(${a}.status_history_json)='array' THEN ${a}.status_history_json ELSE '[]' END) h WHERE h.type='object' AND json_extract(h.value,'$.status') IN (${codes}))`;
+
+/**
+ * Kết cục của đơn đi (đã đóng hàng trở đi), anh Vũ 12/11/2026:
+ * - hủy khi CHƯA giao ĐVVC (lịch sử chưa có Đã gửi trở đi) → tính HỦY;
+ * - đang hoàn / đã hoàn, hoặc hủy SAU khi đã giao ĐVVC → tính HOÀN.
+ */
+export const AFTER_PACK_CANCELLED_SQL = (a = 'o') =>
+  `(${a}.status_code=6 AND ${historyHas(a, '8')} AND NOT ${historyHas(a, '2,3,16,4,15,5')})`;
+export const AFTER_PACK_RETURNED_SQL = (a = 'o') =>
+  `(${a}.status_code IN (4,15,5) OR (${a}.status_code=6 AND ${historyHas(a, '8')} AND ${historyHas(a, '2,3,16,4,15,5')}))`;
+
+/** Bản thuần TS của AFTER_PACK_*: 'returned' | 'cancelled' | null (null = đơn đi chưa hoàn / hủy, hoặc không phải đơn đi). */
+export function afterPackOutcome(o: { status_code: number; status_history_json: string | null }): 'returned' | 'cancelled' | null {
+  if (!isPacked(o)) return null;
+  if ([4, 15, 5].includes(o.status_code)) return 'returned';
+  if (o.status_code !== 6) return null;
+  let statuses: unknown[] = [];
+  try {
+    const history: unknown = JSON.parse(o.status_history_json ?? '[]');
+    if (Array.isArray(history)) statuses = history.map((h: unknown) => (typeof h === 'object' && h !== null && 'status' in h ? (h as { status: unknown }).status : null));
+  } catch { /* lịch sử hỏng: coi như chưa giao */ }
+  return statuses.some((s) => [2, 3, 16, 4, 15, 5].includes(Number(s))) ? 'returned' : 'cancelled';
+}
+
 export function isPacked(o: { status_code: number; status_history_json: string | null }): boolean {
   if ([8, 9, 2, 3, 16, 4, 15, 5].includes(o.status_code)) return true;
   if (o.status_code !== 6) return false;

@@ -1,3 +1,4 @@
+import { memoTick } from '@/lib/zalo/memo';
 import { env } from 'cloudflare:workers';
 import { overviewReport } from '@/lib/reports/overview-report';
 import { resolveHrUnit } from '@/lib/teams/hr-unit';
@@ -9,6 +10,8 @@ import { webOrigin } from '@/lib/notify/origin';
 import { logMessage, pruneMessages, type ChatKind } from '@/lib/zalo/zalo-chat';
 import { loadReportTargets } from '@/lib/zalo/team-link';
 import { buildBossSlotReport, bossSlotText, type BossSlotReport, type BossSlotTeam } from '@/lib/zalo/slot-report';
+import { bossText, type BossImage } from '@/lib/zalo/boss-report';
+import { bossReportData } from '@/lib/zalo/boss-data';
 import { buildMorningReport, morningText, withHidden, type MorningData, type MorningReport } from '@/lib/zalo/morning-report';
 import { REPORT_SCHEDULE_KEY, hiddenSections, legacySlotKey, parseReportSchedule, previousTime, runsOn, timeKey, timeLabel } from '@/lib/zalo/report-schedule';
 
@@ -101,10 +104,51 @@ export async function zaloKpi2(leader: Contact, toDay: string, cache: Kpi2Shared
   }, dept, Number(toDay.slice(8, 10)), daysInMonth);
 }
 
+/** Lệnh gửi ngay báo cáo sếp (anh Vũ 14/11/2026: "gửi ngay báo cáo sếp hôm nay 14/11 (mốc 22h, 2 ảnh)"): ghi app_settings
+ *  key BOSS_NOW_KEY = {"day":"2026-11-14","hour":"22"} (trên PC), lượt cron kế tiếp gửi 2 ảnh cho mọi người nhận báo cáo sếp đã nối Zalo rồi xoá key.
+ *  Gửi đúng số của mốc đó (cắt tại giờ đó, như báo cáo ca); hour "08" = báo cáo sáng của ngày day (số trọn ngày hôm trước). */
+export const BOSS_NOW_KEY = 'zalo_boss_now_v1';
+export async function sendBossReportNow(db: D1Database, day: string, hour: string, opts: { sendPhoto?: ZaloPhotoSend; send?: ZaloSend; bossData?: typeof bossReportData } = {}) {
+  const morning = hour === '08', at = Date.parse(`${day}T${hour}:00:00+07:00`);
+  const bosses = (await listContacts(db)).filter((c) => c.active && c.kind === 'boss' && c.chat_id);
+  if (!bosses.length) return [];
+  const data = await (opts.bossData ?? bossReportData)(day, hour, morning, at, db);
+  const sender = opts.send ?? createZaloSender(db);
+  const photo = opts.sendPhoto ?? ((chatId: string, url: string, caption: string) => sendZaloPhoto(env.ZALO_BOT_TOKEN, chatId, url, caption, db));
+  const out: { name: string; part: 1 | 2; photo: boolean }[] = [];
+  for (const c of bosses) for (const part of [1, 2] as const) {
+    const text = (part === 1 ? bossText(data) : `Chi tiết & cảnh báo · ${data.title}`).slice(0, 2000);
+    const id = await saveMorningImage(db, { kind: 'bossReport', part, data }, Date.now());
+    const ok = await photo(c.chat_id!, `${webOrigin()}/api/zalo/anh/${id}`, text);
+    if (!ok) { try { await sender(c.chat_id!, text); } catch { console.error('zalo boss now send failed'); } }
+    out.push({ name: c.name, part, photo: ok });
+  }
+  return out;
+}
+async function maybeBossNow(db: D1Database) {
+  const row = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(BOSS_NOW_KEY).first<{ value: string }>();
+  if (!row) return;
+  // Xoá trước (có điều kiện) để hai lượt cron không gửi 2 lần.
+  const del = await db.prepare('DELETE FROM app_settings WHERE key=? AND value=?').bind(BOSS_NOW_KEY, row.value).run();
+  if (!Number(del.meta?.changes ?? 0)) return;
+  try {
+    const req = JSON.parse(row.value) as { day?: string; hour?: string };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(req.day ?? '') || !/^(08|12|17|22)$/.test(req.hour ?? '')) return;
+    const out = await sendBossReportNow(db, req.day!, req.hour!);
+    console.log('zalo boss now', req.day, req.hour, JSON.stringify(out));
+  } catch (e) { console.error('zalo boss now failed', e); }
+}
+
 /** Dependencies are injectable for local clock tests; production always uses the shared report and sender. */
-export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database; send?: ZaloSend; snapshot?: typeof zaloTeamSnapshot; morningData?: typeof zaloMorningData; sendPhoto?: ZaloPhotoSend; kpi2?: typeof zaloKpi2 } = {}) {
+export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database; send?: ZaloSend; snapshot?: typeof zaloTeamSnapshot; morningData?: typeof zaloMorningData; sendPhoto?: ZaloPhotoSend; kpi2?: typeof zaloKpi2;
+  /** Số báo cáo sếp (test thay bằng số giả). */ bossData?: typeof bossReportData;
+  /** Gửi ảnh gộp doanh số các team kiểu cũ (chỉ còn dùng trong test cũ). */ legacyBossSlot?: boolean;
+  /** Chạy sổ nhắc việc trong test (production luôn chạy). */ memo?: boolean } = {}) {
   if (env.DEMO_MODE !== '1' && !env.ZALO_BOT_TOKEN?.trim()) return;
   const db = options.db ?? env.DB;
+  if (!options.db) await maybeBossNow(db);
+  // Sổ nhắc việc (lib/zalo/memo.ts): đóng sổ im 15 phút, nhắc việc có hẹn, tin 8h15. Lỗi không chặn phần còn lại.
+  if (!options.db || options.memo) await memoTick(db, now, options.send ?? createZaloSender(db, now)).catch((e) => console.error('zalo memo tick failed', e));
   const local = new Date(now + 7 * 3600000).toISOString(), day = todayVn(now), time = local.slice(11, 16), hour = local.slice(11, 13);
   // One result row even when settings are absent. The indexed EXISTS also avoids a meeting read on quiet minutes.
   const row = await db.prepare(`WITH config AS (SELECT
@@ -153,7 +197,7 @@ export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database
   const snapshot = options.snapshot ?? zaloTeamSnapshot;
   const photo = options.sendPhoto ?? ((chatId: string, url: string, caption: string) => sendZaloPhoto(env.ZALO_BOT_TOKEN, chatId, url, caption, db, now));
   // Báo cáo có ảnh kèm chữ (8h, và từ 03/11/2026 cả 12h/17h/22h); Zalo không nhận ảnh (không tải được đường dẫn) thì gửi bản chữ.
-  const sendImage = async (c: Contact, report: MorningReport | BossSlotReport, text: string, label: string) => {
+  const sendImage = async (c: Contact, report: MorningReport | BossSlotReport | BossImage, text: string, label: string) => {
     if (!c.chat_id || sent >= 30) return;
     text = text.slice(0, 2000);
     const id = await saveMorningImage(db, report, now);
@@ -213,7 +257,22 @@ export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database
         }
       } catch { console.error('zalo team report failed'); }
     }
-    if (slot && bossTeams.size && schedule.boss.send) {
+    // Báo cáo tổng quan cho sếp (anh Vũ 14/11/2026, thay ảnh gộp doanh số các team): 2 ảnh lúc báo cáo sáng và mỗi ca.
+    // Tắt ở Cài đặt báo cáo → "Báo cáo gộp cho sếp" thì không gửi. Lỗi số không chặn các phần khác.
+    const bosses = contacts.filter((c) => c.kind === 'boss' && c.chat_id);
+    if (!options.legacyBossSlot && (slot || (morning && runsOn(schedule.morning.repeat, day))) && schedule.boss.send && bosses.length) {
+      try {
+        // Giờ báo cáo sáng (8h) gửi 2 báo cáo riêng (anh Vũ 15/11/2026): tổng kết trọn ngày hôm qua, rồi báo cáo hôm nay từ 0h tới giờ gửi.
+        const kinds = morning && !slot ? [true, false] : [false];
+        for (const full of kinds) {
+          const data = await (options.bossData ?? bossReportData)(day, key.slice(0, 2), full, now, db);
+          for (const boss of bosses) {
+            await sendImage(boss, { kind: 'bossReport', part: 1, data }, bossText(data), 'báo cáo tổng quan');
+            await sendImage(boss, { kind: 'bossReport', part: 2, data }, `Chi tiết & cảnh báo · ${data.title}`, 'chi tiết & cảnh báo');
+          }
+        }
+      } catch (e) { console.error('zalo boss report failed', e); }
+    } else if (slot && bossTeams.size && schedule.boss.send && options.legacyBossSlot) {
       const report = buildBossSlotReport(`khung ${prevTime ? timeLabel(prevTime) : '0h'}–${timeLabel(time)}`, key, day, [...bossTeams.values()], !schedule.boss.cumulative);
       for (const boss of contacts.filter(c => c.kind === 'boss')) await sendImage(boss, report, bossSlotText(report), `báo cáo ${timeLabel(time)}`);
     }

@@ -72,14 +72,15 @@ void test('số thật của team: cộng người trong team, TB đơn = doanh 
   assert.equal(percentOf(null, 200), null);
 });
 
-void test('TB đơn KPI: chỉ thay khi dòng có trường aov; chỉ cho team; gắn vào dòng team', () => {
+void test('TB đơn KPI: chỉ thay khi dòng có trường aov; cho team và từng người (từ 14/11/2026); gắn vào dòng', () => {
   const stored = { 'team:a': 400_000 };
   assert.deepEqual(mergeTargetAov(stored, [{ scope: 'team', refId: 'a' }], ['team:a']), stored, 'trang cũ không gửi aov: giữ nguyên');
   assert.deepEqual(mergeTargetAov(stored, [{ scope: 'team', refId: 'b', aov: 450_000.4 }], null), { 'team:a': 400_000, 'team:b': 450_000 });
   assert.deepEqual(mergeTargetAov(stored, [{ scope: 'team', refId: 'a', aov: null }], ['team:a']), {});
   assert.deepEqual(mergeTargetAov(stored, [{ scope: 'team', refId: 'a', aov: 0 }], null), {});
   assert.deepEqual(mergeTargetAov(stored, [{ scope: 'team', refId: 'a', aov: 1 }], ['team:b']), stored, 'ngoài phạm vi only');
-  assert.deepEqual(mergeTargetAov(stored, [{ scope: 'employee', refId: 'a', aov: 1 }], null), stored);
+  assert.deepEqual(mergeTargetAov(stored, [{ scope: 'employee', refId: 'a', aov: 1 }], null), { ...stored, 'employee:a': 1 }, 'TB đơn từng người (plan Đầu não 14/11/2026)');
+  assert.deepEqual(mergeTargetAov(stored, [{ scope: 'pos', refId: 'a', aov: 1 }], null), stored, 'POS không có TB đơn');
   const rows: TargetRow[] = [
     { scope: 'team', refId: 'a', revenue: 1, closedOrders: 0, workingDays: null, updatedAt: 'x' },
     { scope: 'pos', refId: 'p', revenue: 2, closedOrders: 0, workingDays: null, updatedAt: 'x' },
@@ -118,7 +119,8 @@ void test('API KPI: chủ lưu TB đơn team; trang KPI cũ lưu doanh thu khôn
     assert.equal((await put('2026-12', [{ scope: 'employee', refId: 'staff-a', revenue: 10 }], ['employee:staff-a'])).status, 200);
     assert.deepEqual(settingKeys().filter((k) => k.endsWith('2026-12')), ['target_cost:2026-12', 'target_rate:2026-12']);
     // TB đơn chỉ cho cả team, không âm.
-    assert.equal((await put('2026-11', [{ scope: 'employee', refId: 'staff-a', revenue: 1, aov: 100 }], ['employee:staff-a'])).status, 400);
+    assert.equal((await put('2026-11', [{ scope: 'employee', refId: 'staff-a', revenue: 1, aov: 100 }], ['employee:staff-a'])).status, 200, 'TB đơn từng người được lưu (14/11/2026)');
+    assert.equal((await put('2026-11', [{ scope: 'pos', refId: 'svg', revenue: 1, aov: 100 }], ['pos:svg'])).status, 400);
     assert.equal((await put('2026-11', [{ scope: 'team', refId: 'team-a', revenue: 1, aov: -1 }], ['team:team-a'])).status, 400);
     // Người không phải chủ: không thấy dòng team (quyền xem giữ như cũ), không ghi được KPI team.
     assert.equal((await put('2026-11', [{ scope: 'team', refId: 'team-a', revenue: 320_000_000, aov: 500_000 }], ['team:team-a'])).status, 200);

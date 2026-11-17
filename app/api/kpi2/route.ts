@@ -33,7 +33,7 @@ export async function PUT(request: Request) {
   try { body = await request.json(); } catch { return Response.json({ error: 'JSON không hợp lệ.' }, { status: 400 }); }
   const month = typeof body?.month === 'string' ? body.month : '';
   const items = Array.isArray(body?.items) ? body.items as { key?: unknown; value?: unknown }[] : null;
-  if (!MONTH_RE.test(month) || !items || items.length > 500 || items.some((it) => !it || typeof it !== 'object' || typeof it.key !== 'string' || !/^(team|employee):[^\s]{1,100}$/.test(it.key)))
+  if (!MONTH_RE.test(month) || !items || items.length > 500 || items.some((it) => !it || typeof it !== 'object' || typeof it.key !== 'string' || !/^(team|employee|dept):[^\s]{1,100}$/.test(it.key)))
     return Response.json({ error: 'Dữ liệu không hợp lệ.' }, { status: 400 });
   const owner = isOwner(user), staff = owner ? null : await targetStaff(env.DB, user);
   if (items.some((it) => !canWriteKpi2(owner, staff, String(it.key)))) return forbidden();

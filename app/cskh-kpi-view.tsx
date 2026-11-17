@@ -10,7 +10,6 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { OrderOriginFilter, useOrderOrigin } from './order-origin-filter';
-import { POS } from '@/lib/shared/report-model';
 import type { Team } from '@/lib/teams/team';
 import { todayVn } from '@/lib/shared/report-time';
 import { kpiPace, parseRate, signedShort } from '@/lib/kpi/kpi-pace';
@@ -21,6 +20,7 @@ import { daysInMonth, parseMoney, type TargetItem } from './targets-panel';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import { usePosIds, usePosStaffFilter } from './pos-store';
+import { useGoalShare } from './goal-share-store';
 import { PosChips } from './overview-view';
 import { TeamKpiPanel } from './team-groups-view';
 import type { OverviewReport } from './overview-view';
@@ -95,11 +95,14 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
   // Tiến độ: doanh thu / đơn chốt của từng nhân viên CSKH trong tháng (tới hôm nay hoặc hết tháng); số lần trước hiện ngay (bản lưu trong trình duyệt).
   // Tháng tương lai: không tải (url null) và không hiện tiến độ. KPI đang sửa (items) vẫn tải riêng ở trên, không lấy từ bản lưu.
   const futureMonth = `${month}-01` > today;
+  // Quy tắc POS (anh Vũ 12/11/2026): chọn POS nào thì số đã đạt chỉ tính POS đó.
+  const [posIds, setPosIds] = usePosIds();
+  const share = useGoalShare(month);
   const progressUrl = useMemo(() => {
     if (futureMonth) return null;
     const end = month === today.slice(0, 7) ? today : lastDay(month);
-    return `/api/reports/overview?${new URLSearchParams({ start: `${month}-01`, end, posIds: POS.map((p) => p.id).join(','), groupBy: 'day', compare: 'none', team, orderOrigin, marketerId })}`;
-  }, [month, today, futureMonth, team, orderOrigin, marketerId]);
+    return `/api/reports/overview?${new URLSearchParams({ start: `${month}-01`, end, posIds: posIds.join(','), groupBy: 'day', compare: 'none', team, orderOrigin, marketerId })}`;
+  }, [month, today, futureMonth, team, orderOrigin, marketerId, posIds]);
   const progress = useApi<Report>(progressUrl, { keep: false });
   const report = futureMonth ? null : progress.data;
   // Tháng đang chạy: tự tải lại mỗi giờ khi trang còn mở (anh Vũ 31/10/2026: "cập nhật từng tiếng một").
@@ -113,8 +116,7 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
 
   const cskhFocus = useCskhFocus();
   const focus = team === 'cskh' ? cskhFocus : null;
-  // Chọn POS nào chỉ còn người của POS đó (anh Vũ 02/11/2026); KPI và số đã đạt vẫn của cả người đó.
-  const [posIds, setPosIds] = usePosIds();
+  // Chọn POS nào chỉ còn người của POS đó (anh Vũ 02/11/2026); số đã đạt tính trên POS đang chọn (12/11/2026), KPI là mục tiêu toàn công ty.
   const inPos = usePosStaffFilter();
   const staff = useMemo(() => employees.filter((e) => !isSystem(e) && (e.active || items[e.id]) && (!focus || e.id === focus.id) && (!inPos || inPos(e.id))).sort((a, b) => a.name.localeCompare(b.name, 'vi')), [employees, items, focus, inPos]);
   const set = (id: string, field: 'revenue' | 'closeRate' | 'workingDays', value: number | null) => {
@@ -158,15 +160,18 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
   const dim = daysInMonth(month);
   const done = (id: string) => report?.current.byEmployee.find((r) => r.sellerId === id);
   const todayNet = (id: string) => (report?.current.byEmployeeDay ?? []).filter((d) => d.sellerId === id && d.day === today).reduce((a, d) => a + d.closedNet, 0);
-  const totalGoal = staff.reduce((a, e) => a + (items[e.id]?.revenue ?? 0), 0);
+  // Mục tiêu đã chia theo POS khi chọn ít hơn mọi POS (anh Vũ 12/11/2026, câu 2 chọn A); ô nhập vẫn là mục tiêu gốc.
+  const goalOf = (id: string) => share.scale(items[id]?.revenue ?? 0, [id]);
+  const totalGoal = staff.reduce((a, e) => a + goalOf(e.id), 0);
   const totalDone = staff.reduce((a, e) => a + (done(e.id)?.closedNet ?? 0), 0);
   const withGoal = staff.filter((e) => items[e.id]?.revenue);
   const isCurrent = month === today.slice(0, 7);
-  const daysElapsed = isCurrent ? Number(today.slice(8, 10)) : `${month}-01` > today ? 0 : dim;
-  const onTrack = withGoal.filter((e) => { const g = items[e.id].revenue; const d = done(e.id)?.closedNet ?? 0; const elapsed = isCurrent ? Number(today.slice(8, 10)) : dim; return d / g >= elapsed / dim; }).length;
-  const totalDaily = staff.reduce((a, e) => a + ((items[e.id]?.revenue ?? 0) / ((items[e.id]?.workingDays || dim))), 0);
+  // So tiến độ tới hết hôm qua (anh Vũ 12/11/2026), đã đạt tính tới lúc này.
+  const daysElapsed = isCurrent ? Number(today.slice(8, 10)) - 1 : `${month}-01` > today ? 0 : dim;
+  const onTrack = withGoal.filter((e) => { const g = goalOf(e.id); const d = done(e.id)?.closedNet ?? 0; const elapsed = isCurrent ? Number(today.slice(8, 10)) : dim; return d / g >= elapsed / dim; }).length;
+  const totalDaily = staff.reduce((a, e) => a + (goalOf(e.id) / dim), 0);
   const totalTodayNet = staff.reduce((a, e) => a + todayNet(e.id), 0);
-  const paceOf = (id: string) => { const t = items[id]; return t ? kpiPace({ goal: t.revenue, workingDays: t.workingDays ?? null, daysInMonth: dim, daysElapsed, monthNet: done(id)?.closedNet ?? 0, todayNet: todayNet(id) }) : null; };
+  const paceOf = (id: string) => { const t = items[id]; return t ? kpiPace({ goal: goalOf(id), workingDays: t.workingDays ?? null, daysInMonth: dim, daysElapsed, monthNet: done(id)?.closedNet ?? 0, todayNet: todayNet(id) }) : null; };
   const totalPaceDiff = staff.reduce((a, e) => a + (paceOf(e.id)?.paceDiff ?? 0), 0);
   const diffTone = (v: number) => v >= 0 ? 'text-good' : 'text-bad';
   const monthLabel = mmyyyy(month);
@@ -199,7 +204,7 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
       {team === 'cskh' && <CskhFocusBar />}
       <PosChips posIds={posIds} onChange={setPosIds} />
       <OrderOriginFilter team={team} marketers={report?.origins} />
-      <PageHeader eyebrow={`${label} · chỉ chủ hệ thống`} title={`KPI ${label}`} subtitle={`Mục tiêu tháng theo đầu người cho bộ phận ${label} · KPI ngày = mục tiêu ÷ số ngày làm việc`}
+      <PageHeader eyebrow={`${label} · chỉ chủ hệ thống`} title={`KPI ${label}`} subtitle={`Mục tiêu tháng theo đầu người cho bộ phận ${label} · KPI ngày = mục tiêu ÷ số ngày của tháng${share.note ? ` · tiến độ dùng ${share.note}` : ''}`}
         badge={!futureMonth ? <StaleChip stale={progress.stale} at={progress.at} loading={progress.loading} error={report ? progress.error : null} onRetry={progress.reload} /> : null}
         actions={
 <div className="flex flex-wrap items-center gap-2">
@@ -231,7 +236,6 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
           <Wand2 size={14} className="text-primary" aria-hidden="true" /><span className="text-xs font-medium text-ink-2">Áp cho tất cả:</span>
           <Input id={`${team}-bulk-revenue`} inputMode="numeric" className={`${NUM_INPUT} tap h-7 w-24 text-xs`} placeholder="Doanh thu" aria-label="KPI doanh thu áp cho tất cả" value={bulk.revenue} onChange={(e) => setBulk((b) => ({ ...b, revenue: e.target.value }))} />
           {isSale && <Input id={`${team}-bulk-rate`} inputMode="decimal" className={`${NUM_INPUT} tap h-7 w-24 text-xs`} placeholder="Tỉ lệ chốt %" aria-label="KPI tỉ lệ chốt áp cho tất cả" value={bulk.rate} onChange={(e) => setBulk((b) => ({ ...b, rate: e.target.value }))} />}
-          <Input id={`${team}-bulk-days`} type="number" min={1} max={31} className={`${NUM_INPUT} tap h-7 w-24 text-xs`} placeholder={`Ngày · ${dim}`} aria-label="Số ngày làm việc áp cho tất cả" value={bulk.days} onChange={(e) => setBulk((b) => ({ ...b, days: e.target.value }))} />
           <Button size="sm" variant="outline" className="h-7 text-xs" onClick={applyBulk} disabled={!bulk.revenue && !bulk.rate && !bulk.days}>Áp dụng</Button>
         </div>}>
         {!loaded ? <SkeletonTable rows={6} cols={9} /> : (
@@ -239,23 +243,23 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
             <table className="tbl sticky-first">
               <thead><tr>
                 <Th>Nhân viên</Th><Th className="n">KPI doanh thu</Th>{isSale && <Th className="n"><span className="inline-flex items-center gap-0.5">KPI tỉ lệ chốt<InfoTip text="Mục tiêu tỉ lệ chốt của tháng (%). Tỉ lệ thật tính theo Cách tính đang chọn (đơn lên hoặc data được chia)." /></span></Th>}
-                <Th className="n"><span className="inline-flex items-center gap-0.5">Ngày làm<InfoTip text="Số ngày làm việc trong tháng, dùng để chia KPI ngày. Bỏ trống = số ngày của tháng." /></span></Th>
+                
                 <Th><span className="inline-flex items-center gap-0.5">Ca (giờ)<InfoTip text="Ca làm việc: giờ bắt đầu – giờ kết thúc (0–24). Dùng ở Trong ngày · chốt nóng, chế độ Ca cá nhân." /></span></Th>
                 <Th className="n">Đã đạt</Th><Th>% tháng</Th><Th className="n">KPI ngày</Th>
                 <Th className="n"><span className="inline-flex items-center gap-0.5">Hôm nay<InfoTip text="Doanh thu chốt hôm nay trừ KPI ngày: +3tr là vượt 3 triệu, −2tr là còn thiếu 2 triệu. Trang tự tải lại mỗi giờ." /></span></Th>
-                <Th className="n"><span className="inline-flex items-center gap-0.5">So tiến độ<InfoTip text="Đã đạt trong tháng trừ phần KPI phải có đến hôm nay (KPI ngày × số ngày đã qua, không quá số ngày làm)." /></span></Th>
+                <Th className="n"><span className="inline-flex items-center gap-0.5">So tiến độ<InfoTip text="Đã đạt trong tháng trừ phần KPI phải có đến hôm nay (KPI ngày × số ngày đã qua trọn, tới hết hôm qua)." /></span></Th>
               </tr></thead>
               <tbody>
                 {staff.map((e) => {
                   const t = items[e.id]; const d = done(e.id); const net = d?.closedNet ?? 0;
-                  const days = t?.workingDays || dim; const daily = t?.revenue ? t.revenue / days : 0;
-                  const p = t?.revenue ? net / t.revenue * 100 : null; const tn = todayNet(e.id); const dp = daily ? tn / daily * 100 : null;
+                  const days = dim; const g = goalOf(e.id); const daily = g ? g / days : 0;
+                  const p = g ? net / g * 100 : null; const tn = todayNet(e.id); const dp = daily ? tn / daily * 100 : null;
                   return (
                     <tr key={e.id}>
                       <td className="font-medium">{e.name}{!e.active && <span className="ml-1.5 rounded-[4px] bg-t-gray-bg px-1 py-px text-[11px] font-semibold text-t-gray">nghỉ</span>}</td>
                       <td className="n">{moneyInput(e.id, e.name)}</td>
                       {isSale && <td className="n">{rateInput(e.id, e.name)}</td>}
-                      <td className="n"><Input type="number" min={1} max={31} className={`${NUM_INPUT} w-16`} placeholder={String(dim)} aria-label={`Ngày làm việc ${e.name}`} value={t?.workingDays ?? ''} onChange={(ev) => set(e.id, 'workingDays', ev.target.value === '' ? null : Math.max(1, Math.min(31, Math.round(Number(ev.target.value) || 0))))} /></td>
+                      
                       <td><span className="inline-flex items-center gap-1"><Input type="number" min={0} max={23} className={`${NUM_INPUT} w-14`} placeholder="8" aria-label={`Giờ bắt đầu ca ${e.name}`} value={shifts[e.id]?.shiftStart ?? ''} onChange={(ev) => setShift(e.id, 'shiftStart', ev.target.value)} /><span className="text-xs text-ink-3">–</span><Input type="number" min={1} max={24} className={`${NUM_INPUT} w-14`} placeholder="17" aria-label={`Giờ kết thúc ca ${e.name}`} value={shifts[e.id]?.shiftEnd ?? ''} onChange={(ev) => setShift(e.id, 'shiftEnd', ev.target.value)} /></span></td>
                       <td className="n">{report ? money(net) : '—'}{d ? <span className="ml-1 text-[11px] font-normal text-ink-3">{vi.format(d.closedOrders)} đơn</span> : null}{isSale && d ? (() => { const r = closeRateOf(d, ms.rateBase); return <span className={`block text-[11px] font-semibold ${rateTone(r, t?.closeRate)}`}>chốt {r === null ? '—' : pct(r, 1)}{t?.closeRate ? <span className="font-normal text-ink-3"> / {pct(t.closeRate, 1)}</span> : null}</span>; })() : null}</td>
                       <td>{p === null ? <span className="text-xs text-ink-4">—</span> : <span className="inline-flex items-center gap-2"><ProgressBar value={Math.min(100, p)} max={100} width={80} color={progressColor(p)} /><span className="num text-xs">{pct(p, 0)}</span></span>}</td>

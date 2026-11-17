@@ -79,9 +79,9 @@ async function computeSaleQuality(opts: Opts) {
   const anchors = new Map<string, Anchor>();
   for (const o of cohort) { const a = anchors.get(o.p); if (!a || o.t < a.t) anchors.set(o.p, o); }
 
-  // Đơn đã chốt của cùng SĐT tạo sau đầu kỳ (cả 6 POS), lọc "sau đơn gốc" trong code.
+  // Đơn đã chốt của cùng SĐT tạo sau đầu kỳ, trên các POS đang chọn (quy tắc POS mục D, anh Vũ 12/11/2026), lọc "sau đơn gốc" trong code.
   const phones = [...anchors.keys()];
-  const all = POS.map((x) => x.id);
+  const all = opts.posIds;
   const st: D1PreparedStatement[] = [];
   for (let i = 0; i < phones.length; i += 90) {
     const c = phones.slice(i, i + 90);

@@ -11,8 +11,13 @@ import { NET } from '@/lib/reports/stats';
 import { ORDER_STATUS } from '@/lib/pancake/pancake';
 import { STAGES, SOURCE_FIELD, itemKey, productExists, saleItemPredicate, stageSql, type MarketingStage } from '@/lib/reports/marketing-report';
 import { MARKETING_TEAMS_KEY, parseMarketingTeams, UNASSIGNED_TEAM, marketingTeamFilter, marketingTeamGroupSql } from '@/lib/teams/marketing-teams';
-import { parseTeam, COUNTED_STAFF, teamFilter, teamSubquery, leadSellerFilter } from '@/lib/teams/team';
+import { parseTeam, COUNTED_STAFF, teamFilter, teamSubquery, leadSellerFilter, notSan } from '@/lib/teams/team';
 import { RANK_STAGES, type RankStage } from '@/lib/reports/mkt-rank';
+import { AFTER_PACK_CANCELLED_SQL, AFTER_PACK_RETURNED_SQL, PACKED_SQL } from '@/lib/reports/van-don';
+import { saleTeamSql } from '@/lib/teams/sale-team-filter';
+
+/** Đã xác nhận lần đầu, kể cả sau đó hủy / hoàn (chỉ trừ mới / chờ / xoá). */
+const EVER_CONFIRMED = "(o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,7))";
 
 const BASES = ['created', 'confirmed'] as const;
 type Basis = typeof BASES[number];
@@ -20,7 +25,7 @@ type Basis = typeof BASES[number];
 type AggregateRow = {
   orders: number; phones: number; gross: number; net: number;
   confirmed: number; shipped: number; delivered: number; returned: number; cancelled: number; refund_net: number;
-  cskh_orders: number; cskh_net: number; cskh_refund_net: number; sale_orders: number; sale_net: number; sale_refund_net: number;
+  cskh_orders: number; cskh_net: number; cskh_refund_net: number; sale_orders: number; sale_net: number; sale_refund_net: number; sale_phones: number;
 };
 type MarketerRow = AggregateRow & { marketer_id: string };
 type MarketingTeamRow = AggregateRow & { marketing_team_id: string };
@@ -36,11 +41,30 @@ const aggregate = (r?: Partial<AggregateRow>) => ({
   // nên người bán chưa có hậu tố SALE / CSKH không vào New hay CSKH (có trong cột Doanh thu).
   cskhOrders: num(r?.cskh_orders), cskhNet: num(r?.cskh_net), cskhAfterRefund: num(r?.cskh_net) - num(r?.cskh_refund_net),
   newOrders: num(r?.sale_orders), newNet: num(r?.sale_net), newAfterRefund: num(r?.sale_net) - num(r?.sale_refund_net),
+  /** SĐT trên đơn chia cho Sale (mẫu số TL chốt New). */ newPhones: num(r?.sale_phones),
 });
 
 type Lens = Exclude<Awaited<ReturnType<typeof resolveMktLens>>, Response>;
+/** Giữ kết quả 60 giây theo đúng tham số (anh Vũ 16/11/2026: báo cáo sếp lấy số trên web, giảm tải): web vừa tính thì báo cáo dùng lại và ngược lại. */
+const CACHE_MS = 60_000;
+// Theo từng DB (test dựng DB riêng mỗi bài, không dùng lẫn kết quả).
+const caches = new WeakMap<object, Map<string, { at: number; value: Promise<Awaited<ReturnType<typeof marketingOverviewRaw>>> }>>();
 /** Trang Tổng quan MKT. Trả null khi team Marketing trên URL không còn tồn tại. */
-export async function marketingOverview(user: { role: Role }, p: URLSearchParams, posIds: string[], start: string, end: string, checkedLens: Lens) {
+export function marketingOverview(user: { role: Role }, p: URLSearchParams, posIds: string[], start: string, end: string, checkedLens: Lens) {
+  const q = new URLSearchParams(p); q.sort();
+  const key = JSON.stringify([user.role, q.toString(), [...posIds].sort(), start, end, checkedLens ? JSON.stringify(checkedLens) : '']);
+  const now = Date.now(), db = env.DB as unknown as object;
+  let cache = caches.get(db);
+  if (!cache) caches.set(db, cache = new Map());
+  for (const [k, v] of cache) if (now - v.at > CACHE_MS) cache.delete(k);
+  const hit = cache.get(key);
+  if (hit) return hit.value;
+  const value = marketingOverviewRaw(user, p, posIds, start, end, checkedLens);
+  cache.set(key, { at: now, value });
+  value.catch(() => cache!.delete(key));
+  return value;
+}
+async function marketingOverviewRaw(user: { role: Role }, p: URLSearchParams, posIds: string[], start: string, end: string, checkedLens: Lens) {
   // SĐT khách đầy đủ chỉ cho chủ hệ thống, giám đốc; người khác thấy 3 số cuối (bảo vệ dữ liệu cá nhân, 10/10/2026).
   const phoneOut = (v: string | null) => (v && user.role !== 'owner' && user.role !== 'director' ? maskPhone(v) : v);
   const basis = BASES.includes(p.get('basis') as Basis) ? p.get('basis') as Basis : 'created';
@@ -52,7 +76,9 @@ export async function marketingOverview(user: { role: Role }, p: URLSearchParams
   const source = (p.get('source') ?? '').trim().slice(0, 180);
   const marketingTeamId = (p.get('mktTeam') ?? p.get('marketingTeamId') ?? '__all').trim();
   const team = parseTeam(p.get('team'));
-  const { startUtc, endUtc } = vnRangeUtc(start, end);
+  // until (UTC ISO): cắt số tới giờ này (báo cáo sếp "0h tới 8h"); web không gửi tham số này.
+  const range = vnRangeUtc(start, end), until = p.get('until') ?? '';
+  const startUtc = range.startUtc, endUtc = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(until) && until < range.endUtc ? until : range.endUtc;
   const ph = posIds.map(() => '?').join(',');
   const marketer = `NULLIF(TRIM(o.marketer_id),'')`;
   const resolvedTeams = await mktTeams(env.DB);
@@ -75,8 +101,11 @@ export async function marketingOverview(user: { role: Role }, p: URLSearchParams
   if (careId) { extra.push('o.care_id=?'); extraBinds.push(careId); }
   if (productKey) { extra.push(productExists('o')); extraBinds.push(productKey); }
   if (source) { extra.push(`${SOURCE_FIELD}=?`); extraBinds.push(source); }
+  // Team Sale (anh Vũ 12/11/2026): đơn của người bấm xác nhận thuộc team; chưa xác nhận thì theo Sale được gán.
+  const saleTeam = saleTeamSql(p.get('saleTeam'));
+  if (saleTeam) extra.push(saleTeam.closer);
   // Chỉ Marketer được tính doanh số (tên có hậu tố MKT…, lib/team.ts).
-  const scopeWith = (sellerSql: string) => `o.pos_id IN (${ph}) AND ${marketer} IS NOT NULL AND ${marketer} IN ${COUNTED_STAFF}${marketingTeam.sql}${sellerSql}${extra.length ? ` AND ${extra.join(' AND ')}` : ''}`;
+  const scopeWith = (sellerSql: string) => `o.pos_id IN (${ph}) AND ${marketer} IS NOT NULL AND ${marketer} IN ${COUNTED_STAFF}${notSan('o.marketer_id')}${marketingTeam.sql}${sellerSql}${extra.length ? ` AND ${extra.join(' AND ')}` : ''}`;
   const scoped = scopeWith(teamFilter('o.seller_id', team));
   const period = `${timeCol}>=? AND ${timeCol}<?`;
   const selectedWhere = `${scoped} AND ${period} AND ${stageSql(stage)}`;
@@ -95,7 +124,8 @@ export async function marketingOverview(user: { role: Role }, p: URLSearchParams
     COALESCE(SUM(CASE WHEN o.seller_id IN ${cskhSellers} AND o.status_code IN (4,5,15,6) THEN ${NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1')} ELSE 0 END),0) AS cskh_refund_net,
     SUM(o.seller_id IN ${saleSellers}) AS sale_orders,
     COALESCE(SUM(CASE WHEN o.seller_id IN ${saleSellers} THEN ${NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1')} ELSE 0 END),0) AS sale_net,
-    COALESCE(SUM(CASE WHEN o.seller_id IN ${saleSellers} AND o.status_code IN (4,5,15,6) THEN ${NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1')} ELSE 0 END),0) AS sale_refund_net`;
+    COALESCE(SUM(CASE WHEN o.seller_id IN ${saleSellers} AND o.status_code IN (4,5,15,6) THEN ${NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1')} ELSE 0 END),0) AS sale_refund_net,
+    COUNT(DISTINCT CASE WHEN o.seller_id IN ${saleSellers} THEN NULLIF(TRIM(o.phone),'') END) AS sale_phones`;
 
   const optionScope = `o.pos_id IN (${ph}) AND ${marketer} IS NOT NULL${marketingTeam.sql}${teamFilter('o.seller_id', team)} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7`;
   const optionBinds = [...posIds, ...marketingTeam.binds, startUtc, endUtc];
@@ -115,7 +145,20 @@ export async function marketingOverview(user: { role: Role }, p: URLSearchParams
       cskh_refund_net: sum(rankNet, `o.seller_id IN ${cskhSellers} AND ${refund}`),
     };
     return Object.entries(fields).map(([field, expression]) => `${expression} AS ${key}_${field}`);
-  }).join(',');
+  }).concat([
+    // Đơn chốt / đơn đi / kết cục (anh Vũ 12/11/2026): "đã chốt là chốt" — đơn chốt = mọi đơn đã xác nhận lần đầu (kể cả sau đó hủy / hoàn, trừ xoá),
+    // đơn đi = trong đó đã vào Đang đóng hàng trở đi (PACKED_SQL, gồm hủy sau đóng hàng). Hủy khi chưa giao ĐVVC → hủy; hoàn / hủy sau khi đã giao → hoàn.
+    `COALESCE(SUM(CASE WHEN ${EVER_CONFIRMED} THEN 1 ELSE 0 END),0) AS xp_confirmed`,
+    `COALESCE(SUM(CASE WHEN ${EVER_CONFIRMED} AND ${PACKED_SQL('o')} THEN 1 ELSE 0 END),0) AS xp_packed`,
+    `COALESCE(SUM(CASE WHEN ${EVER_CONFIRMED} AND ${AFTER_PACK_CANCELLED_SQL('o')} THEN 1 ELSE 0 END),0) AS xp_cancelled`,
+    `COALESCE(SUM(CASE WHEN ${EVER_CONFIRMED} AND ${PACKED_SQL('o')} AND ${AFTER_PACK_RETURNED_SQL('o')} THEN 1 ELSE 0 END),0) AS xp_returned`,
+    // Tách New (người bán Sale) / CSKH (anh Vũ 14/11/2026, ý sếp: số đơn không gộp). Các tỉ lệ ở bảng xếp hạng chỉ tính đơn New.
+    `COALESCE(SUM(CASE WHEN ${EVER_CONFIRMED} AND o.seller_id IN ${saleSellers} THEN 1 ELSE 0 END),0) AS xp_confirmed_new`,
+    `COALESCE(SUM(CASE WHEN ${EVER_CONFIRMED} AND o.seller_id IN ${cskhSellers} THEN 1 ELSE 0 END),0) AS xp_confirmed_cskh`,
+    `COALESCE(SUM(CASE WHEN ${EVER_CONFIRMED} AND o.seller_id IN ${saleSellers} AND ${PACKED_SQL('o')} THEN 1 ELSE 0 END),0) AS xp_packed_new`,
+    `COALESCE(SUM(CASE WHEN ${EVER_CONFIRMED} AND o.seller_id IN ${saleSellers} AND ${AFTER_PACK_CANCELLED_SQL('o')} THEN 1 ELSE 0 END),0) AS xp_cancelled_new`,
+    `COALESCE(SUM(CASE WHEN ${EVER_CONFIRMED} AND o.seller_id IN ${saleSellers} AND ${PACKED_SQL('o')} AND ${AFTER_PACK_RETURNED_SQL('o')} THEN 1 ELSE 0 END),0) AS xp_returned_new`,
+  ]).join(',');
   const rankFrom = basis === 'confirmed'
     ? 'raw_pos_orders o INDEXED BY idx_raw_orders_pos_confirmed_status_money'
     : 'raw_pos_orders o INDEXED BY idx_raw_orders_pos_created_status_phone';
@@ -156,7 +199,13 @@ export async function marketingOverview(user: { role: Role }, p: URLSearchParams
       const r = aggregate(Object.fromEntries(Object.entries(row ?? {}).filter(([field]) => field.startsWith(`${key}_`)).map(([field, value]) => [field.slice(key.length + 1), num(value)])));
       return [key, { ...r, averageOrder: r.orders ? r.net / r.orders : null, revenuePerPhone: r.phones ? r.net / r.phones : null, netAfterRefund: r.net - r.refundNet }];
     })) as Record<RankStage, ReturnType<typeof aggregate> & { averageOrder: number | null; revenuePerPhone: number | null; netAfterRefund: number }>;
-    return { stageMetrics, atConfirmed: stageMetrics.confirmed.orders, atPacked: stageMetrics.packed.orders, atShipped: stageMetrics.shipped.orders, atDelivered: stageMetrics.delivered.orders };
+    return {
+      stageMetrics, atConfirmed: stageMetrics.confirmed.orders, atPacked: stageMetrics.packed.orders, atShipped: stageMetrics.shipped.orders, atDelivered: stageMetrics.delivered.orders,
+      everConfirmed: num(row?.xp_confirmed), everPacked: num(row?.xp_packed),
+      packedCancelled: num(row?.xp_cancelled), packedReturned: num(row?.xp_returned),
+      newConfirmed: num(row?.xp_confirmed_new), cskhConfirmed: num(row?.xp_confirmed_cskh), newPacked: num(row?.xp_packed_new),
+      newCancelled: num(row?.xp_cancelled_new), newReturned: num(row?.xp_returned_new),
+    };
   };
 
   const nameMap = new Map((names.results as { user_id: string; name: string }[]).map((r) => [String(r.user_id), r.name]));
@@ -175,7 +224,7 @@ export async function marketingOverview(user: { role: Role }, p: URLSearchParams
     return {
       ...rankFields(rankMaps[0].get(id)),
       marketerId: id, marketerName: nameMap.get(id) ?? `MKT ${id.slice(0, 8)}`, marketingTeamName: teamByMember.get(id) ?? 'Chưa phân nhóm',
-      ...current, createdOrders: base.orders, createdPhones: base.phones, confirmedOrders: base.confirmed,
+      ...current, createdOrders: base.orders, createdPhones: base.phones, createdNewPhones: base.newPhones, confirmedOrders: base.confirmed,
       confirmationRate: base.orders ? base.confirmed / base.orders * 100 : null,
       shippedOrders: base.shipped, shippingRate: base.confirmed ? base.shipped / base.confirmed * 100 : null,
       deliveredOrders: base.delivered, deliveryRate: base.shipped ? base.delivered / base.shipped * 100 : null,
@@ -197,7 +246,7 @@ export async function marketingOverview(user: { role: Role }, p: URLSearchParams
       ...rankFields(rankMaps[1].get(id)),
       marketingTeamId: id, marketingTeamName: configured?.name ?? (id === UNASSIGNED_TEAM ? 'Chưa phân nhóm' : id),
       marketerCount: byMarketer.filter((m) => id === UNASSIGNED_TEAM ? !teamByMember.has(m.marketerId) : configured?.memberIds.includes(m.marketerId)).length,
-      ...current, createdOrders: base.orders, createdPhones: base.phones, confirmedOrders: base.confirmed,
+      ...current, createdOrders: base.orders, createdPhones: base.phones, createdNewPhones: base.newPhones, confirmedOrders: base.confirmed,
       confirmationRate: base.orders ? base.confirmed / base.orders * 100 : null,
       shippedOrders: base.shipped, shippingRate: base.confirmed ? base.shipped / base.confirmed * 100 : null,
       deliveredOrders: base.delivered, deliveryRate: base.shipped ? base.delivered / base.shipped * 100 : null,
@@ -216,7 +265,7 @@ export async function marketingOverview(user: { role: Role }, p: URLSearchParams
     period: { start, end }, basis, stage,
     filters: { marketerId, sellerId, careId, productKey, source, marketingTeamId },
     summary: {
-      ...current, createdOrders: base.orders, createdPhones: base.phones, confirmedOrders: base.confirmed,
+      ...current, createdOrders: base.orders, createdPhones: base.phones, createdNewPhones: base.newPhones, confirmedOrders: base.confirmed,
       confirmationRate: base.orders ? base.confirmed / base.orders * 100 : null,
       shippedOrders: base.shipped, shippingRate: base.confirmed ? base.shipped / base.confirmed * 100 : null,
       deliveredOrders: base.delivered, deliveryRate: base.shipped ? base.delivered / base.shipped * 100 : null,
@@ -228,9 +277,10 @@ export async function marketingOverview(user: { role: Role }, p: URLSearchParams
       selectedRate: base.orders ? current.orders / base.orders * 100 : null,
     },
     byMarketer, byTeam, stageSummary: rankFields(rankResults[0].results[0] as RankAggregate).stageMetrics,
+    afterPackSummary: (({ everConfirmed, everPacked, packedCancelled, packedReturned, newConfirmed, cskhConfirmed, newPacked, newCancelled, newReturned }) => ({ everConfirmed, everPacked, packedCancelled, packedReturned, newConfirmed, cskhConfirmed, newPacked, newCancelled, newReturned }))(rankFields(rankResults[0].results[0] as RankAggregate)),
     byProduct: (products.results as ProductRow[]).map((r) => ({ productKey: r.product_key, productName: r.product_name, orders: num(r.orders), phones: num(r.phones), quantity: num(r.quantity), lineTotal: num(r.line_total) })),
     recentOrders: (recentOrders.results as RecentOrder[]).map((r) => ({
-      id: r.id, orderId: r.source_order_id, posName: POS.find((x) => x.id === r.pos_id)?.name ?? r.pos_id,
+      id: r.id, orderId: r.source_order_id, posId: r.pos_id, posName: POS.find((x) => x.id === r.pos_id)?.name ?? r.pos_id,
       phone: phoneOut(r.phone), createdAt: r.created_at, confirmedAt: r.first_confirmed_at,
       status: ORDER_STATUS[Number(r.status_code)] ?? String(r.status_code),
       marketer: r.marketer_id ? nameMap.get(r.marketer_id) ?? `MKT ${r.marketer_id.slice(0, 8)}` : null,

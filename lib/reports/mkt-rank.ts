@@ -7,11 +7,12 @@ export type RankRow = {
 };
 
 /** Xếp hạng trong cùng phạm vi lọc; không sửa dữ liệu đầu vào. */
-export function rankByStage<T extends RankRow>(rows: readonly T[], stage: MarketingStage) {
+/** by: 'orders' (mặc định) = số đơn rồi doanh thu; 'net' = doanh thu rồi số đơn (bảng Xếp hạng marketer xếp theo DT New, anh Vũ 14/11/2026). */
+export function rankByStage<T extends RankRow>(rows: readonly T[], stage: MarketingStage, by: 'orders' | 'net' = 'orders') {
   const metrics = (row: T, key: MarketingStage) => row.stageMetrics[key] ?? { orders: 0, net: 0 };
   const ordered = (key: MarketingStage) => [...rows].sort((a, b) =>
-    metrics(b, key).orders - metrics(a, key).orders ||
-    metrics(b, key).net - metrics(a, key).net ||
+    (by === 'net' ? metrics(b, key).net - metrics(a, key).net || metrics(b, key).orders - metrics(a, key).orders
+      : metrics(b, key).orders - metrics(a, key).orders || metrics(b, key).net - metrics(a, key).net) ||
     a.rankName.localeCompare(b.rankName, 'vi'));
   const confirmedRanks = new Map(ordered('confirmed').map((row, i) => [row, i + 1]));
   return ordered(stage).map((row, i) => ({

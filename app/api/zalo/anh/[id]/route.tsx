@@ -7,8 +7,10 @@ import {
   morningImageHeight,
 } from '@/app/zalo-morning-image';
 import { BossSlotImage, SLOT_IMAGE_WIDTH, bossSlotImageHeight } from '@/app/zalo-slot-image';
+import { BOSS_IMAGE_WIDTH, BossImageView, bossImageHeight } from '@/app/zalo-boss-image';
 import type { MorningReport } from '@/lib/zalo/morning-report';
 import type { BossSlotReport } from '@/lib/zalo/slot-report';
+import type { BossImage } from '@/lib/zalo/boss-report';
 
 // Ảnh báo cáo 8h cho Zalo tải (không đăng nhập; mã ngẫu nhiên, hết hạn sau 3 ngày — xem lib/zalo/morning-store.ts).
 // Phông Be Vietnam Pro (giấy phép OFL) tải từ Google Fonts, giữ trong bộ nhớ của tiến trình.
@@ -55,9 +57,10 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const report = await loadMorningImage<MorningReport | BossSlotReport>(env.DB, (await params).id);
+  const report = await loadMorningImage<MorningReport | BossSlotReport | BossImage>(env.DB, (await params).id);
   if (!report) return new Response('Ảnh đã hết hạn.', { status: 404 });
   const opts = { fonts: await loadFonts(), headers: { 'Cache-Control': 'private, max-age=86400' } };
+  if ('kind' in report && report.kind === 'bossReport') return new ImageResponse(<BossImageView img={report} />, { width: BOSS_IMAGE_WIDTH, height: bossImageHeight(report), ...opts });
   if ('kind' in report && report.kind === 'bossSlot') return new ImageResponse(<BossSlotImage r={report} />, { width: SLOT_IMAGE_WIDTH, height: bossSlotImageHeight(report), ...opts });
   return new ImageResponse(<MorningImage r={report as MorningReport} />, { width: MORNING_IMAGE_WIDTH, height: morningImageHeight(report as MorningReport), ...opts });
 }

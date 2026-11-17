@@ -6,12 +6,14 @@ import { PRODUCT_LINES, type LineKey } from '@/lib/reports/mkt-product-split';
 
 export const KPI2_KEY = (month: string) => `target_kpi2:${month}`;
 export type ProductGoal = Partial<Record<LineKey, number>>;
-export type Kpi2 = { assigned?: number; closed?: number; orders?: number; upsellRate?: number; products?: ProductGoal };
+/** leads: KPI số đưa về của MKT (anh Vũ 14/11/2026), lưu theo tháng; đặt theo ngày thì nhân số ngày của tháng. */
+export type Kpi2 = { assigned?: number; closed?: number; orders?: number; leads?: number; upsellRate?: number; products?: ProductGoal };
 export type Kpi2Map = Record<string, Kpi2>;
 /** Chỉ tiêu cộng dồn được (chia cho người thì tổng người ≤ tổng team). Tỷ lệ upsell là tỉ số nên không cộng. */
-export const SUM_FIELDS = ['assigned', 'closed', 'orders'] as const;
+export const SUM_FIELDS = ['assigned', 'closed', 'orders', 'leads'] as const;
 export const KPI2_LINES: LineKey[] = PRODUCT_LINES.map((l) => l.key);
-const KEY_RE = /^(team|employee):[^\s]{1,100}$/;
+/** Khoá: "team:<mã>", "employee:<tài khoản POS>", "dept:mkt" (KPI cả bộ phận, chỉ chủ hệ thống đặt). */
+const KEY_RE = /^(team|employee|dept):[^\s]{1,100}$/;
 
 const count = (v: unknown) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? Math.min(1_000_000, Math.round(n)) : undefined; };
 const rate = (v: unknown) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? Math.min(100, Math.round(n * 10) / 10) : undefined; };
@@ -56,7 +58,7 @@ export function visibleKpi2(map: Kpi2Map, teams: string[] | null, staff: string[
   if (teams === null && staff === null) return map;
   return Object.fromEntries(Object.entries(map).filter(([k]) => {
     const at = k.indexOf(':'), scope = k.slice(0, at), id = k.slice(at + 1);
-    return scope === 'team' ? !!teams?.includes(id) : !!staff?.includes(id);
+    return scope === 'team' ? !!teams?.includes(id) : scope === 'employee' && !!staff?.includes(id);
   }));
 }
 

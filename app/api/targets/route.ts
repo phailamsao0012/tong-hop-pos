@@ -5,7 +5,8 @@ import { canWriteTarget, managedTeams, targetStaff, listTargets, parseTargetCost
 import { audit } from '@/lib/ops/audit';
 
 // KPI team/POS chỉ chủ hệ thống; KPI cá nhân kiểm quyền từng người.
-// scope: pos (cửa hàng), employee (tài khoản POS), team (team Sale/CSKH bên web nhân sự, refId = mã team).
+// scope: pos (cửa hàng), employee (tài khoản POS), team (team Sale/CSKH bên web nhân sự, refId = mã team),
+// dept_pos (bộ phận Sale / CSKH / MKT trên một POS, refId = 'sale:<pos>', anh Vũ 12/11/2026; chỉ chủ hệ thống đặt).
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 export async function GET(request: Request) {
   const user = await getSessionUser();
@@ -34,19 +35,19 @@ export async function PUT(request: Request) {
   if (!body || typeof body !== 'object' || (Array.isArray(body.items) && body.items.some((it) => !it || typeof it !== 'object'))) return Response.json({ error: 'Dữ liệu không hợp lệ.' }, { status: 400 });
   const month = body.month ?? '';
   if (!MONTH_RE.test(month) || !Array.isArray(body.items) || body.items.length > 500) return Response.json({ error: 'Dữ liệu không hợp lệ.' }, { status: 400 });
-  if (body.items.some((it) => !['pos', 'employee', 'team'].includes(it.scope ?? '') || typeof it.refId !== 'string' || !/^[^\s]{1,100}$/.test(it.refId)
+  if (body.items.some((it) => !['pos', 'employee', 'team', 'dept_pos'].includes(it.scope ?? '') || typeof it.refId !== 'string' || !/^[^\s]{1,100}$/.test(it.refId)
     || [it.revenue, it.closedOrders, it.workingDays, it.closeRate, it.aov].some((value) => value != null && (typeof value !== 'number' || !Number.isFinite(value) || value < 0))))
     return Response.json({ error: 'Chỉ tiêu không hợp lệ.' }, { status: 400 });
   const ids = await targetStaff(env.DB, user);
   if (body.items.some((it) => !canWriteTarget(user, ids, String(it.scope), String(it.refId)))) return forbidden();
-  if (body.only !== undefined && (!Array.isArray(body.only) || body.only.length > 500 || body.only.some((k) => typeof k !== 'string' || !/^(pos|employee|team):[^\s]{1,100}$/.test(k)))) return Response.json({ error: 'Phạm vi không hợp lệ.' }, { status: 400 });
+  if (body.only !== undefined && (!Array.isArray(body.only) || body.only.length > 500 || body.only.some((k) => typeof k !== 'string' || !/^(pos|employee|team|dept_pos):[^\s]{1,100}$/.test(k)))) return Response.json({ error: 'Phạm vi không hợp lệ.' }, { status: 400 });
   if (!isOwner(user) && !body.only) return Response.json({ error: 'Cần chỉ rõ từng KPI cần thay đổi.' }, { status: 400 });
   if (body.only?.some((k) => { const at = k.indexOf(':'); return !canWriteTarget(user, ids, k.slice(0, at), k.slice(at + 1)); })) return forbidden();
   const now = new Date().toISOString();
   const storedCaps = await readTargetSetting(`target_cost:${month}`);
   const caps = parseTargetCosts(storedCaps?.value);
   if (body.items.some((it) => it.closeRate != null && (it.closeRate > 100 || (it.scope !== 'employee' && it.scope !== 'team')))) return Response.json({ error: 'Tỉ lệ chốt không hợp lệ (0–100%).' }, { status: 400 });
-  if (body.items.some((it) => it.aov != null && it.scope !== 'team')) return Response.json({ error: 'KPI trung bình đơn chỉ đặt cho cả team.' }, { status: 400 });
+  if (body.items.some((it) => it.aov != null && it.scope !== 'team' && it.scope !== 'employee')) return Response.json({ error: 'KPI trung bình đơn đặt cho từng người hoặc cả team.' }, { status: 400 });
   const storedRates = await readTargetSetting(`target_rate:${month}`);
   const storedAov = await readTargetSetting(`target_aov:${month}`);
   for (const it of body.items) if (it.costCeiling != null && (it.scope !== 'team' || !Number.isFinite(it.costCeiling) || it.costCeiling < 0)) return Response.json({ error: 'Chi phí trần không hợp lệ.' }, { status: 400 });

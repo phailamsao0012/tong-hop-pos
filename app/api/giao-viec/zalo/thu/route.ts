@@ -2,6 +2,7 @@ import { maybeZaloTick } from '@/lib/zalo/zalo-tick';
 import { env } from 'cloudflare:workers';
 import { bossRoute } from '../../me/route';
 import { listContacts, handleZaloUpdate } from '@/lib/zalo/zalo-work';
+import { bossKpiCommand } from '@/lib/zalo/kpi-bot';
 import { createZaloSender } from '@/lib/zalo/zalo';
 export async function POST(request: Request) {
   return bossRoute(request, async db => {
@@ -14,6 +15,6 @@ export async function POST(request: Request) {
     }
     const contact = (await listContacts(db)).find(c => c.id === input.contactId && c.active && c.chat_id);
     if (!contact) throw new Error('Người này chưa nối Zalo.');
-    await handleZaloUpdate(db, { message: { chat: { id: contact.chat_id }, text: input.text } }, createZaloSender(db));
+    await handleZaloUpdate(db, { message: { chat: { id: contact.chat_id }, text: input.text } }, createZaloSender(db), Date.now(), bossKpiCommand);
   });
 }

@@ -12,6 +12,7 @@ import type { VdLine, VdReport } from '@/lib/reports/van-don';
 import { PeriodToolbar, PosChips } from './overview-view';
 import { usePeriod } from './period-store';
 import { usePosIds } from './pos-store';
+import { VanDonCarriersCard } from './van-don-carriers-card';
 import { unitFor, useHrUnit, withUnit, useMktTeam } from './team-store';
 import { StaleChip } from './stale-chip';
 import { useApi } from './use-api';
@@ -309,6 +310,7 @@ export function VanDonView() {
             </ChartCard>
           ))}
 
+          <VanDonCarriersCard start={start} end={end} posIds={posIds} />
           <ChartCard id="vd-sellers" icon={ShoppingCart} title="Phía lên đơn (Sale, CSKH)" subtitle="Hoàn cao và nhiều đơn không xác nhận được ở người lên đơn là dấu hiệu lên đơn kém." info={report.definitions['Người lên đơn']}>
             <LineTable rows={sellers} cols={SELLER_COLS} level={level} first={first} />
           </ChartCard>

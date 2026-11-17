@@ -75,6 +75,25 @@ export function periodLabel(p: Period) {
   return y(p.start) === y(p.end) ? `${dm(p.start)} – ${dm(p.end)}/${y(p.end)}` : `${dm(p.start)}/${y(p.start)} – ${dm(p.end)}/${y(p.end)}`;
 }
 
+/**
+ * TB đơn KPI của team từ TB đơn từng người (plan Đầu não 14/11/2026, bước 3):
+ * - mọi người cùng một số → đúng số đó;
+ * - khác nhau → trọng số theo KPI doanh thu: tổng KPI doanh thu ÷ tổng số đơn cần có (KPI doanh thu từng người ÷ TB đơn người đó),
+ *   khớp cách tính TB đơn thật (doanh thu ÷ số đơn); có người thiếu KPI doanh thu thì trung bình thường;
+ * - người chưa đặt TB đơn không tính (kèm "đã đặt set/total người").
+ * Chưa ai có TB đơn riêng thì dùng TB đơn cấp team cũ (giữ nguyên, không xoá).
+ */
+export function teamAov(people: { aov?: number | null; revenue?: number | null }[], teamValue: number | null = null): { aov: number | null; set: number; total: number; fromPeople: boolean } {
+  const withAov = people.filter((p) => (p.aov ?? 0) > 0) as { aov: number; revenue?: number | null }[];
+  if (!withAov.length) return { aov: teamValue && teamValue > 0 ? teamValue : null, set: 0, total: people.length, fromPeople: false };
+  const same = withAov.every((p) => p.aov === withAov[0].aov);
+  const weighted = withAov.every((p) => (p.revenue ?? 0) > 0);
+  const aov = same ? withAov[0].aov
+    : weighted ? withAov.reduce((a, p) => a + p.revenue!, 0) / withAov.reduce((a, p) => a + p.revenue! / p.aov, 0)
+    : withAov.reduce((a, p) => a + p.aov, 0) / withAov.length;
+  return { aov: Math.round(aov), set: withAov.length, total: people.length, fromPeople: true };
+}
+
 export type MonthKpi = { revenue?: number | null; aov?: number | null; closeRate?: number | null };
 export type PeriodKpi = { revenue: number | null; aov: number | null; closeRate: number | null };
 

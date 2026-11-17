@@ -4,7 +4,8 @@ export type KpiPace = { daily: number; todayDiff: number; paceTarget: number; pa
 
 export function kpiPace(p: { goal: number; workingDays: number | null; daysInMonth: number; daysElapsed: number; monthNet: number; todayNet: number }): KpiPace | null {
   if (!(p.goal > 0)) return null;
-  const days = p.workingDays && p.workingDays > 0 ? p.workingDays : p.daysInMonth;
+  // 12/11/2026: luôn chia đúng số ngày của tháng (anh Vũ: "Chủ nhật hay lễ cũng làm"); workingDays cũ giữ trong DB nhưng không dùng.
+  const days = p.daysInMonth;
   const daily = p.goal / days;
   const paceTarget = daily * Math.max(0, Math.min(p.daysElapsed, days));
   return { daily, todayDiff: p.todayNet - daily, paceTarget, paceDiff: p.monthNet - paceTarget };
