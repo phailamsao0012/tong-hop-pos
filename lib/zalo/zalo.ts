@@ -12,8 +12,9 @@ async function call(token: string, method: string, body: unknown, timeoutMs = 10
   const response = await fetch(`https://bot-api.zaloplatforms.com/bot${token}/${method}`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs),
   });
-  const result = await response.json() as { ok?: boolean; result?: unknown };
-  if (!response.ok || result.ok !== true) throw new Error('Zalo từ chối yêu cầu.');
+  const result = await response.json().catch(() => ({})) as { ok?: boolean; result?: unknown; error_code?: number; description?: string };
+  // Lý do từ chối (mã HTTP, mã lỗi, mô tả của Zalo) để ghi log; không có khoá bot trong đó.
+  if (!response.ok || result.ok !== true) throw new Error(`Zalo từ chối ${method}: HTTP ${response.status}${result.error_code != null ? ` mã ${result.error_code}` : ''}${result.description ? ` ${String(result.description).slice(0, 200)}` : ''}`);
   return result;
 }
 export async function sendZalo(token: string | undefined, chatId: string, text: string, db: D1Database = env.DB, now = Date.now()) {
@@ -29,12 +30,23 @@ export async function sendZalo(token: string | undefined, chatId: string, text: 
   try { return await call(token.trim(), 'sendMessage', { chat_id: chatId, text: text.slice(0, 2000) }); }
   catch { console.error('zalo send failed'); return { ok: false }; }
 }
+/** Chờ trước khi gửi ảnh lại (test đặt 0). */
+export const photoRetry = { ms: 20000 };
 /** Gửi ảnh (Zalo tự tải từ photoUrl công khai) kèm chữ. Trả false khi Zalo từ chối để nơi gọi gửi bản chữ thay. */
 export async function sendZaloPhoto(token: string | undefined, chatId: string, photoUrl: string, caption: string, db: D1Database = env.DB, now = Date.now()) {
   if (env.DEMO_MODE === '1') { await sendZalo(token, chatId, `[Ảnh] ${photoUrl}\n${caption}`, db, now); return true; }
   if (!token?.trim()) return false;
-  try { await call(token.trim(), 'sendPhoto', { chat_id: chatId, photo: photoUrl, caption: caption.slice(0, 2000) }, 20000); return true; }
-  catch { console.error('zalo photo failed'); return false; }
+  // 17/11/2026: 12h và 17h ảnh không tới (web bận, Zalo tải ảnh quá lâu). Vẽ sẵn ảnh trước (đường ảnh giữ ảnh đã vẽ 30 phút),
+  // gửi; lỗi thì ghi lý do, chờ 20 giây gửi lại 1 lần; vẫn lỗi thì nơi gọi gửi bản chữ như cũ.
+  await fetch(photoUrl, { signal: AbortSignal.timeout(90000) }).then((r) => r.arrayBuffer()).catch((e: unknown) => console.error('zalo photo warm failed', e instanceof Error ? e.message : e));
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try { await call(token.trim(), 'sendPhoto', { chat_id: chatId, photo: photoUrl, caption: caption.slice(0, 2000) }, 30000); return true; }
+    catch (e) {
+      console.error(`zalo photo failed (lần ${attempt}): ${e instanceof Error ? e.message : String(e)}`);
+      if (attempt === 1) await new Promise((r) => setTimeout(r, photoRetry.ms));
+    }
+  }
+  return false;
 }
 export async function setWebhook(token: string | undefined, url: string) {
   if (env.DEMO_MODE === '1' || !token?.trim()) return { skipped: true };

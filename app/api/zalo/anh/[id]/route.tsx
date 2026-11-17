@@ -53,14 +53,28 @@ const loadFonts = () =>
     throw e;
   }));
 
+// Ảnh đã vẽ giữ trong bộ nhớ 30 phút (17/11/2026): lúc 12h / 17h web bận, Zalo tải ảnh quá lâu nên từ chối và chỉ còn tin chữ.
+// Bot gọi trước một lần để vẽ sẵn (lib/zalo/zalo.ts sendZaloPhoto), lúc Zalo tải thì trả ngay. Mã ảnh ngẫu nhiên, nội dung không đổi.
+const PNG_TTL = 30 * 60000, PNG_MAX = 40;
+const drawn = new Map<string, { png: ArrayBuffer; at: number }>();
+const png = (body: ArrayBuffer) => new Response(body, { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'private, max-age=86400' } });
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const report = await loadMorningImage<MorningReport | BossSlotReport | BossImage>(env.DB, (await params).id);
+  const id = (await params).id, now = Date.now();
+  const hit = drawn.get(id);
+  if (hit && now - hit.at < PNG_TTL) return png(hit.png);
+  const report = await loadMorningImage<MorningReport | BossSlotReport | BossImage>(env.DB, id);
   if (!report) return new Response('Ảnh đã hết hạn.', { status: 404 });
-  const opts = { fonts: await loadFonts(), headers: { 'Cache-Control': 'private, max-age=86400' } };
-  if ('kind' in report && report.kind === 'bossReport') return new ImageResponse(<BossImageView img={report} />, { width: BOSS_IMAGE_WIDTH, height: bossImageHeight(report), ...opts });
-  if ('kind' in report && report.kind === 'bossSlot') return new ImageResponse(<BossSlotImage r={report} />, { width: SLOT_IMAGE_WIDTH, height: bossSlotImageHeight(report), ...opts });
-  return new ImageResponse(<MorningImage r={report as MorningReport} />, { width: MORNING_IMAGE_WIDTH, height: morningImageHeight(report as MorningReport), ...opts });
+  const opts = { fonts: await loadFonts() };
+  const image = 'kind' in report && report.kind === 'bossReport' ? new ImageResponse(<BossImageView img={report} />, { width: BOSS_IMAGE_WIDTH, height: bossImageHeight(report), ...opts })
+    : 'kind' in report && report.kind === 'bossSlot' ? new ImageResponse(<BossSlotImage r={report} />, { width: SLOT_IMAGE_WIDTH, height: bossSlotImageHeight(report), ...opts })
+    : new ImageResponse(<MorningImage r={report as MorningReport} />, { width: MORNING_IMAGE_WIDTH, height: morningImageHeight(report as MorningReport), ...opts });
+  const body = await image.arrayBuffer();
+  for (const [k, v] of drawn) if (now - v.at >= PNG_TTL) drawn.delete(k);
+  while (drawn.size >= PNG_MAX) drawn.delete(drawn.keys().next().value!);
+  drawn.set(id, { png: body, at: now });
+  return png(body);
 }
