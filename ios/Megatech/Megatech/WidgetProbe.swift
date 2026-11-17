@@ -263,21 +263,21 @@ struct WidgetDiagnosticsView: View {
                         ForEach(r.rows) { row in
                             HStack(alignment: .firstTextBaseline, spacing: 10) {
                                 mark(row.ok)
-                                Text(row.label).font(.system(size: 13, weight: .medium)).foregroundStyle(Color.ink)
+                                Text(row.label).mtFont(.body).foregroundStyle(Color.ink)
                                 Spacer(minLength: 8)
-                                Text(row.value).font(.system(size: 12)).foregroundStyle(Color.inkSoft).multilineTextAlignment(.trailing).textSelection(.enabled)
+                                Text(row.value).mtFont(.body).foregroundStyle(Color.inkSoft).multilineTextAlignment(.trailing).textSelection(.enabled)
                             }
                             .padding(.horizontal, 12).padding(.vertical, 10)
                             if row.id < r.rows.count - 1 { Divider().padding(.leading, 36) }
                         }
                     }
-                    .background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
+                    .background(Color.card, in: .rect(cornerRadius: MT.rCard)).cardShadow()
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Kết luận").font(.system(size: 12, weight: .bold)).foregroundStyle(Color.inkSoft)
+                        Text("Kết luận").mtFont(.body).foregroundStyle(Color.inkSoft)
                         Text(r.conclusion).font(.system(size: 15, weight: .bold)).foregroundStyle(r.verdict == .pathA ? Color.good : Color.warn)
                     }
                     .padding(14).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
+                    .background(Color.card, in: .rect(cornerRadius: MT.rCard)).cardShadow()
                     PrimaryButton(title: copied ? "Đã sao chép" : "Sao chép kết quả", icon: copied ? "checkmark" : "doc.on.doc") {
                         UIPasteboard.general.string = r.text
                         copied = true
@@ -285,7 +285,7 @@ struct WidgetDiagnosticsView: View {
                 } else {
                     ProgressView().frame(maxWidth: .infinity).padding(40)
                 }
-                Text("Không có số liệu hay thông tin cá nhân trong màn này").font(.system(size: 11)).foregroundStyle(Color.inkSoft)
+                Text("Không có số liệu hay thông tin cá nhân trong màn này").mtFont(.caption).foregroundStyle(Color.inkSoft)
             }
             .padding(16)
         }

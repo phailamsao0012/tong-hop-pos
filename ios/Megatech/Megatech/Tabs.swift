@@ -36,19 +36,34 @@ struct RootTabs: View {
     @State private var alerts = AlertCenter()
     /// Đường đi trong các tab (JSON, chỉ các trang được lưu; Route.restorable).
     @SceneStorage(NavMemory.pathsKey) private var savedPaths = ""
+    init() {
+        let appearance = UITabBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = UIColor(Palette.mtSurfaceCard)
+        appearance.shadowColor = UIColor(Palette.mtCardBorder)
+        for item in [appearance.stackedLayoutAppearance, appearance.inlineLayoutAppearance, appearance.compactInlineLayoutAppearance] {
+            item.selected.iconColor = UIColor(Palette.accent)
+            item.selected.titleTextAttributes = [.foregroundColor: UIColor(Palette.accent)]
+            item.normal.iconColor = UIColor(Palette.muted)
+            item.normal.titleTextAttributes = [.foregroundColor: UIColor(Palette.muted)]
+        }
+        UITabBar.appearance().standardAppearance = appearance
+        UITabBar.appearance().scrollEdgeAppearance = appearance
+    }
     var body: some View {
         // Đổi "Cách tính" (ở app hoặc trên web) → revision tăng → các tab báo cáo dựng lại và tải số mới.
         let rev = MetricPrefs.shared.revision
         @Bindable var nav = nav
         TabView(selection: $nav.tab) {
-            HomeFeed().id(rev).tabItem { Label { Text("Trang chủ") } icon: { Reicon.tab("house.fill", "ri_home", on: nav.tab == .home) } }.tag(AppTab.home)
-            OrdersHome().id(rev).tabItem { Label { Text("Đơn hàng") } icon: { Reicon.tab("shippingbox.fill", "ri_box", on: nav.tab == .orders) } }.tag(AppTab.orders)
-            // Ô giữa tròn xanh nổi bật: mở app vào đây khi chưa nhớ tab nào (sau đó mở vào tab cuối cùng, NavMemory).
-            HomeView().id(rev).tabItem { Label { Text("Tổng quan") } icon: { Image(uiImage: CenterTabIcon.image) } }.tag(AppTab.overview)
-            DeptsHome().tabItem { Label { Text("Phòng ban") } icon: { Reicon.tab("building.2.fill", "ri_buildings", on: nav.tab == .depts) } }.tag(AppTab.depts)
-            MoreHome().tabItem { Label { Text("Thêm") } icon: { Reicon.tab("line.3.horizontal", "ri_menu2", on: nav.tab == .more) } }.tag(AppTab.more)
+            HomeFeed().id(rev).modifier(MTRootTabView()).tabItem { Label { Text("Trang chủ") } icon: { Image(systemName: "house.fill") } }.tag(AppTab.home)
+            OrdersHome().id(rev).modifier(MTRootTabView()).tabItem { Label { Text("Đơn hàng") } icon: { Image(systemName: "shippingbox.fill") } }.tag(AppTab.orders)
+            // Tổng quan dùng cùng kiểu icon với bốn tab còn lại.
+            HomeView().id(rev).modifier(MTRootTabView()).tabItem { Label { Text("Tổng quan") } icon: { Image(systemName: "chart.bar.fill") } }.tag(AppTab.overview)
+            DeptsHome().modifier(MTRootTabView()).tabItem { Label { Text("Phòng ban") } icon: { Image(systemName: "building.2.fill") } }.tag(AppTab.depts)
+            MoreHome().modifier(MTRootTabView()).tabItem { Label { Text("Thêm") } icon: { Image(systemName: "ellipsis.circle.fill") } }.tag(AppTab.more)
         }
-        .tint(.brand)
+        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+        .modifier(MTRootTabView())
         .environment(nav)
         .environment(alerts)
         .modifier(NavMemoryKeeper(nav: nav, savedPaths: $savedPaths))
@@ -56,6 +71,12 @@ struct RootTabs: View {
         .task { await refreshBadges(maxAge: 0) }
         .onChange(of: phase) { _, p in if p == .active { Task { await MetricPrefs.shared.load(); await refreshBadges(maxAge: 60) } } }
         .onChange(of: satellites.hrBadge, initial: true) { _, n in alerts.hrPending = n }
+        // R-POS: việc cần xử lý (đơn mới, khách quá 20 ngày, ca, đồng bộ) theo POS chung đang chọn; đổi POS thì hỏi lại ngay.
+        .onChange(of: nav.pos, initial: true) { _, p in
+            guard alerts.pos != p else { return }
+            alerts.pos = p
+            if alerts.loaded { let me = auth.me; Task { await alerts.refresh(maxAge: 0, me: me) } }
+        }
         // Chưa được xem Tổng quan POS: mở app vào Trang chủ thay vì trang báo chưa cấp quyền.
         // Cùng quy tắc với UnlockPrefetch.firstTabPaths (tải trước số của tab mở app lúc hộp Face ID đang hiện): đổi ở đây thì sửa cả ở đó.
         .onAppear { if nav.tab == .overview && !(auth.me?.canView("overview") ?? false) { nav.tab = .home } }
@@ -91,22 +112,46 @@ struct RootTabs: View {
     var hrPending = 0
     @ObservationIgnored private var lastAt: Date?
     @ObservationIgnored private var me: API.Me?
+    /// POS chung đang chọn (RootTabs gán theo AppNav.pos; R-POS: chọn POS nào chỉ tính POS đó). "" = mọi POS được xem.
+    var pos = ""
+    private var posIds: [String] { pos.isEmpty ? [] : [pos] }
+    /// POS của lần hỏi gần nhất: đổi POS thì hỏi lại ngay, không chờ maxAge.
+    @ObservationIgnored private var askedPos = ""
 
     /// route nil: người dùng không mở được trang đích, dòng chỉ để biết.
-    struct Item: Identifiable { let id: String; let icon: String; let tone: Tone; let title: String; let sub: String; let route: Route? }
+    /// label / count: tên ngắn và số (hoặc tên POS) ở bên phải, cho hàng "Ưu tiên" ở trang Thông báo (khung 14).
+    struct Item: Identifiable {
+        let id: String; let icon: String; let tone: Tone; let title: String; let sub: String; let route: Route?
+        var label = ""; var count = ""
+    }
+    /// Nhóm việc cho thẻ "CẦN XỬ LÝ" (khung 14): tên nhóm, số, màu.
+    struct Group: Identifiable { let id: String; let title: String; let n: Int; let color: Color }
+    func groups(sync: SyncStatus) -> [Group] {
+        var out: [Group] = [Group(id: "don", title: "Đơn hàng", n: Int(unconfirmed), color: Palette.orange)]
+        if me?.canView("care") == true { out.append(Group(id: "cham", title: "Chăm sóc", n: Int(over20), color: Palette.cskh)) }
+        out.append(Group(id: "ns", title: "Nhân sự", n: hrPending, color: Palette.purple))
+        out.append(Group(id: "db", title: "Đồng bộ", n: syncIssues(sync).count, color: Palette.warn))
+        return out
+    }
+    /// POS lỗi đồng bộ hoặc chậm quá 15 phút (đã chọn POS thì chỉ POS đó).
+    func syncIssues(_ sync: SyncStatus) -> [API.SyncPos] {
+        sync.pos.filter { (pos.isEmpty || $0.posId == pos) && ($0.lastError != nil || sync.age($0) > 15) }
+    }
 
     /// Bỏ qua nếu vừa hỏi chưa quá maxAge giây (0 = hỏi ngay). Quyền của người dùng quyết dòng nào hiện và dòng nào chạm được.
     @MainActor func refresh(maxAge: TimeInterval = 60, me: API.Me?) async {
-        if let t = lastAt, Date.now.timeIntervalSince(t) < maxAge { return }
+        if let t = lastAt, Date.now.timeIntervalSince(t) < maxAge, askedPos == pos { return }
         lastAt = .now
         self.me = me
+        let p = pos, ids = posIds
+        askedPos = p
         let canCare = me?.canView("care") == true
         let today = VNDate.string(.now)
         // Ba nguồn hỏi cùng lúc.
         let trace = LoadTrace("canh-bao", requests: canCare ? 3 : 2)
-        async let oReq = attempt(true, trace) { try await API.overview(start: today, end: today, compare: "none") }
-        async let sReq = attempt(true, trace) { try await API.shift(date: today, shift: "auto") }
-        async let bReq = attempt(canCare, trace) { try await API.cskhBadge() }
+        async let oReq = attempt(true, trace) { try await API.overview(start: today, end: today, posIds: ids, compare: "none") }
+        async let sReq = attempt(true, trace) { try await API.shift(date: today, shift: "auto", posIds: ids) }
+        async let bReq = attempt(canCare, trace) { try await API.cskhBadge(posIds: ids) }
         let (oRes, sRes, bRes) = await (oReq, sReq, bReq)
         trace.end(cancelled: Task.isCancelled)
         let o = try? oRes?.get(), s = try? sRes?.get(), b = try? bRes?.get()
@@ -115,6 +160,8 @@ struct RootTabs: View {
         let got = o != nil || s != nil || b != nil
         // Bị huỷ giữa chừng (rời tab) mà chưa đọc được gì: lần sau hỏi lại ngay, không đổi trạng thái.
         if Task.isCancelled && !got { lastAt = nil; return }
+        // Đã đổi POS trong lúc hỏi: bỏ số của POS cũ, lần sau hỏi lại.
+        guard p == pos else { lastAt = nil; return }
         if let o { unconfirmed = o.current.total.groups["new"]?.orders ?? 0 }
         if let s { shift = s }
         if let b { over20 = b.over20; callsToday = b.callsToday } else if !canCare { over20 = 0 }
@@ -132,20 +179,53 @@ struct RootTabs: View {
         // Số lấy từ nhóm "new" (trạng thái Mới trên Pancake) nên danh sách mở cùng nhóm đó cho khớp số.
         if unconfirmed > 0 {
             out.append(Item(id: "unconfirmed", icon: "clock.badge.exclamationmark", tone: .red, title: "\(Fmt.int(unconfirmed)) đơn mới chưa chốt", sub: "Tạo hôm nay · đang ở trạng thái Mới",
-                            route: me?.canView("raw-orders") == true ? .orders(HomeShortcuts.newOrders(today)) : nil))
-        }
-        for p in sync.pos where p.lastError != nil || sync.age(p) > 15 {
-            out.append(Item(id: "sync-\(p.posId)", icon: "exclamationmark.triangle.fill", tone: .orange, title: "\(PosBreakdown.short[p.posId] ?? p.posId) \(p.lastError != nil ? "lỗi đồng bộ" : "đang chậm")",
-                            sub: p.lastError ?? "Chưa đồng bộ \(sync.age(p)) phút · kiểm tra kết nối", route: me?.canView("config") == true ? .page("config") : nil))
+                            route: me?.canView("raw-orders") == true ? .orders(HomeShortcuts.newOrders(today, pos: pos)) : nil,
+                            label: "Đơn mới chưa chốt", count: Fmt.int(unconfirmed)))
         }
         if me?.canView("care") == true, over20 > 0 {
             out.append(Item(id: "over20", icon: "person.crop.circle.badge.exclamationmark", tone: .orange, title: "\(Fmt.int(over20)) khách quá 20 ngày chưa ghi chú",
-                            sub: "CSKH · hôm nay đã ghi \(Fmt.int(callsToday)) cuộc gọi", route: .page("care")))
+                            sub: "CSKH · hôm nay đã ghi \(Fmt.int(callsToday)) cuộc gọi", route: .page("care"),
+                            label: "Khách quá 20 ngày chưa ghi chú", count: Fmt.int(over20)))
         }
         if hrPending > 0 {
             out.append(Item(id: "hr", icon: "checkmark.seal.fill", tone: .purple, title: "\(hrPending) yêu cầu nhân sự chờ duyệt",
-                            sub: "Phòng Nhân sự · thêm, đổi chức vụ, đổi trạng thái", route: .hr("approvals")))
+                            sub: "Phòng Nhân sự · thêm, đổi chức vụ, đổi trạng thái", route: .hr("approvals"),
+                            label: "Yêu cầu nhân sự chờ duyệt", count: "\(hrPending)"))
         }
+        // Các POS lỗi / chậm gom vào một hàng (khung 14); chi tiết từng POS ở khối Đồng bộ Pancake.
+        let issues = syncIssues(sync)
+        if !issues.isEmpty {
+            let names = issues.map { PosBreakdown.short[$0.posId] ?? $0.posId }.joined(separator: ", ")
+            let anyError = issues.contains { $0.lastError != nil }
+            out.append(Item(id: "sync", icon: "exclamationmark.triangle.fill", tone: anyError ? .red : .orange,
+                            title: "Đồng bộ \(anyError ? "lỗi" : "chậm"): \(names)",
+                            sub: "Kiểm tra ở khối Đồng bộ Pancake", route: me?.canView("config") == true ? .page("config") : nil,
+                            label: "Đồng bộ lỗi / chậm", count: names))
+        }
+        return out
+    }
+    /// Hàng "Ưu tiên" ở trang Thông báo (khung 14): luôn đủ các dòng theo quyền, dòng chưa có việc hiện số 0.
+    func priority(sync: SyncStatus) -> [Item] {
+        let today = VNDate.string(.now)
+        var out: [Item] = [
+            Item(id: "unconfirmed", icon: "clock.badge.exclamationmark", tone: .red, title: "\(Fmt.int(unconfirmed)) đơn mới chưa chốt",
+                 sub: "Tính theo ngày tạo đơn", route: me?.canView("raw-orders") == true ? .orders(HomeShortcuts.newOrders(today, pos: pos)) : nil,
+                 label: "Đơn mới chưa chốt", count: Fmt.int(unconfirmed)),
+        ]
+        if me?.canView("care") == true {
+            out.append(Item(id: "over20", icon: "person.crop.circle.badge.exclamationmark", tone: .orange, title: "\(Fmt.int(over20)) khách quá 20 ngày chưa ghi chú",
+                            sub: "CSKH phụ trách · hôm nay đã ghi \(Fmt.int(callsToday)) cuộc gọi", route: .page("care"),
+                            label: "Khách quá 20 ngày chưa ghi chú", count: Fmt.int(over20)))
+        }
+        out.append(Item(id: "hr", icon: "checkmark.seal.fill", tone: .purple, title: "\(hrPending) yêu cầu nhân sự chờ duyệt",
+                        sub: "Đổi phòng / team, chức vụ, trạng thái", route: .hr("approvals"),
+                        label: "Yêu cầu nhân sự chờ duyệt", count: "\(hrPending)"))
+        let issues = syncIssues(sync)
+        let names = issues.map { PosBreakdown.short[$0.posId] ?? $0.posId }.joined(separator: ", ")
+        out.append(Item(id: "sync", icon: "exclamationmark.triangle.fill", tone: issues.contains { $0.lastError != nil } ? .red : .orange,
+                        title: issues.isEmpty ? "Đồng bộ: không có POS lỗi / chậm" : "Đồng bộ lỗi / chậm: \(names)",
+                        sub: "Kiểm tra ở khối Đồng bộ Pancake bên dưới", route: me?.canView("config") == true ? .page("config") : nil,
+                        label: "Đồng bộ lỗi / chậm", count: issues.isEmpty ? "0" : names))
         return out
     }
     /// Số đỏ trên chuông: việc cần xử lý + cảnh báo đỏ trong ca.
@@ -173,63 +253,154 @@ struct AlertsPage: View {
         let age: Int = sync.age(pos)
         return age < 60 ? "\(age) phút" : "\(age / 60) giờ"
     }
+    private func syncSymbol(_ pos: API.SyncPos?) -> String {
+        guard let pos else { return "questionmark.circle" }
+        if pos.lastError != nil { return "exclamationmark.triangle.fill" }
+        return sync.age(pos) > 15 ? "clock.badge.exclamationmark" : "checkmark.circle.fill"
+    }
+    /// Trạng thái gọn một POS (khung 14): dấu, chữ, màu, dòng phụ. "pending" là POS chưa xong lần đồng bộ (đang đồng bộ).
+    private func syncLine(_ id: String) -> (title: String, detail: String, tone: Color, error: Bool) {
+        let name = PosBreakdown.short[id] ?? id
+        guard let pos = sync.pos.first(where: { $0.posId == id }) else {
+            return ("? \(name) · Chưa có số", "Máy chủ chưa trả trạng thái POS này", Color.inkSoft, false)
+        }
+        let records = "\(Fmt.int(pos.records)) bản ghi"
+        let at = pos.lastSyncAt.flatMap(Fmt.parseISO).map(Fmt.hm) ?? "—"
+        let errors = pos.errors24h > 0 ? " · \(Fmt.int(pos.errors24h)) lỗi trong ngày" : ""
+        if let err = pos.lastError { return ("! \(name) · Lỗi đồng bộ", err, Color.bad, true) }
+        if pos.status == "pending" { return ("↻ \(name) · Đang đồng bộ", "Đang cập nhật bản ghi mới · \(records)", Palette.info, false) }
+        let age = sync.age(pos)
+        if age > 15 {
+            let late = age < 60 ? "\(age) phút" : "\(age / 60) giờ"
+            return ("! \(name) · Chậm", "\(at) · chậm \(late)\(errors)", Color.warn, false)
+        }
+        return ("✓ \(name) · Đã cập nhật", "\(at) · \(records)\(errors)", Color.good, false)
+    }
+    /// Cảnh báo trong ca về đồng bộ đã có ở khối Đồng bộ Pancake (từng POS), không lặp ở Trong ca.
+    private func isSyncAlert(_ title: String) -> Bool { title.lowercased().contains("đồng bộ") }
+
+    /// Hero "CẦN XỬ LÝ" (khung 14): vòng "N nhóm", "N việc", 4 dòng đếm theo nhóm.
+    private var heroCard: some View {
+        let groups = alerts.groups(sync: sync)
+        let total = groups.reduce(0) { $0 + $1.n }
+        let active = groups.filter { $0.n > 0 }.count
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("CẦN XỬ LÝ").mtFont(.caption).fontWeight(.bold).foregroundStyle(Palette.muted)
+                Spacer()
+                Text(alerts.updatedAt.map { "Cập nhật \(Fmt.hm($0))" } ?? "Đang kiểm tra…").mtFont(.caption).foregroundStyle(Palette.muted)
+            }
+            if !alerts.loaded { Skeleton(height: 72) }
+            else {
+                HStack(alignment: .center, spacing: 14) {
+                    ShareRing(parts: groups.map { (value: Double($0.n), color: $0.color) }, center: "\(active) nhóm", size: 72)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("\(total) việc").mtFont(.heroNumber).foregroundStyle(Palette.heroInk)
+                        groupGrid(groups)
+                    }
+                }
+            }
+        }
+        .heroSurface()
+        .accessibilityElement(children: .combine)
+    }
+    private func groupGrid(_ groups: [AlertCenter.Group]) -> some View {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 6, alignment: .leading), GridItem(.flexible(), spacing: 6, alignment: .leading)], alignment: .leading, spacing: 4) {
+            ForEach(groups) { g in
+                HStack(spacing: 4) {
+                    Circle().fill(g.color).frame(width: 6, height: 6)
+                    Text("\(g.title): ").foregroundStyle(Palette.muted) + Text("\(g.n)").fontWeight(.bold).foregroundStyle(Palette.ink)
+                }.mtFont(.caption).lineLimit(1).minimumScaleFactor(0.8)
+            }
+        }
+    }
+
+    /// "Ưu tiên": mỗi việc một hàng (tên, dòng phụ, số ›); các POS lỗi / chậm gom vào một hàng.
+    private var priorityCard: some View {
+        let items = alerts.priority(sync: sync)
+        return VStack(alignment: .leading, spacing: MT.cellGap) {
+            Text("Ưu tiên").mtFont(.cardHeader).foregroundStyle(Palette.ink)
+            if !alerts.loaded { StateView(loading: "Đang kiểm tra…", compact: true) }
+            else {
+                if alerts.failed { AlertsEmpty(failed: true, text: alerts.failText) { await alerts.refresh(maxAge: 0, me: auth.me) } }
+                // Khung 14: luôn đủ các dòng, dòng chưa có việc hiện số 0.
+                ForEach(items) { PriorityLink(item: $0) }
+            }
+        }
+        .padding(MT.cardPad).frame(maxWidth: .infinity, alignment: .leading).cardSurface()
+    }
+
+    /// "Trong ca": % chốt nóng, số đã nhận / đã chốt, cảnh báo trong ca, nút "Điều hành trong ca ›".
+    private var shiftCard: some View {
+        let canShift = auth.me.map { $0.canView("shift") || $0.canView("center") } ?? false
+        return VStack(alignment: .leading, spacing: MT.cellGap) {
+            Text("Trong ca").mtFont(.cardHeader).foregroundStyle(Palette.ink)
+            if let s = alerts.shift {
+                let shiftAlerts = s.alerts.filter { !isSyncAlert($0.title) }
+                Text("\(Fmt.pct(s.total.rate)) chốt nóng").mtFont(.cardMetric).foregroundStyle(Palette.ink)
+                Text("Số đã nhận: \(Fmt.int(s.total.received)) · Đã chốt: \(Fmt.int(s.total.closed))").mtFont(.caption).foregroundStyle(Palette.muted)
+                ForEach(Array(shiftAlerts.enumerated()), id: \.offset) { _, a in
+                    ShiftAlertRow(title: a.title, detail: a.detail, high: a.level == "high")
+                }
+            } else if alerts.loaded {
+                Text("Chưa đọc được số trong ca.").mtFont(.caption).foregroundStyle(Color.inkSoft)
+            } else { Skeleton(height: 60) }
+            if canShift {
+                NavigationLink(value: Route.page("shift")) {
+                    HStack(spacing: 4) { Text("Điều hành trong ca"); Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)) }
+                        .mtFont(.body).fontWeight(.semibold).foregroundStyle(Palette.ink)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(Palette.wash, in: .rect(cornerRadius: MT.rCell))
+                        .overlay { RoundedRectangle(cornerRadius: MT.rCell).strokeBorder(Palette.line, lineWidth: 1) }
+                }.buttonStyle(.plain)
+            }
+        }
+        .padding(MT.cardPad).frame(maxWidth: .infinity, alignment: .leading).cardSurface()
+    }
+
+    /// "Đồng bộ Pancake": mỗi POS một hàng ✓ / ! / ?, nút "Tải lại".
+    private var syncCard: some View {
+        VStack(alignment: .leading, spacing: MT.cellGap) {
+            Text("Đồng bộ Pancake").mtFont(.cardHeader).foregroundStyle(Palette.ink)
+            ForEach(PosBreakdown.order, id: \.self) { id in
+                let line = syncLine(id)
+                PancakeSyncRow(title: line.title, detail: line.detail, hasError: line.error, tone: line.tone)
+            }
+            Button { Task { await sync.refresh() } } label: {
+                Text("Tải lại").mtFont(.body).fontWeight(.bold).foregroundStyle(Color.white)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(Palette.mtBrandPrimary, in: .rect(cornerRadius: MT.rCell))
+            }.buttonStyle(MTPressStyle())
+        }
+        .padding(MT.cardPad).frame(maxWidth: .infinity, alignment: .leading).cardSurface()
+        .id(Self.syncAnchor)
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    PageTitle(title: "Thông báo", subtitle: alerts.updatedAt.map { "Cập nhật lúc \(Fmt.hm($0))" } ?? "Đang kiểm tra…")
-                    let items = alerts.items(sync: sync)
-                    SectionHead(title: "Cần xử lý", count: items.isEmpty ? nil : items.count)
-                    if !alerts.loaded && items.isEmpty { ThinkingLoader() }
-                    else if items.isEmpty { AlertsEmpty(failed: alerts.failed, text: alerts.failText) { await alerts.refresh(maxAge: 0, me: auth.me) } }
-                    ForEach(items) { AlertLink(item: $0) }
-                    let canShift = auth.me.map { $0.canView("shift") || $0.canView("center") } ?? false
-                    SectionHead(title: "Trong ca", action: canShift ? "Xem ca" : nil, route: canShift ? .page("shift") : nil, count: alerts.highShiftAlerts > 0 ? alerts.highShiftAlerts : nil).padding(.top, 6)
-                    Panel {
-                        if let s = alerts.shift {
-                            if s.alerts.isEmpty { Label("Không có cảnh báo trong ca.", systemImage: "checkmark.circle.fill").font(.system(size: 12)).foregroundStyle(Color.good) }
-                            ForEach(Array(s.alerts.enumerated()), id: \.offset) { _, a in
-                                HStack(alignment: .top, spacing: 8) {
-                                    Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 12)).foregroundStyle(a.level == "high" ? Color.bad : Color.warn)
-                                    VStack(alignment: .leading, spacing: 1) {
-                                        Text(a.title).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink)
-                                        Text(a.detail).font(.system(size: 11)).foregroundStyle(Color.inkSoft)
-                                    }
-                                    Spacer(minLength: 0)
-                                }
-                                .padding(8).frame(maxWidth: .infinity, alignment: .leading)
-                                .background((a.level == "high" ? Color.bad : Color.warn).opacity(0.08), in: .rect(cornerRadius: 8))
-                            }
-                        } else if alerts.loaded {
-                            Text("Chưa đọc được số trong ca.").font(.system(size: 12)).foregroundStyle(Color.inkSoft)
-                        } else { Skeleton(height: 60) }
-                    }
-                    SectionHead(title: "Đồng bộ Pancake").padding(.top, 6).id(Self.syncAnchor)
-                    Panel {
-                        ForEach(PosBreakdown.order, id: \.self) { id in
-                            let p = sync.pos.first { $0.posId == id }
-                            let tone: Color = syncTone(p)
-                            HStack(spacing: 8) {
-                                PosBadge(id: id, size: 20)
-                                VStack(alignment: .leading, spacing: 0) {
-                                    Text(PosBreakdown.names[id] ?? id).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink)
-                                    Text(p?.lastError ?? "đồng bộ lúc \(Fmt.dateTime(p?.lastSyncAt))").font(.system(size: 10)).foregroundStyle(p?.lastError != nil ? Color.bad : Color.inkSoft).lineLimit(1)
-                                }
-                                Spacer()
-                                Circle().fill(tone).frame(width: 8, height: 8)
-                                Text(syncAge(p)).font(.system(size: 10)).foregroundStyle(tone)
-                            }
-                            .padding(.vertical, 2)
-                        }
-                    }
-                }.padding(16).padding(.bottom, 24)
+                VStack(alignment: .leading, spacing: MT.cardGap) {
+                    ChildHeader(title: "Thông báo", eye: false, refresh: { await refreshBoth() })
+                    heroCard
+                    priorityCard
+                    shiftCard.id("thong-bao-2")
+                    syncCard
+                }.padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 24)
             }
             .task {
                 guard focusSync, !scrolled else { return }
                 await scrollToSync(proxy)
             }
+            #if DEBUG
+            .onChange(of: DebugTap.shared.tick) { _, _ in
+                let target = DebugTap.shared.target
+                guard ProcessInfo.processInfo.environment["MEGATECH_TOUR"] == "giaodien", target.hasPrefix("cuon:") else { return }
+                withAnimation { proxy.scrollTo(String(target.dropFirst(5)), anchor: .top) }
+            }
+            #endif
         }
         .navigationTitle("Thông báo").navigationBarTitleDisplayMode(.inline).brandNav()
+        .childChrome()
         .refreshable { await refreshBoth() }
         .task { await alerts.refresh(maxAge: 30, me: auth.me) }
     }
@@ -247,6 +418,80 @@ struct AlertsPage: View {
     }
 }
 
+private struct ShiftAlertRow: View {
+    let title: String
+    let detail: String
+    let high: Bool
+
+    var body: some View {
+        let tint: Color = high ? .bad : .warn
+        let soft: Color = high ? Palette.badSoft : Palette.warnSoft
+        HStack(alignment: .top, spacing: MT.cellGap) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(tint)
+                .frame(width: 44, height: 44)
+                .background(soft, in: Circle())
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).mtFont(.cardHeader).foregroundStyle(Color.ink)
+                Text(detail).mtFont(.caption).foregroundStyle(Color.inkSoft)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(MT.cellGap).frame(maxWidth: .infinity, alignment: .leading)
+        .background(Palette.mtSurfaceCell, in: .rect(cornerRadius: MT.rCell))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Một POS trong khối Đồng bộ Pancake (khung 14): dòng trạng thái màu, dòng phụ giờ đồng bộ hoặc lỗi.
+private struct PancakeSyncRow: View {
+    let title: String
+    let detail: String
+    let hasError: Bool
+    let tone: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).mtFont(.body).fontWeight(.bold).foregroundStyle(tone)
+            Text(detail).mtFont(.caption).foregroundStyle(hasError ? Color.bad : Color.inkSoft)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+        .background(Palette.wash, in: .rect(cornerRadius: MT.rCell))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Hàng "Ưu tiên" ở trang Thông báo (khung 14): tên việc, dòng phụ, số (hoặc tên POS) và "›".
+private struct PriorityLink: View {
+    let item: AlertCenter.Item
+    private var row: some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.label.isEmpty ? item.title : item.label).mtFont(.body).fontWeight(.semibold).foregroundStyle(Palette.ink)
+                Text(item.sub).mtFont(.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 6)
+            if !item.count.isEmpty {
+                Text(item.count).mtFont(.body).fontWeight(.bold)
+                    .foregroundStyle(item.id == "sync" && item.count != "0" ? item.tone.color : Palette.ink)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+            }
+            if item.route != nil { Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Palette.muted) }
+        }
+        .padding(12).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .background(Palette.wash, in: .rect(cornerRadius: MT.rCell))
+        .contentShape(.rect)
+        .accessibilityElement(children: .combine)
+    }
+    var body: some View {
+        if let r = item.route { NavigationLink(value: r) { row }.buttonStyle(.plain) }
+        else { row }
+    }
+}
+
 /// Tab Đơn hàng: đơn theo từng bước (Mới, Xác nhận, Giao vận, Đã giao, Trả hàng), tìm đơn, đơn cần lưu ý, theo kỳ và POS chung;
 /// như mục Đơn hàng trên thanh dưới của Shopify, Sapo, TikTok Shop.
 struct OrdersHome: View {
@@ -255,7 +500,7 @@ struct OrdersHome: View {
     var body: some View {
         @Bindable var nav = nav
         NavigationStack(path: $nav.ordersPath) {
-            TabPage(tagline: "Theo dõi từng đơn, giao đúng hẹn") {
+            TabPage(title: "Đơn hàng", greeting: nav.period.kicker) {
                 if auth.me?.canView("pipeline") ?? false {
                     // Gốc tab Đơn hàng: kỳ và POS chung với Tổng quan (đổi ở đây là đổi cả ở Tổng quan).
                     PipelineView(embedded: true, followsShared: true)
@@ -267,29 +512,6 @@ struct OrdersHome: View {
             .appRoutes()
         }
     }
-}
-
-/// Icon ô giữa thanh dưới: tròn xanh thương hiệu, ô lưới trắng, giữ nguyên màu (không theo màu chọn của thanh dưới).
-enum CenterTabIcon {
-    static let image: UIImage = {
-        let size = CGSize(width: 30, height: 30)
-        let img = UIGraphicsImageRenderer(size: size).image { _ in
-            // Luôn màu xanh đậm bản sáng (AccentColor có bản tối nhạt màu, ảnh vẽ một lần nên không đổi theo giao diện).
-            UIColor(red: 0x17 / 255, green: 0x68 / 255, blue: 0x4b / 255, alpha: 1).setFill()
-            UIBezierPath(ovalIn: CGRect(origin: .zero, size: size)).fill()
-            if Reicon.enabled, let sym = UIImage(named: "ri_category_fill")?.withTintColor(.white, renderingMode: .alwaysOriginal) {
-                // Icon Category (Reicon, kiểu đặc) màu trắng ở giữa.
-                let s: CGFloat = 16
-                sym.draw(in: CGRect(x: (size.width - s) / 2, y: (size.height - s) / 2, width: s, height: s))
-            } else {
-                let conf = UIImage.SymbolConfiguration(pointSize: 13, weight: .bold)
-                if let sym = UIImage(systemName: "square.grid.2x2.fill", withConfiguration: conf)?.withTintColor(.white, renderingMode: .alwaysOriginal) {
-                    sym.draw(in: CGRect(x: (size.width - sym.size.width) / 2, y: (size.height - sym.size.height) / 2, width: sym.size.width, height: sym.size.height))
-                }
-            }
-        }
-        return img.withRenderingMode(.alwaysOriginal)
-    }()
 }
 
 struct WebPage: Identifiable, Hashable { let id: String; let title: String; let icon: String; let path: String }
@@ -370,14 +592,52 @@ struct PageDestination: View {
 /// Dải chip chuyển trang con trong một tab (như thanh dưới của từng bộ ảnh); badges: số đỏ trên chip theo id trang.
 struct SubNav: View {
     @Binding var selection: String; let pages: [WebPage]; var badges: [String: Int] = [:]
+    @Environment(\.colorScheme) private var scheme
     var body: some View {
-        // Mở sẵn trang con ở cuối dải (từ Phòng ban): cuộn cho chip đang chọn hiện ra.
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) { ForEach(pages) { p in FilterChip(label: p.title, on: selection == p.id, badge: badges[p.id]) { withAnimation(.snappy(duration: 0.25)) { selection = p.id } }.id(p.id) } }
+        if pages.count <= 3 {
+            HStack(spacing: 3) {
+                ForEach(pages) { p in
+                    Button { withAnimation(.snappy(duration: 0.25)) { selection = p.id } } label: {
+                        HStack(spacing: 4) {
+                            Text(p.title).font(.subheadline.weight(.bold))
+                            if let n = badges[p.id], n > 0 {
+                                Text("\(n)").font(.caption2.weight(.bold)).foregroundStyle(.white)
+                                    .padding(3).background(Palette.badge, in: .capsule)
+                            }
+                        }.frame(maxWidth: .infinity, minHeight: 38)
+                        .foregroundStyle(selection == p.id ? (scheme == .dark ? Color.white : Palette.ink) : Palette.muted)
+                        .background {
+                            if selection == p.id {
+                                RoundedRectangle(cornerRadius: MT.rSeg - 3).fill(scheme == .dark ? Palette.mtBrandPrimary : Palette.mtSurfaceCard)
+                                    .shadow(color: .black.opacity(scheme == .dark ? 0 : 0.08), radius: 3, y: 1)
+                            }
+                        }
+                    }.buttonStyle(.plain).accessibilityAddTraits(selection == p.id ? .isSelected : []).id(p.id)
+                }
+            }.padding(3).background(Palette.wash, in: .rect(cornerRadius: MT.rSeg))
+            .overlay { RoundedRectangle(cornerRadius: MT.rSeg).strokeBorder(Palette.line, lineWidth: 1) }
+            .sensoryFeedback(.selection, trigger: selection)
+        } else {
+            // Mở sẵn trang con ở cuối dải (từ Phòng ban): cuộn cho chip đang chọn hiện ra.
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(pages) { p in
+                            Button { withAnimation(.snappy(duration: 0.25)) { selection = p.id } } label: {
+                                HStack(spacing: 4) {
+                                    Pill(title: p.title, on: selection == p.id, chevron: false)
+                                    if let n = badges[p.id], n > 0 {
+                                        Text("\(n)").font(.caption2.weight(.bold)).foregroundStyle(.white)
+                                            .padding(3).background(Palette.badge, in: .capsule)
+                                    }
+                                }
+                            }.buttonStyle(.plain).id(p.id)
+                        }
+                    }
+                }
+                .onAppear { proxy.scrollTo(selection, anchor: .center) }
+                .onChange(of: selection) { _, s in withAnimation(.snappy(duration: 0.25)) { proxy.scrollTo(s, anchor: .center) } }
             }
-            .onAppear { proxy.scrollTo(selection, anchor: .center) }
-            .onChange(of: selection) { _, s in withAnimation(.snappy(duration: 0.25)) { proxy.scrollTo(s, anchor: .center) } }
         }
     }
 }
@@ -413,26 +673,45 @@ struct MoreHome: View {
     #endif
     var body: some View {
         NavigationStack {
-            TabPage(tagline: "Vận hành thông minh · Trải nghiệm khác biệt") {
+            TabPage(title: "Thêm", actions: []) {
                 if let me = auth.me {
-                    Panel {
-                        HStack(spacing: 12) {
-                            Avatar(name: me.displayName, size: 48)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(me.displayName).font(.system(size: 16, weight: .bold)).foregroundStyle(Color.ink)
-                                Text(me.title?.isEmpty == false ? me.title! : me.email).font(.system(size: 12)).foregroundStyle(Color.inkSoft)
-                            }
-                            Spacer()
-                            Tag(text: roleTitle(me.role), tone: .green)
+                    // Khung 15A: thẻ người dùng có nút xanh "Quét đăng nhập máy tính", rồi ba thẻ nút: Báo cáo & KPI,
+                    // Vận hành & Nhân sự, Tài khoản & hệ thống (Đăng xuất cuối thẻ). Nút nào không có quyền thì ẩn.
+                    VStack(spacing: MT.cellGap) {
+                        Avatar(name: me.displayName, size: 48)
+                        VStack(spacing: 2) {
+                            Text(me.displayName).mtFont(.cardHeader).foregroundStyle(Color.mtTextPrimary)
+                            Text(me.title?.isEmpty == false ? me.title! : roleTitle(me.role)).mtFont(.caption).foregroundStyle(Color.mtTextSecondary)
+                        }.multilineTextAlignment(.center)
+                        ScanLoginButton()
+                    }
+                    .padding(MT.cardPad).frame(maxWidth: .infinity).heroSurface()
+                    MoreCard(title: "Báo cáo & KPI \(roleTitle(me.role))") {
+                        let reports = Self.pick(["monthly", "custom", "customers", "raw-orders"], me)
+                        LazyVGrid(columns: [GridItem(.flexible(), spacing: MT.cellGap), GridItem(.flexible(), spacing: MT.cellGap)], spacing: MT.cellGap) {
+                            ForEach(reports) { x in MoreButton(title: x.title, route: x.route) }
+                        }
+                        if me.canView("sale-kpi") {
+                            NavigationLink { SaleKpiReadView() } label: { MoreButtonLabel(title: "KPI Sale (Doanh số + Tỷ lệ) & Chia KPI Team", accent: true) }
+                                .buttonStyle(MTPressStyle())
                         }
                     }
-                    ScanLoginRow()
-                    ForEach(MORE_GROUPS, id: \.0) { title, pages in MoreGroup(title: title, rows: Self.rows(title, pages, me)) }
+                    MoreCard(title: "Vận hành & Nhân sự") {
+                        if me.canView("pipeline") { MoreButton(title: "Vận hành đơn", route: .page("pipeline")) }
+                        if me.canView("shift") { MoreButton(title: "Điều hành trong ca", route: .page("shift")) }
+                        if me.canView("overview") { MoreButton(title: "Tổng quan theo từng POS", route: .overview) }
+                        if me.canView("people") { MoreButton(title: "Nhân sự · Web vệ tinh", route: .hr("")) }
+                    }
                     SatelliteSection(me: me)
+                    MoreCard(title: "Tài khoản & hệ thống") {
+                        ForEach(Self.pick(["security", "metrics", "config", "audit"], me)) { x in MoreButton(title: x.title, route: x.route) }
+                        MoreButton(title: "Cài đặt trên máy này", route: .page("app-settings"))
+                        if WidgetProbeBridge.installed { WidgetDiagnosticsRow() }
+                        Button { Task { await auth.logout() } } label: { MoreButtonLabel(title: "Đăng xuất", danger: true) }
+                            .buttonStyle(MTPressStyle())
+                    }
                 }
                 PrivacyRow()
-                if WidgetProbeBridge.installed { WidgetDiagnosticsRow() }
-                PrimaryButton(title: "Đăng xuất", icon: "rectangle.portrait.and.arrow.right", tint: .bad) { Task { await auth.logout() } }.padding(.top, 8)
                 Text(versionLabel).font(.system(size: 10)).foregroundStyle(Color.inkSoft).frame(maxWidth: .infinity)
             }
             .appRoutes()
@@ -453,6 +732,12 @@ struct MoreHome: View {
             .task { await satellites.refresh(maxAge: 10) }
         }
     }
+    /// Nút trang theo id (giữ thứ tự), chỉ những trang người này được xem.
+    static func pick(_ ids: [String], _ me: API.Me) -> [MoreRow] {
+        let pages = MORE_GROUPS.flatMap(\.1)
+        return ids.compactMap { id in pages.first { $0.id == id } }.filter { me.canView($0.id) }
+            .map { MoreRow(id: $0.id, title: $0.title, icon: $0.icon, route: .web($0)) }
+    }
     /// Dòng của một nhóm theo quyền; Tiện ích có thêm Tổng quan theo từng POS (số từng POS riêng lẻ, trước ở trang chủ);
     /// Cài đặt có thêm "Cài đặt trên máy này" (lựa chọn chỉ lưu trên iPhone này, ai cũng mở được).
     static func rows(_ title: String, _ pages: [WebPage], _ me: API.Me) -> [MoreRow] {
@@ -461,6 +746,41 @@ struct MoreHome: View {
         if title == "Cài đặt" { r.append(MoreRow(id: "app-settings", title: "Cài đặt trên máy này", icon: "iphone", route: .page("app-settings"))) }
         return r
     }
+}
+
+/// Thẻ một nhóm nút ở tab Thêm (khung 15A).
+struct MoreCard<Content: View>: View {
+    let title: String
+    @ViewBuilder var content: Content
+    var body: some View {
+        VStack(alignment: .leading, spacing: MT.cellGap) {
+            Text(title).mtFont(.cardHeader).foregroundStyle(Color.mtTextPrimary)
+            content
+        }
+        .padding(MT.cardPad).frame(maxWidth: .infinity, alignment: .leading).cardSurface()
+    }
+}
+/// Nút dạng viên trong thẻ ở tab Thêm: chữ giữa, mũi tên nhỏ.
+struct MoreButtonLabel: View {
+    let title: String
+    var accent = false
+    var danger = false
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(title).multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.8)
+            Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold))
+        }
+        .mtFont(.caption).fontWeight(.semibold)
+        .foregroundStyle(danger ? Color.bad : accent ? Palette.accent : Color.mtTextPrimary)
+        .frame(maxWidth: .infinity, minHeight: 40).padding(.horizontal, 8)
+        .background(Palette.wash, in: .rect(cornerRadius: MT.rCell))
+        .overlay { RoundedRectangle(cornerRadius: MT.rCell).strokeBorder(Palette.line, lineWidth: 1) }
+        .contentShape(.rect)
+    }
+}
+struct MoreButton: View {
+    let title: String; let route: Route
+    var body: some View { NavigationLink(value: route) { MoreButtonLabel(title: title) }.buttonStyle(MTPressStyle()) }
 }
 
 struct MoreRow: Identifiable { let id: String; let title: String; let icon: String; let route: Route }
@@ -484,21 +804,31 @@ struct PrivacyRow: View {
 /// Một nhóm dòng ở tab Thêm (Tiện ích, Cài đặt).
 struct MoreGroup: View {
     let title: String; let rows: [MoreRow]
+    private func tint(_ id: String) -> Color {
+        switch id {
+        case "monthly", "custom-report": return .mtSuccessInk
+        case "security", "audit": return .mtRolePurpleInk
+        case "config", "metrics": return .mtWarningInk
+        default: return .mtBrandPrimary
+        }
+    }
     var body: some View {
         if !rows.isEmpty {
-            Text(title).font(.system(size: 13, weight: .bold)).foregroundStyle(Color.inkSoft).padding(.top, 4)
+            Text(title).mtFont(.body).foregroundStyle(Color.inkSoft).padding(.top, 4)
             VStack(spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { i, x in
                     NavigationLink(value: x.route) {
                         HStack(spacing: 12) {
-                            MetricIcon(x.icon, size: 14).foregroundStyle(Color.brand).frame(width: 34, height: 34).background(Color.brandSoft, in: .rect(cornerRadius: 9))
-                            Text(x.title).font(.system(size: 14, weight: .medium)).foregroundStyle(Color.ink)
-                            Spacer(); Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.inkSoft)
+                            MetricIcon(x.icon, size: 18).foregroundStyle(tint(x.id)).frame(width: 44, height: 44).background(tint(x.id).opacity(0.12), in: .rect(cornerRadius: MT.rCell))
+                            Text(x.title).mtFont(.body).foregroundStyle(Color.ink)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer(); Image(systemName: "chevron.right").mtFont(.caption).foregroundStyle(Color.inkSoft)
                         }.padding(12).contentShape(.rect)
-                    }.buttonStyle(.plain)
+                            .accessibilityElement(children: .combine)
+                    }.buttonStyle(MTPressStyle())
                     if i < rows.count - 1 { Divider().padding(.leading, 58) }
                 }
-            }.background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
+            }.background(Color.mtSurfaceCard, in: .rect(cornerRadius: MT.rCard)).overlay(RoundedRectangle(cornerRadius: MT.rCard).stroke(Color.mtCardBorder)).cardShadow()
         }
     }
 }
@@ -513,7 +843,7 @@ struct SatelliteSection: View {
     var body: some View {
         let list = rows
         if !list.isEmpty {
-            Text("Web vệ tinh").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.inkSoft).padding(.top, 4)
+            Text("Web vệ tinh").mtFont(.body).foregroundStyle(Color.inkSoft).padding(.top, 4)
             VStack(spacing: 0) {
                 ForEach(Array(list.enumerated()), id: \.element.id) { i, m in
                     if SatelliteCenter.known.contains(m.id) {
@@ -523,26 +853,31 @@ struct SatelliteSection: View {
                     }
                     if i < list.count - 1 { Divider().padding(.leading, 58) }
                 }
-            }.background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
+            }.background(Color.mtSurfaceCard, in: .rect(cornerRadius: MT.rCard)).overlay(RoundedRectangle(cornerRadius: MT.rCard).stroke(Color.mtCardBorder)).cardShadow()
         }
     }
     private func row(_ m: API.SatModule, known: Bool) -> some View {
         let dot: Color = moduleTone(m)
         let sub: String = moduleSubtitle(m, known: known)
         return HStack(spacing: 12) {
-            MetricIcon(m.icon ?? "square.grid.2x2.fill", size: 14).foregroundStyle(Color.brand).frame(width: 34, height: 34).background(Color.brandSoft, in: .rect(cornerRadius: 9))
+            MetricIcon(m.icon ?? "square.grid.2x2.fill", size: 14).foregroundStyle(Color.brand).frame(width: 44, height: 44).background(Color.brandSoft, in: .rect(cornerRadius: MT.rCell))
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(m.title).font(.system(size: 14, weight: .medium)).foregroundStyle(Color.ink)
+                    Text(m.title).mtFont(.body).foregroundStyle(Color.ink)
+                        .fixedSize(horizontal: false, vertical: true)
                     Circle().fill(dot).frame(width: 7, height: 7)
                 }
-                if !sub.isEmpty { Text(sub).font(.system(size: 10)).foregroundStyle(known && m.down ? Color.bad : Color.inkSoft).lineLimit(1) }
+                if !sub.isEmpty {
+                    Text(sub).mtFont(.caption).foregroundStyle(known && m.down ? Color.bad : Color.inkSoft)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             Spacer()
-            if known, let b = m.badge, b > 0 { Text("\(b)").font(.system(size: 10, weight: .bold)).foregroundStyle(.white).padding(.horizontal, 6).padding(.vertical, 2).background(Color.bad, in: .capsule) }
-            if known { Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.inkSoft) }
+            if known, let b = m.badge, b > 0 { Text("\(b)").mtFont(.caption).foregroundStyle(.white).padding(.horizontal, 6).padding(.vertical, 2).background(Color.bad, in: .capsule) }
+            if known { Image(systemName: "chevron.right").mtFont(.caption).foregroundStyle(Color.inkSoft) }
         }
         .padding(12).contentShape(.rect).opacity(known ? 1 : 0.55)
+        .accessibilityElement(children: .combine)
     }
     private func moduleTone(_ module: API.SatModule) -> Color {
         if module.status == nil { return .gray }
@@ -576,11 +911,13 @@ enum DebugTour {
     @MainActor static func run(nav: AppNav) async {
         if ProcessInfo.processInfo.environment["MEGATECH_TOUR_SEARCH"] == "1" { await search(nav: nav); return }
         let mode = ProcessInfo.processInfo.environment["MEGATECH_TOUR"]
+        if mode == "giaodien" { await interfaceTour(nav: nav); return }
         if mode == "reload" { await reload(nav: nav); return }
         if mode == "kypos" { await periodPos(nav: nav); return }
         if mode == "kypos-mo-lai" { await periodPosReopened(nav: nav); return }
         if mode == "chamso" { await tapNumbers(nav: nav); return }
         if mode == "team" { await team(nav: nav); return }
+        if mode == "mktnv" { await marketingStaff(nav: nav); return }
         if mode == "xnkho" { await warehouse(nav: nav); return }
         guard mode == "1" else { return }
         let steps: [(Double, () -> Void)] = [
@@ -599,6 +936,173 @@ enum DebugTour {
             (6, { nav.tab = .overview; nav.overviewScroll = CompanyDept.sale.rawValue }),
         ]
         await play(steps)
+    }
+
+    @MainActor private static func interfaceTour(nav: AppNav) async {
+        nav.period = .month; nav.pos = ""; nav.product = "all"; nav.hrUnit = nil
+        func mark(_ stage: String) { print("[UI] moc=\(stage)"); fflush(stdout) }
+        func pause(_ stage: String, seconds: Double = 8) async {
+            await play([(seconds, {})]); mark(stage); await play([(4, {})])
+        }
+        func ready(_ check: () -> Bool) async -> Bool {
+            for _ in 0..<240 {
+                if check() { return true }
+                if MktNvTour.failed { break }
+                try? await Task.sleep(for: .milliseconds(250))
+            }
+            mark("loi-tai"); return false
+        }
+        /// Chờ số của màn về xong (LoadBoard) rồi mới in mốc: không chụp lúc còn khung xương, và màn sau không phải xếp hàng sau
+        /// request của màn trước trên web ảo. Lỗi tải thì in loi-tai.
+        func loaded(_ names: [String], since t: Date) async -> Bool {
+            if await LoadBoard.settle(names, since: t) { return true }
+            // Lỗi tải (web ảo nghẽn): tải lại màn đang hiện một lần như kéo để làm mới, và bấm mọi nút Thử lại đang hiện;
+            // chờ xong lượt mới rồi mới in mốc. Lần hai vẫn lỗi mới in loi-tai.
+            print("[UI] tai-lai \(names.joined(separator: ","))"); fflush(stdout)
+            let again = Date()
+            DebugReload.shared.tick += 1
+            DebugRetry.shared.tick += 1
+            if await LoadBoard.settle(names, since: again, fresh: true) { return true }
+            mark("loi-tai"); return false
+        }
+        var t = Date()
+        await play([(0.35, { nav.tab = .home; nav.homePath = [] })])
+        guard await loaded(["trang-chu", "canh-bao"], since: t) else { return }
+        await pause("hom-nay", seconds: 2)
+        // Phần dưới Hôm nay: MKT + Vận đơn, rồi Cần xử lý + Lối tắt + Ca đang chạy; rồi về đầu trang.
+        DebugTap.shared.tap("cuon:hom-nay-2"); await pause("hom-nay-2", seconds: 2)
+        DebugTap.shared.tap("cuon:hom-nay-3"); await pause("hom-nay-3", seconds: 2)
+        DebugTap.shared.tap("cuon:tab-dau")
+        // Tổng quan chụp ở đầu trang (tiêu đề, pill lọc, segmented, khối đầu), không cuộn xuống.
+        t = Date()
+        await play([(0.35, { nav.tab = .overview; nav.overviewPath = []; nav.overviewScroll = "dau:departments" })])
+        guard await loaded(["tong-quan", "tien-do-thang"], since: t) else { return }
+        await pause("tong-quan", seconds: 2)
+        t = Date()
+        nav.overviewScroll = "dau:metrics"
+        guard await loaded(["trung-tam"], since: t) else { return }
+        await pause("tong-quan-so-lieu", seconds: 2)
+        // Khung 04: phần "Theo POS" của Tổng quan (cùng số trung-tam đã tải), chụp ở đầu trang.
+        t = Date()
+        nav.overviewScroll = "dau:pos"
+        guard await loaded(["trung-tam"], since: t) else { return }
+        await pause("tong-quan-pos", seconds: 2)
+        nav.overviewScroll = "dau:departments"
+        t = Date()
+        await play([(0.35, { nav.tab = .orders; nav.ordersPath = [] })])
+        guard await loaded(["don-hang", "don-hang-danh-sach"], since: t) else { return }
+        await pause("don-hang", seconds: 2)
+        await play([(0.35, { nav.tab = .depts; nav.deptsPath = [] })])
+        await pause("phong-ban", seconds: 4)
+        // Sale (khung 08A), rồi "Từng nhân viên" (khung 09A1) mở từ nút So sánh nhân viên.
+        MktNvTour.compare = false; MktNvTour.failed = false
+        t = Date()
+        nav.deptsPath = [.dept(.sale, period: .month, page: "compare")]
+        guard await ready({ MktNvTour.compare }) else { return }
+        guard await loaded(["nhan-vien", "bang-nhan-vien", "so-cung-ky"], since: t) else { return }
+        await pause("sale", seconds: 2)
+        MktNvTour.compare = false
+        t = Date()
+        nav.deptsPath = [.dept(.sale, period: .month, page: "compare"), .dept(.sale, period: .month, page: "staff")]
+        guard await ready({ MktNvTour.compare }) else { return }
+        guard await loaded(["nhan-vien"], since: t) else { return }
+        await pause("nhan-vien", seconds: 2)
+        MktNvTour.staff = false; DebugTap.shared.tap("nv-mo")
+        t = Date()
+        guard await ready({ MktNvTour.staff }) else { return }
+        guard await loaded(["nhan-vien-chi-tiet"], since: t) else { return }
+        await pause("nhan-vien-mot", seconds: 2)
+        // Từ ngăn sâu 3 lớp (Sale › Từng nhân viên › một người) đổi thẳng sang CSKH làm SwiftUI dựng lại trang Sale rồi huỷ mọi lượt tải
+        // của CSKH (lượt chụp 3f941b4, 13/11). Về gốc Phòng ban trước rồi mới mở CSKH.
+        await play([(0.3, { nav.deptsPath = [] }), (1.5, {})])
+        t = Date()
+        nav.deptsPath = [.dept(.cskh, period: .month)]
+        guard await loaded(["tong-quan-cskh", "kpi-cskh"], since: t) else { return }
+        await pause("cskh", seconds: 2)
+        MktNvTour.marketing = false
+        t = Date()
+        nav.deptsPath = [.dept(.mkt, period: .month)]
+        guard await ready({ MktNvTour.marketing }) else { return }
+        guard await loaded(["marketing", "marketing-xep-hang"], since: t) else { return }
+        await pause("mkt", seconds: 2)
+        // R-POS: chọn một POS (POS đầu danh sách) ở CSKH và MKT; dòng [UIPOS] ghi tổng để so với Mọi POS.
+        let onePos = PosBreakdown.order.first ?? ""
+        t = Date()
+        nav.deptsPath = [.dept(.cskh, period: .month, pos: onePos)]
+        guard await loaded(["tong-quan-cskh", "kpi-cskh"], since: t) else { return }
+        await pause("cskh-mot-pos", seconds: 2)
+        MktNvTour.marketing = false
+        t = Date()
+        nav.deptsPath = [.dept(.mkt, period: .month, pos: onePos)]
+        guard await ready({ MktNvTour.marketing }) else { return }
+        guard await loaded(["marketing", "marketing-xep-hang"], since: t) else { return }
+        await pause("mkt-mot-pos", seconds: 2)
+        t = Date()
+        nav.deptsPath = [.dept(.vandon, period: .month)]
+        guard await loaded(["van-don"], since: t) else { return }
+        await pause("van-don", seconds: 2)
+        // Thông báo thuộc tab Trang chủ (khung Gemini: tab Trang chủ sáng), như khi bấm chuông.
+        t = Date()
+        nav.tab = .home; nav.homePath = [.alerts]
+        guard await loaded(["canh-bao"], since: t) else { return }
+        await pause("thong-bao", seconds: 2)
+        DebugTap.shared.tap("cuon:thong-bao-2"); await pause("thong-bao-2", seconds: 2)
+        await play([(0.35, { nav.tab = .more })])
+        await pause("them", seconds: 4)
+        nav.tab = .depts; nav.deptsPath = [.hr("overview")]; await pause("nhan-su")
+        mark("xong")
+    }
+
+    @MainActor private static func marketingStaff(nav: AppNav) async {
+        nav.period = .month; nav.pos = ""; nav.product = "all"; nav.hrUnit = nil
+        nav.tab = .depts; nav.deptsPath = [.dept(.mkt, period: .month)]
+        guard await mktWait("MKT", { MktNvTour.marketing }) else { return }
+        mktMark("mkt-mo"); await play([(3, {})])
+        for stage in ["mkt-pos", "mkt-xep-doanh-thu", "mkt-xep-khoa", "mkt-tat-ca-pos", "mkt-xep-cp-so", "mkt-hang", "mkt-hang-tl", "mkt-hang-team", "mkt-hang-chi-tiet", "mkt-hang-xem-rieng"] {
+            if stage == "mkt-hang", !(await mktWait("MKT", { MktNvTour.rank })) { return }
+            MktNvTour.done = false
+            DebugTap.shared.tap(stage)
+            guard await mktWait("MKT", { MktNvTour.done }) else { return }
+            await play([(2, {})]); mktMark(stage)
+            await play([(2, {})])
+        }
+        if ProcessInfo.processInfo.environment["MEGATECH_NV"] == "0" {
+            print("[NV] moc=bo-qua"); mktMark("xong"); return
+        }
+        nav.deptsPath = [.dept(.sale, period: .month, page: "compare")]
+        guard await mktWait("NV", { MktNvTour.compare }) else { return }
+        mktMark("nv-ss")
+        await play([(3, {})])
+        DebugTap.shared.tap("nv-mo")
+        guard await mktWait("NV", { MktNvTour.staff }) else { return }
+        mktMark("nv-mo"); await play([(3, {})]); mktMark("nv-tom-tat"); await play([(3, {})])
+        for stage in ["nv-trang-thai", "nv-ly-do", "nv-loc", "nv-don"] {
+            MktNvTour.done = false; DebugTap.shared.tap(stage)
+            guard await mktWait("NV", { MktNvTour.done }) else { return }
+            await play([(2, {})]); mktMark(stage); await play([(2, {})])
+        }
+        nav.tab = .overview; nav.overviewPath = []; nav.overviewScroll = "nhan-vien"
+        MktNvTour.staff = false
+        // Home's existing TOP 5 hook opens the same destination as the row.
+        for _ in 0..<120 {
+            if !nav.overviewPath.isEmpty { break }
+            DebugTap.shared.tap("nhan-vien")
+            await play([(1.0, {})])
+        }
+        guard await mktWait("NV", { MktNvTour.staff }) else { return }
+        print("[NV] tong-quan mo=1"); mktMark("nv-tong-quan")
+        await play([(3, {})]); mktMark("xong")
+    }
+    @MainActor private static func mktWait(_ prefix: String, _ ready: () -> Bool) async -> Bool {
+        for _ in 0..<240 {
+            if MktNvTour.failed { break }
+            if ready() { return true }
+            try? await Task.sleep(for: .milliseconds(250))
+        }
+        print("[\(prefix)] moc=loi-tai"); fflush(stdout); return false
+    }
+    private static func mktMark(_ stage: String) {
+        print("[\(stage.hasPrefix("nv-") ? "NV" : "MKT")] moc=\(stage)"); fflush(stdout)
     }
 
     /// I5a: dùng cùng hành động của chip, danh sách và nút bỏ chọn.
@@ -741,7 +1245,7 @@ enum DebugTour {
                 (6, { if test == "remember-set" { DebugTap.shared.tap("xnk-diff") } }),
                 (2, { DebugTap.shared.tap("xnk-cmp-log") }),
                 (2, { warehouseMark(test) }),
-            ], readyTimeout: .seconds(90))
+            ], nav: nav, readyTimeout: .seconds(90))
             return
         }
         let steps: [(Double, () -> Void)] = [
@@ -890,10 +1394,12 @@ enum DebugTour {
             (2, { DebugTap.shared.tap("cuon:hang-nhan-vien") }),
             (2, { warehouseMark("today-mini") }),
         ]
-        await playCompare(steps)
+        await playCompare(steps, nav: nav)
     }
 
-    @MainActor private static func playCompare(_ steps: [(Double, () -> Void)], readyTimeout: Duration = .seconds(40)) async {
+    // Web ảo trên máy Mac chậm (13/11): số so kỳ có lúc trả sau hơn 40 giây, nên chờ tới 120 giây rồi thử lại thêm 120 giây.
+    @MainActor private static func playCompare(_ steps: [(Double, () -> Void)], nav: AppNav, readyTimeout: Duration = .seconds(120)) async {
+        var retried = false
         for step in steps {
             await play([step])
             guard !Task.isCancelled else { return }
@@ -904,7 +1410,24 @@ enum DebugTour {
                     try? await Task.sleep(for: .milliseconds(250))
                 }
                 guard !Task.isCancelled else { return }
-                if !CompareTourStatus.ready { warehouseMark("loi-tai-so"); return }
+                if !CompareTourStatus.ready, !retried, let reason = CompareTourStatus.retryReason {
+                    retried = true
+                    // Giữ chẩn đoán nếu giới hạn chờ của runner kết thúc trong lượt thử lại.
+                    CompareTourStatus.report(nav: nav)
+                    print("[XNK] thu-lai=1 ly-do=\(reason)")
+                    fflush(stdout)
+                    DebugTap.shared.tap("xnk-thu-lai")
+                    let retryDeadline = ContinuousClock.now.advanced(by: .seconds(120))
+                    while ContinuousClock.now < retryDeadline {
+                        if CompareTourStatus.ready || Task.isCancelled { break }
+                        try? await Task.sleep(for: .milliseconds(250))
+                    }
+                }
+                guard !Task.isCancelled else { return }
+                if !CompareTourStatus.ready {
+                    CompareTourStatus.report(nav: nav)
+                    warehouseMark("loi-tai-so"); return
+                }
             }
         }
     }
@@ -1076,6 +1599,28 @@ enum DebugTour {
 
 /// Bản Debug: lượt tự xem (MEGATECH_TOUR=chamso) "chạm" một chỗ trên màn (máy ảo không chạm được). target: tên chỗ chạm
 /// ("nhan-vien": dòng đầu bảng TOP 5 ở Tổng quan; "van-don": thẻ Đơn chuyển đi; "dong": đóng bảng giải thích); tick tăng mỗi lần.
+enum MktNvTour {
+    static var active: Bool { ["mktnv", "giaodien"].contains(ProcessInfo.processInfo.environment["MEGATECH_TOUR"] ?? "") }
+    static var marketing = false, rank = false, compare = false, staff = false, done = false, failed = false
+    static func number(_ value: Double?) -> String { value.map { String($0) } ?? "-" }
+    static func path(_ path: String) -> String {
+        path.hasPrefix("/api/reports/") ? path + "&" + MetricPrefs.queryString : path
+    }
+}
+
+struct MktNvScroll: ViewModifier {
+    func body(content: Content) -> some View {
+        ScrollViewReader { proxy in
+            content.onChange(of: DebugTap.shared.tick) { _, _ in
+                let target = DebugTap.shared.target
+                if MktNvTour.active && target.hasPrefix("cuon:") {
+                    withAnimation { proxy.scrollTo(String(target.dropFirst(5)), anchor: .top) }
+                }
+            }
+        }
+    }
+}
+
 @Observable final class DebugTap {
     static let shared = DebugTap()
     var target = ""

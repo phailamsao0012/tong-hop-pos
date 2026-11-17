@@ -18,6 +18,11 @@ on:
         required: false
         default: ''
         type: string
+      phat_hanh:
+        description: 'Đăng Release bản chính (IPA chưa ký) từ nhánh này, không gộp main nên không deploy web. Anh Vũ chọn "Phát hành riêng app" 17/11.'
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: ios-${{ github.ref }}
@@ -163,7 +168,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: GitHub Release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.phat_hanh)
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.ipa.outputs.tag }}

@@ -18,7 +18,7 @@ struct ReconcileLine: View {
     let state: (ok: Bool, text: String)
     var body: some View {
         Label(state.text, systemImage: state.ok ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
-            .font(.caption).foregroundStyle(state.ok ? Color.good : .orange)
+            .font(.caption).foregroundStyle(state.ok ? Color.good : Palette.mtWarningInk)
             .padding(10).frame(maxWidth: .infinity, alignment: .leading)
             .background((state.ok ? Color.good : Color.warn).opacity(0.1), in: .rect(cornerRadius: 10))
     }
@@ -27,7 +27,7 @@ struct ReconcileLine: View {
 /// Trạng thái hiện tại của đơn tạo trong kỳ; chạm một đoạn → danh sách đơn đúng trạng thái.
 struct StatusStrip: View {
     let groups: [String: API.Group]; let total: Double; let open: (String, String) -> Void
-    static let items: [(String, String, Color)] = [("new", "Mới / chờ XN", .gray), ("confirmed", "Đã xác nhận", .brand), ("shipping", "Đang giao", .blue), ("delivered", "Đã nhận", .good), ("returned", "Hoàn", .orange), ("cancelled", "Hủy", .bad)]
+    static let items: [(String, String, Color)] = [("new", "Mới / chờ XN", Palette.stNew), ("confirmed", "Đã xác nhận", Palette.stConf), ("shipping", "Đang giao", Palette.stShip), ("delivered", "Đã nhận", Palette.stDel), ("returned", "Hoàn", Palette.stRet), ("cancelled", "Hủy", Palette.stCan)]
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Trạng thái đơn tạo trong kỳ").font(.headline)
@@ -91,12 +91,16 @@ struct PosBreakdown: View {
     static let order = ["sieu-vo-gao", "mgt-apex", "thuy-san", "bio-nano", "megaroot", "oxytetra"]
     static let short = ["sieu-vo-gao": "Siêu Vô Gạo", "mgt-apex": "MGT APEX", "thuy-san": "Thủy sản", "bio-nano": "BIO NANO", "megaroot": "MEGAROOT", "oxytetra": "Oxytetra"]
     var prev: [API.PosRow] = []
+    var series: [API.SeriesRow] = []
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack { Text("Theo POS").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink); Spacer(); Text("chạm để chỉ xem POS đó").font(.caption2).foregroundStyle(Color.inkSoft) }
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+            HStack { Text("Theo POS").font(.title3.weight(.bold)).foregroundStyle(Palette.ink); Spacer(); Text("chạm để chỉ xem POS đó").font(.footnote).foregroundStyle(Palette.muted) }
+            VStack(spacing: 12) {
                 ForEach(rows.sorted { $0.closedNet > $1.closedNet }, id: \.posId) { r in
-                    Button { pick(r.posId) } label: { PosTile(id: r.posId, row: r, prev: prev.first { $0.posId == r.posId }, total: total) }.buttonStyle(.plain)
+                    Button { pick(r.posId) } label: {
+                        PosTile(id: r.posId, row: r, prev: prev.first { $0.posId == r.posId }, total: total,
+                                spark: series.filter { $0.posId == r.posId }.sorted { $0.bucket < $1.bucket }.map(\.closedNet))
+                    }.buttonStyle(.plain)
                 }
             }
         }

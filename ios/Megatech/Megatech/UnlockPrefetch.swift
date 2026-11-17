@@ -87,7 +87,7 @@ final class UnlockPrefetch: @unchecked Sendable {
             if me.canView("mkt-roas") { out.append(API.mktAnalyticsPath(start: r.0, end: r.1, posIds: ids, marketerId: nil, teamId: nil, product: nil)) }
             return out
         case .overview, .home:
-            return HomeSources(me).paths(day: VNDate.string(.now))
+            return HomeSources(me).paths(day: VNDate.string(.now), pos: NavMemory.pos)
         case .orders, .depts, .more:
             return []
         }

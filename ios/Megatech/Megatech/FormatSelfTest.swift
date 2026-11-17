@@ -22,10 +22,28 @@ enum FormatSelfTest {
         relative(&r)
         literals(&r)
         compare(&r)
+        compact(&r)
         emit(r.failed == 0 ? "FORMAT_TEST OK \(r.total) cases" : "FORMAT_TEST FAILED \(r.failed)/\(r.total)")
         exit(r.failed == 0 ? 0 : 1)
     }
 
+    private static func compact(_ r: inout Run) {
+        let cases: [(Double, String, String)] = [
+            (0, "0", "₫"), (850_000, "850.000", "₫"), (999_999, "999.999", "₫"),
+            (999_999.6, "1,0", "tr\u{00A0}₫"), (1_000_000, "1,0", "tr\u{00A0}₫"),
+            (8_700_000, "8,7", "tr\u{00A0}₫"), (133_420_000, "133,4", "tr\u{00A0}₫"),
+            (999_940_000, "999,9", "tr\u{00A0}₫"), (999_950_000, "1,00", "tỷ\u{00A0}₫"),
+            (999_960_000, "1,00", "tỷ\u{00A0}₫"), (1_264_000_000, "1,26", "tỷ\u{00A0}₫"),
+            (1_266_000_000, "1,27", "tỷ\u{00A0}₫"), (999_996_000_000, "1.000", "tỷ\u{00A0}₫"),
+            (12_345_000_000_000, "12.345", "tỷ\u{00A0}₫"), (-8_700_000, "-8,7", "tr\u{00A0}₫"),
+            (-999_999.6, "-1,0", "tr\u{00A0}₫"), (-999_950_000, "-1,00", "tỷ\u{00A0}₫")
+        ]
+        for (n, value, unit) in cases {
+            let actual = Fmt.compactMoney(n)
+            r.eq("compact-\(n)-value", value, actual.value)
+            r.eq("compact-\(n)-unit", unit, actual.unit)
+        }
+    }
     private struct Run {
         var total = 0
         var failed = 0

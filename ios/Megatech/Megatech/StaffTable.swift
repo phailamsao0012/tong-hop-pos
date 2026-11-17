@@ -2,6 +2,7 @@ import SwiftUI
 
 // Cùng một cách trình bày cho người và staffTotal; chỉ đọc số máy chủ, không cộng/trừ các phần thiếu.
 protocol StaffValues {
+    var delivered: Double? { get }; var deliveredNet: Double? { get }; var paidNet: Double? { get }
     var created: Double { get }; var createdClosed: Double { get }; var closed: Double { get }
     var closedNet: Double { get }; var closeRate: Double? { get }; var aov: Double? { get }
     var packed: Double? { get }; var packedRate: Double? { get }
@@ -12,8 +13,9 @@ protocol StaffValues {
 extension API.StaffRow: StaffValues {}
 extension API.StaffSum: StaffValues {}
 
-enum StaffColumn: CaseIterable {
-    case employee, created, closed, closeRate, packedRate, closedNet, compare
+enum StaffColumn: CaseIterable, Identifiable {
+    var id: Self { self }
+    case employee, created, closed, closeRate, delivered, packedRate, closedNet, deliveredNet, compare
     var title: String {
         switch self {
         case .employee: return StaffTerms.employee
@@ -23,6 +25,8 @@ enum StaffColumn: CaseIterable {
         case .packedRate: return StaffTerms.packed
         case .compare: return StaffTerms.compare
         case .closedNet: return StaffTerms.closedNet
+        case .delivered: return "Đơn đã nhận"
+        case .deliveredNet: return "Tiền khách trả"
         }
     }
     func number(_ s: any StaffValues) -> Double? {
@@ -33,6 +37,8 @@ enum StaffColumn: CaseIterable {
         case .closeRate: return s.closeRate
         case .packedRate: return s.packedRate
         case .closedNet: return s.closedNet
+        case .delivered: return s.delivered
+        case .deliveredNet: return s.deliveredNet
         }
     }
 }
@@ -105,6 +111,13 @@ struct StaffWhy: Identifiable {
             count(StaffTerms.closedCount, s.closed)
             items.append((StaffTerms.averageValue, Fmt.shortVnd(s.aov)))
             definition = definitions.closed
+        case .delivered:
+            count("Đơn đã nhận", s.delivered)
+            definition = "Trong số đơn chốt theo bộ lọc của bảng, đơn hiện ở Đã nhận hoặc Đã thu tiền."
+        case .deliveredNet:
+            items.append(("Tiền khách trả", Fmt.shortVnd(s.deliveredNet)))
+            items.append(("Đã đối soát", Fmt.shortVnd(s.paidNet)))
+            definition = "Giá trị đơn đã nhận; Đã thu tiền chỉ là phần Pancake đã đối soát với hãng vận chuyển. Cùng kỳ, POS và team của bảng."
         }
         rows = items
     }
@@ -152,6 +165,7 @@ struct StaffTableBlock: View {
     @State private var why: StaffWhy?
     #if DEBUG
     @Environment(AppNav.self) private var tourNav: AppNav?
+    @State private var tourAppeared = false
     #endif
     private var key: String { "\(period.key)|\(pos)|\(team)|\(hrTeam?.id ?? "")" }
     private var subtitle: String {
@@ -163,7 +177,7 @@ struct StaffTableBlock: View {
         guard let data else { return [] }
         let sorted = StaffDisplayRow.sorted(data.staff, column: column, descending: descending, comparison: comparisonValue)
         var shown = expanded ? sorted : Array(sorted.prefix(10))
-        if let total = data.staffTotal, total.people > 1 { shown.append(StaffDisplayRow(total)) }
+        if let total = data.staffTotal { shown.append(StaffDisplayRow(total)) }
         return shown
     }
     var body: some View {
@@ -183,7 +197,7 @@ struct StaffTableBlock: View {
                     if data.staff.isEmpty { StateView(empty: "Không có nhân viên trong kỳ này.") }
                     else {
                         StaffRowsTable(rows: rows, column: column, descending: descending, sort: sort, explain: explain, query: query, comparison: comparison, metric: compare.metric, kind: compare.kind,
-                                       focusId: compare.focusId, selectFocus: { selectFocus($0, proxy: proxy) })
+                                       focusId: compare.focusId, selectFocus: { selectFocus($0, proxy: proxy) }, sale: team == "sale")
                             .id("hang-nhan-vien")
                         if !expanded && data.staff.count > 10 {
                             Button(StaffTerms.showAll(data.staff.count)) { expanded = true }
@@ -199,6 +213,20 @@ struct StaffTableBlock: View {
             .task(id: compareKey) { await loadCompare() }
             .pullToReload { async let table: Void = load(force: true); async let cmp: Void = loadCompare(force: true); _ = await (table, cmp) }
             #if DEBUG
+            .onAppear {
+                if !tourAppeared { CompareTourStatus.lanDung += 1; tourAppeared = true }
+                CompareTourStatus.refresh = { updateCompareStatus() }
+                updateCompareStatus()
+            }
+            .onChange(of: DebugTap.shared.tick) { _, _ in
+                if DebugTap.shared.target == "xnk-thu-lai" {
+                    Task { @MainActor in
+                        async let table: Void = load(force: true)
+                        async let cmp: Void = loadCompare(force: true)
+                        _ = await (table, cmp)
+                    }
+                }
+            }
             .onChange(of: DebugTap.shared.tick) { _, _ in
                 switch DebugTap.shared.target {
                 case "xnk-rieng":
@@ -263,13 +291,27 @@ struct StaffTableBlock: View {
     @MainActor private func loadCompare(force: Bool = false) async {
         let k = compareKey
         let ticket = UUID(); compareGeneration = ticket
+        #if DEBUG
+        CompareTourStatus.soTicket = ticket
+        #endif
         guard let request = compare.request else {
-            comparison = nil; compareError = nil; compareTeamError = nil; return
+            comparison = nil; compareError = nil; compareTeamError = nil
+            #if DEBUG
+            CompareTourStatus.so = "bo-qua"
+            #endif
+            return
         }
-        if !force, loadedCompareKey == k, comparison != nil, let age = compareFreshness.age(k) { LoadTrace.skip("so-cung-ky", age: age); return }
+        if !force, loadedCompareKey == k, comparison != nil, let age = compareFreshness.age(k) {
+            LoadTrace.skip("so-cung-ky", age: age)
+            #if DEBUG
+            CompareTourStatus.so = "bo-qua"; logCompare()
+            #endif
+            return
+        }
         comparison = nil; compareError = nil; compareTeamError = nil
         #if DEBUG
         CompareTourStatus.ready = false
+        CompareTourStatus.so = "dang-tai"; CompareTourStatus.khoa = "chua"; CompareTourStatus.khopKy = "chua"
         #endif
         let bootstrap = request.bootstrap
         let range = period.range
@@ -282,11 +324,20 @@ struct StaffTableBlock: View {
                     cstart: request.start, cend: request.end, hrTeam: hrTeam?.id)
             }
             try Task.checkCancellation()
-            guard compareGeneration == ticket, compareKey == k else { return }
+            guard compareGeneration == ticket, compareKey == k else {
+                #if DEBUG
+                CompareTourStatus.comparison("huy", ticket: ticket)
+                #endif
+                return
+            }
             var dates: (Date, Date)?
             if bootstrap {
                 guard let start = VNDate.date(result.compare.start), let end = VNDate.date(result.compare.end) else {
-                    compareError = "Không đọc được ngày kỳ so. Thử lại."; return
+                    compareError = "Không đọc được ngày kỳ so. Thử lại."
+                    #if DEBUG
+                    CompareTourStatus.so = "loi-giai-ma"
+                    #endif
+                    return
                 }
                 // Hoàn tất cả hai request trong cùng lượt tải. Đổi ngày ở đây sẽ đổi
                 // task(id:) và hủy chính lượt bootstrap trước khi có số custom.
@@ -297,17 +348,31 @@ struct StaffTableBlock: View {
                         cstart: VNDate.string(start), cend: VNDate.string(end), hrTeam: hrTeam?.id)
                 }
                 try Task.checkCancellation()
-                guard compareGeneration == ticket, compareKey == k else { return }
+                guard compareGeneration == ticket, compareKey == k else {
+                    #if DEBUG
+                    CompareTourStatus.comparison("huy", ticket: ticket)
+                    #endif
+                    return
+                }
             }
             // Chỉ công bố ngày và số cùng nhau; task mới do đổi ngày sẽ dùng số vừa tải.
             if let dates { compare.start = dates.0; compare.end = dates.1 }
             let loadedKey = compareKey
             comparison = result; loadedCompareKey = loadedKey; compareFreshness.stamp(loadedKey)
             #if DEBUG
+            CompareTourStatus.so = "xong"
             logCompare()
             #endif
         } catch {
-            guard compareGeneration == ticket, compareKey == k else { return }
+            guard compareGeneration == ticket, compareKey == k else {
+                #if DEBUG
+                CompareTourStatus.comparison("huy", ticket: ticket)
+                #endif
+                return
+            }
+            #if DEBUG
+            CompareTourStatus.comparison(CompareTourStatus.failure(error), ticket: ticket)
+            #endif
             compareTeamError = HrUnit.serverMessage(error, applied: hrTeam)
             if let api = error as? API.APIError, api.status == 400 { compareError = api.message }
             else if let text = LoadError.text(error) { compareError = text }
@@ -332,8 +397,21 @@ struct StaffTableBlock: View {
     }
     @MainActor private func load(force: Bool = false) async {
         let k = key
-        if !force, let age = freshness.age(k) { LoadTrace.skip("bang-nhan-vien", age: age); return }
+        if !force, let age = freshness.age(k) {
+            LoadTrace.skip("bang-nhan-vien", age: age)
+            #if DEBUG
+            CompareTourStatus.bang = "bo-qua"; logCompare()
+            #endif
+            return
+        }
+        #if DEBUG
+        CompareTourStatus.ready = false; CompareTourStatus.bang = "dang-tai"
+        CompareTourStatus.khoa = "chua"; CompareTourStatus.khopKy = "chua"
+        #endif
         let ticket = UUID(); generation = ticket
+        #if DEBUG
+        CompareTourStatus.bangTicket = ticket
+        #endif
         if freshness.age(k) == nil { data = nil }
         error = nil; teamError = nil; why = nil
         let range = period.range
@@ -344,7 +422,12 @@ struct StaffTableBlock: View {
                 try await API.staffTable(start: range.0, end: range.1, posIds: pos.isEmpty ? [] : [pos], team: team, by: by, hrTeam: hrTeam?.id)
             }
             try Task.checkCancellation()
-            guard generation == ticket, key == k else { return }
+            guard generation == ticket, key == k else {
+                #if DEBUG
+                CompareTourStatus.table("huy", ticket: ticket)
+                #endif
+                return
+            }
             data = result; freshness.stamp(k)
             // Chỉ bỏ người khi bảng mới tải thành công không còn dòng đó; giữ khi đang tải/lỗi.
             if let id = compare.focusId, !result.staff.contains(where: { $0.sellerId == id }) { compare.focusId = nil }
@@ -353,10 +436,19 @@ struct StaffTableBlock: View {
                 print("[XNKQ] path=\(API.staffTablePath(start: range.0, end: range.1, posIds: pos.isEmpty ? [] : [pos], team: team, by: by, hrTeam: hrTeam?.id))")
                 fflush(stdout)
             }
+            CompareTourStatus.bang = "xong"
             logRows(); logCompare()
             #endif
         } catch {
-            guard generation == ticket, key == k else { return }
+            guard generation == ticket, key == k else {
+                #if DEBUG
+                CompareTourStatus.table("huy", ticket: ticket)
+                #endif
+                return
+            }
+            #if DEBUG
+            CompareTourStatus.table(CompareTourStatus.failure(error), ticket: ticket)
+            #endif
             teamError = HrUnit.serverMessage(error, applied: hrTeam)
             if teamError != nil { data = nil; freshness.clear() }
             if let text = LoadError.text(error) { self.error = text }
@@ -377,7 +469,19 @@ struct StaffTableBlock: View {
         }
         fflush(stdout)
     }
+    private func updateCompareStatus() {
+        CompareTourStatus.khoa = loadedCompareKey == nil ? "chua" : (loadedCompareKey == compareKey ? "co" : "khong")
+        if let data, let c = comparison {
+            CompareTourStatus.khopKy = data.period.start == c.period.start && data.period.end == c.period.end ? "co" : "khong"
+        } else { CompareTourStatus.khopKy = "chua" }
+    }
     private func logCompare() {
+        updateCompareStatus()
+        if CompareTourStatus.bang == "xong", CompareTourStatus.so == "xong",
+           CompareTourStatus.khoa == "khong" || CompareTourStatus.khopKy == "khong" {
+            print("[XNK] chua-khop khop-ky=\(CompareTourStatus.khopKy) khoa=\(CompareTourStatus.khoa)")
+            fflush(stdout)
+        }
         guard ProcessInfo.processInfo.environment["MEGATECH_TOUR"] == "xnkho", let c = comparison,
               loadedCompareKey == compareKey, let data, data.period.start == c.period.start, data.period.end == c.period.end else { return }
         CompareTourStatus.ready = true
@@ -433,49 +537,61 @@ struct StaffRowsTable: View {
     let kind: CmpKind
     let focusId: String?
     let selectFocus: (StaffDisplayRow) -> Void
+    var sale = true
     private let numeric = StaffColumn.allCases.filter { $0 != .employee }
+    @State private var scrollColumn: StaffColumn?
+    @State private var tenure: API.StaffTenureReport?
+    @State private var tenureError: String?
+    @State private var tenureMissing = false
     var body: some View {
-        HStack(alignment: .top, spacing: 0) {
-            VStack(spacing: 0) {
-                header(.employee).frame(width: 132, height: 56)
-                ForEach(rows) { row in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(row.name).fontWeight(row.staffId == nil ? .bold : .semibold).lineLimit(1)
-                        if let dept = row.department { Text(dept).font(.caption2).foregroundStyle(Color.inkSoft).lineLimit(1) }
-                    }
-                    .frame(width: 120, height: 56, alignment: .leading).padding(.horizontal, 6).clipped()
-                    .background(row.staffId == nil ? Color.brandSoft : Color.clear)
+        VStack(alignment: .leading, spacing: MT.cardGap) {
+        MTStickyColumnTable(
+            rows: rows.filter { $0.staffId != nil }, total: rows.first { $0.staffId == nil },
+            columns: numeric, title: { c in
+                c.title + (c == .packedRate ? "\n" + StaffTerms.packedHint : "")
+            }, sort: sort, sortFirst: { sort(.employee) }, firstTitle: StaffTerms.employee,
+            columnWidth: 184, rowHeight: 88, selectedColumn: scrollColumn ?? column, descending: descending
+        ) { row in
+            VStack(alignment: .leading, spacing: MT.cellGap) {
+                Text(row.name).mtFont(.body).fontWeight(row.staffId == nil ? .bold : .semibold)
+                if let id = row.staffId, let item = tenure?.people[id] {
+                    Text("T" + Fmt.int(Double(item.t))).mtFont(.caption)
+                        .foregroundStyle(Palette.good).padding(.horizontal, 6).padding(.vertical, 3)
+                        .background(Palette.goodSoft, in: .capsule)
+                        .accessibilityLabel("Thâm niên T" + Fmt.int(Double(item.t)) + ", ngày vào " + Fmt.day(item.joined))
                 }
+                if let dept = row.department { Text(dept).mtFont(.caption).foregroundStyle(Palette.muted) }
             }
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal) {
-                    VStack(spacing: 0) {
-                        HStack(spacing: 0) { ForEach(numeric, id: \.self) { c in header(c).frame(width: width(c), height: 56).id(c) } }
-                        ForEach(rows) { row in
-                            HStack(spacing: 0) {
-                                ForEach(numeric, id: \.self) { c in
-                                    cell(c, row).frame(width: width(c), height: 56).clipped()
-                                }
-                            }.background(row.staffId == nil ? Color.brandSoft : Color.clear)
-                        }
-                    }
-                }
+        } cell: { row, c in
+            cell(c, row).frame(maxWidth: .infinity, minHeight: 44)
+        }
                 #if DEBUG
                 .onChange(of: DebugTap.shared.tick) { _, _ in
                     if ["xnk-cot", "xnk-cuon-kho"].contains(DebugTap.shared.target) {
-                        withAnimation { proxy.scrollTo(StaffColumn.packedRate, anchor: .trailing) }
+                        scrollColumn = .packedRate
                     }
                     if ["xnk-wave", "xnk-diff", "xnk-cum", "xnk-rate", "xnk-cmp-log"].contains(DebugTap.shared.target) {
-                        withAnimation { proxy.scrollTo(StaffColumn.compare, anchor: .trailing) }
+                        scrollColumn = .compare
                     }
                 }
                 #endif
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+        .onChange(of: column) { _, _ in scrollColumn = nil }
+        .monospacedDigit().buttonStyle(.plain)
+        if tenureMissing { StateView(empty: "Chưa có trên máy chủ") }
+        else if let tenureError { StateView(error: tenureError) { await loadTenure() } }
+        }.task { await loadTenure() }
+    }
+    @MainActor private func loadTenure() async {
+        tenureError = nil; tenureMissing = false
+        do {
+            let result = try await API.staffTenure()
+            try Task.checkCancellation()
+            tenure = result
+        } catch {
+            guard !Task.isCancelled else { return }
+            tenureMissing = (error as? API.APIError)?.status == 404
+            if !tenureMissing { tenureError = LoadError.text(error) }
         }
-        .font(.caption).monospacedDigit().buttonStyle(.plain)
-        .lineLimit(2).minimumScaleFactor(0.5)
-        .clipped()
     }
     private func width(_ c: StaffColumn) -> CGFloat {
         if c == .compare { return 184 }
@@ -549,9 +665,16 @@ struct StaffRowsTable: View {
         case .closeRate:
             Button { explain(c, row) } label: {
                 VStack(spacing: 3) {
-                    Text(Fmt.pct(s.closeRate)).fontWeight(.semibold)
+                    if sale { MTRateBadge(rate: s.closeRate, kind: .saleClose) }
+                    else { Text(Fmt.pct(s.closeRate)).fontWeight(.semibold) }
                     Text(StaffTerms.alreadyClosed(s.createdClosed, s.created)).font(.caption2).foregroundStyle(Color.inkSoft)
                 }
+            }
+        case .delivered, .deliveredNet:
+            Button { explain(c, row) } label: {
+                Text(c == .delivered ? s.delivered.map(Fmt.int) ?? "—" : Fmt.shortVnd(s.deliveredNet))
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                    .frame(maxWidth: .infinity, minHeight: 44)
             }
         default:
             Button { explain(c, row) } label: {

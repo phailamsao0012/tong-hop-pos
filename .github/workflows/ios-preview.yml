@@ -26,7 +26,7 @@ concurrency:
 jobs:
   preview:
     runs-on: macos-latest
-    timeout-minutes: 60
+    timeout-minutes: 130
     permissions:
       contents: write
     defaults:
@@ -34,7 +34,8 @@ jobs:
         shell: bash
     env:
       OUT: ${{ github.workspace }}/preview
-      BASE: https://demo.tonghopposmegatech.io.vn
+      # 12/11/2026: Cloudflare về gói miễn phí, lượt chụp chỉ dùng web ảo trên máy GitHub, không gọi demo.
+      BASE: http://127.0.0.1:8788
       BUNDLE: vn.megatech.tonghoppos
     steps:
       - uses: actions/checkout@v4
@@ -55,6 +56,28 @@ jobs:
           [ "$STATUS" -eq 0 ] || { tail -60 "$RUNNER_TEMP/build.log"; exit "$STATUS"; }
           # Ký tạm "-" như Xcode "Sign to Run Locally": app chưa ký thì máy ảo không cho dùng Keychain (không giữ được phiên).
           codesign -dv "$RUNNER_TEMP/sym/Debug-iphonesimulator/Megatech.app" 2>&1 | grep -E 'Identifier|Signature' || true
+
+      - name: Kiểm mọi lần mở app trỏ web ảo
+        run: |
+          # Mọi lần mở app Megatech bằng simctl trong workflow này phải kèm biến MEGATECH_BASE trỏ web ảo, hoặc dùng một mảng
+          # vars… có biến đó; không để app bản Debug rơi về địa chỉ mặc định là web thật.
+          python3 - "$GITHUB_WORKSPACE/.github/workflows/ios-preview.yml" <<'PYBASE'
+          import re, sys
+          text = open(sys.argv[1], encoding="utf-8").read()
+          lines = re.sub(r"\\\n\s*", " ", text).splitlines()
+          launch, bundle = "simctl" + " launch", "$" + "BUNDLE"
+          base = "SIMCTL_CHILD_MEGATECH" + "_BASE=" + '"$' + 'BASE"'
+          bad = []
+          for m in re.finditer(r"\b(vars\w*)=\(([^)]*)\)", " ".join(lines)):
+              if base not in m.group(2):
+                  bad.append("mảng " + m.group(1) + " thiếu MEGATECH_BASE")
+          for n, line in enumerate(lines, 1):
+              if launch in line and bundle in line and base not in line and not re.search(r'env "\$\{vars\w*\[@\]\}"', line):
+                  bad.append("dòng gộp %d: %s" % (n, line.strip()[:160]))
+          for b in bad:
+              print("::error::Mở app không trỏ web ảo: " + b)
+          sys.exit(1 if bad else 0)
+          PYBASE
 
       - name: Mở máy ảo iPhone
         run: |
@@ -77,7 +100,8 @@ jobs:
           xcrun simctl install "$UDID" "$RUNNER_TEMP/sym/Debug-iphonesimulator/Megatech.app"
           # Chạy thử một lượt rồi tắt (chưa có phiên nên không hỏi Face ID): lần mở đầu tiên sau khi bật máy ảo rất chậm,
           # làm lệnh giả lập Face ID tới trễ, hộp Face ID hết giờ. Làm ấm trước để lúc quay chạy đúng nhịp.
-          time xcrun simctl launch "$UDID" "$BUNDLE" > /dev/null
+          # Trỏ vào web ảo (không để app dùng địa chỉ mặc định là web thật), dù lúc này web ảo chưa chạy.
+          time SIMCTL_CHILD_MEGATECH_BASE="$BASE" xcrun simctl launch "$UDID" "$BUNDLE" > /dev/null
           sleep 25
           xcrun simctl terminate "$UDID" "$BUNDLE" || true
           # Lệnh notifyutil vô hại (không gửi "không khớp" ở đây: máy ảo giữ kết quả đó cho lần hỏi Face ID kế tiếp).
@@ -92,16 +116,37 @@ jobs:
           # "FORMAT_TEST FAIL …" rồi "FORMAT_TEST OK <n> cases" và thoát, trước giao diện và trước mạng. Lệch một ký tự là đỏ.
           # Máy macOS không có sẵn timeout thì dùng perl (alarm) thay.
           command -v timeout > /dev/null || timeout() { perl -e 'alarm shift; exec @ARGV' "$@"; }
-          out="$(SIMCTL_CHILD_MEGATECH_FORMAT_TEST=1 timeout 120 xcrun simctl launch --console-pty "$UDID" "$BUNDLE" 2>&1 || true)"
+          out="$(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_FORMAT_TEST=1 timeout 120 xcrun simctl launch --console-pty "$UDID" "$BUNDLE" 2>&1 || true)"
           echo "$out" | grep FORMAT_TEST || { echo "$out" | tail -40; echo "::error::App không in FORMAT_TEST."; exit 1; }
           echo "$out" | grep -q "FORMAT_TEST OK" || exit 1
 
       - name: Kiểm thử giải mã
         run: |
           command -v timeout > /dev/null || timeout() { perl -e 'alarm shift; exec @ARGV' "$@"; }
-          out="$(SIMCTL_CHILD_MEGATECH_DECODE_TEST=1 timeout 120 xcrun simctl launch --console-pty "$UDID" "$BUNDLE" 2>&1 || true)"
+          out="$(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_DECODE_TEST=1 timeout 120 xcrun simctl launch --console-pty "$UDID" "$BUNDLE" 2>&1 || true)"
           echo "$out" | grep DECODE_TEST || { echo "$out" | tail -40; echo "::error::App không in DECODE_TEST."; exit 1; }
           echo "$out" | grep -q "DECODE_TEST OK" || exit 1
+
+      - name: Cài pnpm cho web ảo
+        id: web-ao-pnpm
+        uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4
+        with:
+          version: '10'
+
+      - name: Cài Node cho web ảo
+        id: web-ao-node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+
+      - name: Web ảo
+        id: web-ao
+        timeout-minutes: 18
+        run: bash scripts/ci/web-ao.sh
+
+      - name: Chặn gọi demo
+        run: |
+          case "$BASE" in http://127.0.0.1:*) echo "web-ao: chỉ dùng $BASE";; *) echo "::error::BASE không phải web ảo: không được gọi demo hay web thật"; exit 1;; esac
 
       - name: Phiên đăng nhập bản demo
         run: |
@@ -118,7 +163,9 @@ jobs:
           T0="$(now)"
           # Mốc thời gian (giây tính từ lúc bắt đầu) để tìm đúng khung hình trong video.
           mark() { python3 -c "import time; print('%.1f' % (time.time() - $T0))" | tr -d '\n' >> "$OUT/moc-thoi-gian.txt"; echo " $1" >> "$OUT/moc-thoi-gian.txt"; }
-          face() { xcrun simctl spawn "$UDID" notifyutil -p "com.apple.BiometricKit_Sim.pearl.$1"; }
+          # Có hạn 20 giây: 13/11 lệnh này treo ~20 phút ở đoạn 12 (app đứng ở hộp Face ID, thiếu mốc XNK).
+          face() { perl -e 'alarm shift; exec @ARGV' 20 xcrun simctl spawn "$UDID" notifyutil -p "com.apple.BiometricKit_Sim.pearl.$1" \
+            || echo "::warning::lệnh Face ID $1 quá hạn hoặc lỗi"; }
           # Như máy đã từng đăng nhập: có phiên + nhớ email (tài khoản demo công khai, qua tham số -thp_last_email của UserDefaults)
           # để hiện "Chào mừng trở lại" với email đã che. App đang chạy nền thì lệnh này chỉ đưa app lên lại (không mở mới).
           # MEGATECH_FPS=20: hiệu ứng chạy 20 khung hình/giây (chỉ bản Debug) để máy ảo chậm còn sức nhận lệnh giả lập Face ID.
@@ -169,7 +216,7 @@ jobs:
           # tự cuộn qua mọi mục; mỗi thẻ được app xuất ra PNG trong Documents/widget-gallery.
           rec 6-widget
           xcrun simctl terminate "$UDID" "$BUNDLE" || true; sleep 2
-          SIMCTL_CHILD_MEGATECH_WIDGETS=1 SIMCTL_CHILD_MEGATECH_FPS=20 SIMCTL_CHILD_MEGATECH_NO_INTRO=1 \
+          SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_WIDGETS=1 SIMCTL_CHILD_MEGATECH_FPS=20 SIMCTL_CHILD_MEGATECH_NO_INTRO=1 \
             xcrun simctl launch "$UDID" "$BUNDLE" > /dev/null; mark "mo-khung-widget"
           sleep 35; stop; mark "het-6"
           mkdir -p "$OUT/widget"
@@ -197,14 +244,108 @@ jobs:
           face_on_ask() {
             local i n
             for i in $(seq 1 100); do grep -q 'hoi-face-id' "$1" 2> /dev/null && break; sleep 0.2; done
+            # Đoạn 12–15 (MEGATECH_SKIP_FACEID): app tự ghi face-id-dung, không gửi lệnh giả lập (13/11: notifyutil kẹt 20 giây mỗi lần).
+            for i in $(seq 1 25); do grep -q 'face-id-dung' "$1" 2> /dev/null && return 0; sleep 0.2; done
             if ! grep -q 'hoi-face-id' "$1" 2> /dev/null; then
               mark "face-id-khop-gio-co-dinh"; face match; sleep 5; face match; return 0
             fi
-            for n in 1 2 3; do
+            # Máy ảo chậm có lúc bỏ qua lệnh "khớp" (13/11: kẹt ở hoi-face-id, đoạn 12 thiếu mốc). Gửi lại mỗi 3 giây tới 15 lần.
+            for n in $(seq 1 15); do
+              grep -q 'face-id-dung' "$1" 2> /dev/null && return 0
               sleep 1; mark "face-id-khop-$n"; face match
-              for i in $(seq 1 15); do grep -q 'face-id-dung' "$1" 2> /dev/null && return 0; sleep 0.2; done
+              for i in $(seq 1 10); do grep -q 'face-id-dung' "$1" 2> /dev/null && return 0; sleep 0.2; done
             done
+            echo "::warning::Face ID chưa nhận khớp sau 15 lần ($1)"
           }
+          # Đoạn 15 chạy sớm, ngay sau đoạn 6 (13/11): chạy cuối thì máy ảo đã chạy gần 1 giờ, hay treo hoặc tự tắt, ảnh giao diện mất.
+          # 15. Giao diện 1.0: chụp các màn chính, sáng rồi tối (chỉ ảnh, không video).
+          ui_stages=(hom-nay hom-nay-2 hom-nay-3 tong-quan tong-quan-so-lieu tong-quan-pos don-hang phong-ban sale nhan-vien nhan-vien-mot cskh mkt cskh-mot-pos mkt-mot-pos van-don thong-bao thong-bao-2 them nhan-su)
+          # Mốc chờ 180 giây (13/11): app khi chạy tour chờ mỗi request tới 120 giây và tải lại màn lỗi một lần (c9161ff).
+          wait_ui() {
+            local deadline=$((SECONDS + ${2:-90})) log="$3"
+            while (( SECONDS < deadline )); do
+              if grep -q '^\[UI\] moc=loi-tai$' "$log"; then
+                echo "::error::15-giao-dien: lỗi tải khi chờ mốc $1"; tail -n 40 "$log" | grep -E '^\[(UI|MOC|MKT|NV)\]' || true; return 1
+              fi
+              if grep -q "^\[UI\] moc=$1$" "$log"; then sleep 1; return 0; fi
+              sleep 0.2
+            done
+            echo "::error::15-giao-dien: thiếu mốc $1"; tail -n 40 "$log" | grep -E '^\[(UI|MOC|MKT|NV)\]' || true; return 1
+          }
+          # Đoạn 15 chạy sau gần 1 giờ máy ảo chạy liền: lệnh simctl có thể treo (2 lượt liền im 10–14 phút ở chỗ đổi sang nền tối,
+          # app đã hỏi Face ID nhưng không nhận được "khớp"). Mỗi lệnh simctl ở đây có hạn (perl alarm), có mốc trước / sau
+          # (moc-thoi-gian.txt và log job) để biết lệnh nào treo; lượt nền tối chạy trên máy ảo vừa tắt và bật lại.
+          m15() { mark "15-$1"; echo "15: $1 $(date +%H:%M:%S)"; }
+          sim() { local s="$1"; shift; perl -e 'alarm shift; exec @ARGV' "$s" xcrun simctl "$@"; }
+          # Face ID có hạn 20 giây mỗi lệnh (face_on_ask gọi hàm này).
+          face() { m15 "face-$1-truoc"; sim 20 spawn "$UDID" notifyutil -p "com.apple.BiometricKit_Sim.pearl.$1" || echo "::warning::15: lệnh Face ID $1 quá hạn"; m15 "face-$1-sau"; }
+          reboot_sim() {
+            m15 "shutdown-truoc"; sim 120 shutdown "$UDID" || echo "::warning::15: shutdown quá hạn"; m15 "shutdown-sau"
+            m15 "boot-truoc"; sim 180 boot "$UDID" || true
+            sim 300 bootstatus "$UDID" -b > /dev/null || { echo "::error::15: máy ảo không bật lại được"; return 1; }
+            m15 "boot-sau"
+            sim 30 status_bar "$UDID" override --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4 || true
+            sim 30 spawn "$UDID" notifyutil -s com.apple.BiometricKit.enrollmentChanged 1 || true
+            sim 30 spawn "$UDID" notifyutil -p com.apple.BiometricKit.enrollmentChanged || true
+            # Làm ấm như lúc mở máy ảo: lần mở đầu sau khi bật rất chậm, lệnh Face ID tới trễ.
+            # Chỉ trỏ vào web ảo ($BASE 127.0.0.1), không để app dùng địa chỉ mặc định.
+            m15 "lam-am-truoc"
+            SIMCTL_CHILD_MEGATECH_BASE="$BASE" perl -e 'alarm shift; exec @ARGV' 30 xcrun simctl launch "$UDID" "$BUNDLE" > /dev/null || true
+            sleep 20
+            sim 30 terminate "$UDID" "$BUNDLE" || true; m15 "lam-am-sau"
+          }
+          for mode in sang toi; do
+            # 14/11: bỏ tắt/bật máy ảo trước lượt nền tối. Đoạn 15 nay chạy sớm, máy ảo còn khoẻ; chính lần tắt/bật đó làm máy ảo
+            # treo rồi tự tắt (lỗi 405 "device is not booted"). Chỉ bật lại khi máy ảo thật sự đang tắt.
+            m15 "$mode-terminate-truoc"; sim 30 terminate "$UDID" "$BUNDLE" || true; m15 "$mode-terminate-sau"
+            # 13/11: máy ảo tự tắt sau khi bật lại (đổi nền báo "current state: Shutdown"): còn tắt thì bật lại một lần nữa.
+            if ! sim 30 list devices booted | grep -q "$UDID"; then
+              echo "::warning::15: máy ảo đang tắt trước lượt $mode, bật lại"; reboot_sim || exit 1
+            fi
+            m15 "$mode-giao-dien-truoc"
+            if [ "$mode" = toi ]; then look=dark; else look=light; fi
+            sim 60 ui "$UDID" appearance "$look" || { echo "::error::15: đổi giao diện $look quá hạn"; exit 1; }
+            m15 "$mode-giao-dien-sau"
+            log15="$RUNNER_TEMP/ui-15-$mode.txt"
+            vars15=(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
+              SIMCTL_CHILD_MEGATECH_TOUR=giaodien SIMCTL_CHILD_MEGATECH_NAV_RESET=1 SIMCTL_CHILD_MEGATECH_SKIP_FACEID=1)
+            # Máy ảo vừa bật lại có lúc mở app xong, Face ID đúng mà 3 phút không tới mốc hom-nay (13/11 lượt nền tối,
+            # web ảo trả chậm 8–145 giây): tắt app, mở lại một lần rồi chờ lại.
+            for try15 in 1 2; do
+            rm -f "$log15"
+            m15 "$mode-mo-app-truoc"
+            # Sau khi bật lại máy ảo, lần mở đầu có lúc quá 30 giây (13/11 lượt nền tối): tắt app, mở lại một lần với hạn 90 giây.
+            if ! env "${vars15[@]}" perl -e 'alarm shift; exec @ARGV' 30 xcrun simctl launch --stdout="$log15" "$UDID" "$BUNDLE" > /dev/null; then
+              echo "::warning::15: mở app ($mode) quá 30 giây, mở lại"
+              sim 30 terminate "$UDID" "$BUNDLE" || true; sleep 5
+              env "${vars15[@]}" perl -e 'alarm shift; exec @ARGV' 90 xcrun simctl launch --stdout="$log15" "$UDID" "$BUNDLE" > /dev/null \
+                || { echo "::error::15: mở app ($mode) quá hạn"; exit 1; }
+            fi
+            m15 "$mode-mo-app-sau"
+            m15 "$mode-face-id-truoc"; face_on_ask "$log15"; m15 "$mode-face-id-sau"
+            if wait_ui hom-nay 180 "$log15"; then break; fi
+            if [ "$try15" = 2 ]; then exit 1; fi
+            echo "::warning::15: lượt $mode chưa tới mốc hom-nay, mở lại app"
+            sim 30 terminate "$UDID" "$BUNDLE" || true; sleep 5
+            if ! sim 30 list devices booted | grep -q "$UDID"; then
+              echo "::warning::15: máy ảo đang tắt, bật lại"; reboot_sim || exit 1
+              sim 60 ui "$UDID" appearance "$look" || true
+            fi
+            done
+            for stage in "${ui_stages[@]}"; do
+              if [ "$stage" != hom-nay ]; then wait_ui "$stage" 180 "$log15"; fi
+              # 13/11: một lệnh chụp nền tối treo quá 30 giây (thiếu ảnh 39/40): chụp lại một lần.
+              sim 30 io "$UDID" screenshot "$OUT/15-$mode-$stage.png" > /dev/null \
+                || { echo "::warning::15: chụp $mode-$stage quá hạn, chụp lại"; sim 45 io "$UDID" screenshot "$OUT/15-$mode-$stage.png" > /dev/null; } \
+                || echo "::warning::15: chụp lại $mode-$stage vẫn quá hạn"
+            done
+            wait_ui xong 30 "$log15"
+          done
+          sim 60 ui "$UDID" appearance light || true
+          n15=$(ls "$OUT"/15-*.png 2>/dev/null | wc -l | tr -d ' ')
+          if [ "$n15" != "$(( ${#ui_stages[@]} * 2 ))" ]; then echo "::error::15-giao-dien: thiếu ảnh ($n15/$(( ${#ui_stages[@]} * 2 )))"; exit 1; fi
+          grep -hE '^\[(UI|UIPOS)\]' "$RUNNER_TEMP"/ui-15-*.txt > "$OUT/15-giao-dien-app.txt" || true
+          mark "het-15"
           xcrun simctl terminate "$UDID" "$BUNDLE" || true; sleep 1
           rec 7-mo-nhanh
           launch_clock "$RUNNER_TEMP/moc-7-1.txt" 1; mark "mo-app-lan-1-co-logo"
@@ -315,23 +456,53 @@ jobs:
           xcrun simctl terminate "$UDID" "$BUNDLE" || true; sleep 1
           rec 12-xn-kho
           vars12=(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
-            SIMCTL_CHILD_MEGATECH_CLOCK=1 SIMCTL_CHILD_MEGATECH_TOUR=xnkho SIMCTL_CHILD_MEGATECH_NAV_RESET=1)
+            SIMCTL_CHILD_MEGATECH_CLOCK=1 SIMCTL_CHILD_MEGATECH_TOUR=xnkho SIMCTL_CHILD_MEGATECH_NAV_RESET=1 SIMCTL_CHILD_MEGATECH_SKIP_FACEID=1)
           env "${vars12[@]}" xcrun simctl launch --stdout="$RUNNER_TEMP/xnk-12.txt" "$UDID" "$BUNDLE" > /dev/null
           face_on_ask "$RUNNER_TEMP/xnk-12.txt"
           tour_log_tail() {
-            grep -E '^\[(XNK|TEAM)\]' "$1" | tail -n 40 || true
+            grep -E '^\[(XNK|TEAM|MOC)\]' "$1" | tail -n 60 || true
+          }
+          xnk_notice_count=0
+          xnk_notice_seen=0
+          xnk_case="" xnk_zone="" xnk_attempt=0
+          xnk_notices() {
+            local line index=0
+            while IFS= read -r line; do
+              index=$((index + 1))
+              if (( index > xnk_notice_seen && xnk_notice_count < 8 )); then
+                line=${line//%/%25}
+                line=${line//$'\r'/%0D}
+                echo "::notice::$line"
+                xnk_notice_count=$((xnk_notice_count + 1))
+              fi
+            done < <(grep -E '^\[XNK\] (cho-so |thu-lai[= ])' "$RUNNER_TEMP/xnk-12.txt" || true)
+            xnk_notice_seen=$index
           }
           wait_xnk() {
-            local deadline=$((SECONDS + ${2:-60}))
+            local deadline=$((SECONDS + ${2:-260})) reason
             while (( SECONDS < deadline )); do
+              xnk_notices
               if grep -q '^\[XNK\] moc=loi-tai-so$' "$RUNNER_TEMP/xnk-12.txt"; then
+                xnk_notices
+                reason=$(grep -E '^\[XNK\] cho-so ' "$RUNNER_TEMP/xnk-12.txt" | tail -n 1 | grep -oE '(bang|so)=loi-(mang|het-gio|http-5[0-9]{2}|http-429)( |$)' | head -n 1 | sed -E 's/^[^=]+=//; s/ $//' || true)
+                if [[ -n "$xnk_case" && -n "$reason" ]]; then
+                  tour_log_tail "$RUNNER_TEMP/xnk-12.txt"
+                  if (( xnk_attempt == 0 )); then
+                    echo "::warning::demo: mở lại app ở ca $xnk_case, máy chủ demo trả $reason"
+                    launch_xnk_case "$xnk_case" "$xnk_zone" 1
+                    return $?
+                  fi
+                  echo "::error::demo: mở lại app ở ca $xnk_case, máy chủ demo trả $reason lần hai"
+                  return 1
+                fi
                 echo "::error::XNK báo lỗi tải số (loi-tai-so) khi chờ mốc: $1"
                 tour_log_tail "$RUNNER_TEMP/xnk-12.txt"; return 1
               fi
-              if grep -q "^\[XNK\] moc=$1$" "$RUNNER_TEMP/xnk-12.txt"; then sleep 1; return 0; fi
+              if grep -q "^\[XNK\] moc=$1$" "$RUNNER_TEMP/xnk-12.txt"; then xnk_notices; sleep 1; return 0; fi
               sleep 0.2
             done
             echo "::error::Thiếu mốc XNK: $1"
+            xnk_notices
             tour_log_tail "$RUNNER_TEMP/xnk-12.txt"; return 1
           }
           wait_xnk cot
@@ -407,6 +578,8 @@ jobs:
           # 6.2.6–8: chỉ đọc lựa chọn app đã lưu; ngày custom phải bootstrap từ API.
           launch_xnk_case() {
             local test="$1" zone="$2"
+            xnk_case="$test" xnk_zone="$zone" xnk_attempt="${3:-0}"
+            xnk_notice_seen=0
             xcrun simctl terminate "$UDID" "$BUNDLE" || true
             : > "$RUNNER_TEMP/xnk-12.txt"
             env "${vars12[@]}" SIMCTL_CHILD_MEGATECH_XNK_CASE="$test" SIMCTL_CHILD_TZ="$zone" \
@@ -438,7 +611,7 @@ jobs:
           xcrun simctl terminate "$UDID" "$BUNDLE" || true
           rec 13-team
           vars13=(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
-            SIMCTL_CHILD_MEGATECH_CLOCK=1 SIMCTL_CHILD_MEGATECH_TOUR=team SIMCTL_CHILD_MEGATECH_NAV_RESET=1)
+            SIMCTL_CHILD_MEGATECH_CLOCK=1 SIMCTL_CHILD_MEGATECH_TOUR=team SIMCTL_CHILD_MEGATECH_NAV_RESET=1 SIMCTL_CHILD_MEGATECH_SKIP_FACEID=1)
           env "${vars13[@]}" xcrun simctl launch --stdout="$RUNNER_TEMP/team-13.txt" "$UDID" "$BUNDLE" > /dev/null
           face_on_ask "$RUNNER_TEMP/team-13.txt"
           wait_team() {
@@ -479,11 +652,17 @@ jobs:
           grep '\[TEAM\]' "$RUNNER_TEMP/team-13.txt" > "$OUT/13-team-app.txt"
           # 6.3.7: team còn được chọn trước terminate; lần launch mới phải ap=khong.
           xcrun simctl terminate "$UDID" "$BUNDLE"
-          : > "$RUNNER_TEMP/team-13-reopen.txt"
-          env "${vars13[@]}" SIMCTL_CHILD_MEGATECH_TEAM_CASE=reopen \
-            xcrun simctl launch --stdout="$RUNNER_TEMP/team-13-reopen.txt" "$UDID" "$BUNDLE" > /dev/null
-          face_on_ask "$RUNNER_TEMP/team-13-reopen.txt"
-          wait_team mo-lai 120 "$RUNNER_TEMP/team-13-reopen.txt"
+          # 13/11: máy ảo chậm, app mở lại qua Face ID mà 3 phút chưa tới mốc mo-lai: chờ 240 giây, chưa tới thì tắt, mở lại một lần.
+          for try13 in 1 2; do
+            : > "$RUNNER_TEMP/team-13-reopen.txt"
+            env "${vars13[@]}" SIMCTL_CHILD_MEGATECH_TEAM_CASE=reopen \
+              xcrun simctl launch --stdout="$RUNNER_TEMP/team-13-reopen.txt" "$UDID" "$BUNDLE" > /dev/null
+            face_on_ask "$RUNNER_TEMP/team-13-reopen.txt"
+            if wait_team mo-lai 240 "$RUNNER_TEMP/team-13-reopen.txt"; then break; fi
+            if [ "$try13" = 2 ]; then exit 1; fi
+            echo "::warning::13: chưa tới mốc mo-lai, mở lại app"
+            xcrun simctl terminate "$UDID" "$BUNDLE" || true; sleep 5
+          done
           grep '\[TEAM\] dept=' "$RUNNER_TEMP/team-13-reopen.txt" | head -1 | grep 'ap=khong trang=mo-app' > "$OUT/13-team-mo-lai-app.txt"
           grep '\[TEAM\]' "$RUNNER_TEMP/team-13-reopen.txt" >> "$OUT/13-team-app.txt"
           xcrun simctl io "$UDID" screenshot "$OUT/13-team-mo-lai.png"
@@ -502,12 +681,13 @@ jobs:
           xcrun simctl terminate "$UDID" "$BUNDLE" || true
           rec 14-mkt-nv
           vars14=(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
-            SIMCTL_CHILD_MEGATECH_TOUR=mktnv SIMCTL_CHILD_MEGATECH_NV="$NV" SIMCTL_CHILD_MEGATECH_CLOCK=1 SIMCTL_CHILD_MEGATECH_NAV_RESET=1)
+            SIMCTL_CHILD_MEGATECH_TOUR=mktnv SIMCTL_CHILD_MEGATECH_NV="$NV" SIMCTL_CHILD_MEGATECH_CLOCK=1 SIMCTL_CHILD_MEGATECH_NAV_RESET=1 SIMCTL_CHILD_MEGATECH_SKIP_FACEID=1)
           env "${vars14[@]}" xcrun simctl launch --stdout="$RUNNER_TEMP/mktnv-14.txt" "$UDID" "$BUNDLE" > /dev/null
           face_on_ask "$RUNNER_TEMP/mktnv-14.txt"
           # Chỉ mở rộng hàm chẩn đoán trong đoạn 14, giữ nguyên đoạn 12/13.
           tour_log_tail() {
-            grep -E '^\[(XNK|TEAM|MKT|NV)\]' "$1" | tail -n 40 || true
+            grep -E '^\[(XNK|TEAM|MKT|NV|MOC)\]' "$1" | tail -n 40 || true
+            echo "(log đoạn 14: $(wc -l < "$1" 2> /dev/null || echo 0) dòng)"
           }
           wait_mktnv() {
             local deadline=$((SECONDS + ${2:-90})) log="$RUNNER_TEMP/mktnv-14.txt"
@@ -532,7 +712,8 @@ jobs:
           pids14=()
           labels14=()
           for stage in "${stages14[@]}"; do
-            wait_mktnv "$stage"
+            # Mốc đầu chờ lâu hơn: máy Mac chậm có lúc mở app mất hơn 2 phút (13/11, a9f14e9).
+            if [[ "$stage" == mkt-mo ]]; then wait_mktnv "$stage" 240; else wait_mktnv "$stage"; fi
             xcrun simctl io "$UDID" screenshot "$OUT/14-$stage.png"
             # Lưu từng request mới theo số dòng log, không đưa đường dẫn/JSON vào artifact.
             while IFS= read -r entry; do
@@ -664,6 +845,15 @@ jobs:
             -c:v libx264 -preset veryfast -crf 24 -pix_fmt yuv420p -movflags +faststart -an "$OUT/so-sanh-icon.mp4" || echo "::warning::Không ghép được video so sánh icon."
           ls -la "$OUT"
 
+      - name: Thu log web ảo
+        if: always()
+        run: |
+          mkdir -p "$OUT"
+          # Chỉ giữ phương thức, đường dẫn không query và mã HTTP; bỏ mọi nội dung khác.
+          if [ -f "$RUNNER_TEMP/web-ao.log" ]; then
+            tail -200 "$RUNNER_TEMP/web-ao.log" | sed -nE 's/.*(GET|POST|HEAD) (\/[^ ?]*)[^ ]* ([0-9]{3}).*/web-ao: \1 \2 \3/p' > "$OUT/web-ao.log"
+          fi
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -673,8 +863,9 @@ jobs:
           if-no-files-found: ignore
 
       # Đẩy video lên nhánh ios-preview (ghi đè mỗi lần) để xem được cả ở nơi không tải được artifact.
+      # always(): lượt đỏ giữa chừng vẫn đẩy ảnh đã chụp (13/11, nơi xem không tải được artifact).
       - name: Đẩy video lên nhánh ios-preview
-        if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+        if: always() && (github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -689,3 +880,47 @@ jobs:
         run: |
           [ -n "${TOKEN:-}" ] || exit 0
           curl -sS -o /dev/null -b "thp_session=$TOKEN" -H 'content-type: application/json' -d '{}' "$BASE/api/auth/logout" || true
+
+      - name: Dừng web ảo
+        if: always()
+        run: |
+          # Chỉ in route đã cho phép, mã HTTP và thời gian; không in query hay log thô.
+          python3 - "$RUNNER_TEMP/web-ao.log" <<'PY_NOTICE'
+          from re import search, sub
+          from pathlib import Path
+          from sys import argv
+          allowed = {
+              '/api/teams', '/api/reports/overview', '/api/reports/staff',
+              '/api/reports/staff-compare', '/api/reports/product-groups',
+              '/api/reports/van-don', '/api/reports/staff-profile',
+              '/api/staff-tenure', '/api/kpi2', '/api/marketing/analytics',
+              '/api/reports/cskh-badge', '/api/employees', '/api/targets',
+              '/api/reports/calls', '/api/reports/repurchase', '/api/reports/shift',
+              '/api/reports/batches', '/api/marketing-teams', '/api/staff-settings',
+          }
+          path = Path(argv[1])
+          rows = []
+          if path.is_file():
+              for line in path.read_text(errors='replace').splitlines():
+                  line = sub(r'\x1b\[[0-9;]*m', '', line)
+                  match = search(r'\b(?:GET|POST|HEAD) (/api/[^\s?]*)(?:\?\S*)? ([1-5][0-9]{2})[^\r\n]*?\(([0-9]+(?:\.[0-9]+)?)\s*(ms|s)\)', line)
+                  if not match:
+                      continue
+                  route, code, duration, unit = match.groups()
+                  milliseconds = float(duration) * (1000 if unit == 's' else 1)
+                  rows.append((milliseconds, route if route in allowed else '/api/<route-khac>', code))
+          for milliseconds, route, code in sorted(rows, reverse=True)[:8]:
+              print(f'::notice::web-ao: {route} {code} {milliseconds:g}ms')
+          PY_NOTICE
+          python3 - "$RUNNER_TEMP/web-ao.pid" <<'PY'
+          from os import killpg
+          from signal import SIGTERM
+          from sys import argv
+          from pathlib import Path
+          path = Path(argv[1])
+          if path.exists():
+              try:
+                  killpg(int(path.read_text()), SIGTERM)
+              except ProcessLookupError:
+                  pass
+          PY

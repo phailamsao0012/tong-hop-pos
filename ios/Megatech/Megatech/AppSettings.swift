@@ -13,7 +13,7 @@ struct AppSettingsView: View {
                 PageTitle(title: "Cài đặt trên máy này", subtitle: "Chỉ lưu trên iPhone này, không đổi gì trên web")
                 HStack(spacing: 6) {
                     MetricIcon("sparkles", size: 12, weight: .bold).foregroundStyle(Color.brand)
-                    Text("Màn logo khi mở app").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink)
+                    Text("Màn logo khi mở app").mtFont(.body).foregroundStyle(Color.ink)
                 }.padding(.top, 4)
                 VStack(spacing: 0) {
                     ForEach(Array(IntroMode.allCases.enumerated()), id: \.element) { i, m in
@@ -22,7 +22,7 @@ struct AppSettingsView: View {
                             HStack(spacing: 12) {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(m.title).font(.system(size: 14, weight: on ? .semibold : .medium)).foregroundStyle(Color.ink)
-                                    Text(m.hint).font(.system(size: 11)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
+                                    Text(m.hint).mtFont(.caption).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
                                 }
                                 Spacer()
                                 Image(systemName: on ? "checkmark.circle.fill" : "circle").font(.system(size: 18)).foregroundStyle(on ? Color.good : Color.inkSoft.opacity(0.5))
@@ -32,10 +32,10 @@ struct AppSettingsView: View {
                         .accessibilityAddTraits(on ? .isSelected : [])
                         if i < IntroMode.allCases.count - 1 { Divider().padding(.leading, 12) }
                     }
-                }.background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
+                }.background(Color.card, in: .rect(cornerRadius: MT.rCard)).cardShadow()
                 HStack(spacing: 6) {
                     MetricIcon("square.grid.2x2.fill", size: 12, weight: .bold).foregroundStyle(Color.brand)
-                    Text("Mở app vào").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink)
+                    Text("Mở app vào").mtFont(.body).foregroundStyle(Color.ink)
                 }.padding(.top, 4)
                 VStack(spacing: 0) {
                     ForEach(Array(OpenTab.allCases.enumerated()), id: \.element) { i, t in
@@ -44,7 +44,7 @@ struct AppSettingsView: View {
                             HStack(spacing: 12) {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(t.title).font(.system(size: 14, weight: on ? .semibold : .medium)).foregroundStyle(Color.ink)
-                                    Text(t.hint).font(.system(size: 11)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
+                                    Text(t.hint).mtFont(.caption).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
                                 }
                                 Spacer()
                                 Image(systemName: on ? "checkmark.circle.fill" : "circle").font(.system(size: 18)).foregroundStyle(on ? Color.good : Color.inkSoft.opacity(0.5))
@@ -54,11 +54,11 @@ struct AppSettingsView: View {
                         .accessibilityAddTraits(on ? .isSelected : [])
                         if i < OpenTab.allCases.count - 1 { Divider().padding(.leading, 12) }
                     }
-                }.background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
+                }.background(Color.card, in: .rect(cornerRadius: MT.rCard)).cardShadow()
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: "info.circle.fill").font(.system(size: 15)).foregroundStyle(Color.good)
                     Text("Mở app và mỗi lần quay lại app vẫn luôn phải \(Biometric.name), mật mã iPhone hoặc mật khẩu MEGATECH. Lựa chọn có hiệu lực từ lần mở app sau.")
-                        .font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink).fixedSize(horizontal: false, vertical: true)
+                        .mtFont(.caption).foregroundStyle(Color.ink).fixedSize(horizontal: false, vertical: true)
                 }.padding(12).frame(maxWidth: .infinity, alignment: .leading).background(Color.brandSoft, in: .rect(cornerRadius: 12))
             }.padding(16).padding(.bottom, 90)
         }

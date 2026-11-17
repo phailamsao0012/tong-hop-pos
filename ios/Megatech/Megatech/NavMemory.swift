@@ -13,14 +13,14 @@ enum OpenTab: String, CaseIterable {
     var title: String {
         switch self {
         case .last: return "Tab cuối cùng"
-        case .home: return "Trang chủ"
+        case .home: return "Hôm nay"
         case .overview: return "Tổng quan"
         }
     }
     var hint: String {
         switch self {
         case .last: return "Mở lại tab và trang đang xem lần trước, giữ kỳ, POS và nhóm đơn đã chọn. Trang một đơn hay một khách không được lưu: mở lại thì về trang danh sách."
-        case .home: return "Luôn mở vào Trang chủ (số hôm nay)."
+        case .home: return "Luôn mở vào Hôm nay (số hôm nay)."
         case .overview: return "Luôn mở vào Tổng quan, giữ kỳ, POS và nhóm đơn đã chọn."
         }
     }
@@ -61,7 +61,7 @@ enum NavMemory {
 
     /// Đăng xuất, đổi tài khoản: bỏ tab, kỳ, POS, nhóm đơn và đường đi đã lưu (giữ "Mở app vào").
     static func reset() {
-        for k in [tabKey, periodKey, posKey, productKey] { store.removeObject(forKey: k) }
+        for k in [tabKey, periodKey, posKey, productKey, "thp_mkt_sort"] { store.removeObject(forKey: k) }
         store.set(generation + 1, forKey: genKey)
     }
 }
@@ -188,7 +188,7 @@ extension Route: Codable {
     /// từ khóa tìm (có thể là SĐT) hoặc của một nhân viên (tiêu đề là tên nhân viên), Hồ sơ khách mở sẵn từ khóa (tên khách).
     var restorable: Bool {
         switch self {
-        case .order, .customer, .customerSearch, .hrPerson, .staffOrders: return false
+        case .order, .customer, .customerSearch, .hrPerson, .staffOrders, .staffDetail: return false
         case .orders(let q): return q.q.isEmpty && q.sellerId.isEmpty
         case .web, .calls, .compare, .overview, .overviewRef, .overviewPos, .alerts, .alertsSync, .page, .satellite, .dept, .hr: return true
         }
@@ -237,7 +237,7 @@ extension Route: Codable {
         }
         var c = encoder.container(keyedBy: RouteKey.self)
         switch self {
-        case .order, .customer, .customerSearch, .hrPerson, .staffOrders: break   // đã chặn ở trên
+        case .order, .customer, .customerSearch, .hrPerson, .staffOrders, .staffDetail: break   // đã chặn ở trên
         case .orders(var q):
             // Không lưu tiêu đề (chữ tự do, sau này có thể mang tên người); khi mở lại lấy tên theo nhóm trạng thái.
             q.title = ""

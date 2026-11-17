@@ -160,22 +160,23 @@ struct SearchField: View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass").foregroundStyle(Color.inkSoft)
             TextField(prompt, text: $text)
-                .font(.system(size: 13))
+                .mtFont(.body)
                 .submitLabel(.search)
                 .autocorrectionDisabled(true)
                 .textInputAutocapitalization(.never)
                 .onSubmit { submit() }
             if !text.isEmpty {
                 Button { text = "" } label: {
-                    Image(systemName: "xmark.circle.fill").font(.system(size: 15)).foregroundStyle(Color.inkSoft)
+                    Image(systemName: "xmark.circle.fill").font(.body).foregroundStyle(Palette.muted).frame(width: 44, height: 44)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Xóa chữ đã gõ")
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
-        .background(Color.card, in: .rect(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.black.opacity(0.08)))
+        .frame(minHeight: 44)
+        .background(Palette.mtSurfaceCell, in: .rect(cornerRadius: MT.rCell))
+        .overlay(RoundedRectangle(cornerRadius: MT.rCell).stroke(Palette.mtCardBorder))
     }
 }
 

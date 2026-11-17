@@ -31,7 +31,8 @@ struct HrTeamChip: View {
     private var allowed: Bool { ["sale-teams", "cskh-teams", "van-don"].contains { auth.me?.canView($0) == true } }
     var body: some View {
         if allowed {
-            FilterChip(label: nav?.hrUnit?.shortName ?? "Team", on: nav?.hrUnit != nil) { open = true }
+            MTFilterBarPill(title: nav?.hrUnit?.shortName ?? "Team", icon: "person.2", selected: nav?.hrUnit != nil) { open = true }
+                .buttonStyle(.plain).accessibilityLabel("Team: \(nav?.hrUnit?.shortName ?? "Team")")
                 .sheet(isPresented: $open) { HrTeamSheet() }
                 #if DEBUG
                 .onChange(of: DebugTap.shared.tick) { _, _ in
@@ -108,7 +109,7 @@ struct HrTeamSheet: View {
             .navigationTitle("Team").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Đóng") { dismiss() } } }
             .task { await load() }
-            .refreshable { await load() }
+            .refreshable { await load(force: true) }
             #if DEBUG
             .onChange(of: DebugTap.shared.tick) { _, _ in
                 let target = DebugTap.shared.target
@@ -117,7 +118,7 @@ struct HrTeamSheet: View {
                 }
             }
             #endif
-        }
+        }.tint(Palette.accent).presentationDetents([.medium, .large]).presentationCornerRadius(MT.rSheet).presentationBackground(Palette.card).presentationDragIndicator(.visible)
     }
     private func pick(_ t: API.HrTeamItem?) {
         nav?.hrUnit = t.map { HrUnit(id: $0.id, name: $0.name, dept: $0.dept) }
@@ -126,11 +127,11 @@ struct HrTeamSheet: View {
         #endif
         dismiss()
     }
-    @MainActor private func load() async {
+    @MainActor private func load(force: Bool = false) async {
         loading = true; error = nil
         defer { loading = false }
         do {
-            let result = try await API.hrTeams()
+            let result = try await HrTeamCache.list(force: force)
             try Task.checkCancellation()
             teams = result
             // Cập nhật tên team đang chọn ngay khi mở lại danh sách.
@@ -148,6 +149,27 @@ struct HrTeamSheet: View {
     }
 }
 
+/// Danh sách team dùng chung trong lần đăng nhập: mở lại bảng Team không hỏi lại máy chủ trong 5 phút, và nhiều bảng Team mở
+/// cùng lúc (pill lọc ở trang gốc và trang con cùng nghe một lần chạm) chờ chung một request. Kéo để làm mới thì hỏi lại.
+@MainActor enum HrTeamCache {
+    private static var value: [API.HrTeamItem]?
+    private static var at: Date?
+    private static var owner: String?
+    private static var running: Task<[API.HrTeamItem], Error>?
+    static func list(force: Bool = false) async throws -> [API.HrTeamItem] {
+        let who = SessionStore.token ?? ""
+        if owner != who { value = nil; at = nil; running = nil; owner = who }
+        if !force, let value, let at, Date.now.timeIntervalSince(at) < 300 { return value }
+        if let running { return try await running.value }
+        let task = Task { try await API.hrTeams() }
+        running = task
+        defer { if running == task { running = nil } }
+        let result = try await task.value
+        if owner == who { value = result; at = .now }
+        return result
+    }
+}
+
 struct HrTeamNotice: View {
     let applies: Bool
     let deptLabel: String
@@ -155,11 +177,20 @@ struct HrTeamNotice: View {
     var body: some View {
         if let unit = nav?.hrUnit {
             VStack(alignment: .leading, spacing: 6) {
-                Text(applies
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "person.2.fill").foregroundStyle(Palette.hr)
+                    Text(applies ? "Đang xem riêng team \(unit.name)" : "Trang này chưa lọc theo team \(unit.name)")
+                        .font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
+                    InfoButton(InfoText(title: "Team", body: applies
                      ? "Đang xem riêng team \(unit.name) — số trên trang chỉ tính người đang thuộc team này bên web nhân sự (theo team hiện tại: người chuyển team thì số các kỳ trước đi theo team mới; người đã nghỉ không tính)."
-                     : "Trang này chưa lọc được theo team — đang hiện số cả nhóm \(deptLabel), không riêng team \(unit.name). Xem theo team ở Tổng quan, Sale › Nhân viên, CSKH › Tổng quan và Vận đơn.")
+                     : "Trang này chưa lọc được theo team — đang hiện số cả nhóm \(deptLabel), không riêng team \(unit.name). Xem theo team ở Tổng quan, Sale › Nhân viên, CSKH › Tổng quan và Vận đơn."))
+                }
                 Button("Bỏ chọn team") { nav?.hrUnit = nil }
-            }.font(.caption).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
+                    .font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink).padding(.horizontal, 10).padding(.vertical, 7)
+                    .overlay { RoundedRectangle(cornerRadius: 8).strokeBorder(Palette.line) }
+            }.fixedSize(horizontal: false, vertical: true).padding(12)
+                .background(Palette.wash, in: .rect(cornerRadius: 16))
+                .overlay(alignment: .leading) { UnevenRoundedRectangle(topLeadingRadius: 2, bottomLeadingRadius: 2).fill(Palette.hr).frame(width: 3).padding(.vertical, 12) }
                 #if DEBUG
                 .onChange(of: DebugTap.shared.tick) { _, _ in
                     if DebugTap.shared.target == "team-bo" { nav?.hrUnit = nil }
@@ -174,8 +205,10 @@ struct HrTeamErrorView: View {
     let clear: () -> Void
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(message).foregroundStyle(Color.bad)
+            Text(message).foregroundStyle(Palette.bad)
             Button("Bỏ chọn team", action: clear)
+                .font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink).padding(.horizontal, 10).padding(.vertical, 7)
+                .overlay { RoundedRectangle(cornerRadius: 8).strokeBorder(Palette.line) }
         }.font(.subheadline).fixedSize(horizontal: false, vertical: true)
     }
 }
@@ -194,8 +227,8 @@ private struct HrNoticeModifier: ViewModifier {
         if enabled, nav?.hrUnit != nil {
             content.safeAreaInset(edge: .top, spacing: 0) {
                 HrTeamNotice(applies: false, deptLabel: dept)
-                    .padding(16).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.cream)
+                    .padding(.horizontal, 16).padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Palette.bg)
             }
         } else {
             content

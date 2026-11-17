@@ -54,6 +54,7 @@ extension API {
     }
     struct VdReason: Decodable, Identifiable { let reason: String; let n: Double; var id: String { reason } }
     struct VanDon: Decodable {
+        let sellers: [VanDonSellerRow]?
         let total: VdLine; let sellerDepts: [VdLine]; let confirmers: [VdLine]; let reasons: [VdReason]; let syncedAt: String?
         let period: DayRange?
         let sentBasis: String?
@@ -106,7 +107,7 @@ enum CompanyDept: String, CaseIterable, Identifiable, Hashable {
         switch self { case .sale: return "cart.fill"; case .cskh: return "person.2.wave.2.fill"; case .mkt: return "megaphone.fill"; case .vandon: return "truck.box.fill" }
     }
     var tint: Color {
-        switch self { case .sale: return .good; case .cskh: return .teal; case .mkt: return .blue; case .vandon: return .warn }
+        switch self { case .sale: return Palette.sale; case .cskh: return Palette.cskh; case .mkt: return Palette.mkt; case .vandon: return Palette.vandon }
     }
     /// Khoá trong "definitions" của /api/reports/sections.
     var definitionKey: String { self == .mkt ? "MKT" : title }
@@ -116,9 +117,9 @@ enum CompanyDept: String, CaseIterable, Identifiable, Hashable {
     static func vanDonDefinition(_ basis: VdBasis) -> String {
         switch basis {
         case .sent:
-            return "Vận đơn không bán hàng nên không có doanh thu. Đơn chuyển đi = đơn giao cho đơn vị vận chuyển trong kỳ, theo ngày gửi hàng lần đầu (đã gửi, đã nhận, đã thu tiền, hoàn): đơn vào Chờ xác nhận từ kỳ trước mà trong kỳ mới gửi thì tính vào kỳ này. Doanh số chuyển đi = tiền các đơn đó, sau giảm giá, không cộng phí ship, không cộng vào doanh thu. Đã nhận, hoàn (đang hoàn, hoàn một phần, đã hoàn), giá trị hoàn, tỷ lệ hoàn theo số đơn và theo giá trị tính trên các đơn chuyển đi đó; kỳ ngắn thì tỷ lệ hoàn còn thấp vì đơn mới gửi chưa kịp hoàn. Đơn vào Chờ xác nhận, đã xác nhận, không xác nhận được vẫn theo ngày vào Chờ xác nhận lần đầu."
+            return "Vận đơn tính riêng, không cộng vào tổng công ty. Đơn chuyển đi = đơn giao cho đơn vị vận chuyển trong kỳ, theo ngày gửi hàng lần đầu (đã gửi, đã nhận, đã thu tiền, hoàn): đơn vào Chờ xác nhận từ kỳ trước mà trong kỳ mới gửi thì tính vào kỳ này. Doanh số chuyển đi = tiền các đơn đó, sau giảm giá, không cộng phí ship, không cộng vào tổng công ty. Đã nhận, hoàn (đang hoàn, hoàn một phần, đã hoàn), giá trị hoàn, tỷ lệ hoàn theo số đơn và theo giá trị tính trên các đơn chuyển đi đó; kỳ ngắn thì tỷ lệ hoàn còn thấp vì đơn mới gửi chưa kịp hoàn. Đơn vào Chờ xác nhận, đã xác nhận, không xác nhận được vẫn theo ngày vào Chờ xác nhận lần đầu."
         case .closed:
-            return "Vận đơn không bán hàng nên không có doanh thu. Đơn vào Chờ xác nhận trong kỳ (Sale, CSKH đưa sang, theo ngày vào Chờ xác nhận lần đầu), xét trạng thái hiện tại. Đơn chuyển đi = đã giao cho đơn vị vận chuyển (đã gửi, đã nhận, đã thu tiền, hoàn); doanh số chuyển đi = tiền các đơn đó, sau giảm giá, không cộng phí ship, không cộng vào doanh thu. Hoàn = đang hoàn, hoàn một phần, đã hoàn; giá trị hoàn = tiền các đơn hoàn. Tỷ lệ hoàn theo số đơn và theo giá trị."
+            return "Vận đơn tính riêng, không cộng vào tổng công ty. Đơn vào Chờ xác nhận trong kỳ (Sale, CSKH đưa sang, theo ngày vào Chờ xác nhận lần đầu), xét trạng thái hiện tại. Đơn chuyển đi = đã giao cho đơn vị vận chuyển (đã gửi, đã nhận, đã thu tiền, hoàn); doanh số chuyển đi = tiền các đơn đó, sau giảm giá, không cộng phí ship, không cộng vào tổng công ty. Hoàn = đang hoàn, hoàn một phần, đã hoàn; giá trị hoàn = tiền các đơn hoàn. Tỷ lệ hoàn theo số đơn và theo giá trị."
         }
     }
     /// Xem được trang chi tiết của bộ phận (cùng điều kiện với thẻ ở tab Phòng ban).
@@ -218,9 +219,9 @@ struct DeptBoards: View {
     }
     @ViewBuilder private func board(_ dept: CompanyDept, _ d: API.Sections) -> some View {
         switch dept {
-        case .sale: SaleBoard(s: d.sale)
-        case .cskh: CskhBoard(c: d.cskh)
-        case .mkt: MktBoard(m: d.mkt, a: mkt, ratios: mktRatios, caveat: mktNote)
+        case .sale: SaleBoard(s: d.sale, definition: d.definitions?[dept.definitionKey])
+        case .cskh: CskhBoard(c: d.cskh, definition: d.definitions?[dept.definitionKey])
+        case .mkt: MktBoard(m: d.mkt, a: mkt, ratios: mktRatios, caveat: mktNote, definition: d.definitions?[dept.definitionKey])
         // Trang Vận đơn (/api/reports/van-don) chưa lọc theo nhóm đơn: bảng ghi rõ để không đọc nhầm số khi mở trang.
         case .vandon: VanDonBoard(s: d.shipping, basis: VdBasis(d.sentBasis), short: VdBasis.short(d.period, VdBasis(d.sentBasis)), caveat: Self.vanDonCaveat(d.productSegment ?? product))
         }
@@ -230,55 +231,92 @@ struct DeptBoards: View {
     }
 }
 
-/// Khung một bảng như web: vạch màu mép trên, icon trong ô màu, tên + chú thích, số chính bên phải, các ô chi tiết bên dưới.
+/// Khung một bảng (khung Gemini 02): tên bảng (và dòng phụ), số lớn bên trái, ghi chú bên phải, các ô chi tiết bên dưới.
+/// compactHero: số đặt ở góc phải dòng tên (bảng Vận đơn), không có dòng số lớn.
 struct DeptBoard<Tiles: View>: View {
+    @AppStorage("thp_hide_money") private var hideMoney = false
     let dept: CompanyDept
     let heroLabel: String; let hero: String; let heroNote: String
-    /// Chú thích thay cho dept.caption (vd Vận đơn tính theo ngày gửi hàng).
+    /// Dòng phụ dưới tên bảng (vd Vận đơn: tính riêng, theo ngày gửi hàng).
     var caption: String? = nil
+    var heroMoney: Double? = nil
+    var definition: String? = nil
+    /// Tên bảng; nil = tên bộ phận.
+    var title: String? = nil
+    var compactHero = false
     @ViewBuilder let tiles: Tiles
     @Environment(\.thinking) private var thinking
     @Environment(\.boardLinked) private var linked
+    private var heroText: some View {
+        Group {
+            if hideMoney, heroMoney != nil { Text("••• tr ₫") }
+            else if let heroMoney { Text(Fmt.shortVnd(heroMoney)) }
+            else { Text(hero) }
+        }
+        .monospacedDigit().foregroundStyle(Palette.ink)
+        .lineLimit(1).minimumScaleFactor(0.6).rolling(hero)
+        .loadingPlaceholder(thinking)
+    }
+    private var header: some View {
+        HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title ?? dept.pageTitle).mtFont(.cardHeader).foregroundStyle(Palette.ink)
+                if let caption { Text(caption).mtFont(.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true) }
+            }
+            Spacer(minLength: 6)
+            if compactHero { heroText.mtFont(.cardMetric) }
+            if let definition { InfoButton(InfoText(title: dept.title, body: definition)) }
+        }
+    }
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 10) {
-                MetricIcon(dept.icon, size: 16).foregroundStyle(dept.tint)
-                    .frame(width: 38, height: 38).background(dept.tint.opacity(0.13), in: .rect(cornerRadius: 11))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(dept.title).font(.system(size: 17, weight: .bold)).foregroundStyle(Color.ink)
-                    Text(caption ?? dept.caption).font(.system(size: 10)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 6)
-                VStack(alignment: .trailing, spacing: 1) {
-                    Text(heroLabel.uppercased()).font(.system(size: 9, weight: .semibold)).tracking(0.6).foregroundStyle(Color.inkSoft)
-                    // Đang tải lại: số thành khung xám (redacted) tới khi số mới về.
-                    Text(hero).font(.system(size: 21, weight: .bold, design: .rounded)).monospacedDigit().foregroundStyle(Color.ink)
-                        .lineLimit(1).minimumScaleFactor(0.6).rolling(hero)
-                        .loadingPlaceholder(thinking)
-                    Text(heroNote).font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.8)
+        VStack(alignment: .leading, spacing: 10) {
+            header
+            if !compactHero {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    heroText.mtFont(.heroNumber)
+                    Spacer(minLength: 6)
+                    Text(heroNote).mtFont(.caption).fontWeight(.semibold).foregroundStyle(Palette.ink)
+                        .multilineTextAlignment(.trailing).lineLimit(2).minimumScaleFactor(0.8)
                         .loadingPlaceholder(thinking)
                 }
                 .layoutPriority(1)
             }
             tiles
-            if linked {
-                HStack(spacing: 3) {
-                    Spacer()
-                    Text("Xem chi tiết \(dept.pageTitle)")
-                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold))
-                }
-                .font(.system(size: 11, weight: .semibold)).foregroundStyle(dept.tint)
-            }
         }
-        .padding(14)
+        .padding(MT.cardPad)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.card)
-        .overlay(alignment: .top) { dept.tint.frame(height: 3) }
-        .clipShape(.rect(cornerRadius: 16))
-        .cardShadow()
-        .contentShape(.rect(cornerRadius: 16))
+        .cardSurface()
+        .contentShape(.rect(cornerRadius: MT.rCard))
         .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title ?? dept.pageTitle), \(heroLabel) \(hideMoney ? "đã ẩn" : hero), \(heroNote)")
         .accessibilityHint(linked ? "Chạm để xem chi tiết \(dept.pageTitle)" : "")
+    }
+}
+
+/// Ô gọn trong bảng bộ phận (khung 02): nhãn nhỏ, số, dòng phụ; nền ô xám nhạt.
+struct BoardCell<Extra: View>: View {
+    let label: String
+    var value: String? = nil
+    var note: String? = nil
+    @ViewBuilder var extra: Extra
+    @Environment(\.thinking) private var thinking
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label).mtFont(.caption).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.75)
+            if let value {
+                Text(value).mtFont(.body).fontWeight(.bold).foregroundStyle(Palette.ink)
+                    .lineLimit(1).minimumScaleFactor(0.6).loadingPlaceholder(thinking)
+            }
+            extra
+            if let note { Text(note).mtFont(.caption).foregroundStyle(Palette.muted).lineLimit(2).minimumScaleFactor(0.8) }
+        }
+        .padding(10).frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(Palette.wash, in: .rect(cornerRadius: MT.rCell))
+    }
+}
+extension BoardCell where Extra == EmptyView {
+    init(label: String, value: String?, note: String? = nil) {
+        self.label = label; self.value = value; self.note = note; self.extra = EmptyView()
     }
 }
 
@@ -295,28 +333,31 @@ struct DeptTile: View {
                 MetricIcon(icon, size: 9)
                 Text(label).lineLimit(1).minimumScaleFactor(0.75)
             }
-            .font(.system(size: 10, weight: .medium)).foregroundStyle(Color.inkSoft)
-            Text(value).font(.system(size: 15, weight: .bold, design: .rounded)).monospacedDigit().foregroundStyle(Color.ink)
+            .font(.footnote.weight(.medium)).foregroundStyle(Color.inkSoft)
+            Text(value).mtFont(.cardMetric).monospacedDigit().foregroundStyle(Color.ink)
                 .lineLimit(1).minimumScaleFactor(0.55).rolling(value)
                 .loadingPlaceholder(thinking)
-            if let note { Text(note).font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.75).loadingPlaceholder(thinking) }
+            if let note { Text(note).font(.caption).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.75).loadingPlaceholder(thinking) }
             if let bar { Bar(value: bar / 100, tint: tint, height: 4).padding(.top, 3) }
         }
-        .padding(.horizontal, 9).padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(Color.cream, in: .rect(cornerRadius: 10))
+        .tileSurface()
     }
 }
 
 struct SaleBoard: View {
     let s: API.Sections.Sale
+    var definition: String? = nil
     var body: some View {
-        let t = CompanyDept.sale.tint
-        DeptBoard(dept: .sale, heroLabel: "Doanh thu", hero: Fmt.vnd(s.net), heroNote: "\(Fmt.int(s.orders)) đơn chốt") {
-            HStack(alignment: .top, spacing: 8) {
-                DeptTile(icon: "checkmark.circle.fill", label: "Đơn chốt", value: Fmt.int(s.orders), note: "chờ XN + đã XN", tint: t)
-                DeptTile(icon: "target", label: "Tỷ lệ chốt", value: Fmt.pct(s.rate), note: "\(Fmt.int(s.closedNow)) ÷ \(Fmt.int(s.created)) đơn lên", bar: s.rate, tint: t)
-                DeptTile(icon: "creditcard.fill", label: "AOV", value: Fmt.shortVnd(s.orders > 0 ? s.net / s.orders : nil), note: "doanh thu ÷ đơn", tint: t)
+        // Khung 02 "Doanh thu · Sale": số lớn, 3 ô Đơn chốt · Tỷ lệ chốt · AOV. AOV = doanh thu ÷ đơn chốt, tính trên app từ số của
+        // bảng (máy chủ chưa trả AOV Sale). Badge so kỳ trước: /api/reports/sections chưa trả kỳ trước nên chưa có.
+        DeptBoard(dept: .sale, heroLabel: "Doanh thu", hero: Fmt.vnd(s.net), heroNote: "", heroMoney: s.net, definition: definition, title: "Doanh thu · Sale") {
+            HStack(alignment: .top, spacing: MT.cellGap) {
+                BoardCell(label: "Đơn chốt", value: "\(Fmt.int(s.orders)) đơn", note: "chờ XN + đã XN")
+                BoardCell(label: "Tỷ lệ chốt", note: "\(Fmt.int(s.closedNow)) ÷ \(Fmt.int(s.created))") {
+                    MTRateBadge(rate: s.rate, kind: .saleClose)
+                }
+                BoardCell(label: "AOV", value: s.orders > 0 ? Fmt.shortVnd(s.net / s.orders) : "—", note: "doanh thu ÷ đơn chốt")
             }
         }
     }
@@ -324,14 +365,13 @@ struct SaleBoard: View {
 
 struct CskhBoard: View {
     let c: API.Sections.Cskh
+    var definition: String? = nil
     var body: some View {
-        let t = CompanyDept.cskh.tint
-        let selfShare: Double? = c.orders > 0 ? c.own.orders / c.orders * 100 : nil
-        DeptBoard(dept: .cskh, heroLabel: "Doanh thu", hero: Fmt.vnd(c.net), heroNote: "\(Fmt.int(c.orders)) đơn chốt") {
-            HStack(alignment: .top, spacing: 8) {
-                DeptTile(icon: "creditcard.fill", label: "AOV", value: Fmt.shortVnd(c.aov), note: "doanh thu ÷ đơn", tint: t)
-                DeptTile(icon: "arrow.triangle.2.circlepath", label: "Tự upsell · \(Fmt.pct0(selfShare))", value: Fmt.int(c.own.orders), note: Fmt.shortVnd(c.own.net), bar: selfShare, tint: t)
-                DeptTile(icon: "megaphone.fill", label: "Từ MKT · \(Fmt.pct0(selfShare.map { 100 - $0 }))", value: Fmt.int(c.fromMkt.orders), note: Fmt.shortVnd(c.fromMkt.net), bar: selfShare.map { 100 - $0 }, tint: .blue)
+        // Khung 02 "CSKH": số lớn, "N đơn chốt · AOV" bên phải, dòng Tự upsell / Từ MKT.
+        DeptBoard(dept: .cskh, heroLabel: "Doanh thu", hero: Fmt.vnd(c.net), heroNote: "\(Fmt.int(c.orders)) đơn chốt · AOV \(Fmt.shortVnd(c.aov))", heroMoney: c.net, definition: definition) {
+            HStack(alignment: .top, spacing: MT.cellGap) {
+                BoardCell(label: "Tự upsell", value: "\(Fmt.int(c.own.orders)) đơn · \(Fmt.shortVnd(c.own.net))")
+                BoardCell(label: "Từ MKT", value: "\(Fmt.int(c.fromMkt.orders)) đơn · \(Fmt.shortVnd(c.fromMkt.net))")
             }
         }
     }
@@ -347,33 +387,40 @@ struct MktBoard: View {
     var ratios = true
     /// Ghi chú phạm vi (ví dụ MKT chưa lọc theo nhóm đơn).
     var caveat: String? = nil
+    var definition: String? = nil
     var body: some View {
-        let t = CompanyDept.mkt.tint
+        // Khung 02 "Marketing": số lớn, "N đơn đã xác nhận" bên phải, lưới 2×2, dòng số về.
         if let a {
-            DeptBoard(dept: .mkt, heroLabel: "Doanh thu", hero: Fmt.vnd(a.net), heroNote: "\(Fmt.int(a.closed)) đơn đã xác nhận" + (ratios ? " · ROAS \(Fmt.roas(a.roas))" : "")) {
-                Grid(horizontalSpacing: 8, verticalSpacing: 8) {
+            DeptBoard(dept: .mkt, heroLabel: "Doanh thu", hero: Fmt.vnd(a.net), heroNote: "\(Fmt.int(a.closed)) đơn đã xác nhận", heroMoney: a.net, definition: definition) {
+                Grid(horizontalSpacing: MT.cellGap, verticalSpacing: MT.cellGap) {
                     GridRow {
-                        DeptTile(icon: "phone.fill", label: "Số về", value: Fmt.int(a.phones), note: "\(Fmt.int(a.orders)) đơn lên", tint: t)
-                        DeptTile(icon: "wallet.pass.fill", label: "Chi phí QC", value: a.cost > 0 ? Fmt.shortVnd(a.cost) : "—", note: a.cost > 0 ? (ratios ? "Google Sheet CPQC" : "của mọi POS") : "chưa có số liệu", tint: t)
+                        BoardCell(label: "ROAS", value: ratios ? Fmt.roas(a.roas) : "—", note: ratios ? nil : "chi phí không chia POS")
+                        BoardCell(label: "Chi phí QC", value: a.cost > 0 ? Fmt.shortVnd(a.cost) : "—", note: a.cost > 0 ? (ratios ? nil : "của mọi POS") : "chưa có số liệu")
                     }
                     GridRow {
-                        DeptTile(icon: "megaphone.fill", label: "Chi phí / số", value: ratios ? Fmt.shortVnd(a.costPerLead) : "—", note: !ratios ? "chi phí không chia POS" : a.costPerLead == nil ? "chưa có chi phí" : "người có chi phí", tint: t)
-                        DeptTile(icon: "creditcard.fill", label: "Chi phí / đơn chốt", value: ratios ? Fmt.shortVnd(a.costPerClosed) : "—", note: !ratios ? "chi phí không chia POS" : a.costPerClosed == nil ? "chưa có chi phí" : "người có chi phí", tint: t)
+                        BoardCell(label: "Chi phí / số", value: ratios ? Fmt.shortVnd(a.costPerLead) : "—", note: ratios ? nil : "chi phí không chia POS")
+                        BoardCell(label: "Chi phí / đơn chốt", value: ratios ? Fmt.shortVnd(a.costPerClosed) : "—", note: ratios ? nil : "chi phí không chia POS")
                     }
                 }
-                if let caveat { Text(caveat).font(.system(size: 9)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true) }
+                HStack {
+                    Text("Số về MKT:").foregroundStyle(Palette.muted)
+                    Spacer(minLength: 6)
+                    Text("\(Fmt.int(a.phones)) số · \(Fmt.int(a.orders)) đơn lên").fontWeight(.semibold).foregroundStyle(Palette.ink)
+                }
+                .mtFont(.caption).padding(10).background(Palette.wash, in: .rect(cornerRadius: MT.rCell))
+                if let caveat { Text(caveat).font(.caption).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true) }
             }
         } else {
-            DeptBoard(dept: .mkt, heroLabel: "Doanh thu", hero: Fmt.vnd(m.net), heroNote: "\(Fmt.int(m.orders)) đơn đã xác nhận") {
-                Grid(horizontalSpacing: 8, verticalSpacing: 8) {
+            DeptBoard(dept: .mkt, heroLabel: "Doanh thu", hero: Fmt.vnd(m.net), heroNote: "\(Fmt.int(m.orders)) đơn đã xác nhận", heroMoney: m.net, definition: definition) {
+                Grid(horizontalSpacing: MT.cellGap, verticalSpacing: MT.cellGap) {
                     GridRow {
-                        DeptTile(icon: "ic_m_orders", label: "Đơn lên", value: Fmt.int(m.created), note: "đơn MKT tạo trong kỳ", tint: t)
-                        DeptTile(icon: "target", label: "Tỷ lệ chốt", value: Fmt.pct(m.rate), note: "\(Fmt.int(m.closedNow)) ÷ \(Fmt.int(m.created)) đơn lên", bar: m.rate, tint: t)
+                        BoardCell(label: "Đơn lên", value: Fmt.int(m.created), note: "đơn MKT tạo trong kỳ")
+                        BoardCell(label: "Tỷ lệ chốt", value: Fmt.pct(m.rate), note: "\(Fmt.int(m.closedNow)) ÷ \(Fmt.int(m.created)) đơn lên")
                     }
                     GridRow {
-                        DeptTile(icon: "wallet.pass.fill", label: "Chi phí QC", value: Fmt.shortVnd(m.cost), note: m.cost == nil ? "chưa có số liệu" : ratios ? "mọi nhóm đơn" : "mọi POS, mọi nhóm đơn", tint: t)
+                        BoardCell(label: "Chi phí QC", value: Fmt.shortVnd(m.cost), note: m.cost == nil ? "chưa có số liệu" : ratios ? "mọi nhóm đơn" : "mọi POS, mọi nhóm đơn")
                         // Không tự chia chi phí cho đơn trong app (chi phí mọi sản phẩm, đơn đã lọc nhóm): giữ AOV của máy chủ.
-                        DeptTile(icon: "creditcard.fill", label: "AOV", value: Fmt.shortVnd(m.aov), note: "doanh thu ÷ đơn XN", tint: t)
+                        BoardCell(label: "AOV", value: Fmt.shortVnd(m.aov), note: "doanh thu ÷ đơn XN")
                     }
                 }
             }
@@ -391,12 +438,14 @@ struct VanDonBoard: View {
         let total = s.total
         // Vận đơn không bán hàng, không chốt đơn (anh Vũ 10/10/2026): "đơn chuyển đi", "doanh số chuyển đi", không phải doanh thu.
         // Mọi số trên bảng (chuyển đi, hoàn) theo ngày gửi hàng khi máy chủ báo sentBasis "sent".
+        // Khung 02 "Vận đơn": tên, "Tính riêng…", doanh số chuyển đi ở góc phải, bảng có cột đầu cố định.
         DeptBoard(dept: .vandon, heroLabel: "Doanh số chuyển đi", hero: Fmt.vnd(total.net),
                   heroNote: "\(Fmt.int(total.orders)) đơn chuyển đi · hoàn \(Fmt.pct(total.rateOrders))",
-                  caption: basis == .sent ? "Đơn chuyển đi trong kỳ · theo ngày gửi hàng" : nil) {
+                  caption: "Tính riêng, không cộng vào tổng công ty" + (basis == .sent ? " · theo ngày gửi hàng" : ""),
+                  heroMoney: total.net, definition: CompanyDept.vanDonDefinition(basis), compactHero: true) {
             ShipTable(rows: shipRows)
-            if short { Text(VdBasis.shortNote).font(.system(size: 9)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true) }
-            if let caveat { Text(caveat).font(.system(size: 9)).foregroundStyle(Color.warn).fixedSize(horizontal: false, vertical: true) }
+            if short { Text(VdBasis.shortNote).font(.footnote).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true) }
+            if let caveat { Text(caveat).font(.footnote).foregroundStyle(Color.warn).fixedSize(horizontal: false, vertical: true) }
         }
     }
     private var shipRows: [(String, API.DeptShip)] {
@@ -410,60 +459,103 @@ struct VanDonBoard: View {
 /// Bảng đơn chuyển đi / hoàn theo bộ phận người lên đơn: số đơn kèm tiền bên dưới, % hoàn theo đơn và theo giá trị.
 struct ShipTable: View {
     let rows: [(String, API.DeptShip)]
+    @State private var moreColumns = false
+    private struct EndKey: PreferenceKey {
+        static var defaultValue: CGFloat = 0
+        static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             grid
-            Text("Số lớn: số đơn · số nhỏ: doanh số chuyển đi, giá trị hoàn").font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.8)
+            Text("Số lớn: số đơn · số nhỏ: doanh số chuyển đi, giá trị hoàn").font(.caption).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.8)
         }
     }
     private var grid: some View {
-        Grid(alignment: .trailing, horizontalSpacing: 10, verticalSpacing: 7) {
-            GridRow {
-                Text("Bộ phận lên đơn").gridColumnAlignment(.leading)
-                Text("Chuyển đi")
-                Text("Hoàn")
-                Text("% hoàn đơn · giá trị")
-            }
-            .font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.inkSoft)
-            Divider().gridCellUnsizedAxes(.horizontal)
-            ForEach(rows, id: \.0) { label, r in
-                let bold = label == "Tổng"
-                GridRow {
-                    Text(label).font(.system(size: 12, weight: bold ? .bold : .semibold)).foregroundStyle(Color.ink).gridColumnAlignment(.leading)
-                    VStack(alignment: .trailing, spacing: 0) {
-                        Text(Fmt.int(r.orders)).font(.system(size: 12, weight: bold ? .bold : .semibold)).monospacedDigit().foregroundStyle(Color.ink)
-                        Text(Fmt.shortVnd(r.net)).font(.system(size: 9)).foregroundStyle(Color.inkSoft)
-                    }
-                    VStack(alignment: .trailing, spacing: 0) {
-                        Text(Fmt.int(r.returned)).font(.system(size: 12, weight: bold ? .bold : .semibold)).monospacedDigit().foregroundStyle(Color.ink)
-                        Text(Fmt.shortVnd(r.returnedNet)).font(.system(size: 9)).foregroundStyle(Color.inkSoft)
-                    }
-                    HStack(spacing: 4) {
-                        Text(Fmt.pct(r.rateOrders)).foregroundStyle(returnTone(r.rateOrders))
-                        Text("·").foregroundStyle(Color.inkSoft)
-                        Text(Fmt.pct(r.rateNet)).foregroundStyle(returnTone(r.rateNet))
-                    }
-                    .font(.system(size: 11, weight: .semibold)).monospacedDigit()
+        HStack(alignment: .top, spacing: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Bộ phận").font(.caption2.weight(.bold)).frame(height: 44)
+                ForEach(rows, id: \.0) { label, _ in
+                    Text(label).font(.footnote.weight(label == "Tổng" ? .bold : .semibold)).frame(height: 56)
                 }
-            }
+            }.frame(width: 84, alignment: .leading).background(Palette.card)
+            GeometryReader { viewport in
+                ScrollView(.horizontal, showsIndicators: true) {
+                    Grid(alignment: .trailing, horizontalSpacing: 16, verticalSpacing: 0) {
+                        GridRow {
+                            Text("Chuyển đi")
+                            Text("Hoàn")
+                            Text("% hoàn đơn · giá trị")
+                        }.frame(height: 44)
+                        .font(.caption2.weight(.bold)).foregroundStyle(Palette.muted)
+                        ForEach(rows, id: \.0) { label, r in
+                            let bold = label == "Tổng"
+                            GridRow {
+                                VStack(alignment: .trailing, spacing: 0) {
+                                    Text(Fmt.int(r.orders)).font(.footnote.weight(bold ? .bold : .semibold)).monospacedDigit().foregroundStyle(Color.ink)
+                                    Text(Fmt.shortVnd(r.net)).font(.caption2).foregroundStyle(Color.inkSoft)
+                                }
+                                VStack(alignment: .trailing, spacing: 0) {
+                                    Text(Fmt.int(r.returned)).font(.footnote.weight(bold ? .bold : .semibold)).monospacedDigit().foregroundStyle(Color.ink)
+                                    Text(Fmt.shortVnd(r.returnedNet)).font(.caption2).foregroundStyle(Color.inkSoft)
+                                }
+                                HStack(spacing: 4) {
+                                    MTRateBadge(rate: r.rateOrders, kind: .refund)
+                                    Text("·").foregroundStyle(Color.inkSoft)
+                                    MTRateBadge(rate: r.rateNet, kind: .refund)
+                                }
+                                .font(.footnote.weight(.semibold)).monospacedDigit()
+                            }.frame(height: 56)
+                        }
+                    }
+                    .padding(.trailing, 24)
+                    .background {
+                        GeometryReader { content in Color.clear.preference(key: EndKey.self, value: content.frame(in: .named("ship-table")).maxX) }
+                    }
+                }.coordinateSpace(name: "ship-table")
+                .onPreferenceChange(EndKey.self) { moreColumns = $0 > viewport.size.width + 1 }
+                .overlay(alignment: .trailing) {
+                    if moreColumns {
+                        LinearGradient(colors: [.clear, Palette.card], startPoint: .leading, endPoint: .trailing)
+                        .frame(width: 24).allowsHitTesting(false)
+                    }
+                }
+            }.frame(height: CGFloat(rows.count * 56 + 44))
         }
-        .lineLimit(1).minimumScaleFactor(0.7)
     }
 }
 
 // MARK: Trang chi tiết bộ phận
 
+/// Nút trong trang xin cuộn tới một khối có .id (ví dụ "Xếp hạng marketer / team ›" ở Marketing, khung 12A).
+@Observable final class PageScroll {
+    static let shared = PageScroll()
+    var target = ""
+    var tick = 0
+    func go(_ id: String) { target = id; tick += 1 }
+}
+
 /// Khung trang chi tiết mở từ bảng: thanh điều hướng xanh, nội dung cuộn trên nền kem (như trang gốc của tab cũ).
 /// Kéo để làm mới: mọi khối bên trong có pullToReload tải lại cùng lúc (không chạy việc kéo làm mới của trang bên dưới).
 struct DeptPage<Content: View>: View {
     let title: String
+    /// Chữ breadcrumb; nil = theo tab đang mở.
+    var parent: String? = nil
     @ViewBuilder let content: Content
     var body: some View {
         ScrollViewReader { proxy in
-            ScrollView { VStack(alignment: .leading, spacing: 14) { content }.padding(16).padding(.bottom, 24) }
+            ScrollView {
+                VStack(alignment: .leading, spacing: MT.cardGap) {
+                    ChildHeader(title: title, parent: parent)
+                    content
+                }.padding(.horizontal, MT.gutter).padding(.top, 8).padding(.bottom, 24)
+            }
                 .refreshHost(outer: nil)
                 .background(Color.cream)
                 .navigationTitle(title).navigationBarTitleDisplayMode(.inline).brandNav()
+                .childChrome()
+                .onChange(of: PageScroll.shared.tick) { _, _ in
+                    withAnimation { proxy.scrollTo(PageScroll.shared.target, anchor: .top) }
+                }
                 #if DEBUG
                 .onChange(of: DebugTap.shared.tick) { _, _ in
                     let target = DebugTap.shared.target
@@ -488,6 +580,9 @@ struct DeptDestination: View {
         let ps = period == nil ? NavMemory.pos : pos
         let pr = period == nil ? NavMemory.product : product
         switch dept {
+        // Khung 09A1 "Từng nhân viên": bảng đầy đủ, breadcrumb "‹ Sale".
+        case .sale where page == "staff":
+            DeptPage(title: "Từng nhân viên", parent: "Sale") { CompareView(team: "sale", embedded: true, period: p, pos: ps, product: pr, mode: .table) }
         case .sale: DeptPage(title: dept.pageTitle) { SaleContent(initial: page, period: p, pos: ps, product: pr) }
         case .cskh: DeptPage(title: dept.pageTitle) { CskhContent(initial: page, period: p, pos: ps, product: pr) }
         case .mkt: DeptPage(title: dept.pageTitle) {
@@ -513,14 +608,18 @@ struct SaleContent: View {
     }
     private var pages: [WebPage] { SALE_PAGES.filter { auth.me?.canView($0.id) ?? false } }
     var body: some View {
+        let switcher = MTSegmentedControl(selection: $page, options: pages.map { ($0.id, $0.title) })
         Group {
-            SubNav(selection: $page, pages: pages)
-            if HrUnit.notice(for: page) { HrTeamNotice(applies: false, deptLabel: "Sale") }
             switch page {
-            case "shift": ShiftView()
-            case "batches": BatchesView(embedded: true)
-            case "pipeline": PipelineView(embedded: true)
-            default: CompareView(team: "sale", embedded: true, period: period, pos: pos, product: product)
+            case "shift", "batches", "pipeline":
+                switcher
+                if HrUnit.notice(for: page) { HrTeamNotice(applies: false, deptLabel: "Sale") }
+                if page == "shift" { ShiftView() }
+                else if page == "batches" { BatchesView(embedded: true) }
+                else { PipelineView(embedded: true) }
+            default:
+                // Khung 08A: pill lọc rồi segmented ngay dưới (CompareView chèn qua header).
+                CompareView(team: "sale", embedded: true, period: period, pos: pos, product: product, mode: .summary, header: AnyView(switcher))
             }
         }
         .onAppear { if !pages.contains(where: { $0.id == page }), let f = pages.first { page = f.id } }
@@ -564,6 +663,11 @@ struct CskhContent: View {
 /// (anh Vũ 10/10/2026): số đơn là "đơn chuyển đi", tiền là "doanh số chuyển đi", không phải doanh thu.
 /// Máy chủ báo sentBasis "sent" (anh chọn ngày gửi hàng): chuyển đi, đã nhận, hoàn theo ngày gửi hàng, tách khỏi phần đơn vào Chờ xác nhận.
 struct VanDonView: View {
+    @AppStorage("thp_hide_money") private var hideMoney = false
+    private enum Column: String, CaseIterable, Identifiable {
+        case dept = "Bộ phận", waiting = "Vào chờ XN", sent = "Đơn chuyển đi", net = "Doanh số chuyển đi", returned = "Hoàn", returnedNet = "Giá trị hoàn", rate = "% hoàn đơn", rateNet = "% hoàn giá trị"
+        var id: String { rawValue }
+    }
     @Environment(AppNav.self) private var nav: AppNav?
     @State private var teamError: String?
     @State private var generation = UUID()
@@ -592,38 +696,35 @@ struct VanDonView: View {
     }
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                // Cách tính theo số đang hiện; chưa có số thì như thiếu trường (cách cũ, chữ cũ).
-                Text(VdBasis(data?.sentBasis) == .sent ? "Chuyển đi, đã nhận, hoàn theo ngày gửi hàng" : "Đơn vào Chờ xác nhận trong kỳ, xét trạng thái hiện tại")
-                    .font(.system(size: 11)).foregroundStyle(Color.inkSoft)
-                PeriodChips(period: $period)
-                PosChipRow(selection: $pos)
-                ScopeLine(period: period, pos: pos)
-                HStack { HrTeamChip(); Spacer() }
+            VStack(alignment: .leading, spacing: MT.cardGap) {
+                ChildHeader(title: "Vận đơn")
+                ScopeFilterPill(period: $period, pos: $pos, team: true)
                 HrTeamNotice(applies: applied != nil, deptLabel: "Tất cả")
                 if let teamError { HrTeamErrorView(message: teamError) { nav?.hrUnit = nil } }
                 else if let error, data == nil { StateView(error: error) { await load() } }
                 if let d = data {
                     let basis = VdBasis(d.sentBasis)
-                    summary(d.total, basis, short: VdBasis.short(d.period, basis))
-                    funnel(d.total, basis)
+                    // Khung 13: hero Doanh số chuyển đi (vòng Sale / CSKH), thẻ "Luồng vận chuyển" (2×2 + các thanh), rồi các bảng.
+                    summary(d, basis, short: VdBasis.short(d.period, basis))
                     byDept(d, basis)
+                    sellers(d)
                     confirmers(d, basis)
                     reasons(d)
-                    if let at = d.syncedAt { Text("Số Pancake · đồng bộ \(Fmt.dateTime(at))").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }
+                    if let at = d.syncedAt { Text("Số Pancake · đồng bộ \(Fmt.dateTime(at))").mtFont(.caption).foregroundStyle(Color.inkSoft) }
                 } else if error == nil {
                     SkeletonGrid(tiles: 4)
                 }
             }
-            .padding(16).padding(.bottom, 24)
+            .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 24)
         }
         .background(Color.cream)
         .environment(\.thinking, loading && data != nil)
         .navigationTitle("Vận đơn").navigationBarTitleDisplayMode(.inline).brandNav()
+        .childChrome()
         .refreshable { await load() }
         .task(id: loadKey) { await load() }
         // Chưa có danh sách đơn theo ngày gửi hàng trên web: bảng giải thích không có nút xem đơn.
-        .sheet(item: $explain) { m in ExplainSheet(m: m) { _ in } }
+        .sheet(item: $explain) { m in MTFilterSheet(title: m.title, existingNavigation: true) { ExplainSheet(m: m) { _ in } } }
         #if DEBUG
         .onChange(of: DebugTap.shared.tick) { _, _ in
             // Lượt tự xem MEGATECH_TOUR=chamso "chạm" thẻ Đơn chuyển đi (máy ảo không chạm được), rồi đóng bảng giải thích.
@@ -640,31 +741,75 @@ struct VanDonView: View {
         #endif
     }
 
-    /// Thẻ số đầu trang; chạm thẻ nào mở bảng giải thích số đó (kế hoạch 1.6), giữ nguyên dáng thẻ.
-    private func summary(_ t: API.VdLine, _ basis: VdBasis, short: Bool) -> some View {
+    /// Thẻ số đầu trang (khung 13); chạm số nào mở bảng giải thích số đó (kế hoạch 1.6).
+    private func summary(_ d: API.VanDon, _ basis: VdBasis, short: Bool) -> some View {
+        let t = d.total
         let show = { (tile: VdTile) in explain = Self.vdExplain(tile, t, basis, short: short, scope: dataScope) }
-        return VStack(alignment: .leading, spacing: 10) {
+        return VStack(alignment: .leading, spacing: MT.cardGap) {
             Button { show(.sentNet) } label: {
-                KpiCard(icon: "banknote.fill", tint: .warn, label: "Doanh số chuyển đi", value: Fmt.vnd(t.sentNet),
-                        note: basis == .sent ? "theo ngày gửi hàng · không phải doanh thu" : "tiền các đơn chuyển đi · không phải doanh thu")
+                VStack(alignment: .leading, spacing: MT.cellGap) {
+                    HStack(alignment: .center, spacing: MT.cellGap) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("DOANH SỐ CHUYỂN ĐI").mtFont(.caption).fontWeight(.bold).foregroundStyle(Palette.muted)
+                            Text(hideMoney ? "••• tr ₫" : Fmt.shortMoney(t.sentNet)).mtFont(.heroNumber).foregroundStyle(Palette.ink)
+                                .lineLimit(1).minimumScaleFactor(0.6)
+                            Text("\(Fmt.int(t.sent)) đơn chuyển đi").mtFont(.caption).foregroundStyle(Palette.muted)
+                        }
+                        Spacer(minLength: 4)
+                        if !hideMoney, t.sentNet > 0 { deptRing(d.sellerDepts, total: t.sentNet) }
+                    }
+                    Text(dataScope + " · Tính riêng, không cộng vào tổng công ty").mtFont(.caption).foregroundStyle(Palette.muted)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading).contentShape(.rect).heroSurface()
             }
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                Button { show(.sent) } label: {
-                    KpiCard(icon: "paperplane.fill", tint: .warn, label: "Đơn chuyển đi", value: Fmt.int(t.sent), note: basis == .sent ? "gửi đi trong kỳ" : "đã giao vận chuyển")
+            VStack(alignment: .leading, spacing: MT.cellGap) {
+                Text("Luồng vận chuyển").mtFont(.cardHeader).foregroundStyle(Palette.ink)
+                Grid(horizontalSpacing: MT.cellGap, verticalSpacing: MT.cellGap) {
+                    GridRow {
+                        Button { show(.delivered) } label: { BoardCell(label: "Đã nhận", value: "\(Fmt.int(t.delivered)) / \(Fmt.int(t.sent))", note: "khách đã nhận hàng") }
+                        Button { show(.returned) } label: { BoardCell(label: "Hoàn (đơn · giá trị)", value: "\(Fmt.int(t.returned)) đơn · \(hideMoney ? "•••" : Fmt.shortVnd(t.returnedNet))") }
+                    }
+                    GridRow {
+                        Button { show(.returned) } label: { BoardCell(label: "Hoàn đơn (%)") { MTRateBadge(rate: t.returnRate, kind: .refund) } }
+                        Button { show(.returned) } label: { BoardCell(label: "Hoàn giá trị (%)") { MTRateBadge(rate: t.returnRateNet, kind: .refund) } }
+                    }
                 }
-                Button { show(.returned) } label: {
-                    KpiCard(icon: "arrow.uturn.backward.circle.fill", tint: returnTone(t.returnRate), label: "Hoàn · \(Fmt.pct(t.returnRate))", value: Fmt.int(t.returned), note: "giá trị \(Fmt.shortVnd(t.returnedNet)) · \(Fmt.pct(t.returnRateNet))")
-                }
-                Button { show(.delivered) } label: {
-                    KpiCard(icon: "shippingbox.fill", tint: .good, label: "Đã nhận", value: Fmt.int(t.delivered), note: "khách đã nhận hàng")
-                }
+                funnel(t, basis)
                 Button { show(.failed) } label: {
-                    KpiCard(icon: "phone.down.fill", tint: .bad, label: "Không xác nhận được", value: Fmt.int(t.failed), note: basis == .sent ? "vào Chờ XN · tỷ lệ \(Fmt.pct(t.failRate))" : "tỷ lệ \(Fmt.pct(t.failRate))")
+                    HStack { Text("Không xác nhận được · tỷ lệ \(Fmt.pct(t.failRate))").mtFont(.caption).foregroundStyle(Palette.muted); Spacer(); Image(systemName: "info.circle").mtFont(.caption).foregroundStyle(Palette.muted) }
                 }
+                if short { Label(VdBasis.shortNote, systemImage: "info.circle").mtFont(.caption).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true) }
             }
-            if short { Label(VdBasis.shortNote, systemImage: "info.circle").font(.system(size: 10)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true) }
+            .padding(MT.cardPad).frame(maxWidth: .infinity, alignment: .leading).cardSurface()
         }
         .buttonStyle(.plain)
+    }
+    /// Vòng nhỏ chia doanh số chuyển đi theo bộ phận người lên đơn (Sale, CSKH), kèm chú thích phần trăm và số tiền.
+    private func deptRing(_ rows: [API.VdLine], total: Double) -> some View {
+        let parts = rows.filter { $0.sentNet > 0 }
+        let color = { (label: String) -> Color in label == "Sale" ? Palette.sale : label == "CSKH" ? Palette.cskh : Palette.mtRolePurpleInk }
+        var start = 0.0
+        let arcs: [(from: Double, to: Double, color: Color)] = parts.map { r in
+            let f = start, to = start + r.sentNet / total; start = to
+            return (from: f, to: to, color: color(r.label))
+        }
+        return HStack(spacing: 8) {
+            ZStack {
+                Circle().stroke(Palette.line, lineWidth: 7)
+                ForEach(Array(arcs.enumerated()), id: \.offset) { _, a in
+                    Circle().trim(from: a.from, to: a.to).stroke(a.color, style: StrokeStyle(lineWidth: 7, lineCap: .butt)).rotationEffect(.degrees(-90))
+                }
+            }.frame(width: 44, height: 44)
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(parts) { r in
+                    HStack(spacing: 4) {
+                        Circle().fill(color(r.label)).frame(width: 6, height: 6)
+                        Text("\(r.label) \(Fmt.pct0(r.sentNet / total * 100)): \(Fmt.shortVnd(r.sentNet))").lineLimit(1).minimumScaleFactor(0.7)
+                    }
+                }
+            }.mtFont(.caption).foregroundStyle(Palette.muted)
+        }
+        .accessibilityElement(children: .combine)
     }
 
     /// Bảng giải thích một thẻ số Vận đơn: số đó đếm gì, theo mốc ngày nào (trường sentBasis máy chủ trả về), phạm vi kỳ và POS.
@@ -706,29 +851,23 @@ struct VanDonView: View {
     @ViewBuilder private func funnel(_ t: API.VdLine, _ basis: VdBasis) -> some View {
         switch basis {
         case .closed:
-            Panel {
-                HStack { Text("Từ Chờ xác nhận đến giao").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink); Spacer(); Hint(text: "Số đơn") }
-                FunnelLine(label: "Vào Chờ xác nhận", n: t.closed, of: t.closed, tint: .good)
-                FunnelLine(label: "Đã xác nhận", n: t.confirmed, of: t.closed, tint: .blue)
-                FunnelLine(label: "Đã chuyển đi", n: t.sent, of: t.closed, tint: .warn)
-                FunnelLine(label: "Đã nhận", n: t.delivered, of: t.closed, tint: .good)
-                FunnelLine(label: "Hoàn", n: t.returned, of: t.closed, tint: .bad)
-                funnelTags(t)
-            }
+            FunnelLine(label: "Đơn vào Chờ xác nhận", n: t.closed, of: t.closed, tint: Palette.info)
+            FunnelLine(label: "Đã xác nhận", n: t.confirmed, of: t.closed, tint: Palette.info)
+            FunnelLine(label: "Đơn chuyển đi", n: t.sent, of: t.closed, tint: .good)
+            FunnelLine(label: "Đã nhận", n: t.delivered, of: t.closed, tint: .good)
+            FunnelLine(label: "Không xác nhận được", n: t.failed, of: t.closed, tint: .bad)
+            funnelTags(t)
         case .sent:
-            // Hai nhóm đơn khác nhau (vào Chờ xác nhận trong kỳ / gửi đi trong kỳ): tách hai khung, không chia số này cho số kia.
-            Panel {
-                HStack { Text("Đơn vào Chờ xác nhận").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink); Spacer(); Hint(text: "Theo ngày vào Chờ XN") }
-                FunnelLine(label: "Vào Chờ xác nhận", n: t.closed, of: t.closed, tint: .good)
-                FunnelLine(label: "Đã xác nhận", n: t.confirmed, of: t.closed, tint: .blue)
-                funnelTags(t)
-            }
-            Panel {
-                HStack { Text("Đơn chuyển đi").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink); Spacer(); Hint(text: "Theo ngày gửi hàng") }
-                FunnelLine(label: "Đã chuyển đi", n: t.sent, of: t.sent, tint: .warn)
-                FunnelLine(label: "Đã nhận", n: t.delivered, of: t.sent, tint: .good)
-                FunnelLine(label: "Hoàn", n: t.returned, of: t.sent, tint: .bad)
-            }
+            // Hai nhóm đơn khác nhau (vào Chờ xác nhận trong kỳ / gửi đi trong kỳ): mỗi nhóm thanh riêng, không chia số này cho số kia.
+            Text("Theo ngày vào Chờ xác nhận").mtFont(.caption).foregroundStyle(Palette.muted)
+            FunnelLine(label: "Đơn vào Chờ xác nhận", n: t.closed, of: t.closed, tint: Palette.info)
+            FunnelLine(label: "Đã xác nhận", n: t.confirmed, of: t.closed, tint: Palette.info)
+            FunnelLine(label: "Không xác nhận được", n: t.failed, of: t.closed, tint: .bad)
+            funnelTags(t)
+            Text("Theo ngày gửi hàng").mtFont(.caption).foregroundStyle(Palette.muted)
+            FunnelLine(label: "Đơn chuyển đi", n: t.sent, of: t.sent, tint: .good)
+            FunnelLine(label: "Đã nhận", n: t.delivered, of: t.sent, tint: .good)
+            FunnelLine(label: "Hoàn", n: t.returned, of: t.sent, tint: .bad)
         }
     }
     private func funnelTags(_ t: API.VdLine) -> some View {
@@ -741,38 +880,51 @@ struct VanDonView: View {
 
     private func byDept(_ d: API.VanDon, _ basis: VdBasis) -> some View {
         Panel {
-            HStack { Text("Theo người lên đơn").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink); Spacer(); Hint(text: "Hoàn tính cho người lên đơn") }
-            Grid(alignment: .trailing, horizontalSpacing: 10, verticalSpacing: 7) {
-                GridRow {
-                    Text("Bộ phận").gridColumnAlignment(.leading)
-                    Text("Vào chờ XN")
-                    Text("Chuyển đi")
-                    Text("Hoàn")
-                    Text("% hoàn")
-                }
-                .font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.inkSoft)
-                Divider().gridCellUnsizedAxes(.horizontal)
-                ForEach(d.sellerDepts + [d.total]) { r in
-                    let bold = r.key == "total"
-                    GridRow {
-                        Text(r.label).font(.system(size: 12, weight: bold ? .bold : .semibold)).foregroundStyle(Color.ink).gridColumnAlignment(.leading)
-                        Text(Fmt.int(r.closed)).font(.system(size: 12, weight: bold ? .bold : .regular)).monospacedDigit()
-                        VStack(alignment: .trailing, spacing: 0) {
-                            Text(Fmt.int(r.sent)).font(.system(size: 12, weight: bold ? .bold : .semibold)).monospacedDigit()
-                            Text(Fmt.shortVnd(r.sentNet)).font(.system(size: 9)).foregroundStyle(Color.inkSoft)
-                        }
-                        VStack(alignment: .trailing, spacing: 0) {
-                            Text(Fmt.int(r.returned)).font(.system(size: 12, weight: bold ? .bold : .semibold)).monospacedDigit()
-                            Text(Fmt.shortVnd(r.returnedNet)).font(.system(size: 9)).foregroundStyle(Color.inkSoft)
-                        }
-                        Text(Fmt.pct(r.returnRate)).font(.system(size: 11, weight: .semibold)).monospacedDigit().foregroundStyle(returnTone(r.returnRate))
-                    }
-                    .foregroundStyle(Color.ink)
+            Text("Theo bộ phận người lên đơn").mtFont(.cardHeader)
+            MTStickyColumnTable(rows: d.sellerDepts, total: d.total, columns: Column.allCases.filter { $0 != .dept },
+                                title: { $0.rawValue }, sort: { _ in }, firstTitle: "Bộ phận", scope: dataScope) { row in
+                Text(row.label).mtFont(.body)
+            } cell: { row, column in
+                switch column {
+                case .dept: Text(row.dept ?? "—")
+                case .waiting: Text(Fmt.int(row.closed))
+                case .sent: Text(Fmt.int(row.sent))
+                case .net: Text(Fmt.shortMoney(row.sentNet))
+                case .returned: Text(Fmt.int(row.returned))
+                case .returnedNet: Text(Fmt.shortMoney(row.returnedNet))
+                case .rate: MTRateBadge(rate: row.returnRate, kind: .refund)
+                case .rateNet: MTRateBadge(rate: row.returnRateNet, kind: .refund)
                 }
             }
-            .lineLimit(1).minimumScaleFactor(0.7)
             if basis == .sent {
-                Text("Vào chờ XN theo ngày vào Chờ xác nhận; chuyển đi, hoàn theo ngày gửi hàng.").font(.system(size: 9)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
+                Text("Vào chờ XN theo ngày vào Chờ xác nhận; chuyển đi, hoàn theo ngày gửi hàng.").mtFont(.caption).foregroundStyle(Palette.muted)
+            }
+        }
+    }
+
+    @ViewBuilder private func sellers(_ d: API.VanDon) -> some View {
+        if let rows = d.sellers, !rows.isEmpty {
+            let t = d.total
+            let total = API.VanDonSellerRow(key: t.key, label: t.label, dept: nil, closed: t.closed, sent: t.sent, sentNet: t.sentNet,
+                                           returned: t.returned, returnedNet: t.returnedNet, returnRate: t.returnRate, returnRateNet: t.returnRateNet)
+            Panel {
+                Text("Người lên đơn").mtFont(.cardHeader)
+                MTStickyColumnTable(rows: rows, total: total, columns: Column.allCases,
+                                    title: { $0.rawValue }, sort: { _ in }, firstTitle: "Người lên đơn", scope: dataScope) { row in
+                    Text(row.label).mtFont(.body)
+                } cell: { row, column in
+                    switch column {
+                    case .dept: Text(row.dept ?? "—")
+                    case .waiting: Text(Fmt.int(row.closed))
+                    case .sent: Text(Fmt.int(row.sent))
+                    case .net: Text(Fmt.shortMoney(row.sentNet))
+                    case .returned: Text(Fmt.int(row.returned))
+                    case .returnedNet: Text(Fmt.shortMoney(row.returnedNet))
+                    case .rate: MTRateBadge(rate: row.returnRate, kind: .refund)
+                    case .rateNet: MTRateBadge(rate: row.returnRateNet, kind: .refund)
+                    }
+                }
+                Text("Tính riêng, không cộng vào tổng công ty").mtFont(.caption).foregroundStyle(Palette.muted)
             }
         }
     }
@@ -783,24 +935,24 @@ struct VanDonView: View {
         let rows = Array((team.isEmpty ? d.confirmers : team).prefix(10))
         if !rows.isEmpty {
             Panel {
-                HStack { Text("Người gọi xác nhận").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink); Spacer(); Hint(text: "Tỷ lệ XN · tỷ lệ hoàn") }
+                HStack { Text("Người gọi xác nhận").mtFont(.cardHeader).foregroundStyle(Color.ink); Spacer(); Hint(text: "Tỷ lệ XN · tỷ lệ hoàn") }
                 ForEach(rows) { r in
                     HStack(spacing: 10) {
                         Avatar(name: r.label, size: 30)
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(r.label).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1)
-                            Text("đã XN \(Fmt.int(r.confirmed)) · không XN \(Fmt.int(r.failed)) · chuyển đi \(Fmt.int(r.sent))").font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.75)
+                            Text(r.label).mtFont(.body).foregroundStyle(Color.ink).lineLimit(1)
+                            Text("đã XN \(Fmt.int(r.confirmed)) · không XN \(Fmt.int(r.failed)) · chuyển đi \(Fmt.int(r.sent))").mtFont(.caption).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.75)
                         }
                         Spacer(minLength: 6)
                         VStack(alignment: .trailing, spacing: 1) {
-                            Text("XN \(Fmt.pct(r.confirmRate))").font(.system(size: 11, weight: .bold)).monospacedDigit().foregroundStyle(Color.ink)
-                            Text("hoàn \(Fmt.pct(r.returnRate))").font(.system(size: 10, weight: .semibold)).monospacedDigit().foregroundStyle(returnTone(r.returnRate))
+                            Text("XN \(Fmt.pct(r.confirmRate))").mtFont(.caption).monospacedDigit().foregroundStyle(Color.ink)
+                            MTRateBadge(rate: r.returnRate, kind: .refund)
                         }
                     }
                     .padding(.vertical, 2)
                 }
                 if basis == .sent {
-                    Text("Đã XN, không XN, tỷ lệ XN theo ngày vào Chờ xác nhận; chuyển đi, tỷ lệ hoàn theo ngày gửi hàng.").font(.system(size: 9)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
+                    Text("Đã XN, không XN, tỷ lệ XN theo ngày vào Chờ xác nhận; chuyển đi, tỷ lệ hoàn theo ngày gửi hàng.").mtFont(.caption).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -811,13 +963,13 @@ struct VanDonView: View {
         if !top.isEmpty {
             let maxN = max(1, top.map(\.n).max() ?? 1)
             Panel {
-                HStack { Text("Lý do không xác nhận được").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink); Spacer(); Hint(text: "Thẻ \"VĐ: lý do\"") }
+                HStack { Text("Lý do không xác nhận được").mtFont(.cardHeader).foregroundStyle(Color.ink); Spacer(); Hint(text: "Thẻ \"VĐ: lý do\"") }
                 ForEach(top) { r in
                     VStack(alignment: .leading, spacing: 3) {
                         HStack {
-                            Text(r.reason).font(.system(size: 12)).foregroundStyle(Color.ink).lineLimit(1)
+                            Text(r.reason).mtFont(.body).foregroundStyle(Color.ink).lineLimit(1)
                             Spacer()
-                            Text(Fmt.int(r.n)).font(.system(size: 12, weight: .bold)).monospacedDigit().foregroundStyle(Color.ink)
+                            Text(Fmt.int(r.n)).mtFont(.body).monospacedDigit().foregroundStyle(Color.ink)
                         }
                         Bar(value: r.n / maxN, tint: .bad, height: 5)
                     }

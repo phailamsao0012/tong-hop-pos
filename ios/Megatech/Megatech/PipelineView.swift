@@ -39,72 +39,23 @@ struct PipelineView: View {
     private var mainKey: String { "\(period.key)|\(basis)|\(pos)" }
     private var recentKey: String { "\(period.key)|\(basis)|\(pos)|\(status)" }
     static let stages: [(key: String, group: String, label: String, icon: String, color: Color)] = [
-        ("unconfirmed", "unconfirmed", "Mới", "ic_m_orders", .good), ("processing", "processing", "Xác nhận", "ic_m_closed", .warn), ("shipping", "shipping", "Giao vận", "ic_m_shipping", .blue), ("delivered", "delivered", "Đã giao", "checkmark.circle.fill", .good), ("returned", "returned", "Trả hàng", "ic_m_returned", .bad),
+        ("unconfirmed", "unconfirmed", "Mới", "ic_m_orders", .good), ("processing", "processing", "Xác nhận", "ic_m_closed", .warn), ("shipping", "shipping", "Giao vận", "ic_m_shipping", Palette.info), ("delivered", "delivered", "Đã giao", "checkmark.circle.fill", .good), ("returned", "returned", "Trả hàng", "ic_m_returned", .bad),
     ]
     private func q(_ group: String, _ title: String) -> OrderQuery { OrderQuery(start: period.range.0, end: period.range.1, posIds: posIds, group: group, basis: basis == "confirmed" ? "confirmed" : "created", title: title) }
     private func n(_ b: [String: API.Bucket], _ k: String) -> Double { b[k]?.orders ?? 0 }
 
     var body: some View {
         Embed(embedded: embedded, title: "Vận hành đơn") {
-            PageTitle(title: "Vận hành đơn", subtitle: "Theo dõi từng bước, giao đúng hẹn.")
-            // Ô tìm ở đầu trang (kế hoạch 1.5): SĐT tìm trong mọi đơn, mọi POS; mã đơn mọi POS (mọi ngày khi máy chủ tra mã theo khóa
-            // chính, SearchText.codesByKey; chưa thì trong kỳ đang xem); tên khách trong kỳ và POS đang xem.
-            HStack(spacing: 8) {
-                SearchField(prompt: "Tìm SĐT, mã đơn hoặc tên khách", text: $typed) { scheduleSearch(typed, delay: .zero) }
-                NavigationLink(value: Route.orders(q(status, "Đơn hàng"))) { Image(systemName: "line.3.horizontal.decrease").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.ink).frame(width: 40, height: 40).background(Color.card, in: .rect(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.black.opacity(0.08))) }.buttonStyle(.plain)
-            }
-            searchResults
-            PeriodChips(period: periodBinding)
-            Segmented(selection: $basis, options: [("confirmed", "Theo giờ chốt"), ("created", "Theo ngày tạo")])
-            // Số các bước, danh sách đơn và tìm tên khách theo kỳ và POS đang chọn (POS chọn ở dải lọc trên danh sách đơn).
-            ScopeLine(period: period, pos: pos)
+            if !embedded { PageTitle(title: "Vận hành đơn", subtitle: "Theo dõi từng bước, giao đúng hẹn.") }
+            // Pill lọc (khung Gemini): kỳ và POS; bấm mở bảng chọn.
+            ScopeFilterPill(period: periodBinding, pos: Binding(get: { pos }, set: { setPos($0) }))
             if let error, data == nil { StateView(error: error) { await reloadAll() } }
+            // Khung 05: "ĐƠN THEO BƯỚC" (số lớn, cột Mới · Xác nhận · Giao vận · Đã giao · Trả hàng), "Đơn cần lưu ý", "Danh sách đơn hàng".
             if let d = data {
-                let T = d.total
-                let unconfirmed = basis == "created" ? n(T, "unconfirmed") : 0
-                HStack(spacing: 4) {
-                    ForEach(Array(Self.stages.enumerated()), id: \.element.key) { i, st in
-                        NavigationLink(value: Route.orders(q(st.group, st.label))) {
-                            VStack(spacing: 4) {
-                                MetricIcon(st.icon, size: 13).foregroundStyle(st.color).frame(width: 28, height: 28).background(st.color.opacity(0.14), in: .rect(cornerRadius: 8))
-                                Text(st.label).font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1).minimumScaleFactor(0.7)
-                                Text(Fmt.int(st.key == "unconfirmed" ? unconfirmed : n(T, st.key))).font(.system(size: 15, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).rolling(Fmt.int(n(T, st.key)))
-                            }.frame(maxWidth: .infinity).padding(.vertical, 10).background(st.color.opacity(0.08), in: .rect(cornerRadius: 10))
-                        }.buttonStyle(.plain)
-                        if i < Self.stages.count - 1 { Image(systemName: "arrow.right").font(.system(size: 8, weight: .bold)).foregroundStyle(Color.inkSoft) }
-                    }
-                }
-                let shipped = n(T, "shipped")
-                HStack(spacing: 10) {
-                    NavigationLink(value: Route.orders(q("delivered", "Đã giao"))) { KpiCard(icon: "checkmark.seal.fill", tint: .good, label: "Tỷ lệ giao thành công", value: Fmt.pct(shipped > 0 ? n(T, "delivered") / shipped * 100 : nil), note: "\(Fmt.int(n(T, "delivered"))) / \(Fmt.int(shipped)) đã xuất") }
-                    NavigationLink(value: Route.orders(q("closed", "Đơn chốt"))) { KpiCard(icon: "ic_m_closed", tint: .good, label: "Tổng đơn chốt", value: Fmt.int(n(T, "closed")), note: Fmt.shortMoney(T["closed"]?.net ?? 0)) }
-                }.buttonStyle(.plain)
-                Panel(padding: 12) {
-                    HStack { Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Color.bad); Text("Đơn cần lưu ý").font(.system(size: 14, weight: .bold)).foregroundStyle(Color.bad); Spacer(); NavigationLink(value: Route.orders(q("processing", "Chưa xuất kho"))) { HStack(spacing: 2) { Text("Xem tất cả"); Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)) }.font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.brand) }.buttonStyle(.plain) }
-                    AttentionRow(icon: "clock.badge.exclamationmark.fill", tone: .red, title: "Chờ chuyển hàng (đã đóng, chưa giao)", n: n(T, "waiting"), route: .orders(q("waiting", "Chờ chuyển hàng")))
-                    AttentionRow(icon: "hourglass", tone: .orange, title: "Đã xác nhận, chưa đóng hàng", n: n(T, "confirmed"), route: .orders(q("justconfirmed", "Đã xác nhận")))
-                    AttentionRow(icon: "ic_m_returned", tone: .orange, title: "Hoàn / trả hàng", n: n(T, "returned"), route: .orders(q("returned", "Hoàn")))
-                    AttentionRow(icon: "ic_m_cancelled", tone: .red, title: "Hủy sau khi chốt", n: n(T, "cancelled"), route: .orders(q("cancelled", "Hủy sau chốt")))
-                }.overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.bad.opacity(0.2)))
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        Menu { Button("Tất cả POS") { setPos("") }; ForEach(PosBreakdown.order, id: \.self) { id in Button(PosBreakdown.names[id] ?? id) { setPos(id) } } } label: { FilterChip(label: pos.isEmpty ? "Tất cả POS" : (PosBreakdown.short[pos] ?? pos), on: true, chevron: true) {} }
-                        FilterChip(label: "Mới", on: status == "unconfirmed") { status = status == "unconfirmed" ? "" : "unconfirmed" }
-                        FilterChip(label: "Xác nhận", on: status == "processing") { status = status == "processing" ? "" : "processing" }
-                        FilterChip(label: "Giao vận", on: status == "shipping") { status = status == "shipping" ? "" : "shipping" }
-                        FilterChip(label: "Đã giao", on: status == "delivered") { status = status == "delivered" ? "" : "delivered" }
-                    }
-                }
-                SectionHead(title: "Danh sách đơn hàng", action: "Mới nhất", route: .orders(q(status, "Đơn hàng")))
-                VStack(spacing: 10) {
-                    ForEach(recent.prefix(8)) { o in orderLink(o) }
-                    if recent.isEmpty {
-                        if let recentError { StateView(error: recentError, compact: true) { await loadRecent(force: true) } }
-                        else if recentLoading { StateView(loading: "Đang tải danh sách đơn…", compact: true) }
-                        else { Panel { Text("Không có đơn khớp bộ lọc.").font(.system(size: 12)).foregroundStyle(Color.inkSoft) } }
-                    }
-                }
-            } else if error == nil { Skeleton(height: 90); SkeletonGrid(tiles: 2) }
+                stepsCard(d.total)
+                attentionCard(d.total)
+            } else if error == nil { Skeleton(height: 160); Skeleton(height: 120) }
+            listCard
         }
         .task(id: mainKey) { await load() }
         .task(id: recentKey) { await loadRecent() }
@@ -123,15 +74,141 @@ struct PipelineView: View {
         #endif
     }
 
-    /// Một dòng đơn (danh sách mới nhất và kết quả tìm), chạm mở hồ sơ đơn.
+    /// Một dòng đơn (danh sách mới nhất và kết quả tìm), chạm mở hồ sơ đơn. Ô xám nhạt trong thẻ (khung 05).
     private func orderLink(_ o: API.OrderRow) -> some View {
-        NavigationLink(value: Route.order(o.id)) {
-            Panel(padding: 12) {
-                HStack { Text("#\(o.orderId)").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink); Spacer(); Tag(text: o.statusName, tone: tone(o.statusCode)) }
-                HStack(spacing: 4) { PosLabel(id: o.posId, name: o.posName).font(.system(size: 10)).foregroundStyle(Color.inkSoft); Text("· \(o.customer ?? "") · \(o.phone ?? "")").font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1); Spacer(); Text(Fmt.time(o.firstConfirmedAt ?? o.createdAt)).font(.system(size: 10)).foregroundStyle(Color.inkSoft) }
-                HStack { Text(o.sellerName ?? "—").font(.system(size: 10)).foregroundStyle(Color.inkSoft); Spacer(); Text(Fmt.vnd(o.net ?? 0)).font(.system(size: 12, weight: .bold)).foregroundStyle(Color.ink) }
+        // Dòng 1: mã · trạng thái · POS; dòng 2: khách · người bán · giờ; tiền và › bên phải.
+        let line2 = [o.customer, o.sellerName, Fmt.time(o.firstConfirmedAt ?? o.createdAt)].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+        return NavigationLink(value: Route.order(o.id)) {
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("#\(o.orderId) · \(o.statusName) · \(PosBreakdown.short[o.posId] ?? o.posName)")
+                        .mtFont(.body).fontWeight(.semibold).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
+                    Text(line2).mtFont(.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                }
+                Spacer(minLength: 6)
+                Text(Fmt.shortVnd(o.net ?? o.currentTotal ?? 0)).mtFont(.body).fontWeight(.bold).foregroundStyle(Palette.ink)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Palette.muted)
             }
+            .padding(12).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .background(Palette.wash, in: .rect(cornerRadius: MT.rCell))
+            .contentShape(.rect)
+            .accessibilityElement(children: .combine)
         }.buttonStyle(.plain)
+    }
+
+    // MARK: Khung 05
+
+    /// Link xanh nhỏ ở góc thẻ ("Xem tất cả ›").
+    private func cornerLink(_ title: String, _ route: Route) -> some View {
+        NavigationLink(value: route) {
+            HStack(spacing: 2) { Text(title); Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)) }
+                .mtFont(.caption).fontWeight(.semibold).foregroundStyle(Palette.accent).frame(minHeight: 32)
+        }.buttonStyle(.plain)
+    }
+
+    /// "ĐƠN THEO BƯỚC": số lớn (cộng 5 cột), cột từng bước chạm mở danh sách; mốc ngày (giờ chốt / ngày tạo) chọn ở góc thẻ.
+    private func stepsCard(_ T: [String: API.Bucket]) -> some View {
+        let unconfirmed = basis == "created" ? n(T, "unconfirmed") : 0
+        let values: [Double] = Self.stages.map { $0.key == "unconfirmed" ? unconfirmed : n(T, $0.key) }
+        let maxV = max(1, values.max() ?? 1)
+        let shipped = n(T, "shipped")
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top) {
+                Text("ĐƠN THEO BƯỚC").mtFont(.caption).fontWeight(.bold).foregroundStyle(Palette.muted)
+                Spacer(minLength: 6)
+                Menu {
+                    Button { basis = "confirmed" } label: { if basis == "confirmed" { Label("Theo giờ chốt", systemImage: "checkmark") } else { Text("Theo giờ chốt") } }
+                    Button { basis = "created" } label: { if basis == "created" { Label("Theo ngày tạo", systemImage: "checkmark") } else { Text("Theo ngày tạo") } }
+                } label: {
+                    HStack(spacing: 3) {
+                        Text(basis == "confirmed" ? "Theo giờ chốt" : "Theo ngày tạo")
+                        Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
+                    }
+                    .mtFont(.caption).fontWeight(.semibold).foregroundStyle(Palette.accent).frame(minHeight: 32)
+                }
+                .accessibilityLabel("Mốc ngày: \(basis == "confirmed" ? "theo giờ chốt" : "theo ngày tạo")")
+            }
+            Text("\(Fmt.int(values.reduce(0, +))) đơn").mtFont(.heroNumber).foregroundStyle(Palette.ink)
+            HStack(alignment: .bottom, spacing: MT.cellGap) {
+                ForEach(Array(Self.stages.enumerated()), id: \.element.key) { i, st in
+                    NavigationLink(value: Route.orders(q(st.group, st.label))) {
+                        VStack(spacing: 4) {
+                            Text(Fmt.int(values[i])).mtFont(.caption).fontWeight(.bold).foregroundStyle(Palette.ink)
+                            RoundedRectangle(cornerRadius: 4).fill(Palette.accent)
+                                .frame(height: max(4, 64 * values[i] / maxV))
+                            Text(st.label).font(.system(size: 10, weight: .semibold)).foregroundStyle(Palette.muted)
+                                .lineLimit(1).minimumScaleFactor(0.7)
+                        }
+                        .frame(maxWidth: .infinity).contentShape(.rect)
+                        .accessibilityElement(children: .combine)
+                    }.buttonStyle(.plain)
+                }
+            }
+            .frame(height: 104, alignment: .bottom)
+            Text("Giao thành công \(Fmt.pct(shipped > 0 ? n(T, "delivered") / shipped * 100 : nil)) · \(Fmt.int(n(T, "delivered")))/\(Fmt.int(shipped)) đã xuất · Tổng đơn chốt \(Fmt.int(n(T, "closed"))) · \(Fmt.shortVnd(T["closed"]?.net ?? 0))")
+                .mtFont(.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+        }
+        .heroSurface()
+    }
+
+    /// "Đơn cần lưu ý": mỗi việc một hàng; Hoàn / Hủy kèm badge tỷ lệ trên tổng đơn chốt trong kỳ (≥7% ▲ đỏ, 5–7% ! vàng, <5% ✓ xanh).
+    private func attentionCard(_ T: [String: API.Bucket]) -> some View {
+        let closed = n(T, "closed")
+        return VStack(alignment: .leading, spacing: MT.cellGap) {
+            HStack {
+                Text("Đơn cần lưu ý").mtFont(.cardHeader).foregroundStyle(Palette.ink)
+                Spacer()
+                cornerLink("Xem tất cả", .orders(q("processing", "Chưa xuất kho")))
+            }
+            attentionRow("Chờ chuyển hàng (đã đóng, chưa giao)", n(T, "waiting"), rate: nil, .orders(q("waiting", "Chờ chuyển hàng")))
+            attentionRow("Đã xác nhận, chưa đóng hàng", n(T, "confirmed"), rate: nil, .orders(q("justconfirmed", "Đã xác nhận")))
+            attentionRow("Hoàn / trả hàng", n(T, "returned"), rate: closed > 0 ? n(T, "returned") / closed * 100 : nil, .orders(q("returned", "Hoàn")))
+            attentionRow("Hủy sau khi chốt", n(T, "cancelled"), rate: closed > 0 ? n(T, "cancelled") / closed * 100 : nil, .orders(q("cancelled", "Hủy sau chốt")), cancel: true)
+        }
+        .padding(MT.cardPad).frame(maxWidth: .infinity, alignment: .leading).cardSurface()
+    }
+    private func attentionRow(_ title: String, _ count: Double, rate: Double?, _ route: Route, cancel: Bool = false) -> some View {
+        NavigationLink(value: route) {
+            HStack(spacing: 8) {
+                Text(title).mtFont(.body).fontWeight(.semibold).foregroundStyle(Palette.ink).lineLimit(2)
+                Spacer(minLength: 6)
+                if let rate { RefundCountBadge(count: count, rate: rate, cancel: cancel) }
+                else { Text(Fmt.int(count)).mtFont(.body).fontWeight(.bold).foregroundStyle(Palette.ink) }
+                Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Palette.muted)
+            }
+            .padding(12).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .background(Palette.wash, in: .rect(cornerRadius: MT.rCell))
+            .contentShape(.rect)
+            .accessibilityElement(children: .combine)
+        }.buttonStyle(.plain)
+    }
+
+    /// "Danh sách đơn hàng": ô tìm (chuyển vào thẻ), lọc trạng thái, 8 đơn mới nhất, "Xem tất cả".
+    private var listCard: some View {
+        VStack(alignment: .leading, spacing: MT.cellGap) {
+            HStack {
+                Text("Danh sách đơn hàng").mtFont(.cardHeader).foregroundStyle(Palette.ink)
+                Spacer()
+                cornerLink("Xem tất cả", .orders(q(status, "Đơn hàng")))
+            }
+            // Ô tìm (kế hoạch 1.5): SĐT tìm trong mọi đơn, mọi POS; mã đơn mọi POS (mọi ngày khi máy chủ tra mã theo khóa chính,
+            // SearchText.codesByKey; chưa thì trong kỳ đang xem); tên khách trong kỳ và POS đang xem.
+            SearchField(prompt: "Tìm SĐT, mã đơn hoặc tên khách", text: $typed) { scheduleSearch(typed, delay: .zero) }
+            searchResults
+            MTFlowLayout(spacing: MT.cellGap) {
+                ForEach([("", "Tất cả"), ("unconfirmed", "Mới"), ("processing", "Xác nhận"), ("shipping", "Giao vận"), ("delivered", "Đã giao")], id: \.0) { key, label in
+                    QuickChip(label: label, on: status == key) { status = key }
+                }
+            }
+            ForEach(recent.prefix(8)) { o in orderLink(o) }
+            if recent.isEmpty {
+                if let recentError { StateView(error: recentError, compact: true) { await loadRecent(force: true) } }
+                else if recentLoading { StateView(loading: "Đang tải danh sách đơn…", compact: true) }
+                else { Text("Không có đơn khớp bộ lọc.").mtFont(.caption).foregroundStyle(Palette.muted) }
+            }
+        }
+        .padding(MT.cardPad).frame(maxWidth: .infinity, alignment: .leading).cardSurface()
     }
 
     // MARK: Ô tìm đơn (kế hoạch 1.5)

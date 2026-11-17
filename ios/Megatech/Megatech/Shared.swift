@@ -152,9 +152,11 @@ struct OrderListView: View {
         }
         .overlay { if loading && rows.isEmpty { ThinkingLoader() } }
         .navigationTitle(active.title)
+        .scrollContentBackground(.hidden)
+        .background(Palette.mtBackground)
         .navigationBarTitleDisplayMode(.inline).brandNav()
         .toolbar { if filterable { ToolbarItem(placement: .primaryAction) { Button { showFilter = true } label: { Label("Lọc", systemImage: "line.3.horizontal.decrease.circle") } } } }
-        .sheet(isPresented: $showFilter) { OrderFilterSheet(query: active) { edited = $0 } }
+        .sheet(isPresented: $showFilter) { MTFilterSheet(title: "Lọc đơn", existingNavigation: true) { OrderFilterSheet(query: active) { edited = $0 } } }
         .searchable(text: $search, prompt: "Mã đơn, SĐT, tên khách")
         .onSubmit(of: .search) { Task { await load(next: false) } }
         .onChange(of: search) { _, v in if v.isEmpty { Task { await load(next: false) } } }
@@ -207,7 +209,7 @@ struct OrderRowView: View {
                 Text("#\(o.orderId)").font(.subheadline.weight(.semibold)).monospacedDigit()
                 StatusChip(name: o.statusName, code: o.statusCode)
                 Spacer()
-                Text(Fmt.money(o.net ?? o.currentTotal ?? 0)).font(.subheadline.weight(.semibold)).monospacedDigit()
+                Text(Fmt.shortMoney(o.net ?? o.currentTotal ?? 0)).mtFont(.cardMetric).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
             }
             Text([o.customer, o.phone].compactMap { $0 }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             HStack(spacing: 6) {
@@ -217,27 +219,46 @@ struct OrderRowView: View {
                 Text(Fmt.time(o.firstConfirmedAt ?? o.createdAt)).monospacedDigit()
             }.font(.caption2).foregroundStyle(.tertiary)
         }
-        .padding(.vertical, 2)
+        .padding(MT.cellGap)
+        .background(Palette.mtSurfaceCell, in: .rect(cornerRadius: MT.rCell))
+        .accessibilityElement(children: .combine)
     }
 }
 
 struct StatusChip: View {
     let name: String; let code: Int?
-    var tint: Color {
+    static func tint(code: Int?) -> Color {
         switch code ?? -1 {
-        case 3, 16: return .good
-        case 4, 5, 15: return .orange
-        case 6, 7: return .bad
-        case 0, 17: return .gray
-        default: return .brand
+        case 3, 16: return Palette.stDel
+        case 2: return Palette.stShip
+        case 4, 5, 15: return Palette.stRet
+        case 6, 7: return Palette.stCan
+        case 0, 17: return Palette.stNew
+        default: return Palette.stConf
         }
     }
-    var body: some View {
-        Text(name).font(.caption2.weight(.semibold)).foregroundStyle(tint)
-            .padding(.horizontal, 6).padding(.vertical, 2).background(tint.opacity(0.12), in: .capsule)
+    static func bg(code: Int?) -> Color {
+        switch code ?? -1 {
+        case 3, 16: return Palette.stDelBg
+        case 2: return Palette.stShipBg
+        case 4, 5, 15: return Palette.stRetBg
+        case 6, 7: return Palette.stCanBg
+        case 0, 17: return Palette.stNewBg
+        default: return Palette.stConfBg
+        }
     }
+    var body: some View { StatusPill(name: name, code: code) }
 }
 
+struct StatusPill: View {
+    let name: String
+    let code: Int?
+    var body: some View {
+        Text(name).font(.caption.weight(.bold)).foregroundStyle(StatusChip.tint(code: code))
+            .padding(.horizontal, 8).padding(.vertical, 4)
+            .background(StatusChip.tint(code: code).opacity(0.16), in: .capsule)
+    }
+}
 /// Đích điều hướng dùng chung: một đơn, một khách, một danh sách đơn. Lưu được để mở lại (Codable, NavMemory.swift), trừ trang
 /// một đơn, một khách, một nhân sự (Route.restorable).
 enum Route: Hashable {
@@ -247,6 +268,7 @@ enum Route: Hashable {
     case customerSearch(String)
     case orders(OrderQuery)
     case staffOrders(StaffOrderQuery)
+    case staffDetail(StaffDetailQuery)
     case web(WebPage)
     case calls(team: String)
     case compare(team: String)
@@ -278,6 +300,7 @@ extension View {
             case .customerSearch(let term): CustomerSearchView(initial: term)
             case .orders(let q): OrderListView(query: q)
             case .staffOrders(let q): StaffOrdersView(query: q)
+            case .staffDetail(let q): StaffDetailView(query: q)
             case .web(let p): PageDestination(p: p)
             case .overview: OverviewView().hrNotice(dept: "Tất cả")
             case .overviewRef: OverviewView(refFirst: true).hrNotice(dept: "Tất cả")
@@ -299,6 +322,7 @@ extension View {
 // MARK: Hồ sơ đơn
 
 struct OrderDetailView: View {
+    @AppStorage("thp_hide_money") private var hideMoney = false
     let id: String
     @State private var d: API.OrderDetail?
     @State private var error: String?
@@ -310,7 +334,7 @@ struct OrderDetailView: View {
                 Section {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("#\(d.orderId)").font(.title3.weight(.bold)).monospacedDigit()
+                            Text("#\(d.orderId)").font(MT.screenTitle).monospacedDigit()
                             PosLabel(id: d.posId, name: d.posName, size: 18, short: false).font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
@@ -330,6 +354,7 @@ struct OrderDetailView: View {
                     }
                 }
                 Section("Tiền") {
+                    MTMetricHeroCard(label: "Doanh thu", value: d.net.map(Fmt.shortMoney) ?? "—", scope: d.posName, isPrivacyMasked: hideMoney)
                     row("Doanh số", Fmt.money(d.gross ?? 0))
                     row("Giảm giá / quà", "−" + Fmt.money(d.discount ?? 0))
                     row("Doanh thu", Fmt.money(d.net ?? 0), bold: true)
@@ -386,6 +411,9 @@ struct OrderDetailView: View {
             } else if error == nil { ThinkingLoader().listRowBackground(Color.clear) }
         }
         .navigationTitle("Đơn hàng")
+        .scrollContentBackground(.hidden)
+        .background(Palette.mtBackground)
+        .listRowBackground(Palette.mtSurfaceCard)
         .navigationBarTitleDisplayMode(.inline).brandNav()
         .task { do { d = try await API.orderDetail(id: id) } catch { self.error = error.localizedDescription } }
     }
@@ -397,6 +425,7 @@ struct OrderDetailView: View {
 // MARK: Hồ sơ khách (ảnh 5.1)
 
 struct CustomerDetailView: View {
+    @AppStorage("thp_hide_money") private var hideMoney = false
     let posId: String; let phone: String
     @State private var d: API.CustomerDetail?
     @State private var error: String?
@@ -407,6 +436,10 @@ struct CustomerDetailView: View {
                 if let error { Label(error, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad) }
                 if let d {
                     let name = d.stats?.name ?? d.orders.first.map { _ in "Khách" } ?? "Khách"
+                    if let stats = d.stats {
+                        MTMetricHeroCard(label: name + " · Tổng chi tiêu", value: Fmt.shortMoney(stats.successNet),
+                                         scope: "\(PosBreakdown.names[posId] ?? posId) · Toàn bộ lịch sử · \(Fmt.int(stats.successOrders)) lần mua", isPrivacyMasked: hideMoney)
+                    }
                     Panel {
                         HStack(alignment: .top, spacing: 12) {
                             Avatar(name: name, size: 56)
@@ -448,8 +481,8 @@ struct CustomerDetailView: View {
                             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                                 KpiCard(icon: "ic_m_orders", tint: .good, label: "Đơn tạo / chốt", value: "\(Fmt.int(s.orders)) / \(Fmt.int(s.closedOrders))")
                                 KpiCard(icon: "checkmark.seal.fill", tint: .good, label: "Mua thành công", value: Fmt.int(s.successOrders))
-                                KpiCard(icon: "ic_m_aov", tint: .teal, label: "Giá trị TB đơn", value: Fmt.shortMoney(s.averageOrder ?? 0))
-                                KpiCard(icon: "ic_m_returned", tint: .orange, label: "Hoàn / hủy", value: "\(Fmt.int(s.returnedOrders)) / \(Fmt.int(s.cancelledOrders))")
+                                KpiCard(icon: "ic_m_aov", tint: Palette.teal, label: "Giá trị TB đơn", value: Fmt.shortMoney(s.averageOrder ?? 0))
+                                KpiCard(icon: "ic_m_returned", tint: Palette.mtWarningInk, label: "Hoàn / hủy", value: "\(Fmt.int(s.returnedOrders)) / \(Fmt.int(s.cancelledOrders))")
                             }
                         }
                         Panel { SectionHead(title: "Lịch sử mua hàng", action: "Xem tất cả").onTapGesture { tab = "history" }; OrderTimeline(orders: Array(d.orders.prefix(4))) }
@@ -464,6 +497,7 @@ struct CustomerDetailView: View {
             }.padding(16)
         }
         .navigationTitle("Hồ sơ khách hàng").navigationBarTitleDisplayMode(.inline).brandNav()
+        .background(Palette.mtBackground)
         .task { do { d = try await API.customer(posId: posId, phone: phone) } catch { self.error = error.localizedDescription } }
     }
 }
@@ -481,7 +515,7 @@ struct OrderTimeline: View {
                         VStack(alignment: .leading, spacing: 2) { Text(Fmt.day(o.createdAt)).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink); Text(Fmt.time(o.createdAt)).font(.system(size: 9)).foregroundStyle(Color.inkSoft) }.frame(width: 76, alignment: .leading)
                         VStack(alignment: .leading, spacing: 2) { Text("Đơn #\(o.sourceOrderId)").font(.system(size: 12)).foregroundStyle(Color.ink); if let r = o.successRank { Text(r == 1 ? "Lần đầu" : "Mua lại \(r - 1)").font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.good) } else if !o.items.isEmpty { Text(o.items.compactMap(\.name).joined(separator: ", ")).font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1) } }
                         Spacer()
-                        VStack(alignment: .trailing, spacing: 3) { Text(Fmt.vnd(o.net)).font(.system(size: 12, weight: .bold)).foregroundStyle(Color.ink); Tag(text: o.statusName, tone: [3, 16].contains(o.statusCode) ? .green : [6, 7].contains(o.statusCode) ? .red : [4, 5, 15].contains(o.statusCode) ? .orange : .blue) }
+                        VStack(alignment: .trailing, spacing: 3) { Text(Fmt.vnd(o.net)).font(.system(size: 12, weight: .bold)).foregroundStyle(Color.ink); Tag(text: o.statusName, tint: StatusChip.tint(code: o.statusCode)) }
                     }.padding(.vertical, 6).contentShape(.rect)
                 }.buttonStyle(.plain)
             }
@@ -506,7 +540,7 @@ struct CustomerSearchView: View {
                 PageTitle(title: "Hồ sơ khách hàng", subtitle: "Tìm theo số điện thoại hoặc tên", icon: "person.text.rectangle.fill")
                 HStack(spacing: 8) {
                     SearchField(prompt: "Tìm theo số điện thoại hoặc tên khách hàng", text: $q) { scheduleSearch(delay: .zero) }
-                    Menu { Button("Tất cả POS") { pos = "" }; ForEach(PosBreakdown.order, id: \.self) { id in Button(PosBreakdown.names[id] ?? id) { pos = id } } } label: { Image(systemName: "line.3.horizontal.decrease").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.ink).frame(width: 40, height: 40).background(Color.card, in: .rect(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.black.opacity(0.08))) }
+                    Menu { Button("Tất cả POS") { pos = "" }; ForEach(PosBreakdown.order, id: \.self) { id in Button(PosBreakdown.names[id] ?? id) { pos = id } } } label: { Image(systemName: "line.3.horizontal.decrease").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.ink).frame(width: 40, height: 40).background(Color.card, in: .rect(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.mtCardBorder)) }
                 }
                 if !pos.isEmpty { Tag(text: "Chỉ tìm trong \(PosBreakdown.names[pos] ?? pos)", tone: .blue) }
                 results
@@ -619,7 +653,7 @@ struct ExplainSheet: View {
                 Section("Cách tính") { Text(m.definition).font(.subheadline) }
                 if let r = m.reconcile {
                     Section("Đối chiếu") {
-                        Label(r.text, systemImage: r.ok ? "checkmark.seal.fill" : "exclamationmark.triangle.fill").foregroundStyle(r.ok ? Color.good : .orange).font(.subheadline)
+                        Label(r.text, systemImage: r.ok ? "checkmark.seal.fill" : "exclamationmark.triangle.fill").foregroundStyle(r.ok ? Color.good : Palette.mtWarningInk).font(.subheadline)
                     }
                 }
                 if let q = m.query {
