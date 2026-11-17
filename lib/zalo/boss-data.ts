@@ -18,7 +18,7 @@ import { AFTER_PACK_CANCELLED_SQL, AFTER_PACK_RETURNED_SQL, PACKED_SQL } from '@
 import { KPI2_KEY, parseKpi2 } from '@/lib/kpi/kpi2';
 import { UNASSIGNED_TEAM } from '@/lib/teams/marketing-teams';
 import { loadPersonSplits, splitAmount } from '@/lib/zalo/team-pos-split';
-import { OUTSIDE_TEAM, type BossData, type MktPersonRow, type MktTeamRow, type PersonRow, type PosRow, type TeamRow } from '@/lib/zalo/boss-report';
+import { OUTSIDE_TEAM, type BossData, type CskhPosRow, type MktPersonRow, type MktTeamRow, type PersonRow, type PosRow, type SalePosRow, type TeamRow } from '@/lib/zalo/boss-report';
 
 const NET = 'COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0))';
 /** Tài khoản MKT: tên có hậu tố MKT, hoặc đã xếp vào team MKT (Cài đặt → Chia team). */
@@ -61,9 +61,9 @@ export async function bossReportData(sendDay: string, hour: string, morning: boo
         COUNT(*) AS base, SUM(CASE WHEN o.first_closed_at IS NOT NULL AND o.first_closed_at<? THEN 1 ELSE 0 END) AS closed
       FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.created_at>=? AND o.created_at<? AND o.status_code<>7 AND NULLIF(o.seller_id,'') IS NOT NULL GROUP BY 1, 2`)
       .bind(cut, ...posIds, dayR.startUtc, cut),
-    db.prepare(`SELECT CASE WHEN o.seller_id IN ${sale} THEN 'sale' WHEN o.seller_id IN ${cskh} THEN 'cskh' ELSE '' END AS dept,
+    db.prepare(`SELECT CASE WHEN o.seller_id IN ${sale} THEN 'sale' WHEN o.seller_id IN ${cskh} THEN 'cskh' ELSE '' END AS dept, o.pos_id AS pos,
         COUNT(*) AS base, SUM(CASE WHEN o.first_closed_at IS NOT NULL AND o.first_closed_at<? THEN 1 ELSE 0 END) AS closed
-      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.created_at>=? AND o.created_at<? AND o.status_code<>7 AND NULLIF(o.seller_id,'') IS NOT NULL GROUP BY 1`)
+      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.created_at>=? AND o.created_at<? AND o.status_code<>7 AND NULLIF(o.seller_id,'') IS NOT NULL GROUP BY 1, 2`)
       .bind(prevCut, ...posIds, prevR.startUtc, prevCut),
     db.prepare(`SELECT SUM(${PACKED_SQL('o')}) AS packed, SUM(${PACKED_SQL('o')} AND ${AFTER_PACK_RETURNED_SQL('o')}) AS returned, SUM(${AFTER_PACK_CANCELLED_SQL('o')}) AS cancelled
       FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,7) AND o.seller_id IN ${sale}`)
@@ -94,7 +94,9 @@ export async function bossReportData(sendDay: string, hour: string, morning: boo
   const rate = new Map<string, { base: number; closed: number }>();
   for (const r of ratePos) { const x = rate.get(r.id) ?? { base: 0, closed: 0 }; x.base += r.base; x.closed += r.closed; rate.set(r.id, x); }
   const splits = await loadPersonSplits(db, month, posIds, cut);
-  const prevRate = new Map((ratesPrev.results as { dept: string; base: number; closed: number }[]).map((r) => [r.dept, r]));
+  const prevRatePos = (ratesPrev.results as { dept: string; pos: string; base: number; closed: number }[]).map((r) => ({ dept: r.dept, pos: r.pos, base: Number(r.base), closed: Math.min(Number(r.base), Number(r.closed)) }));
+  const prevRate = new Map<string, { base: number; closed: number }>();
+  for (const r of prevRatePos) { const x = prevRate.get(r.dept) ?? { base: 0, closed: 0 }; x.base += r.base; x.closed += r.closed; prevRate.set(r.dept, x); }
   const teams = parseWebTeams((teamsRow.results as { value: string }[])[0]?.value);
   const tg = targets.results as { scope: string; ref_id: string; revenue: number }[];
   const empGoal = new Map(tg.filter((t) => t.scope === 'employee').map((t) => [t.ref_id, Number(t.revenue) || 0]));
@@ -135,22 +137,34 @@ export async function bossReportData(sendDay: string, hour: string, morning: boo
       const r = rate.get(x.id) ?? { base: 0, closed: 0 };
       return { name: x.name ?? x.id.slice(0, 8), team: teamNames(x.id), net: Number(x.today_net), orders: Number(x.today_orders), base: r.base, closed: r.closed };
     });
-    const total = mine.reduce((p, x) => ({ today: p.today + Number(x.today_net), month: p.month + Number(x.month_net), orders: p.orders + Number(x.today_orders) }), { today: 0, month: 0, orders: 0 });
+    const total = mine.reduce((p, x) => ({ today: p.today + Number(x.today_net), month: p.month + Number(x.month_net), orders: p.orders + Number(x.today_orders), prev: p.prev + Number(x.prev_net) }), { today: 0, month: 0, orders: 0, prev: 0 });
+    // Theo POS (mẫu rút gọn 17/11/2026): cùng các dòng số với ô tổng nên cộng các POS đúng bằng ô tổng.
+    const byPos: SalePosRow[] = POS.map((p) => {
+      const row: SalePosRow = { name: p.name, net: 0, prevNet: 0, orders: 0, base: 0, closed: 0, prevBase: 0, prevClosed: 0 };
+      for (const r of sellerPos) if (r.id && r.dept === dept && r.pos === p.id) { row.net += Number(r.today_net); row.prevNet += Number(r.prev_net); row.orders += Number(r.today_orders); }
+      for (const r of ratePos) if (r.dept === dept && r.pos === p.id) { row.base += r.base; row.closed += r.closed; }
+      for (const r of prevRatePos) if (r.dept === dept && r.pos === p.id) { row.prevBase += r.base; row.prevClosed += r.closed; }
+      return row;
+    }).filter((r) => r.net || r.prevNet || r.orders || r.base).sort((a, b) => b.net - a.net);
     const r = ratePos.filter((x) => x.dept === dept).reduce((p, x) => ({ base: p.base + x.base, closed: p.closed + x.closed }), { base: 0, closed: 0 });
     const p = prevRate.get(dept);
-    return { total, teams: teamRows, people, base: r.base, closed: r.closed, prevBase: Number(p?.base ?? 0), prevClosed: Math.min(Number(p?.base ?? 0), Number(p?.closed ?? 0)) };
+    return { total, byPos, teams: teamRows, people, base: r.base, closed: r.closed, prevBase: Number(p?.base ?? 0), prevClosed: Math.min(Number(p?.base ?? 0), Number(p?.closed ?? 0)) };
   };
   const s = deptRows('sale'), c = deptRows('cskh');
 
   // MKT: chi phí, DT New theo trang Chi phí & ROAS (mktAnalytics); SỐ VỀ, ĐƠN NEW, TL CHỐT theo đúng trang Marketing trên web (marketingOverview,
   // anh Vũ 16/11/2026: "những số này nên lấy trên web"): số về = SĐT khác nhau trên đơn chia Sale (không cộng trùng theo marketer),
   // TL chốt = đơn New ÷ số về, không lẫn đơn CSKH. Kết quả trang Marketing giữ 60 giây nên web vừa tính thì báo cáo dùng lại.
-  const mo = (start: string, end: string) => marketingOverview({ role: 'owner' } as never, new URLSearchParams({ basis: 'confirmed', stage: 'confirmed', team: 'all', until: cut }), posIds, start, end, null);
-  const [mToday, mMonth, wToday, wMonth] = await Promise.all([
+  const mo = (start: string, end: string, until = cut) => marketingOverview({ role: 'owner' } as never, new URLSearchParams({ basis: 'confirmed', stage: 'confirmed', team: 'all', until }), posIds, start, end, null);
+  const prevDay = addDays(day, -1);
+  const [mToday, mMonth, wToday, wMonth, mPrev, wPrev] = await Promise.all([
     mktAnalytics({ posIds, start: day, end: day, db, untilUtc: cut }),
     day === monthStart ? null : mktAnalytics({ posIds, start: monthStart, end: day, db, untilUtc: cut }),
     mo(day, day),
     day === monthStart ? null : mo(monthStart, day),
+    // So hôm qua (mẫu rút gọn 17/11/2026): cùng khoảng giờ hôm qua, báo cáo trọn ngày thì trọn ngày trước.
+    mktAnalytics({ posIds, start: prevDay, end: prevDay, db, untilUtc: prevCut }),
+    mo(prevDay, prevDay, prevCut),
   ]);
   type WebTeam = { marketingTeamId: string; createdNewPhones?: number; newConfirmed?: number };
   type WebM = { marketerId: string; createdNewPhones?: number };
@@ -163,7 +177,8 @@ export async function bossReportData(sendDay: string, hour: string, morning: boo
     const goal = leadsOf(`team:${t.id}`) || members.reduce((a, p) => a + leadsOf(`employee:${p.id}`), 0) || null;
     const w = webTeam(wToday, t.id);
     return { name: t.id === UNASSIGNED_TEAM ? 'Ngoài team' : t.name, cost: t.cost, newNet: t.newNet, leads: Number(w?.createdNewPhones ?? 0), closed: Number(w?.newConfirmed ?? 0), leadsGoal: goal,
-      monthLeads: Number(webTeam(wMonth ?? wToday, t.id)?.createdNewPhones ?? 0) };
+      monthLeads: Number(webTeam(wMonth ?? wToday, t.id)?.createdNewPhones ?? 0),
+      prevNewNet: mPrev.teams.find((x) => x.id === t.id)?.newNet ?? 0, prevLeads: Number(webTeam(wPrev, t.id)?.createdNewPhones ?? 0) };
   }).sort((a, b) => b.newNet - a.newNet);
   const teamName = (id: string) => (id === UNASSIGNED_TEAM ? 'Ngoài team' : mToday.teams.find((x) => x.id === id)?.name ?? 'Ngoài team');
   const webPeople = new Map(((wToday?.byMarketer ?? []) as WebM[]).map((x) => [x.marketerId, Number(x.createdNewPhones ?? 0)]));
@@ -185,10 +200,11 @@ export async function bossReportData(sendDay: string, hour: string, morning: boo
     range: morning ? 'số trọn ngày' : `số từ 0h tới ${h}h`,
     company,
     sale: { kpi: { goal: goalOfDept('sale'), monthNet: s.total.month, todayNet: s.total.today }, base: s.base, closed: s.closed, prevBase: s.prevBase, prevClosed: s.prevClosed,
-      packed: Number(ap?.packed ?? 0), returned: Number(ap?.returned ?? 0), cancelled: Number(ap?.cancelled ?? 0), teams: s.teams, people: s.people },
-    cskh: { kpi: { goal: goalOfDept('cskh'), monthNet: c.total.month, todayNet: c.total.today }, orders: c.total.orders, prevOrders: 0, base: c.base, closed: c.closed, prevBase: c.prevBase, prevClosed: c.prevClosed, teams: c.teams, people: c.people },
+      packed: Number(ap?.packed ?? 0), returned: Number(ap?.returned ?? 0), cancelled: Number(ap?.cancelled ?? 0), teams: s.teams, people: s.people, prevNet: s.total.prev, byPos: s.byPos },
+    cskh: { kpi: { goal: goalOfDept('cskh'), monthNet: c.total.month, todayNet: c.total.today }, orders: c.total.orders, prevOrders: 0, base: c.base, closed: c.closed, prevBase: c.prevBase, prevClosed: c.prevClosed, teams: c.teams, people: c.people, prevNet: c.total.prev,
+      byPos: c.byPos.map((r): CskhPosRow => ({ name: r.name, net: r.net, prevNet: r.prevNet, orders: r.orders })) },
     mkt: { kpi: { goal: goalOfDept('mkt'), monthNet: (mMonth ?? mToday).current.newNet, todayNet: mToday.current.newNet }, leads: webLeads(wToday), monthLeads: webLeads(wMonth ?? wToday),
-      leadsGoal: leadsGoalAll, cost: mToday.current.cost, costAt: (costRow.results as { at: string | null }[])[0]?.at ?? null, teams: mktTeamRows, people: mktPeople },
+      leadsGoal: leadsGoalAll, cost: mToday.current.cost, prevNewNet: mPrev.current.newNet, prevLeads: webLeads(wPrev), costAt: (costRow.results as { at: string | null }[])[0]?.at ?? null, teams: mktTeamRows, people: mktPeople },
     pos: posRows,
     ship: { packed: ship?.total.orders ?? 0, closed: company.orders, vtp: ship?.rows.find((r) => r.carrier === 'VTP')?.orders ?? 0, spx: ship?.rows.find((r) => r.carrier === 'SPX')?.orders ?? 0,
       others: (ship?.rows ?? []).filter((r) => r.carrier !== 'VTP' && r.carrier !== 'SPX' && r.orders > 0).map((r) => ({ name: r.carrier, orders: r.orders })) },

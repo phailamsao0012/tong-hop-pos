@@ -9,7 +9,8 @@ const base: BossData = {
   company: { net: 580e6, orders: 742, yesterday: 546e6 },
   sale: { kpi: { goal: 14.1e9, monthNet: 5.62e9, todayNet: 412e6 }, base: 900, closed: 425, prevBase: 800, prevClosed: 360, packed: 1000, returned: 31, cancelled: 54,
     teams: [{ name: 'Sale Heo HN', net: 43e6, orders: 58, base: 158, closed: 58, monthNet: 1e9, goal: 3e9 }],
-    people: [{ name: 'Trường Sơn', team: 'Sale Nấm', net: 5e6, orders: 8, base: 26, closed: 8 }, { name: 'Ít số', team: 'Sale Nấm', net: 0, orders: 0, base: 5, closed: 0 }] },
+    people: [{ name: 'Trường Sơn', team: 'Sale Nấm', net: 5e6, orders: 8, base: 26, closed: 8 }, { name: 'Ít số', team: 'Sale Nấm', net: 0, orders: 0, base: 5, closed: 0 }],
+    byPos: [{ name: 'Siêu Vô Gạo', net: 43e6, prevNet: 50e6, orders: 58, base: 158, closed: 58, prevBase: 150, prevClosed: 60 }, { name: 'MEGAROOT', net: 9e6, prevNet: 0, orders: 9, base: 12, closed: 3, prevBase: 0, prevClosed: 0 }] },
   cskh: { kpi: { goal: null, monthNet: 2.31e9, todayNet: 168e6 }, orders: 201, prevOrders: 0, base: 300, closed: 174, prevBase: 0, prevClosed: 0, teams: [], people: [] },
   mkt: { kpi: { goal: null, monthNet: 4.1e9, todayNet: 311e6 }, leads: 1084, monthLeads: 15400, leadsGoal: null, cost: 96e6,
     teams: [{ name: 'MKT Đông Phong', cost: 18e6, newNet: 0, leads: 210, closed: 9, leadsGoal: null, monthLeads: 2000 }], people: [] },
@@ -43,9 +44,13 @@ void test('người ngoài team gom 1 hàng "Ngoài team"', () => {
   assert.deepEqual(withOutside([{ name: 'A' }], null).map((r) => r.name), ['A']);
 });
 
-void test('cảnh báo: team chốt thấp, người chốt thấp, hủy vượt 5%, MKT chi không ra đơn, POS giảm, việc quá hạn', () => {
+void test('cảnh báo: POS chốt thấp (không theo team), không còn dòng KPI, người chốt thấp, hủy vượt 5%, MKT chi không ra đơn, POS giảm, việc quá hạn', () => {
   const w = warnings(base);
-  assert.ok(w.some((x) => x.startsWith('Sale Heo HN: tỉ lệ chốt 36,7%')));
+  // Mẫu rút gọn 17/11/2026: cảnh báo tỉ lệ chốt theo POS; POS dưới 20 số không cảnh báo; không còn dòng KPI.
+  assert.ok(w.some((x) => x.startsWith('Sale Siêu Vô Gạo: tỉ lệ chốt 36,7%')));
+  assert.ok(!w.some((x) => x.includes('MEGAROOT')), 'POS dưới 20 số không cảnh báo');
+  assert.ok(!w.some((x) => x.includes('Sale Heo HN')), 'không còn cảnh báo theo team');
+  assert.ok(!w.some((x) => /KPI/.test(x)), 'không còn dòng KPI');
   assert.ok(w.some((x) => x.includes('Trường Sơn')));
   assert.ok(w.some((x) => x.includes('tỉ lệ hủy 5,4%')));
   assert.ok(!w.some((x) => x.includes('tỉ lệ hoàn')), 'hoàn 3,1% chưa tới 7%');

@@ -14,7 +14,12 @@ export type Money = { today: number; month: number; yesterday: number };
 /** Dòng team Sale / CSKH. kpi: KPI tháng của team (cộng KPI người); null = chưa đặt. */
 export type TeamRow = { name: string; net: number; orders: number; base: number; closed: number; monthNet: number; goal: number | null };
 export type PersonRow = { name: string; team: string; net: number; orders: number; base: number; closed: number };
-export type MktTeamRow = { name: string; cost: number; newNet: number; leads: number; closed: number; leadsGoal: number | null; monthLeads: number };
+export type MktTeamRow = { name: string; cost: number; newNet: number; leads: number; closed: number; leadsGoal: number | null; monthLeads: number;
+  /** Cùng khoảng giờ hôm qua (báo cáo trọn ngày: trọn ngày trước). */ prevNewNet?: number; prevLeads?: number };
+/** Sale theo POS (mẫu rút gọn 17/11/2026): doanh thu, đơn, tỉ lệ chốt hôm nay và cùng khoảng giờ hôm qua. Cộng các dòng = ô SALE. */
+export type SalePosRow = { name: string; net: number; prevNet: number; orders: number; base: number; closed: number; prevBase: number; prevClosed: number };
+/** CSKH theo POS: doanh thu, đơn, doanh thu cùng khoảng giờ hôm qua. Cộng các dòng = ô CSKH. */
+export type CskhPosRow = { name: string; net: number; prevNet: number; orders: number };
 export type MktPersonRow = { name: string; team: string; cost: number; newNet: number; leads: number };
 export type PosRow = { name: string; net: number; orders: number; yesterday: number };
 export type DeptKpi = { goal: number | null; monthNet: number; todayNet: number };
@@ -25,9 +30,9 @@ export type BossData = {
   /** Nhãn gửi: "17h thứ Bảy 14/11" / "sáng thứ Bảy 14/11". */ title: string;
   /** Khoảng số: "số từ 0h tới 17h" / "số trọn ngày 13/11". */ range: string;
   company: { net: number; orders: number; yesterday: number };
-  sale: { kpi: DeptKpi; base: number; closed: number; prevBase: number; prevClosed: number; packed: number; returned: number; cancelled: number; teams: TeamRow[]; people: PersonRow[] };
-  cskh: { kpi: DeptKpi; orders: number; prevOrders: number; base: number; closed: number; prevBase: number; prevClosed: number; teams: TeamRow[]; people: PersonRow[] };
-  mkt: { kpi: DeptKpi; leads: number; monthLeads: number; leadsGoal: number | null; cost: number; /** Lúc chi phí QC của ngày được nhập lần cuối (ISO), null = chưa có. */ costAt?: string | null; teams: MktTeamRow[]; people: MktPersonRow[] };
+  sale: { kpi: DeptKpi; base: number; closed: number; prevBase: number; prevClosed: number; packed: number; returned: number; cancelled: number; teams: TeamRow[]; people: PersonRow[]; prevNet?: number; byPos?: SalePosRow[] };
+  cskh: { kpi: DeptKpi; orders: number; prevOrders: number; base: number; closed: number; prevBase: number; prevClosed: number; teams: TeamRow[]; people: PersonRow[]; prevNet?: number; byPos?: CskhPosRow[] };
+  mkt: { kpi: DeptKpi; leads: number; monthLeads: number; leadsGoal: number | null; cost: number; prevNewNet?: number; prevLeads?: number; /** Lúc chi phí QC của ngày được nhập lần cuối (ISO), null = chưa có. */ costAt?: string | null; teams: MktTeamRow[]; people: MktPersonRow[] };
   pos: PosRow[];
   ship: { packed: number; closed: number; vtp: number; spx: number; others?: { name: string; orders: number }[] };
   overdueTasks: number;
@@ -92,26 +97,19 @@ export function coach(people: PersonRow[]) {
     .filter((p) => p.rate < BOSS_CLOSE_RED).sort((a, b) => a.rate - b.rate);
 }
 
-/** Dòng "Cần chú ý" ở ảnh 2 (tối đa 8), theo thứ tự nặng trước. */
+/** Dòng "Cần chú ý" ở ảnh 2 (tối đa 8), theo thứ tự nặng trước. Mẫu rút gọn 17/11/2026: cảnh báo tỉ lệ chốt theo POS (không theo team),
+ *  bỏ dòng thiếu KPI tháng / KPI số vì tin gửi sếp không còn KPI. */
 export function warnings(d: BossData): string[] {
   const out: string[] = [];
-  const sk = deptKpi(d.sale.kpi, d), ck = deptKpi(d.cskh.kpi, d), mk = deptKpi(d.mkt.kpi, d);
-  for (const t of d.sale.teams) {
-    const r = closeRate(t);
-    if (r != null && t.base >= COACH_MIN_BASE && r < BOSS_CLOSE_RED) out.push(`${t.name}: tỉ lệ chốt ${rateText(r)} (dưới ${BOSS_CLOSE_RED}%)`);
+  for (const p of d.sale.byPos ?? []) {
+    const r = closeRate(p);
+    if (r != null && p.base >= COACH_MIN_BASE && r < BOSS_CLOSE_RED) out.push(`Sale ${p.name}: tỉ lệ chốt ${rateText(r)} (dưới ${BOSS_CLOSE_RED}%)`);
   }
   for (const p of coach(d.sale.people).slice(0, 3)) out.push(`Sale ${p.name} (${p.team}): chốt ${rateText(p.rate, 0)} trên ${num(p.base)} số`);
   const ret = pct(d.sale.returned, d.sale.packed), can = pct(d.sale.cancelled, d.sale.packed);
   if (ret != null && ret >= BOSS_RETURN_RED) out.push(`Sale: tỉ lệ hoàn ${rateText(ret)} trên đơn đi (từ ${BOSS_RETURN_RED}% là đỏ)`);
   if (can != null && can >= BOSS_CANCEL_RED) out.push(`Sale: tỉ lệ hủy ${rateText(can)} trên đơn đi (từ ${BOSS_CANCEL_RED}% là đỏ)`);
-  for (const [name, k] of [['Sale', sk], ['CSKH', ck], ['MKT', mk]] as const) {
-    if (k && k.diff < 0 && d.until == null) out.push(`${name}: thiếu ${money(-k.diff)} so tiến độ KPI tháng`);
-  }
   for (const t of d.mkt.teams) if (t.cost > 0 && t.newNet === 0) out.push(`${t.name}: chi ${money(t.cost)} mà chưa ra doanh thu New`);
-  if (d.mkt.leadsGoal) {
-    const lk = bossPace(d.mkt.leadsGoal, d, d.mkt.monthLeads, d.mkt.leads);
-    if (lk && d.mkt.leads < lk.daily && d.until == null) out.push(`MKT: ${num(d.mkt.leads)} số, thiếu ${num(lk.daily - d.mkt.leads)} so KPI số ngày`);
-  }
   for (const p of d.pos) {
     const ch = pct(p.net - p.yesterday, p.yesterday);
     if (ch != null && ch <= -20 && p.yesterday >= 5e6) out.push(`${p.name}: doanh thu giảm ${Math.round(-ch)}% so ${d.until ? 'cùng giờ hôm qua' : `ngày ${prevDay(d.day)}`}`);
@@ -120,20 +118,30 @@ export function warnings(d: BossData): string[] {
   return out.slice(0, 8);
 }
 
-/** Tin chữ kèm ảnh (cũng là bản gửi khi Zalo không tải được ảnh). */
+/** "So hôm qua" (mẫu rút gọn 17/11/2026): hôm nay trừ cùng khoảng giờ hôm qua; hôm qua bằng 0 thì null (ghi "–"). */
+export const vsPrev = (now: number, prev: number | null | undefined) => (prev ? now - prev : null);
+/** Tỉ lệ chốt hôm nay trừ cùng giờ hôm qua, đơn vị điểm %: "− 2,1%". Thiếu một bên thì null. */
+export const rateVsPrev = (r: { base: number; closed: number; prevBase: number; prevClosed: number }) => {
+  const a = closeRate(r), b = closeRate({ base: r.prevBase, closed: r.prevClosed });
+  return a == null || b == null ? null : a - b;
+};
+/** "+18 tr" / "−6 tr" / "–" (hôm qua 0) / "0". */
+export const vsText = (v: number | null, fmt: (n: number) => string = money) => (v == null ? '–' : gapWord(v, fmt));
+export const rateVsText = (v: number | null) => (v == null ? '–' : `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(1).replace('.', ',')}%`);
+/** Chữ "so hôm qua" / "so 15/11" (báo cáo trọn ngày so trọn ngày trước). */
+export const prevWordOf = (d: Pick<BossData, 'day' | 'until'>) => (d.until ? 'hôm qua' : prevDay(d.day));
+
+/** Tin chữ kèm ảnh (cũng là bản gửi khi Zalo không tải được ảnh). Mẫu rút gọn 17/11/2026: không còn KPI, so cùng khoảng giờ hôm qua. */
 export function bossText(d: BossData) {
-  const sk = deptKpi(d.sale.kpi, d), ck = deptKpi(d.cskh.kpi, d), mk = deptKpi(d.mkt.kpi, d);
-  const line = (name: string, net: number, k: KpiDay | null, monthNet = 0) => { const g = k ? kpiGap(k.goal, d.day, monthNet, net) : null; return `${name}: ${money(net)}${g ? ` · KPI ngày ${money(g.daily)}: ${gapWord(g.today)} · từ đầu tháng ${signed(g.month)}` : ' · chưa đặt KPI'}`; };
-  const lk = d.mkt.leadsGoal ? bossPace(d.mkt.leadsGoal, d, d.mkt.monthLeads, d.mkt.leads) : null;
+  const w = `so ${prevWordOf(d)}`;
+  const saleRate = closeRate(d.sale);
   return [
     `📊 MEGATECH · Báo cáo tổng quan ${d.title}`,
     d.range,
-    line('Sale', d.sale.kpi.todayNet, sk, d.sale.kpi.monthNet),
-    line('CSKH', d.cskh.kpi.todayNet, ck, d.cskh.kpi.monthNet),
-    line('MKT (DT New)', d.mkt.kpi.todayNet, mk, d.mkt.kpi.monthNet),
-    `Số đưa về: ${num(d.mkt.leads)}${lk ? ` · KPI số ngày ${num(lk.daily)}: ${gapWord(d.mkt.leads - lk.daily, num)}` : ''}`,
-    `Tổng công ty ${money(d.company.net)} · ${num(d.company.orders)} đơn chốt`,
-    ...warnings(d).slice(0, 4).map((w) => `⚠️ ${w}`),
+    `Sale: ${money(d.sale.kpi.todayNet)} (${vsText(vsPrev(d.sale.kpi.todayNet, d.sale.prevNet))} ${w}) · TL chốt ${rateText(saleRate)} (${rateVsText(rateVsPrev(d.sale))})`,
+    `CSKH: ${money(d.cskh.kpi.todayNet)} (${vsText(vsPrev(d.cskh.kpi.todayNet, d.cskh.prevNet))} ${w})`,
+    `MKT (DT New): ${money(d.mkt.kpi.todayNet)} (${vsText(vsPrev(d.mkt.kpi.todayNet, d.mkt.prevNewNet))} ${w}) · Số new ${num(d.mkt.leads)} (${vsText(vsPrev(d.mkt.leads, d.mkt.prevLeads), num)})`,
+    ...warnings(d).slice(0, 4).map((x) => `⚠️ ${x}`),
   ].join('\n').slice(0, 2000);
 }
 
