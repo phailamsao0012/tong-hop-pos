@@ -166,7 +166,18 @@ const VIEW_GATES: [string, string[]][] = [
   ['/api/teams', ['sale-teams', 'cskh-teams', 'van-don']],
   // Phần Nhân sự trong app (qua web nhân sự): chỉ chủ hệ thống và giám đốc.
   ['/api/sat/hr', ['people']],
+  // Khai báo thêm khi chuyển sang chặn mặc định (plan sửa web 1.4, 17/11/2026): trước đây mọi người đăng nhập đều gọi được.
+  ['/api/reports/kpi-day', ['overview']],
+  ['/api/reports/van-don-carriers', ['van-don']],
+  ['/api/reports/cskh-badge', ['calls', 'care', 'cskh-overview']],
 ];
+/** API tự kiểm quyền bên trong route (chủ hệ thống, người được giao việc, trang được cấp...): ở đây chỉ cần đăng nhập. */
+export const SELF_CHECKED_API = ['/api/activity', '/api/recruit', '/api/ai/trends', '/api/demo/order-notes', '/api/giao-viec', '/api/holidays', '/api/kpi2', '/api/prefs/metrics',
+  '/api/reports/customer-detail', '/api/reports/kpi-extra', '/api/reports/returns', '/api/staff-settings', '/api/staff-status', '/api/stuck-alert', '/api/sync/pos',
+  '/api/targets', '/api/web-teams'];
+/** API dùng chung cho mọi trang (tên nhân viên, thâm niên, phần KPI theo POS đã thu hẹp POS, danh sách mục app): ai đăng nhập cũng gọi được. */
+export const ANY_USER_API = ['/api/employees', '/api/staff-tenure', '/api/targets/pos-share', '/api/app/modules'];
+const declared = (path: string) => [...OWNER_ONLY, ...VIEW_GATES.map(([p]) => p), ...SELF_CHECKED_API, ...ANY_USER_API].some((p) => path === p || path.startsWith(`${p}/`));
 
 /** Kiểm tra và thu hẹp một yêu cầu API theo quyền: trả về lý do chặn, hoặc URL đã sửa tham số posIds/team. */
 export const MENTOR_REPORTS = ['/api/reports/customers', '/api/reports/customer360', '/api/reports/customer-detail', '/api/reports/care', '/api/reports/calls', '/api/reports/repurchase', '/api/reports/staff-detail', '/api/reports/staff-compare'];
@@ -204,6 +215,8 @@ export function scopeApi(a: Access & { userId?: string }, method: string, url: U
     if (path.startsWith('/api/sync/') && method !== 'GET') return { blocked: 'Chỉ chủ hệ thống mới chạy đồng bộ.', url };
     const gate = VIEW_GATES.find(([p]) => path === p || path.startsWith(`${p}/`));
     if (gate && !gate[1].some((v) => canView(a, v))) return { blocked: 'Tài khoản của bạn không được cấp quyền xem phần này.', url };
+    // Chặn mặc định (plan sửa web 1.4, 17/11/2026): API chưa khai báo ở trên thì chỉ chủ hệ thống gọi được, tránh route mới quên phân quyền.
+    if (!declared(path)) return { blocked: 'Phần này chưa được cấp quyền cho tài khoản của bạn.', url };
   }
   const out = new URL(url);
   const allowed = allowedPos(a);
