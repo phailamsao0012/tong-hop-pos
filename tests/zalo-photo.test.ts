@@ -24,7 +24,7 @@ void test('gửi ảnh Zalo: tải ảnh trước, đưa Zalo đường sau chuy
       const u = String(url);
       if (!u.includes('zaloplatforms')) { calls.push('anh'); return imageResponse(NEW); }
       calls.push('zalo'); zaloCalls++;
-      sentPhotos.push((JSON.parse(String(init?.body)) as { photo: string }).photo);
+      sentPhotos.push((JSON.parse(init?.body as string) as { photo: string }).photo);
       return zaloCalls <= failFirst ? Response.json({ ok: false, error_code: 408, description: 'Không tải được ảnh' }, { status: 400 }) : Response.json({ ok: true, result: {} });
     }) as typeof fetch;
     assert.equal(await sendZaloPhoto('khoa-gia', 'chat-1', OLD, 'chú thích'), true);
@@ -39,7 +39,7 @@ void test('gửi ảnh Zalo: tải ảnh trước, đưa Zalo đường sau chuy
     sentPhotos.length = 0;
     globalThis.fetch = (async (url: string | URL, init?: RequestInit) => {
       if (!String(url).includes('zaloplatforms')) return new Response('lỗi', { status: 500 });
-      sentPhotos.push((JSON.parse(String(init?.body)) as { photo: string }).photo);
+      sentPhotos.push((JSON.parse(init?.body as string) as { photo: string }).photo);
       return Response.json({ ok: true, result: {} });
     }) as typeof fetch;
     assert.equal(await sendZaloPhoto('khoa-gia', 'chat-1', OLD, 'chú thích'), true);
