@@ -46,6 +46,7 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
   // Bản đã tải từ máy chủ: lúc lưu chỉ gửi đúng dòng khác bản này (plan sửa web 1.1, 17/11/2026).
   const [loadedItems, setLoadedItems] = useState<Record<string, TargetItem>>({});
   const [undo, setUndo] = useState<Undo>(null);
+  const [undoAsk, setUndoAsk] = useState(false);
   const [mktTeams, setMktTeams] = useState<{ id: string; name: string }[]>([]);
   useEffect(() => { if (canEdit) void fetch('/api/marketing-teams').then((r) => r.ok ? r.json() as Promise<{ teams: { id: string; name: string }[] }> : null).then((b) => setMktTeams(b?.teams ?? [])).catch(() => undefined); }, [canEdit]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -129,13 +130,13 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
   };
   // Hoàn tác lần lưu gần nhất (chủ hệ thống): trả đúng các dòng của lần lưu đó về như trước.
   const undoLast = async () => {
-    if (!undo || !window.confirm(`Hoàn tác lần lưu lúc ${new Date(undo.at).toLocaleString('vi-VN')} (${undo.count} dòng KPI)?`)) return;
-    setSaving(true); setError(null);
+    if (!undo) return;
+    setUndoAsk(false); setSaving(true); setError(null);
     try {
       const r = await fetch('/api/targets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ month, action: 'undo' }) });
-      const b = await r.json() as { error?: string };
+      const b = await r.json() as { error?: string; count?: number; skipped?: string[] };
       if (!r.ok) throw new Error(b.error ?? 'Không hoàn tác được.');
-      toast('Đã hoàn tác lần lưu trước'); await load();
+      toast(`Đã hoàn tác ${b.count ?? 0} dòng KPI${b.skipped?.length ? `, giữ nguyên ${b.skipped.length} dòng đã có người đổi sau đó` : ''}`); await load();
     } catch (e) { setError(e instanceof Error ? e.message : 'Không hoàn tác được.'); }
     finally { setSaving(false); }
   };
@@ -192,7 +193,7 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
               <span className="inline-flex" tabIndex={previous?.items.length ? -1 : 0}><Button variant="outline" size="sm" onClick={copyPrevious} disabled={!previous?.items.length}><Copy size={14} />Sao chép tháng trước</Button></span>
             </Tooltip>
           )}
-          {canEdit && undo && !dirty && <Tooltip content={`Trả các dòng KPI của lần lưu lúc ${new Date(undo.at).toLocaleString('vi-VN')} về như trước`}><Button variant="outline" size="sm" onClick={() => void undoLast()} disabled={saving}><Undo2 size={14} />Hoàn tác lần lưu trước</Button></Tooltip>}
+          {canEdit && undo && !dirty && <Tooltip content={`Trả các dòng KPI của lần lưu lúc ${new Date(undo.at).toLocaleString('vi-VN')} (${undo.by}) về như trước`}><Button variant="outline" size="sm" onClick={() => setUndoAsk(true)} disabled={saving}><Undo2 size={14} />Hoàn tác lần lưu trước</Button></Tooltip>}
           {canEdit && dirty && <Button variant="ghost" size="sm" onClick={discard} disabled={saving}><RotateCcw size={14} />Hủy thay đổi</Button>}
           {canEdit && <Button size="sm" onClick={save} disabled={!dirty || saving}>{saving ? <RotateCw size={14} className="animate-spin" /> : <Save size={14} />}{saving ? 'Đang lưu…' : 'Lưu mục tiêu'}</Button>}
         </div>
@@ -269,6 +270,19 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
           <AlertDialogFooter>
             <AlertDialogCancel>Ở lại</AlertDialogCancel>
             <AlertDialogAction variant="destructive" onClick={() => { if (pendingMonth) setMonth(pendingMonth); setPendingMonth(null); }}>Bỏ và đổi tháng</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      {/* Hộp xác nhận hoàn tác: cùng kiểu hộp chung với hộp đổi tháng (17/11/2026). */}
+      <AlertDialog open={undoAsk && !!undo} onOpenChange={(o) => { if (!o) setUndoAsk(false); }}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hoàn tác lần lưu trước?</AlertDialogTitle>
+            <AlertDialogDescription>{undo ? `Lần lưu lúc ${new Date(undo.at).toLocaleString('vi-VN')} của ${undo.by}, ${undo.count} dòng KPI, sẽ trở về như trước khi lưu. Dòng nào đã có người khác đổi sau lần lưu đó thì giữ nguyên.` : ''}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Không</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={() => void undoLast()}>Hoàn tác</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

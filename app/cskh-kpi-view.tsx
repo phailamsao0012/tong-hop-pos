@@ -20,6 +20,7 @@ import { daysInMonth, parseMoney, type TargetItem } from './targets-panel';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import { usePosIds, usePosStaffFilter } from './pos-store';
+import { seesKpi, type KpiSeen } from '@/lib/kpi/kpi-seen';
 import { useGoalShare } from './goal-share-store';
 import { PosChips } from './overview-view';
 import { TeamKpiPanel } from './team-groups-view';
@@ -52,6 +53,7 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
   const [pendingMonth, setPendingMonth] = useState<string | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [items, setItems] = useState<Record<string, TargetItem>>({});
+  const [seen, setSeen] = useState<KpiSeen>(undefined);
   const [previous, setPrevious] = useState<Resp['previous'] | null>(null);
   const [shifts, setShifts] = useState<Record<string, Shift>>({});
   const [draft, setDraft] = useState<Record<string, string>>({});
@@ -80,6 +82,7 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
       const body = await r.json() as Resp & { error?: string };
       if (!r.ok) throw new Error(body.error ?? 'Không tải được KPI.');
       setItems(Object.fromEntries(body.items.filter((i) => i.scope === 'employee').map((i) => [i.refId, i])));
+      setSeen((body as { seeKpiOf?: string[] | null }).seeKpiOf ?? null);
       setPrevious(body.previous); setDirty(false); setDraft({});
     } catch (e) { setError(e instanceof Error ? e.message : 'Không tải được KPI.'); }
     finally { setLoaded(true); }
@@ -162,7 +165,9 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
   const todayNet = (id: string) => (report?.current.byEmployeeDay ?? []).filter((d) => d.sellerId === id && d.day === today).reduce((a, d) => a + d.closedNet, 0);
   // Mục tiêu đã chia theo POS khi chọn ít hơn mọi POS (anh Vũ 12/11/2026, câu 2 chọn A); ô nhập vẫn là mục tiêu gốc.
   const goalOf = (id: string) => share.scale(items[id]?.revenue ?? 0, [id]);
-  const totalGoal = staff.reduce((a, e) => a + goalOf(e.id), 0);
+  // Thiếu quyền xem KPI một số người (plan sửa web 1.3): tổng KPI hiện "–", không cộng thiếu.
+  const hiddenKpi = staff.filter((e) => !seesKpi(seen, e.id)).length;
+  const totalGoal = hiddenKpi ? 0 : staff.reduce((a, e) => a + goalOf(e.id), 0);
   const totalDone = staff.reduce((a, e) => a + (done(e.id)?.closedNet ?? 0), 0);
   const withGoal = staff.filter((e) => items[e.id]?.revenue);
   const isCurrent = month === today.slice(0, 7);
@@ -221,7 +226,7 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
       <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <KpiCard icon={Users} tone="green" label={`Nhân viên ${label}`} value={vi.format(staff.length)} countUp rawValue={staff.length} format={(n) => vi.format(Math.round(n))} note={`${withGoal.length} người đã có KPI`}
           tooltip={{ period: monthLabel, current: `${vi.format(staff.length)} người`, definition: `Nhân viên bộ phận ${label} trên Pancake (đang làm việc, hoặc đã nghỉ nhưng còn KPI tháng này).` }} />
-        <KpiCard icon={ICON.kpi} tone="purple" label="Tổng KPI tháng" value={short(totalGoal)} unit="₫" countUp rawValue={totalGoal} format={short} note={`Trung bình ${withGoal.length ? `${short(totalGoal / withGoal.length)} ₫` : '—'} / người`}
+        <KpiCard icon={ICON.kpi} tone="purple" label="Tổng KPI tháng" value={hiddenKpi ? '–' : short(totalGoal)} unit={hiddenKpi ? undefined : '₫'} countUp={!hiddenKpi} rawValue={totalGoal} format={short} note={hiddenKpi ? `Không xem được KPI ${hiddenKpi} người nên không cộng tổng` : `Trung bình ${withGoal.length ? `${short(totalGoal / withGoal.length)} ₫` : '—'} / người`}
           tooltip={{ period: monthLabel, current: money(totalGoal), definition: `Tổng KPI doanh thu của mọi nhân viên ${label} trong tháng; trung bình tính trên người đã có KPI.` }} />
         <KpiCard icon={Wallet} tone="teal" label="Đã đạt (doanh thu chốt)" value={short(totalDone)} unit="₫" countUp rawValue={totalDone} format={short} note={totalGoal ? `${pct(totalDone / totalGoal * 100, 0)} KPI · ngày ${daysElapsed}/${dim}` : 'Chưa đặt KPI'} progress={totalGoal ? { value: totalDone, max: totalGoal } : undefined}
           tooltip={{ period: monthLabel, current: money(totalDone), previous: totalGoal ? money(totalGoal) : undefined, previousLabel: 'KPI tháng', definition: `Doanh thu đơn chốt (đơn đã xác nhận, sau giảm giá) của nhân viên ${label} từ đầu tháng tới hôm nay${totalGoal ? `, đạt ${pct(totalDone / totalGoal * 100, 1)} KPI` : ''}.` }} />
@@ -257,8 +262,8 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
                   return (
                     <tr key={e.id}>
                       <td className="font-medium">{e.name}{!e.active && <span className="ml-1.5 rounded-[4px] bg-t-gray-bg px-1 py-px text-[11px] font-semibold text-t-gray">nghỉ</span>}</td>
-                      <td className="n">{moneyInput(e.id, e.name)}</td>
-                      {isSale && <td className="n">{rateInput(e.id, e.name)}</td>}
+                      <td className="n">{seesKpi(seen, e.id) ? moneyInput(e.id, e.name) : <span className="text-xs text-ink-4" title="Không có quyền xem KPI người này">–</span>}</td>
+                      {isSale && <td className="n">{seesKpi(seen, e.id) ? rateInput(e.id, e.name) : <span className="text-xs text-ink-4">–</span>}</td>}
                       
                       <td><span className="inline-flex items-center gap-1"><Input type="number" min={0} max={23} className={`${NUM_INPUT} w-14`} placeholder="8" aria-label={`Giờ bắt đầu ca ${e.name}`} value={shifts[e.id]?.shiftStart ?? ''} onChange={(ev) => setShift(e.id, 'shiftStart', ev.target.value)} /><span className="text-xs text-ink-3">–</span><Input type="number" min={1} max={24} className={`${NUM_INPUT} w-14`} placeholder="17" aria-label={`Giờ kết thúc ca ${e.name}`} value={shifts[e.id]?.shiftEnd ?? ''} onChange={(ev) => setShift(e.id, 'shiftEnd', ev.target.value)} /></span></td>
                       <td className="n">{report ? money(net) : '—'}{d ? <span className="ml-1 text-[11px] font-normal text-ink-3">{vi.format(d.closedOrders)} đơn</span> : null}{isSale && d ? (() => { const r = closeRateOf(d, ms.rateBase); return <span className={`block text-[11px] font-semibold ${rateTone(r, t?.closeRate)}`}>chốt {r === null ? '—' : pct(r, 1)}{t?.closeRate ? <span className="font-normal text-ink-3"> / {pct(t.closeRate, 1)}</span> : null}</span>; })() : null}</td>
@@ -280,7 +285,7 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
                 {!staff.length && <tr><td colSpan={10} className="py-6 text-center text-xs text-ink-3">Chưa có nhân viên {label} (danh sách lấy từ bộ phận trên Pancake sau khi đồng bộ).</td></tr>}
               </tbody>
               {staff.length > 0 && <tfoot><tr>
-                <td className="bg-surface-2">Tổng · <span className="num">{vi.format(staff.length)}</span> người</td><td className="n">{money(totalGoal)}</td>{isSale && <td className="n text-xs">{teamRate === null ? '—' : <span className={`font-semibold ${rateTone(teamRate, avgGoalRate)}`}>{pct(teamRate, 1)}</span>}{avgGoalRate ? <span className="block font-normal text-ink-3">KPI TB {pct(avgGoalRate, 1)}</span> : null}</td>}<td /><td />
+                <td className="bg-surface-2">Tổng · <span className="num">{vi.format(staff.length)}</span> người</td><td className="n">{hiddenKpi ? '–' : money(totalGoal)}</td>{isSale && <td className="n text-xs">{teamRate === null ? '—' : <span className={`font-semibold ${rateTone(teamRate, avgGoalRate)}`}>{pct(teamRate, 1)}</span>}{avgGoalRate ? <span className="block font-normal text-ink-3">KPI TB {pct(avgGoalRate, 1)}</span> : null}</td>}<td /><td />
                 <td className="n">{report ? money(totalDone) : '—'}</td><td className="num text-xs">{totalGoal ? pct(totalDone / totalGoal * 100, 0) : '—'}</td><td className="n text-xs">{totalGoal ? `${short(totalDaily)} ₫` : '—'}</td><td className={`n text-xs font-semibold ${diffTone(totalTodayNet - totalDaily)}`}>{isCurrent && totalGoal ? <>{signedShort(totalTodayNet - totalDaily)} <span className="font-normal text-ink-3">{pct(totalTodayNet / totalDaily * 100, 0)}</span></> : '—'}</td>
                 <td className={`n text-xs font-semibold ${diffTone(totalPaceDiff)}`}>{report && totalGoal ? signedShort(totalPaceDiff) : '—'}</td>
               </tr></tfoot>}

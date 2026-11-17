@@ -19,11 +19,14 @@ export async function GET(request: Request) {
     const pm = new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 7);
     return { month: pm, items: await listTargets(pm) };
   })()]);
-  if (isOwner(user)) return Response.json({ month, items, previous: prev, undo: await lastTargetBackup(month) }, { headers: { 'Cache-Control': 'private, no-store' } });
+  if (isOwner(user)) return Response.json({ month, items, previous: prev, seeKpiOf: null, undo: await lastTargetBackup(month) }, { headers: { 'Cache-Control': 'private, no-store' } });
   const ids = user.role === 'staff' ? [] : await targetStaff(env.DB, user);
   // Leader / mentor / giám đốc: thấy KPI của team mình cầm (chỉ xem, đặt KPI team vẫn chỉ chủ hệ thống).
   const teams = await managedTeams(env.DB, user);
-  return Response.json({ month, items: await visibleTargets(env.DB, user, items, ids, teams), previous: { ...prev, items: await visibleTargets(env.DB, user, prev.items, ids, teams) }, teams, ...(user.role === 'staff' ? {} : { editable: ids }) }, { headers: { 'Cache-Control': 'private, no-store' } });
+  const visible = await visibleTargets(env.DB, user, items, ids, teams);
+  // seeKpiOf: KPI cá nhân của ai xem được (người mình quản lý + chính mình). Trang cộng KPI cả team mà thiếu người thì hiện "–" (17/11/2026).
+  const seeKpiOf = [...new Set([...(ids ?? []), ...visible.filter((i) => i.scope === 'employee').map((i) => i.refId)])];
+  return Response.json({ month, items: visible, previous: { ...prev, items: await visibleTargets(env.DB, user, prev.items, ids, teams) }, teams, seeKpiOf, ...(user.role === 'staff' ? {} : { editable: ids }) }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
 export async function PUT(request: Request) {

@@ -165,3 +165,72 @@ void test('1.5 mật khẩu: băm mới 600.000 vòng; băm cũ 30.000 vẫn đ�
   logout();
   raw.close();
 });
+
+void test('1.1 hoàn tác chỉ trả khoá trong bản chụp còn y nguyên; khoá đã bị người khác (bot Zalo) đổi sau đó thì giữ nguyên', async () => {
+  const { raw } = emptyDb();
+  await loginAs(raw, 'owner');
+  await put([{ scope: 'employee', refId: 'nv-a', revenue: 100, closedOrders: 1, closeRate: 30 }, { scope: 'employee', refId: 'nv-b', revenue: 100, closedOrders: 1, closeRate: 30 }]);
+  await put([{ scope: 'employee', refId: 'nv-a', revenue: 500, closedOrders: 1, closeRate: 50 }, { scope: 'employee', refId: 'nv-b', revenue: 200, closedOrders: 1, closeRate: 50 }]);
+  // Sau lần lưu: bot Zalo đổi KPI nv-b (không qua hàm lưu web), và có người thêm KPI nv-c ngoài bản chụp.
+  raw.prepare("UPDATE targets SET revenue=777, updated_by='Zalo: Người khác', updated_at='2026-10-20T00:00:00.000Z' WHERE id=?").run(`${M}:employee:nv-b`);
+  raw.prepare("INSERT INTO targets (id,month,scope,ref_id,revenue,closed_orders,updated_by,updated_at) VALUES (?,?,'employee','nv-c',90,0,'khac','2026-10-20')").run(`${M}:employee:nv-c`, M);
+  const r = await undo();
+  assert.equal(r.status, 200);
+  const body = await r.json() as { count: number; skipped: string[]; by: string };
+  assert.equal(body.count, 1);
+  assert.deepEqual(body.skipped, ['employee:nv-b']);
+  assert.match(body.by, /@test$/, 'ghi lần lưu của ai');
+  const now = await items();
+  assert.equal(now['employee:nv-a'].revenue, 100, 'khoá còn y nguyên thì trả về bản trước');
+  assert.equal(now['employee:nv-a'].closeRate, 30);
+  assert.equal(now['employee:nv-b'].revenue, 777, 'không đè thay đổi của người khác');
+  assert.equal(now['employee:nv-b'].closeRate, 50, 'tỉ lệ chốt của khoá bỏ qua cũng giữ nguyên');
+  assert.equal(now['employee:nv-c'].revenue, 90, 'khoá ngoài bản chụp không đụng tới');
+  raw.close();
+});
+
+void test('1.1 bản chụp KPI: người không phải chủ không thấy; không vào file sao lưu xuất ra', async () => {
+  const { raw } = emptyDb();
+  await loginAs(raw, 'owner');
+  await put([{ scope: 'employee', refId: 'nv-a', revenue: 100, closedOrders: 1 }]);
+  assert.ok(((await (await GET(new Request(`http://local/api/targets?month=${M}`))).json()) as { undo?: unknown }).undo, 'chủ thấy nút hoàn tác');
+  for (const role of ['director', 'lead', 'staff'] as const) {
+    await loginAs(raw, role);
+    const b = await (await GET(new Request(`http://local/api/targets?month=${M}`))).json() as Record<string, unknown>;
+    assert.equal(b.undo, undefined, `${role} không thấy bản chụp`);
+    assert.ok(!JSON.stringify(b).includes('targets_backup'), `${role} không nhận được bản chụp`);
+  }
+  const { ROW_FILTERS } = await import('../lib/ops/backup');
+  const kept = raw.prepare(`SELECT key FROM app_settings WHERE ${ROW_FILTERS.app_settings}`).all() as { key: string }[];
+  assert.ok(raw.prepare("SELECT COUNT(*) n FROM app_settings WHERE key LIKE 'targets_backup:%'").get()!.n as number > 0, 'có bản chụp trong DB');
+  assert.ok(!kept.some((k) => k.key.startsWith('targets_backup:')), 'file sao lưu bỏ bản chụp KPI');
+  logout();
+  raw.close();
+});
+
+void test('1.3 seeKpiOf: trang biết xem được KPI của ai để không cộng thiếu (giám đốc, trưởng nhóm, chủ)', async () => {
+  const { raw } = emptyDb();
+  const now = '2026-10-01T00:00:00Z';
+  for (const ref of ['nv-a', 'nv-b']) raw.prepare("INSERT INTO targets (id,month,scope,ref_id,revenue,closed_orders,updated_by,updated_at) VALUES (?,?,'employee',?,1000,1,NULL,?)").run(`${M}:employee:${ref}`, M, ref, now);
+  const link = (mgr: string, n: string) => {
+    raw.prepare("INSERT INTO users (id,email,name,password_hash,role,created_at,updated_at,manager_id) VALUES (?,?,?,'-','staff',?,?,?)").run(`u-${n}`, `${n}@test`, n, now, now, mgr);
+    raw.prepare("INSERT INTO hr_employees (id,code,full_name,status,main_user_id) VALUES (?,?,?,'dang_lam',?)").run(`e-${n}`, n, n, `u-${n}`);
+    raw.prepare("INSERT INTO hr_pos_team (pos_user_id,employee_id,employee_name,team,status) VALUES (?,?,?,'sale','dang_lam')").run(n, `e-${n}`, n);
+    raw.prepare("INSERT INTO pos_users (id,pos_id,user_id,name,fetched_at) VALUES (?,'pos-a',?,?,?)").run(`pos-a:${n}`, n, n, now);
+  };
+  const seeOf = async () => ((await (await GET(new Request(`http://local/api/targets?month=${M}`))).json()) as { seeKpiOf?: string[] | null }).seeKpiOf;
+  const a = await loginAs(raw, 'director');
+  link(a, 'nv-a');
+  assert.deepEqual(await seeOf(), ['nv-a'], 'giám đốc A chỉ xem được người mình quản lý');
+  const lead = await loginAs(raw, 'lead');
+  link(lead, 'nv-b');
+  assert.deepEqual(await seeOf(), ['nv-b'], 'trưởng nhóm chỉ xem được người mình quản lý');
+  await loginAs(raw, 'owner');
+  assert.equal(await seeOf(), null, 'chủ xem hết');
+  const { seesAllKpi, seesKpi } = await import('../lib/kpi/kpi-seen');
+  assert.equal(seesAllKpi(['nv-a'], ['nv-a', 'nv-b']), false, 'team có người không xem được: không cộng');
+  assert.equal(seesAllKpi(null, ['nv-a', 'nv-b']), true);
+  assert.equal(seesKpi(['nv-a'], 'nv-b'), false);
+  logout();
+  raw.close();
+});
