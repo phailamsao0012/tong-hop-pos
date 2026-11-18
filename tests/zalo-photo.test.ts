@@ -47,3 +47,13 @@ void test('gửi ảnh Zalo: tải ảnh trước, đưa Zalo đường sau chuy
     assert.ok(errors.some((e) => e.includes('zalo photo warm: HTTP 500')));
   } finally { globalThis.fetch = original; console.error = originalError; photoRetry.ms = 20000; raw.close(); }
 });
+
+void test('đường ảnh Zalo mặc định trên tên miền đang chạy posmegatech.com (không qua chuyển hướng của tên miền cũ)', async () => {
+  const { DEFAULT_WEB_ORIGIN, webOrigin } = await import('../lib/notify/origin');
+  assert.equal(DEFAULT_WEB_ORIGIN, 'https://posmegatech.com');
+  const { env } = await import('cloudflare:workers');
+  const before = (env as { WEB_ORIGIN?: string }).WEB_ORIGIN;
+  Object.assign(env as object, { WEB_ORIGIN: undefined });
+  try { assert.equal(`${webOrigin()}/api/zalo/anh/x`, 'https://posmegatech.com/api/zalo/anh/x'); }
+  finally { Object.assign(env as object, { WEB_ORIGIN: before }); }
+});
