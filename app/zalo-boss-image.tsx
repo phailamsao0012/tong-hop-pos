@@ -9,7 +9,7 @@ import {
 export const BOSS_IMAGE_WIDTH = 1080;
 const C = { ink: '#14231c', muted: '#5f6f67', line: '#e3ebe6', soft: '#f2f6f3', green: '#2f6b4f', good: '#2e7d32', bad: '#c62828', badSoft: '#fdecea', barBg: '#e3e9e5', head: '#d6efe3' };
 const PAD = 44;
-const H = { mktNote: 40, head: 150, top: 250, secTitle: 48, cards: 150, th: 50, tr: 54, foot: 96, foot1: 150, gap: 30, warn: 64, people: 330, ship: 170 };
+const H = { mktNote: 40, head: 150, top: 250, secTitle: 48, cards: 150, th: 50, tr: 54, foot: 96, foot1: 150, gap: 30, warn: 64, people: 410, ship: 170 };
 const MAX_TEAMS = 12, MAX_POS = 8, MAX_MKT = 7;
 /** Cộng số về các team MKT lớn hơn tổng (một SĐT về từ nhiều team: mỗi team đếm, tổng đếm 1 lần) → chú thích nhỏ dưới bảng (anh Vũ 16/11/2026). */
 export const mktLeadsNote = (d: Pick<BossData, 'mkt'>) => { const sum = d.mkt.teams.reduce((a, t) => a + t.leads, 0); return sum > d.mkt.leads ? `Cộng các team ${num(sum)} số, lớn hơn tổng ${num(d.mkt.leads)} số về: một SĐT về từ nhiều team được đếm ở mỗi team, tổng chỉ đếm 1 lần.` : null; };
@@ -179,8 +179,18 @@ function Part2({ d }: { d: BossData }) {
     <Col style={{ width: '31.5%', height: H.people, background: C.soft, borderRadius: 20, padding: '20px 22px', marginRight: 14 }}>
       <Lab>{label}</Lab>
       {lines.length ? lines : <Small>Chưa có số</Small>}
-      <Txt style={{ fontSize: 21, fontWeight: 600, color: C.muted, marginTop: 14 }}>Cần kèm</Txt>
-      {coachLine}
+      <Txt style={{ fontSize: 21, fontWeight: 600, color: C.muted, marginTop: 18 }}>Cần kèm</Txt>
+      <Col style={{ marginTop: 8 }}>{coachLine}</Col>
+    </Col>
+  );
+  // "Cần kèm" (Đầu não kiểm 17–18/11/2026): tên một dòng riêng, tự xuống dòng hết chiều rộng ô; tỉ lệ chốt và số ở dòng dưới.
+  const coachOf = (name: string, rate: number, count: number) => (
+    <Col>
+      <Txt style={{ fontSize: 20, color: C.ink, lineHeight: 1.35 }}>{name}</Txt>
+      <Txt style={{ fontSize: 20, color: C.muted, marginTop: 4, whiteSpace: 'pre' }}>
+        <span style={{ color: C.bad, fontWeight: 700 }}>{rateText(rate, 0)}</span>
+        <span>{` / ${num(count)} số`}</span>
+      </Txt>
     </Col>
   );
   return (
@@ -192,9 +202,9 @@ function Part2({ d }: { d: BossData }) {
       <Box style={{ height: H.gap }}>{''}</Box>
       <Title>TOP NGƯỜI</Title>
       <Box style={{ height: H.people }}>
-        {col('Sale', topSale.map((p, i) => person(i, `${p.name} · ${money(p.net)} · ${rateText(closeRate(p), 0)}`)), saleCoach ? <Small>{saleCoach.name} ·<span style={{ color: C.bad, fontWeight: 700, marginLeft: 6, marginRight: 6 }}>{rateText(saleCoach.rate, 0)}</span>/ {num(saleCoach.base)} số</Small> : <Small>Không có</Small>)}
+        {col('Sale', topSale.map((p, i) => person(i, `${p.name} · ${money(p.net)} · ${rateText(closeRate(p), 0)}`)), saleCoach ? coachOf(saleCoach.name, saleCoach.rate, saleCoach.base) : <Small>Không có</Small>)}
         {col('CSKH', topCskh.map((p, i) => person(i, `${p.name} · ${money(p.net)}`)), <Small>Không xét tỉ lệ chốt CSKH</Small>)}
-        {col('Marketing', topMkt.map((p, i) => person(i, `${p.name} · ${money(p.newNet)} · ${rateText(closeRate({ base: p.leads, closed: p.closed ?? 0 }), 0)}`)), mktCoach ? <Small>{mktCoach.name} ·<span style={{ color: C.bad, fontWeight: 700, marginLeft: 6, marginRight: 6 }}>{rateText(mktCoach.rate, 0)}</span>/ {num(mktCoach.leads)} số</Small> : <Small>Không có</Small>)}
+        {col('Marketing', topMkt.map((p, i) => person(i, `${p.name} · ${money(p.newNet)} · ${rateText(closeRate({ base: p.leads, closed: p.closed ?? 0 }), 0)}`)), mktCoach ? coachOf(mktCoach.name, mktCoach.rate, mktCoach.leads) : <Small>Không có</Small>)}
       </Box>
       <Box style={{ height: H.gap }}>{''}</Box>
       <Title>ĐƠN ĐI & VẬN ĐƠN</Title>
