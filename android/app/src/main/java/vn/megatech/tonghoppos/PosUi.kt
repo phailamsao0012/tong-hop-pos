@@ -74,14 +74,14 @@ fun posIcon(id: String): Int = when (id) {
 @Composable fun PosChip(id: String, on: Boolean, narrow: Boolean = true, status: Pair<String, Boolean>? = null, onClick: () -> Unit) {
     val c = posColor(id)
     val shape = RoundedCornerShape(12.dp)
-    Row(Modifier.height(36.dp).clip(shape).background(if (on) lerp(C.card, c, .08f) else Color(0xFFF5F8F3)).border(1.5.dp, if (on) c.copy(alpha = .55f) else Color(0xFFD5DFD6), shape)
+    Row(Modifier.height(36.dp).clip(shape).background(if (on) lerp(C.card, c, .08f) else C.cell).border(1.5.dp, if (on) c.copy(alpha = .55f) else C.line, shape)
         .clickable { onClick() }.padding(start = 4.dp, end = if (on) 8.dp else 12.dp), verticalAlignment = Alignment.CenterVertically) {
         PosBadge(id, 28.dp, gray = !on)
         Spacer(Modifier.width(8.dp))
-        T(if (narrow) Pos.tiny(id) else Pos.short(id), 13.sp, if (on) FontWeight.SemiBold else FontWeight.Medium, if (on) C.ink else Color(0xFF5F7468), 1)
+        T(if (narrow) Pos.tiny(id) else Pos.short(id), 13.sp, if (on) FontWeight.SemiBold else FontWeight.Medium, if (on) C.ink else C.inkSoft, 1)
         if (status != null) {
             Spacer(Modifier.width(6.dp))
-            val (bg, fg) = if (status.second) Color(0xFFFDEAEA) to Color(0xFFC8403F) else Color(0xFFFFF4DC) to Color(0xFF9A6500)
+            val (bg, fg) = if (status.second) C.badSoft to C.bad else C.warnSoft to C.warn
             Box(Modifier.clip(CircleShape).background(bg).padding(horizontal = 6.dp, vertical = 1.dp)) { T(status.first, 10.sp, FontWeight.Bold, fg, 1) }
         }
         if (on) {
@@ -146,7 +146,7 @@ fun posChipStatus(id: String): Pair<String, Boolean>? = Sync.pos.firstOrNull { i
 @Composable fun PosTile(id: String, row: J?, prev: J?, totalNet: Double, spark: List<Double>?, status: Pair<Color, String>?, loading: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val c = posColor(id)
     val shape = RoundedCornerShape(16.dp)
-    Column(modifier.thinkingBorder(loading || LocalRefreshing.current, shape).clip(shape).background(C.card).border(1.dp, Color(0xFFE3EAE2), shape)
+    Column(modifier.thinkingBorder(loading || LocalRefreshing.current, shape).clip(shape).background(C.card).border(1.dp, C.line, shape)
         .drawBehind { drawRect(Brush.verticalGradient(listOf(c.copy(alpha = .11f), Color.Transparent), endY = 64.dp.toPx()), size = Size(size.width, 64.dp.toPx())) }
         .clickable { onClick() }.padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         val net = row?.get("closedNet")?.d ?: 0.0; val co = row?.get("closedOrders")?.d ?: 0.0; val or = row?.get("orders")?.d ?: 0.0
@@ -181,7 +181,7 @@ fun posChipStatus(id: String): Pair<String, Boolean>? = Sync.pos.firstOrNull { i
 }
 
 @Composable private fun TileCell(label: String, value: String, modifier: Modifier, tint: Color = C.ink) {
-    Column(modifier.clip(RoundedCornerShape(8.dp)).background(Color(0xFFF5F8F3)).padding(horizontal = 6.dp, vertical = 5.dp)) {
+    Column(modifier.clip(RoundedCornerShape(8.dp)).background(C.cell).padding(horizontal = 6.dp, vertical = 5.dp)) {
         T(label, 8.sp, color = C.inkSoft, maxLines = 1); T(value, 11.sp, FontWeight.Bold, tint, 1)
     }
 }

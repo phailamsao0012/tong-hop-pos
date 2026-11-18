@@ -114,7 +114,7 @@ object Approvals {
         Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             val phone = Regex("iPhone|iPad|Android|app MEGATECH", RegexOption.IGNORE_CASE).containsMatchIn(item["device"].s)
             T(if (phone) "Đăng nhập trên điện thoại khác?" else "Đăng nhập trên máy tính?", 18.sp, FontWeight.Bold, modifier = Modifier.fillMaxWidth(), align = TextAlign.Center)
-            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0xFFF5F8F3)).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.cell).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(if (phone) Icons.Filled.PhoneIphone else Icons.Filled.Computer, null, tint = C.brand, modifier = Modifier.size(32.dp)); Spacer(Modifier.width(12.dp))
                 Column {
                     T(item["device"].sn ?: "Máy không rõ", 14.sp, FontWeight.Bold)
@@ -126,7 +126,7 @@ object Approvals {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)) {
                 item["choices"].list.forEach { c ->
                     val n = c.i; val on = pick == n
-                    Box(Modifier.size(68.dp).clip(RoundedCornerShape(14.dp)).background(if (on) C.brand else C.card).border(1.dp, if (on) C.brand else Color(0xFFD5DFD6), RoundedCornerShape(14.dp)).clickable(enabled = !busy) { pick = n }, contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(68.dp).clip(RoundedCornerShape(14.dp)).background(if (on) C.brand else C.card).border(1.dp, if (on) C.brand else C.line, RoundedCornerShape(14.dp)).clickable(enabled = !busy) { pick = n }, contentAlignment = Alignment.Center) {
                         T(n.toString().padStart(2, '0'), 28.sp, FontWeight.ExtraBold, if (on) Color.White else C.ink)
                     }
                 }
@@ -139,7 +139,7 @@ object Approvals {
             }, horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                 run { Icon(Icons.Filled.Fingerprint, null, tint = Color.White, modifier = Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); T("Xác nhận bằng vân tay / khuôn mặt", 14.sp, FontWeight.Bold, Color.White) }
             }
-            Box(Modifier.fillMaxWidth().height(50.dp).clip(RoundedCornerShape(14.dp)).background(C.card).border(1.dp, Color(0xFFD5DFD6), RoundedCornerShape(14.dp)).clickable(enabled = !busy) { scope.launch { busy = true; Approvals.decide(id, null, false); busy = false } }, contentAlignment = Alignment.Center) {
+            Box(Modifier.fillMaxWidth().height(50.dp).clip(RoundedCornerShape(14.dp)).background(C.card).border(1.dp, C.line, RoundedCornerShape(14.dp)).clickable(enabled = !busy) { scope.launch { busy = true; Approvals.decide(id, null, false); busy = false } }, contentAlignment = Alignment.Center) {
                 T("Không phải tôi · chặn", 14.sp, FontWeight.Bold, C.bad)
             }
         }

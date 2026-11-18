@@ -97,7 +97,7 @@ fun Modifier.thinkingBorder(active: Boolean, shape: Shape = RoundedCornerShape(1
     val still = reduceMotion()
     val p by (if (still) remember { mutableFloatStateOf(.5f) } else rememberInfiniteTransition(label = "sk").animateFloat(0f, 1f, infiniteRepeatable(tween(1400, easing = LinearEasing)), label = "p"))
     val sheen = remember { listOf(Color.Transparent) + THINK_COLORS.dropLast(1).map { it.copy(alpha = .18f) } + Color.Transparent }
-    Box(Modifier.fillMaxWidth().height(height).thinkingBorder(border).clip(RoundedCornerShape(14.dp)).background(Color(0xFFE8EDE7)).drawBehind {
+    Box(Modifier.fillMaxWidth().height(height).thinkingBorder(border).clip(RoundedCornerShape(14.dp)).background(C.cell).drawBehind {
         val w = size.width; val x = -w + p * 2.2f * w
         drawRect(Brush.linearGradient(sheen, start = Offset(x, 0f), end = Offset(x + w * .9f, size.height)))
     })
