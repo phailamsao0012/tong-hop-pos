@@ -359,7 +359,6 @@ val LocalNoBack = staticCompositionLocalOf { false }
     CompositionLocalProvider(LocalNoBack provides true) { OrderListScreen(OrderQuery(today.first, today.second, title = "Đơn hàng"), filterable = true) }
 }
 
-@Composable fun OverviewTab() { CompositionLocalProvider(LocalNoBack provides true) { OverviewScreen(null) } }
 
 /** Tab Phòng ban (khung 07 Gemini): mỗi phòng một thẻ, nút tới từng trang con. */
 @Composable fun DeptsTab() {
@@ -408,6 +407,17 @@ val LocalNoBack = staticCompositionLocalOf { false }
                 go("cuon:hom-nay-2", "hom-nay-2"); go("cuon:hom-nay-3", "hom-nay-3")
                 go("thong-bao", "thong-bao-1", 8_000); go("cuon:thong-bao-2", "thong-bao-2")
                 DebugTour.target = "ve"; DebugTour.tick++; kotlinx.coroutines.delay(1_500)
+            }
+            // Tổng quan: Bốn bộ phận (cuộn), Số liệu & KH, Theo POS, bảng lọc, một POS (bước A3).
+            if (i == 2) {
+                go("cuon:bo-phan-2", "bo-phan-2")
+                go("seg:metrics", "so-lieu-1", 10_000); go("cuon:so-lieu-2", "so-lieu-2")
+                go("seg:pos", "theo-pos", 6_000)
+                go("loc-mo", "bo-loc")
+                DebugTour.target = "loc-dong"; DebugTour.tick++; kotlinx.coroutines.delay(1_500)
+                DebugTour.target = "seg:departments"; DebugTour.tick++; kotlinx.coroutines.delay(500)
+                go("pos:thuy-san", "mot-pos", 10_000)
+                DebugTour.target = "pos:"; DebugTour.tick++; kotlinx.coroutines.delay(1_500)
             }
         }
         DebugLog.ui("xong")

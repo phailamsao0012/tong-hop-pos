@@ -239,6 +239,7 @@ object Api {
     suspend fun customer(posId: String, phone: String) = get("/api/reports/customers/detail?posId=$posId&phone=${enc(phone)}")
     suspend fun syncStatus() = get("/api/sync/pos")
     suspend fun cskhBadge(posIds: List<String> = emptyList()) = get("/api/reports/cskh-badge?posIds=${posIds.joinToString(",")}")
+    suspend fun sections(start: String, end: String, posIds: List<String> = emptyList(), product: String = "all") = get("/api/reports/sections?start=$start&end=$end&posIds=${posIds.joinToString(",")}&productSegment=$product")
     suspend fun mktAnalytics(start: String, end: String, posIds: List<String> = emptyList()) = get("/api/marketing/analytics?start=$start&end=$end&posIds=${posIds.joinToString(",")}")
     suspend fun vanDon(start: String, end: String, posIds: List<String> = emptyList()) = get("/api/reports/van-don?start=$start&end=$end&posIds=${posIds.joinToString(",")}")
     suspend fun employees(team: String = "") = get("/api/employees" + if (team.isEmpty()) "" else "?team=$team")

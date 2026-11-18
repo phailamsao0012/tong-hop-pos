@@ -146,7 +146,7 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
     return m.map { it.key to it.value }
 }
 
-@Composable fun CenterBlocks(period: Period, team: String, pos: String, product: String, data: HomeData) {
+@Composable fun CenterBlocks(period: Period, team: String, pos: String, product: String, data: HomeData, skipTop: Boolean = false) {
     val nav = LocalNav.current
     val (a, b) = period.range
     val posIds = if (pos.isEmpty()) emptyList() else listOf(pos)
@@ -155,9 +155,9 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
     val report = data.today
     val t = report?.get("current")?.get("total"); val p = report?.get("compare")?.get("total")
     if (BuildConfig.DEBUG) DebugTour.TeamAnchor("team-center")
-    T("Số liệu theo kỳ", 15.sp, FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
-    T(buildString { append("${period.label} · so với kỳ liền trước"); applied?.let { append(" · team ${it.shortName}") }; if (team != "all") append(" · " + if (team == "sale") "Sale" else "CSKH"); if (pos.isNotEmpty()) append(" · " + Pos.short(pos)); if (product != "all") append(" · " + if (product == "gentadox") "Gentadox" else "SK + GK") }, 10.sp, color = C.inkSoft)
-    if (t != null) {
+    if (!skipTop) T("Số liệu theo kỳ", 15.sp, FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
+    if (!skipTop) T(buildString { append("${period.label} · so với kỳ liền trước"); applied?.let { append(" · team ${it.shortName}") }; if (team != "all") append(" · " + if (team == "sale") "Sale" else "CSKH"); if (pos.isNotEmpty()) append(" · " + Pos.short(pos)); if (product != "all") append(" · " + if (product == "gentadox") "Gentadox" else "SK + GK") }, 10.sp, color = C.inkSoft)
+    if (t != null && !skipTop) {
         val shift = data.shift
         val shiftName = mapOf("morning" to "ca sáng", "afternoon" to "ca chiều", "evening" to "ca tối", "day" to "cả ngày")[shift?.get("shift")?.s] ?: "ca hiện tại"
         Grid2(listOf(
@@ -230,7 +230,7 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
     }
     // Xếp hạng POS
     val rows = report?.get("current")?.get("byPos")?.list
-    if (rows != null && t != null) Panel {
+    if (rows != null && t != null && !skipTop) Panel {
         Row { T("Xếp hạng POS", 15.sp, FontWeight.Bold, modifier = Modifier.weight(1f)); Hint("Doanh thu đơn chốt") }
         val sorted = rows.sortedByDescending { it["closedNet"].d }; val maxV = (sorted.firstOrNull()?.get("closedNet")?.d ?: 1.0).coerceAtLeast(1.0)
         sorted.forEachIndexed { i, x ->
@@ -247,7 +247,7 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
         }
     }
     // Cảnh báo & đồng bộ
-    Panel {
+    if (!skipTop) Panel {
         val alerts = data.shift?.get("alerts")?.list ?: emptyList()
         SectionHead("Cảnh báo & đồng bộ" + if (alerts.isNotEmpty()) " (${alerts.size})" else "", "Xem ca") { nav.push(Screen.Page("shift")) }
         if (data.shift != null && alerts.isEmpty()) T("✓ Không có cảnh báo trong ca.", 11.sp, color = C.good)

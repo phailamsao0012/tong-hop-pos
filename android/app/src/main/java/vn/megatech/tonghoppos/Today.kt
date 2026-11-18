@@ -41,6 +41,9 @@ import java.time.format.DateTimeFormatter
 /** POS chung của cả app (như AppNav.pos của iPhone): "" = mọi POS được xem. */
 object AppPos {
     var pos by mutableStateOf("")
+    /** Kỳ và nhóm đơn chung của tab Tổng quan (AppNav.period / product của iPhone). */
+    var period by mutableStateOf<Period>(Period.Month)
+    var product by mutableStateOf("all")
     val ids: List<String> get() = if (pos.isEmpty()) emptyList() else listOf(pos)
 }
 
