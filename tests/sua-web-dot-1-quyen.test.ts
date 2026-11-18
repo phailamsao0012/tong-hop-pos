@@ -56,3 +56,34 @@ void test('1.4 năm vai trò: route vừa khai báo theo trang', () => {
     for (const [role, ok] of Object.entries(roles))
       assert.equal(call(ROLES[role as keyof typeof ROLES], path) === undefined, ok, `${role} ${path} ${ok ? 'vào được' : 'bị chặn'}`);
 });
+
+void test('1.4 danh sách nhân viên chỉ gồm người ở POS người xem được cấp, chỉ kèm POS đó; chủ hệ thống thấy đủ', async () => {
+  const { emptyDb } = await import('./support/d1-sqlite');
+  const { loginAs, logout } = await import('./support/session');
+  const { POS } = await import('../lib/shared/report-model');
+  const { raw } = emptyDb();
+  const [a, b] = [POS[0].id, POS[1].id], now = '2026-11-01T00:00:00Z';
+  const add = (pos: string, id: string, name: string) => raw.prepare("INSERT INTO pos_users (id,pos_id,user_id,name,is_active,fetched_at,department) VALUES (?,?,?,?,1,?,'Sale')").run(`${pos}:${id}`, pos, id, name, now);
+  add(a, 'nv-1', 'NV Mot SALE'); add(b, 'nv-2', 'NV Hai SALE'); add(a, 'nv-3', 'NV Ba SALE'); add(b, 'nv-3', 'NV Ba SALE');
+  const { GET } = await import('../app/api/employees/route');
+  const list = async () => (await (await GET(new Request('http://local/api/employees'))).json() as { id: string; posIds: string[] }[]).map((e) => `${e.id}:${e.posIds.sort().join('+')}`).sort();
+  await loginAs(raw, 'staff', { posIds: [a] });
+  assert.deepEqual(await list(), [`nv-1:${a}`, `nv-3:${a}`], 'nhân viên POS A chỉ thấy người POS A, người 2 POS chỉ kèm POS A');
+  await loginAs(raw, 'lead', { posIds: [b] });
+  assert.deepEqual(await list(), [`nv-2:${b}`, `nv-3:${b}`]);
+  await loginAs(raw, 'owner');
+  assert.deepEqual(await list(), [`nv-1:${a}`, `nv-2:${b}`, `nv-3:${[a, b].sort().join('+')}`]);
+  logout();
+  raw.close();
+});
+
+void test('1.4 webhook tuyển dụng: không nhận mã bí mật trên địa chỉ, chỉ nhận header X-Recruit-Secret', async () => {
+  const { emptyDb } = await import('./support/d1-sqlite');
+  const { raw } = emptyDb({ RECRUIT_WEBHOOK_SECRET: 'ma-gia-0123456789' });
+  const { POST } = await import('../app/api/recruit/webhook/route');
+  const body = JSON.stringify({ file: {}, tabs: 'x' });
+  assert.equal((await POST(new Request('http://local/api/recruit/webhook?secret=ma-gia-0123456789', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }))).status, 401, 'mã trên địa chỉ bị từ chối');
+  assert.equal((await POST(new Request('http://local/api/recruit/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Recruit-Secret': 'sai' }, body }))).status, 401);
+  assert.equal((await POST(new Request('http://local/api/recruit/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Recruit-Secret': 'ma-gia-0123456789' }, body }))).status, 400, 'đúng mã qua header thì qua bước xác thực (dữ liệu thiếu nên 400)');
+  raw.close();
+});

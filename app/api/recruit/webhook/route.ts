@@ -3,11 +3,12 @@ import { attachCv, driveFileId, ingestSnapshot, type SnapshotPayload } from '@/l
 
 // Apps Script (chạy bằng tài khoản Google của chủ web) gọi vào đây: JSON = snapshot các tab; multipart = tải một file CV.
 // Xác thực bằng header X-Recruit-Secret (wrangler secret put RECRUIT_WEBHOOK_SECRET). Không dùng phiên đăng nhập web.
+// 18/11/2026: bỏ nhận mã bí mật trên địa chỉ (?secret=), vì địa chỉ hay bị ghi vào log; script sheet (scripts/recruit-sheets.gs) đã gửi bằng header.
 const timingSafeEqual = (a: string, b: string) => { if (a.length !== b.length) return false; let r = 0; for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i); return r === 0; };
 
 export async function POST(request: Request) {
   const secret = env.RECRUIT_WEBHOOK_SECRET?.trim();
-  const given = (request.headers.get('x-recruit-secret') ?? new URL(request.url).searchParams.get('secret') ?? '').trim();
+  const given = (request.headers.get('x-recruit-secret') ?? '').trim();
   if (!secret || !given || !timingSafeEqual(secret, given)) return Response.json({ error: 'Sai mã bí mật.' }, { status: 401 });
   const type = request.headers.get('content-type') ?? '';
   try {
