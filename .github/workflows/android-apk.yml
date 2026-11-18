@@ -1,0 +1,111 @@
+name: Android APK
+# Phát hành APK đã ký từ nhánh app Android (anh Vũ 30/10/2026 "cho xin lại app apk").
+# Chưa có khóa ký lưu trong secret riêng: mỗi lần phát hành CI tạo khóa tạm, ký rồi xóa, không lưu và không in ra log (repo công khai).
+# Vì vậy bản sau có thể phải gỡ bản cũ trước khi cài; khi có secret khóa ký riêng thì đổi sang ký cố định.
+on:
+  push:
+    branches: [claude/app-android]
+    paths: ['android/**', '.github/workflows/android-apk.yml']
+permissions:
+  contents: read
+concurrency:
+  group: android-apk
+  cancel-in-progress: false
+env:
+  BUILD_TOOLS_VERSION: '36.0.0'
+defaults:
+  run:
+    shell: bash
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/wrapper-validation@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - name: Phiên bản
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          trap 'rc=$?; echo "::error::Phiên bản không hợp lệ"; exit "$rc"' ERR
+          name=$(sed -n 's/^megatech[.]versionName=//p' android/gradle.properties)
+          code=$(sed -n 's/^megatech[.]versionCode=//p' android/gradle.properties)
+          [[ "$name" =~ ^[0-9]+(\.[0-9]+)*$ && "$code" =~ ^[0-9]+$ ]]
+          tag="android-v$name-$code"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" > /dev/null 2> "$RUNNER_TEMP/tag.err"; then
+            echo "Đã có $tag, bỏ qua"; echo "release=false" >> "$GITHUB_OUTPUT"
+          elif grep -q 'HTTP 404' "$RUNNER_TEMP/tag.err"; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Không kiểm được tag"; exit 1
+          fi
+      - name: Cài SDK
+        if: steps.version.outputs.release == 'true'
+        run: |
+          trap 'rc=$?; echo "::error::Không cài được SDK"; exit "$rc"' ERR
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --channel=3 'platforms;android-37.0' "build-tools;$BUILD_TOOLS_VERSION" > "$RUNNER_TEMP/sdk.txt" 2>&1
+          [[ -d "$ANDROID_HOME/platforms/android-37" ]] || ln -s android-37.0 "$ANDROID_HOME/platforms/android-37"
+      - name: Khóa ký tạm
+        if: steps.version.outputs.release == 'true'
+        run: |
+          trap 'rc=$?; echo "::error::Không tạo được khóa ký tạm"; exit "$rc"' ERR
+          umask 077
+          pass=$(openssl rand -hex 24)
+          echo "::add-mask::$pass"
+          echo "KS_PASS=$pass" >> "$GITHUB_ENV"
+          keytool -genkeypair -keystore "$RUNNER_TEMP/release.jks" -storetype PKCS12 -alias megatech -keyalg RSA -keysize 3072 -validity 10000 \
+            -storepass "$pass" -keypass "$pass" -dname "CN=MEGATECH, O=MEGATECH, C=VN" > /dev/null 2>&1
+      - name: Build release
+        if: steps.version.outputs.release == 'true'
+        working-directory: android
+        run: |
+          if ./gradlew :app:testDebugUnitTest :app:assembleRelease > "$RUNNER_TEMP/gradle.txt" 2>&1; then
+            tail -n 20 "$RUNNER_TEMP/gradle.txt"
+          else
+            rc=$?
+            grep -E '^e: |FAILED|What went wrong|^> ' "$RUNNER_TEMP/gradle.txt" | sed "s#$GITHUB_WORKSPACE/##g" | head -n 60 | sed 's/^/::error::/'
+            exit "$rc"
+          fi
+      - name: Ký APK
+        if: steps.version.outputs.release == 'true'
+        run: |
+          trap 'rc=$?; echo "::error::Không ký được APK"; exit "$rc"' ERR
+          tools="$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION"
+          input=android/app/build/outputs/apk/release/app-release-unsigned.apk
+          "$tools/zipalign" -P 16 -f 4 "$input" "$RUNNER_TEMP/aligned.apk"
+          "$tools/apksigner" sign --ks "$RUNNER_TEMP/release.jks" --ks-key-alias megatech --ks-pass env:KS_PASS --key-pass env:KS_PASS --out "$RUNNER_TEMP/MEGATECH.apk" "$RUNNER_TEMP/aligned.apk"
+          "$tools/apksigner" verify --print-certs "$RUNNER_TEMP/MEGATECH.apk" > "$RUNNER_TEMP/certs.txt"
+          sed -n 's/.*certificate SHA-256 digest: //p' "$RUNNER_TEMP/certs.txt" | tr -d ':' | tr '[:upper:]' '[:lower:]' > "$RUNNER_TEMP/cert.sha256"
+          [[ $(wc -l < "$RUNNER_TEMP/cert.sha256") -eq 1 && $(cat "$RUNNER_TEMP/cert.sha256") =~ ^[0-9a-f]{64}$ ]]
+          "$tools/aapt2" dump badging "$RUNNER_TEMP/MEGATECH.apk" > "$RUNNER_TEMP/badging.txt"
+          if grep -q application-debuggable "$RUNNER_TEMP/badging.txt"; then echo "::error::APK còn debuggable"; exit 1; fi
+      - name: Xóa khóa tạm
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks"
+      - name: Phát hành
+        if: steps.version.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          NAME: ${{ steps.version.outputs.name }}
+          CODE: ${{ steps.version.outputs.code }}
+        run: |
+          trap 'rc=$?; echo "::error::Không tạo được Release"; exit "$rc"' ERR
+          cd "$RUNNER_TEMP"
+          sha256sum MEGATECH.apk > MEGATECH.apk.sha256
+          # --latest=false: giữ link releases/latest cho bản iPhone.
+          gh release create "$TAG" MEGATECH.apk MEGATECH.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --latest=false \
+            --title "Android $NAME ($CODE)" --notes "Bản Android MEGATECH $NAME: dùng tốt cả màn ngoài lẫn màn trong máy gập (thanh tab dọc, lưới 4 cột trên màn rộng)."

@@ -29,19 +29,23 @@ class HomeData(val today: J?, val week: J?, val badge: J?, val trend: J?, val sh
 
 @Composable fun HomeTab() {
     val nav = LocalNav.current
-    var period by remember { mutableStateOf<Period>(Period.Today) }
+    var period by remember { mutableStateOf<Period>(if (BuildConfig.DEBUG && DebugTour.tour == "team") Period.Last else Period.Today) }
     var team by remember { mutableStateOf("all") }
     var pos by remember { mutableStateOf("") }
     var product by remember { mutableStateOf("all") }
     val posIds = if (pos.isEmpty()) emptyList() else listOf(pos)
     val (a, b) = period.range
-    val d = load(period.key, team, pos, product) {
+    val applied = HrUnit.applies(TeamState.unit, team)
+    var teamError by remember(applied, period.key, pos, product) { mutableStateOf<String?>(null) }
+    val d = key(applied?.id) { load(period.key, team, pos, product, applied?.id) {
+        teamError = null
+        try {
         val today = VNDate.today().toString()
         coroutineScope {
-            val o = async { Api.overview(a, b, posIds, team = team, product = product) }
-            val w = async { runCatching { Api.overview(VNDate.add(-6).toString(), today, posIds, team = team, compare = "none", product = product) }.getOrNull() }
+            val o = async { Api.overview(a, b, posIds, team = team, product = product, hrTeam = applied?.id) }
+            val w = async { runCatching { Api.overview(VNDate.add(-6).toString(), today, posIds, team = team, compare = "none", product = product, hrTeam = applied?.id) }.getOrNull() }
             val bd = async { runCatching { Api.cskhBadge() }.getOrNull() }
-            val tr = async { runCatching { Api.overview(VNDate.add(-29).toString(), today, posIds, team = team, compare = "none", product = product) }.getOrNull() }
+            val tr = async { runCatching { Api.overview(VNDate.add(-29).toString(), today, posIds, team = team, compare = "none", product = product, hrTeam = applied?.id) }.getOrNull() }
             val sh = async { runCatching { Api.shift(today, "auto", posIds, team) }.getOrNull() }
             val pl = async { runCatching { Api.pipeline(a, b, "confirmed", posIds, team, product) }.getOrNull() }
             val tg = async { runCatching { Api.targets(b.take(7)) }.getOrNull() }
@@ -49,6 +53,15 @@ class HomeData(val today: J?, val week: J?, val badge: J?, val trend: J?, val sh
             val bt = async { runCatching { Api.batches(a, b, posIds, team) }.getOrNull() }
             val cu = async { runCatching { Api.customers("", "spend", "", 1, 1) }.getOrNull() }
             HomeData(o.await(), w.await(), bd.await(), tr.await(), sh.await(), pl.await(), tg.await(), rp.await(), bt.await(), cu.await())
+        }
+        } catch (e: Exception) { teamError = HrUnit.serverMessage(e, applied); throw e }
+    } }
+    LaunchedEffect(d.data, d.loading) {
+        if (BuildConfig.DEBUG && DebugTour.tour == "team" && applied != null && !d.loading && d.error == null) {
+            d.data?.today?.get("current")?.get("total")?.let {
+                DebugTour.log("[TEAM] tq don-chot=${Fmt.int(it["closedOrders"].d)} dt=${Fmt.shortMoney(it["closedNet"].d)} tao-moi=${Fmt.int(it["orders"].d)} gttb=${Fmt.shortMoney(it["averageOrder"].d)} giao=${Fmt.int(it["groups"]["delivered"]["orders"].d)}")
+                DebugTour.teamOverviewReady = true
+            }
         }
     }
     fun q(group: String, basis: String, title: String, ids: List<String> = posIds) = Screen.Orders(OrderQuery(a, b, ids, group, basis = basis, title = title, team = team, product = product))
@@ -60,7 +73,9 @@ class HomeData(val today: J?, val week: J?, val badge: J?, val trend: J?, val sh
             T("Thẻ", 10.sp, FontWeight.Bold, C.inkSoft)
             Chip("Tất cả", product == "all") { product = "all" }; Chip("Gentadox", product == "gentadox") { product = "gentadox" }; Chip("SK + GK", product == "skgk") { product = "skgk" }
         }
-        ErrorLine(d.error.takeIf { d.data == null })
+        HrTeamChip()
+        HrTeamNotice(applied != null, if (team == "sale") "Sale" else if (team == "cskh") "CSKH" else "Tất cả")
+        if (teamError != null) HrTeamErrorView(teamError!!) else ErrorLine(d.error.takeIf { d.data == null })
         val data = d.data
         val t = data?.today?.get("current")?.get("total")
         // Ô POS
@@ -136,31 +151,38 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
     val (a, b) = period.range
     val posIds = if (pos.isEmpty()) emptyList() else listOf(pos)
     fun q(group: String, basis: String, title: String, ids: List<String> = posIds) = Screen.Orders(OrderQuery(a, b, ids, group, basis = basis, title = title, team = team, product = product))
+    val applied = HrUnit.applies(TeamState.unit, team)
     val report = data.today
     val t = report?.get("current")?.get("total"); val p = report?.get("compare")?.get("total")
+    if (BuildConfig.DEBUG) DebugTour.TeamAnchor("team-center")
     T("Số liệu theo kỳ", 15.sp, FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
-    T(buildString { append("${period.label} · so với kỳ liền trước"); if (team != "all") append(" · " + if (team == "sale") "Sale" else "CSKH"); if (pos.isNotEmpty()) append(" · " + Pos.short(pos)); if (product != "all") append(" · " + if (product == "gentadox") "Gentadox" else "SK + GK") }, 10.sp, color = C.inkSoft)
+    T(buildString { append("${period.label} · so với kỳ liền trước"); applied?.let { append(" · team ${it.shortName}") }; if (team != "all") append(" · " + if (team == "sale") "Sale" else "CSKH"); if (pos.isNotEmpty()) append(" · " + Pos.short(pos)); if (product != "all") append(" · " + if (product == "gentadox") "Gentadox" else "SK + GK") }, 10.sp, color = C.inkSoft)
     if (t != null) {
         val shift = data.shift
         val shiftName = mapOf("morning" to "ca sáng", "afternoon" to "ca chiều", "evening" to "ca tối", "day" to "cả ngày")[shift?.get("shift")?.s] ?: "ca hiện tại"
         Grid2(listOf(
             { m -> KpiCard(MI.orders, C.blue, "Đơn tạo mới", Fmt.int(t["orders"].d), Fmt.delta(t["orders"].d, p?.get("orders")?.dn), note = "${Fmt.int(t["customers"].d)} khách", modifier = m) { nav.push(q("", "created", "Đơn tạo mới")) } },
             { m -> KpiCard(MI.closed, C.good, "Đơn chốt", Fmt.int(t["closedOrders"].d), Fmt.delta(t["closedOrders"].d, p?.get("closedOrders")?.dn), note = "Tỷ lệ chốt ${Fmt.pct(t.rate)}", modifier = m) { nav.push(q("closed", "confirmed", "Đơn chốt")) } },
-            { m -> KpiCard(MI.revenue, C.teal, "Doanh thu đơn chốt", Fmt.short(t["closedNet"].d) + " ₫", Fmt.delta(t["closedNet"].d, p?.get("closedNet")?.dn), note = "GTTB ${Fmt.short(t["averageOrder"].d)} ₫", modifier = m) { nav.push(q("closed", "confirmed", "Đơn chốt")) } },
-            { m -> KpiCard(MI.aov, C.gray, "Giá trị TB đơn (AOV)", Fmt.short(t["averageOrder"].d) + " ₫", Fmt.delta(t["averageOrder"].d, p?.get("averageOrder")?.dn), note = "Doanh thu ÷ đơn chốt", modifier = m) },
-            { m -> KpiCard(Icons.Filled.Inventory2, C.good, "Giao thành công", Fmt.int(t["groups"]["delivered"]["orders"].d), Fmt.delta(t["groups"]["delivered"]["orders"].d, p?.get("groups")?.get("delivered")?.get("orders")?.dn), note = "${Fmt.short(t["groups"]["delivered"]["net"].d)} ₫ · theo ngày tạo", modifier = m) { nav.push(q("delivered", "created", "Giao thành công")) } },
+            { m -> KpiCard(MI.revenue, C.teal, "Doanh thu đơn chốt", Fmt.shortMoney(t["closedNet"].d), Fmt.delta(t["closedNet"].d, p?.get("closedNet")?.dn), note = "GTTB ${Fmt.shortMoney(t["averageOrder"].d)}", modifier = m) { nav.push(q("closed", "confirmed", "Đơn chốt")) } },
+            { m -> KpiCard(MI.aov, C.gray, "Giá trị TB đơn (AOV)", Fmt.shortMoney(t["averageOrder"].d), Fmt.delta(t["averageOrder"].d, p?.get("averageOrder")?.dn), note = "Doanh thu ÷ đơn chốt", modifier = m) },
+            { m -> KpiCard(Icons.Filled.Inventory2, C.good, "Giao thành công", Fmt.int(t["groups"]["delivered"]["orders"].d), Fmt.delta(t["groups"]["delivered"]["orders"].d, p?.get("groups")?.get("delivered")?.get("orders")?.dn), note = "${Fmt.shortMoney(t["groups"]["delivered"]["net"].d)} · theo ngày tạo", modifier = m) { nav.push(q("delivered", "created", "Giao thành công")) } },
             { m -> val r = shift?.get("total")?.get("rate")?.dn; val y = shift?.get("yesterday")?.get("rate")?.dn
                 KpiCard(MI.rate, C.warn, "Chốt nóng $shiftName hôm nay", Fmt.pct(r), if (r != null && y != null) Fmt.points(r - y) else null, (r ?: 0.0) >= (y ?: 0.0), note = shift?.let { "${Fmt.int(it["total"]["closed"].d)} chốt / ${Fmt.int(it["total"]["received"].d)} số nhận" }, modifier = m) { nav.push(Screen.Page("shift")) } },
         ))
+        if (applied != null) T("Chốt nóng chưa lọc theo team.")
         PancakeRefBlock(a, b, posIds)
+        if (applied != null) T("Số tham chiếu Pancake chưa lọc theo team.")
         val goal = data.targets?.get("items")?.list?.filter { it["scope"].s == "pos" && (pos.isEmpty() || it["refId"].s == pos) }?.sumOf { it["revenue"].d } ?: 0.0
+        if (BuildConfig.DEBUG) DebugTour.TeamAnchor("team-target")
         Panel(12.dp, onClick = { nav.push(Screen.Page("cskh-kpi")) }) {
+            if (applied != null) T("Mục tiêu tháng chưa tính theo team") else {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconBox(MI.kpi, C.purple); Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) { T("Mục tiêu tháng ${b.substring(5, 7)}", 11.sp, color = C.inkSoft); Rolling(if (goal > 0) Fmt.pct0(t["closedNet"].d / goal * 100) else "—", 19.sp) }
-                T(if (goal > 0) "${Fmt.short(t["closedNet"].d)} / ${Fmt.short(goal)} ₫ · còn ${Fmt.short(maxOf(0.0, goal - t["closedNet"].d))} ₫" else "Chưa đặt mục tiêu (Cấu hình → Mục tiêu tháng)", 10.sp, color = C.inkSoft, modifier = Modifier.width(150.dp))
+                T(if (goal > 0) "${Fmt.short(t["closedNet"].d)} / ${Fmt.shortMoney(goal)} · còn ${Fmt.shortMoney(maxOf(0.0, goal - t["closedNet"].d))}" else "Chưa đặt mục tiêu (Cấu hình → Mục tiêu tháng)", 10.sp, color = C.inkSoft, modifier = Modifier.width(150.dp))
             }
             Bar(if (goal > 0) t["closedNet"].d / goal else 0.0, C.purple, 7.dp)
+            }
         }
     }
     // Xu hướng 30 ngày
@@ -189,8 +211,10 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
         }
     }
     data.pipeline?.let { pl ->
+        if (BuildConfig.DEBUG) DebugTour.TeamAnchor("team-pipeline")
         val T0 = pl["total"]; val closed = T0["closed"]["orders"].d
         Panel {
+            if (applied != null) T("Vận hành đơn chưa lọc theo team.")
             SectionHead("Vận hành đơn", "Xem chi tiết") { nav.push(Screen.Page("pipeline")) }
             T("Chốt → xuất đi → đã nhận · theo giờ chốt trong kỳ", 10.sp, color = C.inkSoft)
             FunnelLine("Đơn chốt", closed, closed, C.good) { nav.push(q("closed", "confirmed", "Đơn chốt")) }
@@ -215,10 +239,10 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     T("${i + 1}", 10.sp, FontWeight.Bold, C.inkSoft, modifier = Modifier.width(16.dp)); PosBadge(id, 20.dp); Spacer(Modifier.width(6.dp))
                     T(Pos.name(id), 12.sp, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
-                    Column(horizontalAlignment = Alignment.End) { T(Fmt.short(x["closedNet"].d) + " ₫", 12.sp, FontWeight.Bold); Fmt.delta(x["closedNet"].d, prev?.get("closedNet")?.dn)?.let { T(it, 9.sp, FontWeight.SemiBold, if (it.startsWith("-")) C.bad else C.good) } }
+                    Column(horizontalAlignment = Alignment.End) { T(Fmt.shortMoney(x["closedNet"].d), 12.sp, FontWeight.Bold); Fmt.delta(x["closedNet"].d, prev?.get("closedNet")?.dn)?.let { T(it, 9.sp, FontWeight.SemiBold, if (it.startsWith("-")) C.bad else C.good) } }
                 }
                 Bar(x["closedNet"].d / maxV, posColor(id), 5.dp, Modifier.padding(start = 42.dp))
-                T("${Fmt.int(x["closedOrders"].d)} chốt · tỷ trọng ${Fmt.pct0(if (t["closedNet"].d > 0) x["closedNet"].d / t["closedNet"].d * 100 else null)} · AOV ${Fmt.short(if (x["closedOrders"].d > 0) x["closedNet"].d / x["closedOrders"].d else 0.0)} ₫ · kỳ trước ${prev?.let { Fmt.short(it["closedNet"].d) } ?: "—"} ₫", 9.sp, color = C.inkSoft, modifier = Modifier.padding(start = 42.dp))
+                T("${Fmt.int(x["closedOrders"].d)} chốt · tỷ trọng ${Fmt.pct0(if (t["closedNet"].d > 0) x["closedNet"].d / t["closedNet"].d * 100 else null)} · AOV ${Fmt.shortMoney(if (x["closedOrders"].d > 0) x["closedNet"].d / x["closedOrders"].d else 0.0)} · kỳ trước ${prev?.let { Fmt.short(it["closedNet"].d) } ?: "—"} ₫", 9.sp, color = C.inkSoft, modifier = Modifier.padding(start = 42.dp))
             }
         }
     }
@@ -253,6 +277,7 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
             EmpRows(staff.sortedBy { it.rate ?: 999.0 }.take(5), C.bad, a, b)
         }
     }
+    if (applied != null) T("Mua lại & data chưa lọc theo team.")
     // Mua lại & data
     Panel {
         Row(verticalAlignment = Alignment.CenterVertically) { T("Mua lại & data", 15.sp, FontWeight.Bold, modifier = Modifier.weight(1f)); T("Mua lại ›", 11.sp, FontWeight.SemiBold, C.brand, modifier = Modifier.clickable { nav.push(Screen.Page("repurchase")) }); Spacer(Modifier.width(10.dp)); T("Data ›", 11.sp, FontWeight.SemiBold, C.brand, modifier = Modifier.clickable { nav.push(Screen.Page("batches")) }) }
@@ -260,7 +285,7 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
         val recv = bt.sumOf { it["received"].d }; val buy = bt.sumOf { it["buyers"].d }
         GridN(2, listOf(
             { m -> MiniCell("Tỷ lệ mua lại (trọn đời)", rp?.let { Fmt.pct(if (it["funnel"]["once"].d > 0) it["funnel"]["twice"].d / it["funnel"]["once"].d * 100 else null) } ?: "—", m) },
-            { m -> MiniCell("Doanh thu mua lại", rp?.let { Fmt.short(it["summary"]["repurchase"]["net"].d) + " ₫" } ?: "—", m) },
+            { m -> MiniCell("Doanh thu mua lại", rp?.let { Fmt.shortMoney(it["summary"]["repurchase"]["net"].d) } ?: "—", m) },
             { m -> MiniCell("Đơn mua lại", rp?.let { Fmt.int(it["summary"]["repurchase"]["orders"].d) } ?: "—", m) },
             { m -> MiniCell("Khách mua lại", rp?.let { Fmt.int(it["summary"]["repurchase"]["customers"].d) } ?: "—", m) },
             { m -> MiniCell("Data được cấp", if (data.batches == null) "—" else Fmt.int(recv), m) },
@@ -269,8 +294,10 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
     }
     // Khách hàng + Khách lâu chưa mua
     data.customers?.let { c ->
+        if (BuildConfig.DEBUG) DebugTour.TeamAnchor("team-customers")
         val g = c["groups"]; val seg = c["segments"]
         Panel {
+            if (applied != null) T("Khách hàng chưa lọc theo team.")
             SectionHead("Khách hàng", "Xem chi tiết") { nav.push(Screen.Page("customers")) }
             T("Toàn bộ lịch sử · bấm một ô để mở trang tương ứng", 10.sp, color = C.inkSoft)
             GridN(3, listOf(
@@ -279,10 +306,11 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
                 { m -> MiniCell("Thân thiết", Fmt.int(seg["loyal"].d), m) { nav.push(Screen.Page("customers")) } },
                 { m -> MiniCell("Nguy cơ rời bỏ", Fmt.int(seg["risk"].d), m) { nav.push(Screen.Page("dormant")) } },
                 { m -> MiniCell("Lâu chưa mua (>90)", Fmt.int(seg["dormant"].d), m) { nav.push(Screen.Page("dormant")) } },
-                { m -> MiniCell("Tổng chi tiêu", Fmt.short(seg["ltvTotal"].d) + " ₫", m) },
+                { m -> MiniCell("Tổng chi tiêu", Fmt.shortMoney(seg["ltvTotal"].d), m) },
             ))
         }
         Panel {
+            if (applied != null) T("Khách hàng chưa lọc theo team.")
             SectionHead("Khách lâu chưa mua", "Xem chi tiết") { nav.push(Screen.Page("dormant")) }
             T("Theo số ngày từ lần mua thành công gần nhất tới hôm nay", 10.sp, color = C.inkSoft)
             val buckets = listOf("30-45" to "30–45 ngày", "46-60" to "46–60 ngày", "61-90" to "61–90 ngày", "90+" to "Trên 90 ngày")
@@ -292,7 +320,7 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
                 Column(Modifier.clickable { nav.push(Screen.Page("dormant")) }.padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Row { T(label, 12.sp, FontWeight.SemiBold, modifier = Modifier.weight(1f)); Column(horizontalAlignment = Alignment.End) { T(Fmt.int(n), 12.sp, FontWeight.Bold); T("${Fmt.pct0(n / buyers * 100)} khách đã mua", 9.sp, color = C.inkSoft) } }
                     Bar(n / maxV, if (k == "90+") C.bad else if (k == "61-90") C.warn else C.good, 5.dp)
-                    T("Đã mua ${net?.let { Fmt.short(it) + " ₫" } ?: "—"}${if (net != null && n > 0) " · TB ${Fmt.short(net / n)} ₫/khách" else ""}", 9.sp, color = C.inkSoft)
+                    T("Đã mua ${net?.let { Fmt.shortMoney(it) } ?: "—"}${if (net != null && n > 0) " · TB ${Fmt.shortMoney(net / n)}/khách" else ""}", 9.sp, color = C.inkSoft)
                 }
             }
         }
@@ -330,6 +358,7 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
     val label = (if (a == b) Fmt.day(a) else "${Fmt.day(a)} – ${Fmt.day(b)}") + " · " + (pos?.let { Pos.name(it) } ?: "Tất cả POS")
     fun q(g: String, basis: String, title: String) = OrderQuery(a, b, posIds, g, basis = basis, title = title)
     SubPage("Tổng quan POS", d.loading && d.data != null, { d.reload() }) {
+        UnfilteredTeamNotice()
         PageTitle("Tổng quan POS", "Hiệu suất bán hàng theo từng điểm") { Hint("Số liệu Pancake") }
         PeriodMenu(period) { period = it }
         PosChipRow(pos, label = null) { pos = it }
@@ -374,7 +403,7 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
         Row { T("Theo POS", 15.sp, FontWeight.Bold, modifier = Modifier.weight(1f)); T("chạm để chỉ xem POS đó", 9.sp, color = C.inkSoft) }
         rows.sortedByDescending { it["closedNet"].d }.forEach { r ->
             Column(Modifier.clickable { pick(r["posId"].s) }, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) { PosBadge(r["posId"].s, 20.dp); Spacer(Modifier.width(8.dp)); T(Pos.name(r["posId"].s), 13.sp, FontWeight.Medium, modifier = Modifier.weight(1f)); T(Fmt.short(r["closedNet"].d) + " ₫", 13.sp, FontWeight.SemiBold) }
+                Row(verticalAlignment = Alignment.CenterVertically) { PosBadge(r["posId"].s, 20.dp); Spacer(Modifier.width(8.dp)); T(Pos.name(r["posId"].s), 13.sp, FontWeight.Medium, modifier = Modifier.weight(1f)); T(Fmt.shortMoney(r["closedNet"].d), 13.sp, FontWeight.SemiBold) }
                 Bar(if (total > 0) r["closedNet"].d / total else 0.0, posColor(r["posId"].s))
                 T("${Fmt.int(r["closedOrders"].d)} đơn chốt · ${Fmt.int(r["orders"].d)} đơn tạo", 11.sp, color = C.inkSoft)
             }
@@ -387,7 +416,7 @@ data class Explain(val title: String, val value: String, val definition: String,
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun ExplainSheet(m: Explain, dismiss: () -> Unit, open: (OrderQuery) -> Unit) {
-    ModalBottomSheet(dismiss, containerColor = C.cream) {
+    SafeSheet(dismiss, containerColor = C.cream) {
         Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) { m.icon?.let { IconBox(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(it), C.brand, 30.dp); Spacer(Modifier.width(8.dp)) }; T(m.title, 16.sp, FontWeight.Bold) }
             Panel { T(m.value, 30.sp, FontWeight.Bold); T(m.period, 11.sp, color = C.inkSoft); m.previous?.let { Row { T(it.first, 13.sp, modifier = Modifier.weight(1f)); T(it.second, 13.sp, color = C.inkSoft) } } }
@@ -401,9 +430,15 @@ data class Explain(val title: String, val value: String, val definition: String,
 @Composable fun AlertsScreen() {
     val shift = load(Unit) { Sync.refresh(); Api.shift(VNDate.today().toString(), "auto") }
     SubPage("Thông báo", shift.loading, { shift.reload() }) {
+        UnfilteredTeamNotice()
         T("Đồng bộ", 13.sp, FontWeight.Bold, C.inkSoft)
         Panel { Sync.pos.forEach { p -> Row(verticalAlignment = Alignment.CenterVertically) { PosBadge(p["posId"].s, 20.dp); Spacer(Modifier.width(6.dp)); Box(Modifier.size(8.dp).clip(CircleShape).background(if (p["lastError"].sn != null) C.bad else if (Sync.age(p) > 15) C.warn else C.good)); Spacer(Modifier.width(8.dp)); Column { T(Pos.name(p["posId"].s), 13.sp, FontWeight.SemiBold); T(p["lastError"].sn ?: if (Sync.age(p) > 15) "Chưa đồng bộ ${Fmt.ago(p["lastSyncAt"].sn)}" else "Đồng bộ ${Fmt.dateTime(p["lastSyncAt"].sn)}", 11.sp, color = C.inkSoft) } } } }
         val alerts = shift.data?.get("alerts")?.list ?: emptyList()
         if (alerts.isNotEmpty()) { T("Trong ca", 13.sp, FontWeight.Bold, C.inkSoft); Panel { alerts.forEach { a -> Row { Icon(Icons.Filled.Warning, null, tint = if (a["level"].s == "high") C.bad else C.warn, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(8.dp)); Column { T(a["title"].s, 13.sp, FontWeight.SemiBold); T(a["detail"].s, 11.sp, color = C.inkSoft) } } } } }
     }
+}
+
+// Dùng lại nguyên văn câu báo chung; không thêm giao diện khi chưa chọn team.
+@Composable fun UnfilteredTeamNotice(dept: String = "Tất cả") {
+    if (TeamState.unit != null) HrTeamNotice(false, dept)
 }

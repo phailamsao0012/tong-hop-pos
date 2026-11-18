@@ -33,6 +33,7 @@ import java.time.LocalDate
     val (a, b) = period.range
     val d = load(period.key) { coroutineScope { val x = async { Api.marketing(a, b) }; val y = async { runCatching { Api.marketing(period.previous.first, period.previous.second) }.getOrNull() }; x.await() to y.await() } }
     TabPage("Đồng hành cùng nhà chăn nuôi Việt", d.loading && d.data != null, { d.reload() }) {
+        UnfilteredTeamNotice("MKT")
         PageTitle("Tổng quan MKT", "Số về, xác nhận, doanh thu theo marketer") { PeriodMenu(period) { period = it } }
         val all = d.data?.first?.get("byMarketer")?.list ?: emptyList()
         val teams = all.map { it["marketingTeamName"].s }.filter { it.isNotEmpty() }.distinct().sorted()
@@ -53,9 +54,9 @@ import java.time.LocalDate
             { m -> KpiCard(MI.closed, C.good, "Đơn xác nhận", Fmt.int(sum("confirmedOrders")), Fmt.delta(sum("confirmedOrders"), ps("confirmedOrders")), modifier = m) },
             { m -> KpiCard(MI.customers, C.good, "Khách có mua (giao TC)", Fmt.int(sum("deliveredOrders")), Fmt.delta(sum("deliveredOrders"), ps("deliveredOrders")), modifier = m) },
             { m -> KpiCard(MI.rate, C.purple, "Tỷ lệ xác nhận", Fmt.pct(if (sum("createdOrders") > 0) sum("confirmedOrders") / sum("createdOrders") * 100 else null), note = "${Fmt.int(sum("confirmedOrders"))} / ${Fmt.int(sum("createdOrders"))} đơn", modifier = m) },
-            { m -> KpiCard(MI.revenue, C.teal, "Doanh thu", Fmt.short(sum("net")) + " ₫", Fmt.delta(sum("net"), ps("net")), note = "TB đơn ${Fmt.short(if (sum("confirmedOrders") > 0) sum("net") / sum("confirmedOrders") else 0.0)} ₫", modifier = m) },
-            { m -> KpiCard(MI.returned, C.warn, "Sau hoàn hủy", Fmt.short(rows.sumOf { it["netAfterRefund"].dn ?: it["net"].d }) + " ₫", note = "Hoàn ${Fmt.int(sum("returnedOrders"))} · hủy ${Fmt.int(sum("cancelledOrders"))}", modifier = m) },
-            { m -> KpiCard(MI.aov, C.good, "Doanh thu / SĐT", Fmt.short(if (sum("createdPhones") > 0) sum("net") / sum("createdPhones") else 0.0) + " ₫", note = "Giao TC ${Fmt.pct(if (sum("confirmedOrders") > 0) sum("deliveredOrders") / sum("confirmedOrders") * 100 else null)}", modifier = m) },
+            { m -> KpiCard(MI.revenue, C.teal, "Doanh thu", Fmt.shortMoney(sum("net")), Fmt.delta(sum("net"), ps("net")), note = "TB đơn ${Fmt.shortMoney(if (sum("confirmedOrders") > 0) sum("net") / sum("confirmedOrders") else 0.0)}", modifier = m) },
+            { m -> KpiCard(MI.returned, C.warn, "Sau hoàn hủy", Fmt.shortMoney(rows.sumOf { it["netAfterRefund"].dn ?: it["net"].d }), note = "Hoàn ${Fmt.int(sum("returnedOrders"))} · hủy ${Fmt.int(sum("cancelledOrders"))}", modifier = m) },
+            { m -> KpiCard(MI.aov, C.good, "Doanh thu / SĐT", Fmt.shortMoney(if (sum("createdPhones") > 0) sum("net") / sum("createdPhones") else 0.0), note = "Giao TC ${Fmt.pct(if (sum("confirmedOrders") > 0) sum("deliveredOrders") / sum("confirmedOrders") * 100 else null)}", modifier = m) },
         ))
         if (teams.size > 1 && team.isEmpty()) Panel {
             Row { T("Theo marketing team", 15.sp, FontWeight.Bold, modifier = Modifier.weight(1f)); Hint("Chạm để lọc") }
@@ -63,7 +64,7 @@ import java.time.LocalDate
             val maxO = (byTeam.maxOfOrNull { p -> p.second.sumOf { it["createdOrders"].d } } ?: 1.0).coerceAtLeast(1.0)
             byTeam.forEach { (t, ms) ->
                 val o = ms.sumOf { it["createdOrders"].d }; val c = ms.sumOf { it["confirmedOrders"].d }; val n = ms.sumOf { it["net"].d }
-                Column(Modifier.clickable { team = t }.padding(vertical = 3.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) { Row { T(t, 12.sp, FontWeight.SemiBold); T("  ${ms.size} người", 9.sp, color = C.inkSoft); Spacer(Modifier.weight(1f)); T("${Fmt.int(o)} số về · XN ${Fmt.pct(if (o > 0) c / o * 100 else null)} · ${Fmt.short(n)} ₫", 10.sp, FontWeight.SemiBold, C.inkSoft) }; Bar(o / maxO, C.good) }
+                Column(Modifier.clickable { team = t }.padding(vertical = 3.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) { Row { T(t, 12.sp, FontWeight.SemiBold); T("  ${ms.size} người", 9.sp, color = C.inkSoft); Spacer(Modifier.weight(1f)); T("${Fmt.int(o)} số về · XN ${Fmt.pct(if (o > 0) c / o * 100 else null)} · ${Fmt.shortMoney(n)}", 10.sp, FontWeight.SemiBold, C.inkSoft) }; Bar(o / maxO, C.good) }
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -76,16 +77,16 @@ import java.time.LocalDate
                 Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Medal(i + 1); Spacer(Modifier.width(8.dp)); Avatar(m["marketerName"].s, 34.dp); Spacer(Modifier.width(8.dp))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Row { T(m["marketerName"].s, 13.sp, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f)); T(when (sort) { "net" -> Fmt.short(m["net"].d) + " ₫"; "rate" -> Fmt.pct(m["confirmationRate"].dn); else -> "${Fmt.int(m["createdOrders"].d)} đơn" }, 12.sp, FontWeight.Bold) }
+                        Row { T(m["marketerName"].s, 13.sp, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f)); T(when (sort) { "net" -> Fmt.shortMoney(m["net"].d); "rate" -> Fmt.pct(m["confirmationRate"].dn); else -> "${Fmt.int(m["createdOrders"].d)} đơn" }, 12.sp, FontWeight.Bold) }
                         Bar(when (sort) { "net" -> m["net"].d; "rate" -> m["confirmationRate"].d; else -> m["createdOrders"].d } / maxV, C.good, 5.dp)
-                        T("${m["marketingTeamName"].s} · ${Fmt.int(m["createdPhones"].d)} SĐT · XN ${Fmt.pct(m["confirmationRate"].dn)} · ${Fmt.short(m["netAfterRefund"].dn ?: m["net"].d)} ₫ sau hoàn hủy", 9.sp, color = C.inkSoft, maxLines = 1)
+                        T("${m["marketingTeamName"].s} · ${Fmt.int(m["createdPhones"].d)} SĐT · XN ${Fmt.pct(m["confirmationRate"].dn)} · ${Fmt.shortMoney(m["netAfterRefund"].dn ?: m["net"].d)} sau hoàn hủy", 9.sp, color = C.inkSoft, maxLines = 1)
                     }
                 }
                 if (i < minOf(20, rows.size) - 1) Divider0(40.dp)
             }
         }
         Grid2(listOf(
-            { m -> Panel(12.dp, m) { T("Doanh thu theo nhân viên MKT", 11.sp, color = C.inkSoft); Rolling(Fmt.short(sum("net")), 22.sp, color = C.good); T("Sau hoàn hủy ${Fmt.short(rows.sumOf { it["netAfterRefund"].dn ?: it["net"].d })} ₫", 10.sp, color = C.inkSoft) } },
+            { m -> Panel(12.dp, m) { T("Doanh thu theo nhân viên MKT", 11.sp, color = C.inkSoft); Rolling(Fmt.short(sum("net")), 22.sp, color = C.good); T("Sau hoàn hủy ${Fmt.shortMoney(rows.sumOf { it["netAfterRefund"].dn ?: it["net"].d })}", 10.sp, color = C.inkSoft) } },
             { m -> Panel(12.dp, m) { T("Trạng thái vận chuyển", 11.sp, color = C.inkSoft); T("${Fmt.int(sum("deliveredOrders"))} giao TC", 13.sp, FontWeight.Bold); T("${Fmt.int(sum("returnedOrders"))} hoàn · ${Fmt.int(sum("cancelledOrders"))} hủy", 10.sp, color = C.inkSoft); T("Tỷ lệ giao ${Fmt.pct(if (sum("confirmedOrders") > 0) sum("deliveredOrders") / sum("confirmedOrders") * 100 else null)}", 10.sp, color = C.good) } },
         ))
     }
@@ -118,27 +119,35 @@ val MORE_GROUPS = listOf(
 }
 
 @Composable fun PageScreen(id: String) {
-    when (id) {
-        "customers" -> CustomerSearchScreen()
-        "monthly" -> MonthlyScreen()
-        "custom" -> CustomReportScreen()
-        "raw-orders" -> OrderListScreen(OrderQuery(VNDate.add(-6).toString(), VNDate.today().toString(), title = "Đơn nguồn Pancake POS"), filterable = true)
-        "recruit" -> RecruitScreen()
-        "config" -> ConfigScreen()
-        "audit" -> AuditScreen()
-        "security" -> SecurityScreen()
-        "metrics" -> MetricSettingsScreen()
-        "shift" -> SubPage("Điều hành trong ca") { ShiftContent() }
-        "compare" -> SubPage("So sánh nhân viên") { CompareContent("all") }
-        "batches" -> SubPage("Data được cấp") { BatchesContent() }
-        "pipeline" -> SubPage("Vận hành đơn") { PipelineContent() }
-        "calls" -> SubPage("Cuộc gọi CSKH") { CallsContent("cskh") }
-        "care" -> SubPage("Khách theo nhân viên") { CareContent() }
-        "repurchase" -> SubPage("Mua lại & Upsell") { RepurchaseContent() }
-        "dormant" -> SubPage("Khách lâu chưa mua") { DormantContent() }
-        "cskh-kpi" -> SubPage("KPI CSKH") { KpiContent() }
-        else -> SubPage(id) { T("Trang này chưa có trong app.", 13.sp) }
+    val content: @Composable () -> Unit = {
+        when (id) {
+            "customers" -> CustomerSearchScreen()
+            "monthly" -> MonthlyScreen()
+            "custom" -> CustomReportScreen()
+            "raw-orders" -> OrderListScreen(OrderQuery(VNDate.add(-6).toString(), VNDate.today().toString(), title = "Đơn nguồn Pancake POS"), filterable = true)
+            "recruit" -> RecruitScreen()
+            "config" -> ConfigScreen()
+            "audit" -> AuditScreen()
+            "security" -> SecurityScreen()
+            "metrics" -> MetricSettingsScreen()
+            "shift" -> SubPage("Điều hành trong ca") { ShiftContent() }
+            "compare" -> SubPage("So sánh nhân viên") { CompareContent("all") }
+            "batches" -> SubPage("Data được cấp") { BatchesContent() }
+            "pipeline" -> SubPage("Vận hành đơn") { PipelineContent() }
+            "calls" -> SubPage("Cuộc gọi CSKH") { CallsContent("cskh") }
+            "care" -> SubPage("Khách theo nhân viên") { CareContent() }
+            "repurchase" -> SubPage("Mua lại & Upsell") { RepurchaseContent() }
+            "dormant" -> SubPage("Khách lâu chưa mua") { DormantContent() }
+            "cskh-kpi" -> SubPage("KPI CSKH") { KpiContent() }
+            else -> SubPage(id) { T("Trang này chưa có trong app.", 13.sp) }
+        }
     }
+    if (TeamState.unit != null && HrUnit.notice(id) && id !in listOf("calls", "raw-orders")) {
+        Column {
+            Column(Modifier.padding(16.dp)) { UnfilteredTeamNotice() }
+            Box(Modifier.weight(1f)) { content() }
+        }
+    } else content()
 }
 
 // ---------- Báo cáo cuối tháng ----------
@@ -147,7 +156,7 @@ val MORE_GROUPS = listOf(
     var offset by remember { mutableLongStateOf(0) }
     val start = VNDate.monthStart().minusMonths(offset)
     val end = if (offset == 0L) VNDate.today() else start.withDayOfMonth(start.lengthOfMonth())
-    val label = "Tháng %02d/%d".format(start.monthValue, start.year); val prevLabel = start.minusMonths(1).let { "Tháng %02d/%d".format(it.monthValue, it.year) }
+    val label = Fmt.monthTitle(start); val prevLabel = start.minusMonths(1).let { Fmt.monthTitle(it) }
     val a = start.toString(); val b = end.toString()
     val d = load(offset) { Api.overview(a, b) }
     fun q(g: String, basis: String, title: String) = Screen.Orders(OrderQuery(a, b, group = g, basis = basis, title = title))
@@ -239,7 +248,7 @@ val METRICS = listOf("closedNet" to "Doanh thu", "closedOrders" to "Số đơn h
             StepTitle(1, "Chọn chỉ số (Tối đa 3 chỉ số)")
             ChipRow {
                 metrics.forEach { m -> Row(Modifier.clip(CircleShape).background(C.brandSoft).clickable { metrics = metrics - m }.padding(horizontal = 10.dp, vertical = 6.dp)) { T("${METRICS.first { it.first == m }.second}  ✕", 11.sp, FontWeight.SemiBold, C.good) } }
-                if (metrics.size < 3) { var o by remember { mutableStateOf(false) }; Box { Chip("+ Thêm chỉ số", false) { o = true }; DropdownMenu(o, { o = false }) { METRICS.filter { it.first !in metrics }.forEach { (k, l) -> DropdownMenuItem({ T(l, 13.sp) }, { metrics = metrics + k; o = false }) } } } }
+                if (metrics.size < 3) { var o by remember { mutableStateOf(false) }; Box { Chip("+ Thêm chỉ số", false) { o = true }; SafeMenu(o, { o = false }) { METRICS.filter { it.first !in metrics }.forEach { (k, l) -> DropdownMenuItem({ T(l, 13.sp) }, { metrics = metrics + k; o = false }) } } } }
             }
         }
         Panel {

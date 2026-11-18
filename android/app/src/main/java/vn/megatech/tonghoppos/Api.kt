@@ -16,6 +16,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -62,6 +63,23 @@ object Vault {
     }
 }
 
+/** Danh sách cố định, không phụ thuộc Api.base. */
+object HostList {
+    private val localHosts = setOf("10.0.2.2", "localhost")
+    fun allows(url: HttpUrl, debug: Boolean): Boolean =
+        url.username.isEmpty() && url.password.isEmpty() &&
+            ((url.scheme == "https" && (url.host == "tonghopposmegatech.io.vn" ||
+                (debug && (url.host == "demo.tonghopposmegatech.io.vn" || url.host in localHosts)))) ||
+                (debug && url.scheme == "http" && url.host in localHosts))
+
+    fun debugBase(value: String, debug: Boolean): String? {
+        if (!debug) return null
+        val url = value.toHttpUrlOrNull() ?: return null
+        if (!allows(url, debug) || url.encodedPath != "/" || url.query != null || url.fragment != null) return null
+        return url.toString().removeSuffix("/")
+    }
+}
+
 /**
  * Gọi API của web tonghopposmegatech.io.vn. Phiên đăng nhập là cookie `thp_session`; cùng cookie nhớ máy `thp_device`
  * được mã hoá bằng Keystore (Vault) nên mở lại app vẫn còn đăng nhập. Tắt "Nhớ máy này" thì phiên chỉ giữ trong bộ nhớ.
@@ -78,6 +96,8 @@ object Api {
     fun init(ctx: Context) {
         prefs = ctx.getSharedPreferences("megatech", Context.MODE_PRIVATE)
         Vault.init(prefs)
+        prefs.getString("last_email", null)?.let { Vault.put("last_email", it) }
+        prefs.edit().remove("last_email").apply()
         // Chuyển phiên cũ (lưu chữ thường) sang kho mã hoá.
         prefs.getString(COOKIE, null)?.let { Vault.put(COOKIE, it); prefs.edit().remove(COOKIE).apply() }
         remember = prefs.getBoolean("remember", true)
@@ -94,8 +114,8 @@ object Api {
     val hasSavedSession get() = session != null && remember
     /** Email lần đăng nhập gần nhất (hiện "Chào mừng trở lại"). */
     var lastEmail: String?
-        get() = prefs.getString("last_email", null)
-        set(v) { prefs.edit().apply { if (v == null) remove("last_email") else putString("last_email", v) }.apply() }
+        get() = Vault.get("last_email")
+        set(v) { Vault.put("last_email", v) }
 
     /** Tên máy gửi lên máy chủ, ví dụ "Samsung SM-N986B" (chỉ ký tự ASCII hiển thị được). */
     val deviceName: String by lazy {
@@ -106,6 +126,7 @@ object Api {
 
     private val jar = object : CookieJar {
         override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+            if (!HostList.allows(url, BuildConfig.DEBUG)) return
             cookies.firstOrNull { it.name == COOKIE }?.let { c -> session = if (c.expiresAt < System.currentTimeMillis() || c.value.isEmpty()) null else c.value }
             cookies.firstOrNull { it.name == DEVICE }?.let { c ->
                 val v = if (c.expiresAt < System.currentTimeMillis() || c.value.isEmpty()) null else c.value
@@ -113,7 +134,7 @@ object Api {
             }
         }
         override fun loadForRequest(url: HttpUrl): List<Cookie> =
-            listOf(COOKIE, DEVICE).mapNotNull { n -> mem[n]?.let { Cookie.Builder().name(n).value(it).domain(url.host).path("/").build() } }
+            if (!HostList.allows(url, BuildConfig.DEBUG)) emptyList() else listOf(COOKIE, DEVICE).mapNotNull { n -> mem[n]?.let { Cookie.Builder().name(n).value(it).hostOnlyDomain(url.host).path("/").build() } }
     }
     val http: OkHttpClient = OkHttpClient.Builder().cookieJar(jar).connectTimeout(20, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS).build()
 
@@ -125,7 +146,7 @@ object Api {
         val rb = body?.toString()?.toRequestBody("application/json".toMediaType())
         // Mọi báo cáo tính theo "Cách tính" của tài khoản (như web).
         val url = base + path + if (path.startsWith("/api/reports/")) (if ('?' in path) "&" else "?") + MetricPrefs.query else ""
-        val req = Request.Builder().url(url).header("Accept", "application/json").header("User-Agent", "MEGATECH-Android/0.1")
+        val req = Request.Builder().url(url).header("Accept", "application/json").header("User-Agent", "MEGATECH-Android/${BuildConfig.VERSION_NAME}")
             .header("X-Megatech-Client", "android").header("X-Megatech-Device", deviceName)
             .method(method, if (method == "GET") null else (rb ?: "{}".toRequestBody("application/json".toMediaType()))).build()
         http.newCall(req).execute().use { res ->
@@ -150,11 +171,65 @@ object Api {
 
     fun enc(s: String): String = java.net.URLEncoder.encode(s, "UTF-8")
 
+    // Giá trị mã hóa riêng; dấu phẩy giữa các POS giữ nguyên theo hợp đồng app.
+    private fun staffValue(value: String): String =
+        enc(value).replace("+", "%20").replace("%7E", "~").replace("*", "%2A")
+    private fun staffTeamSuffix(hrTeam: String?): String =
+        hrTeam?.takeIf { it.isNotEmpty() }?.let { "&hrTeam=${staffValue(it)}" } ?: ""
+
+    fun staffTablePath(start: String, end: String, posIds: List<String>, team: String, by: String, hrTeam: String? = null): String =
+        "/api/reports/product-groups?start=${staffValue(start)}&end=${staffValue(end)}&posIds=${posIds.joinToString(",") { staffValue(it) }}&team=${staffValue(team)}&dim=tag&basis=both&by=${staffValue(by)}" + staffTeamSuffix(hrTeam)
+
+    suspend fun staffTable(start: String, end: String, posIds: List<String>, team: String, by: String, hrTeam: String? = null): StaffTable =
+        StaffTable.fromJson(get(staffTablePath(start, end, posIds, team, by, hrTeam)).v as JSONObject)
+
+    fun staffOrdersPath(q: StaffOrderQuery): String =
+        staffTablePath(q.start, q.end, q.posIds, q.team, q.by, q.hrTeam) +
+            "&staffId=${staffValue(q.staffId)}" + if (q.packed) "&packed=1" else ""
+
+    suspend fun staffOrders(q: StaffOrderQuery): StaffTable =
+        StaffTable.fromJson(get(staffOrdersPath(q)).v as JSONObject)
+
+    fun staffComparePath(
+        start: String, end: String, posIds: List<String>, team: String, by: String,
+        mode: String, step: Int, cstart: String? = null, cend: String? = null, hrTeam: String? = null
+    ): String {
+        val prefix = "/api/reports/staff-compare?start=${staffValue(start)}&end=${staffValue(end)}&posIds=${posIds.joinToString(",") { staffValue(it) }}&team=${staffValue(team)}&by=${staffValue(by)}&mode=${staffValue(mode)}"
+        val range = if (mode == "custom") {
+            // Thiếu ngày để máy chủ báo lỗi; app không tự tính ngày kỳ so.
+            "&cstart=${staffValue(cstart ?: "")}&cend=${staffValue(cend ?: "")}"
+        } else {
+            val levels = when (mode) {
+                "previous" -> listOf(1, 2, 3, 4)
+                "weekday" -> listOf(1, 2, 3, 4, 8)
+                "monthday" -> listOf(1, 2, 3, 6, 12)
+                "year" -> listOf(1, 2)
+                else -> emptyList()
+            }
+            "&step=${if (step in levels) step else 1}"
+        }
+        return prefix + range + staffTeamSuffix(hrTeam)
+    }
+
+    suspend fun staffCompare(
+        start: String, end: String, posIds: List<String>, team: String, by: String,
+        mode: String, step: Int, cstart: String? = null, cend: String? = null, hrTeam: String? = null
+    ): StaffCompare = StaffCompare.fromJson(
+        get(staffComparePath(start, end, posIds, team, by, mode, step, cstart, cend, hrTeam)).v as JSONObject
+    )
+
+    // Client không có Cache: mỗi lần gọi đều tải danh sách team mới từ máy chủ.
+    suspend fun hrTeams(): List<HrTeamItem> =
+        (get("/api/teams?list=1").v as JSONObject).optJSONArray("teams")?.let { teams ->
+            List(teams.length()) { HrTeamItem.fromJson(teams.getJSONObject(it)) }
+        } ?: emptyList()
+
     // ---------- Các lời gọi thường dùng ----------
+    suspend fun reauth(password: String) { send("/api/auth/reauth", "POST", mapOf("password" to password)) }
     suspend fun me() = get("/api/auth/me")
     suspend fun logout() { runCatching { send("/api/auth/logout", "POST", emptyMap()) }; session = null }
-    suspend fun overview(start: String, end: String, posIds: List<String> = emptyList(), groupBy: String = "day", team: String = "all", compare: String = "previous", employeeIds: List<String> = emptyList(), product: String = "all") =
-        get("/api/reports/overview?posIds=${posIds.joinToString(",")}&start=$start&end=$end&compare=$compare&groupBy=$groupBy&team=$team&employeeIds=${employeeIds.joinToString(",")}&productSegment=$product")
+    suspend fun overview(start: String, end: String, posIds: List<String> = emptyList(), groupBy: String = "day", team: String = "all", compare: String = "previous", employeeIds: List<String> = emptyList(), product: String = "all", hrTeam: String? = null) =
+        get("/api/reports/overview?posIds=${posIds.joinToString(",")}&start=$start&end=$end&compare=$compare&groupBy=$groupBy&team=$team&employeeIds=${employeeIds.joinToString(",")}&productSegment=$product" + staffTeamSuffix(hrTeam))
     suspend fun pancakeRef(start: String, end: String, posIds: List<String> = emptyList()) = get("/api/reports/pancake-ref?start=$start&end=$end&posIds=${posIds.joinToString(",")}")
     suspend fun shift(date: String, shift: String, posIds: List<String> = emptyList(), team: String = "all") = get("/api/reports/shift?posIds=${posIds.joinToString(",")}&date=$date&shift=$shift&team=$team")
     suspend fun pipeline(start: String, end: String, basis: String, posIds: List<String> = emptyList(), team: String = "all", product: String = "all") =

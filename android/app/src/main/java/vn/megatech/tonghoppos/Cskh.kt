@@ -24,14 +24,23 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
 data class SubTab(val id: String, val title: String)
-val CSKH_TABS = listOf(SubTab("calls", "Cuộc gọi CSKH"), SubTab("care", "Khách theo nhân viên"), SubTab("repurchase", "Mua lại & Upsell"), SubTab("dormant", "Khách lâu chưa mua"), SubTab("cskh-kpi", "KPI CSKH"))
+val CSKH_TABS = listOf(SubTab("calls", "Cuộc gọi CSKH"), SubTab("compare", "Nhân viên"), SubTab("care", "Khách theo nhân viên"), SubTab("repurchase", "Mua lại & Upsell"), SubTab("dormant", "Khách lâu chưa mua"), SubTab("cskh-kpi", "KPI CSKH"))
 
 @Composable fun CskhTab() {
     val tabs = CSKH_TABS.filter { Auth.canView(it.id) }
     var page by remember { mutableStateOf(tabs.firstOrNull()?.id ?: "calls") }
+    if (BuildConfig.DEBUG && DebugTour.tour == "team") LaunchedEffect(DebugTour.tick) {
+        when (DebugTour.target) {
+            "team-cskh-care" -> page = "care"
+            "team-cskh-mua-lai" -> page = "repurchase"
+            "team-cskh-lau" -> page = "dormant"
+            "team-cskh-kpi" -> page = "cskh-kpi"
+        }
+    }
     TabPage("POS · CSKH · Tăng trưởng cùng bạn") {
         ChipRow { tabs.forEach { Chip(it.title, page == it.id) { page = it.id } } }
-        when (page) { "care" -> CareContent(); "repurchase" -> RepurchaseContent(); "dormant" -> DormantContent(); "cskh-kpi" -> KpiContent(); else -> CallsContent("cskh") }
+        if (page != "compare" && page != "calls") UnfilteredTeamNotice("CSKH")
+        when (page) { "compare" -> CompareContent("cskh"); "care" -> CareContent(); "repurchase" -> RepurchaseContent(); "dormant" -> DormantContent(); "cskh-kpi" -> KpiContent(); else -> CallsContent("cskh") }
     }
 }
 
@@ -47,6 +56,7 @@ val CSKH_TABS = listOf(SubTab("calls", "Cuộc gọi CSKH"), SubTab("care", "Kh�
     val (a, b) = period.range
     val d = load(period.key, team) { coroutineScope { val x = async { Api.calls(a, b, team) }; val y = async { runCatching { Api.calls(period.previous.first, period.previous.second, team) }.getOrNull() }; x.await() to y.await() } }
     val care = load(filter, staffPick) { if (filter != "all" && isCskh) Api.care(staffPick, if (filter == "todo") "note_old" else "note_new", 0, "", 1) else null }
+    UnfilteredTeamNotice(if (isCskh) "CSKH" else "Sale")
     PageTitle(if (isCskh) "Cuộc gọi CSKH" else "Cuộc gọi Sale", "Kết nối nhiều hơn. Khách hàng hài lòng hơn.", Icons.Filled.Call) { PeriodMenu(period, listOf(Period.Today, Period.Yesterday, Period.Week, Period.Month, Period.Last)) { period = it } }
     ErrorLine(d.error.takeIf { d.data == null })
     val data = d.data?.first
@@ -78,10 +88,10 @@ val CSKH_TABS = listOf(SubTab("calls", "Cuộc gọi CSKH"), SubTab("care", "Kh�
         if (isCskh) { Chip("Chưa liên hệ", filter == "todo", care.data?.get("summary")?.get("neverNoted")?.i) { filter = "todo" }; Chip("Đã liên hệ", filter == "done") { filter = "done" } }
         var o1 by remember { mutableStateOf(false) }
         Box { Chip(if (staffPick.isEmpty()) "Nhân viên" else all.firstOrNull { it["authorId"].s == staffPick }?.get("name")?.s ?: "Nhân viên", staffPick.isNotEmpty(), chevron = true) { o1 = true }
-            DropdownMenu(o1, { o1 = false }) { DropdownMenuItem({ T("Tất cả nhân viên", 13.sp) }, { staffPick = ""; o1 = false }); all.forEach { s -> DropdownMenuItem({ T(s["name"].s, 13.sp) }, { staffPick = s["authorId"].s; o1 = false }) } } }
-        if (depts.size > 1) { var o2 by remember { mutableStateOf(false) }; Box { Chip(dept.ifEmpty { "Mọi bộ phận" }, dept.isNotEmpty(), chevron = true) { o2 = true }; DropdownMenu(o2, { o2 = false }) { DropdownMenuItem({ T("Mọi bộ phận", 13.sp) }, { dept = ""; o2 = false }); depts.forEach { x -> DropdownMenuItem({ T(x, 13.sp) }, { dept = x; o2 = false }) } } } }
+            SafeMenu(o1, { o1 = false }) { DropdownMenuItem({ T("Tất cả nhân viên", 13.sp) }, { staffPick = ""; o1 = false }); all.forEach { s -> DropdownMenuItem({ T(s["name"].s, 13.sp) }, { staffPick = s["authorId"].s; o1 = false }) } } }
+        if (depts.size > 1) { var o2 by remember { mutableStateOf(false) }; Box { Chip(dept.ifEmpty { "Mọi bộ phận" }, dept.isNotEmpty(), chevron = true) { o2 = true }; SafeMenu(o2, { o2 = false }) { DropdownMenuItem({ T("Mọi bộ phận", 13.sp) }, { dept = ""; o2 = false }); depts.forEach { x -> DropdownMenuItem({ T(x, 13.sp) }, { dept = x; o2 = false }) } } } }
         var o3 by remember { mutableStateOf(false) }
-        Box { Chip(if (countBy == "customers") "Đếm: khách đã gọi" else "Đếm: cuộc gọi", false, chevron = true) { o3 = true }; DropdownMenu(o3, { o3 = false }) { DropdownMenuItem({ T("Đếm: khách đã gọi", 13.sp) }, { countBy = "customers"; o3 = false }); DropdownMenuItem({ T("Đếm: cuộc gọi", 13.sp) }, { countBy = "notes"; o3 = false }) } }
+        Box { Chip(if (countBy == "customers") "Đếm: khách đã gọi" else "Đếm: cuộc gọi", false, chevron = true) { o3 = true }; SafeMenu(o3, { o3 = false }) { DropdownMenuItem({ T("Đếm: khách đã gọi", 13.sp) }, { countBy = "customers"; o3 = false }); DropdownMenuItem({ T("Đếm: cuộc gọi", 13.sp) }, { countBy = "notes"; o3 = false }) } }
     }
     if (days.isNotEmpty()) Panel {
         Row { T("Theo ngày", 15.sp, FontWeight.Bold, modifier = Modifier.weight(1f)); Hint(if (countBy == "customers") "Số khách đã gọi" else "Số cuộc gọi") }
@@ -151,7 +161,7 @@ val CSKH_TABS = listOf(SubTab("calls", "Cuộc gọi CSKH"), SubTab("care", "Kh�
     var open by remember { mutableStateOf(false) }
     Box {
         Panel(12.dp, onClick = { open = true }) { Row(verticalAlignment = Alignment.CenterVertically) { Avatar(cur?.get("name")?.s ?: "Tất cả", 40.dp); Spacer(Modifier.width(10.dp)); Column(Modifier.weight(1f)) { T(cur?.get("name")?.s ?: "Tất cả nhân viên CSKH", 14.sp, FontWeight.Bold); T(cur?.get("department")?.sn ?: "Đội CSKH · ${staff.size} người", 11.sp, color = C.inkSoft) }; Icon(Icons.Filled.KeyboardArrowDown, null, tint = C.inkSoft) } }
-        DropdownMenu(open, { open = false }) { DropdownMenuItem({ T("Tất cả nhân viên CSKH", 13.sp) }, { assigned = ""; open = false }); staff.forEach { s -> DropdownMenuItem({ T("${s["name"].s} · ${Fmt.int(s["assigned"].d)}", 13.sp) }, { assigned = s["id"].s; open = false }) } }
+        SafeMenu(open, { open = false }) { DropdownMenuItem({ T("Tất cả nhân viên CSKH", 13.sp) }, { assigned = ""; open = false }); staff.forEach { s -> DropdownMenuItem({ T("${s["name"].s} · ${Fmt.int(s["assigned"].d)}", 13.sp) }, { assigned = s["id"].s; open = false }) } }
     }
     Panel(12.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -332,7 +342,7 @@ val CSKH_TABS = listOf(SubTab("calls", "Cuộc gọi CSKH"), SubTab("care", "Kh�
     if (mode == "person") {
         var open by remember { mutableStateOf(false) }
         Box { Panel(12.dp, onClick = { open = true }) { Row(verticalAlignment = Alignment.CenterVertically) { Avatar(cur?.get("name")?.s ?: "?", 40.dp); Spacer(Modifier.width(10.dp)); Column(Modifier.weight(1f)) { T(cur?.get("name")?.s ?: "Chọn nhân viên", 14.sp, FontWeight.Bold); T(cur?.get("department")?.sn ?: "Nhân viên CSKH", 11.sp, color = C.inkSoft) }; OutlineButton("Đổi nhân viên") { open = true } } }
-            DropdownMenu(open, { open = false }) { staff.forEach { e -> DropdownMenuItem({ T(e["name"].s, 13.sp) }, { pick = e["id"].s; open = false }) } } }
+            SafeMenu(open, { open = false }) { staff.forEach { e -> DropdownMenuItem({ T(e["name"].s, 13.sp) }, { pick = e["id"].s; open = false }) } } }
     }
     val x = d.data ?: run { if (d.error == null) Thinking(); ErrorLine(d.error); return }
     val (targets, actual, care, hist) = x
@@ -389,7 +399,7 @@ val CSKH_TABS = listOf(SubTab("calls", "Cuộc gọi CSKH"), SubTab("care", "Kh�
     var rev by remember { mutableStateOf(cur?.get("revenue")?.d?.toLong()?.toString() ?: "") }
     var ord by remember { mutableStateOf(cur?.get("closedOrders")?.d?.toLong()?.toString() ?: "") }
     var err by remember { mutableStateOf<String?>(null) }
-    AlertDialog(dismiss, title = { T("Mục tiêu tháng ${month.takeLast(2)} · ${e["name"].s}", 15.sp, FontWeight.Bold) }, text = {
+    SafeAlert(dismiss, title = { T("Mục tiêu tháng ${month.takeLast(2)} · ${e["name"].s}", 15.sp, FontWeight.Bold) }, text = {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedTextField(rev, { rev = it.filter(Char::isDigit) }, label = { Text("Doanh thu (₫)") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
             OutlinedTextField(ord, { ord = it.filter(Char::isDigit) }, label = { Text("Đơn chốt") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))

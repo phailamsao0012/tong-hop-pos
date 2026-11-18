@@ -81,9 +81,12 @@ object Approvals {
     /** Quét QR trên máy tính bằng máy quét của Google Play services (không cần quyền camera). */
     fun scan(act: FragmentActivity, scope: CoroutineScope) {
         val opts = GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()
-        GmsBarcodeScanning.getClient(act, opts).startScan()
-            .addOnSuccessListener { b -> val id = parse(b.rawValue ?: ""); if (id == null) Notice.show("Đây không phải mã đăng nhập MEGATECH", true) else scope.launch { open(id) } }
-            .addOnFailureListener { e -> Notice.show("Không mở được máy quét: ${e.message ?: "lỗi không rõ"}", true) }
+        AppLock.expectExternal()
+        try { GmsBarcodeScanning.getClient(act, opts).startScan()
+            .addOnSuccessListener { b -> AppLock.finishExternal(); val id = parse(b.rawValue ?: ""); if (id == null) Notice.show("Đây không phải mã đăng nhập MEGATECH", true) else scope.launch { open(id) } }
+            .addOnCanceledListener { AppLock.finishExternal() }
+            .addOnFailureListener { e -> AppLock.finishExternal(); Notice.show("Không mở được máy quét: ${e.message ?: "lỗi không rõ"}", true) }
+        } catch (e: RuntimeException) { AppLock.finishExternal(); Notice.show("Không mở được máy quét", true) }
     }
     suspend fun decide(id: String, number: Int?, approve: Boolean) {
         val msg = try {
@@ -107,7 +110,7 @@ object Approvals {
     var pick by remember(id) { mutableStateOf<Int?>(null) }
     var busy by remember(id) { mutableStateOf(false) }
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet({ Approvals.close() }, sheetState = state, containerColor = C.card) {
+    SafeSheet({ Approvals.close() }, sheetState = state, containerColor = C.card) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             val phone = Regex("iPhone|iPad|Android|app MEGATECH", RegexOption.IGNORE_CASE).containsMatchIn(item["device"].s)
             T(if (phone) "Đăng nhập trên điện thoại khác?" else "Đăng nhập trên máy tính?", 18.sp, FontWeight.Bold, modifier = Modifier.fillMaxWidth(), align = TextAlign.Center)
@@ -130,9 +133,9 @@ object Approvals {
             }
             val ready = pick != null && !busy
             Row(Modifier.fillMaxWidth().height(50.dp).thinkingBorder(busy, RoundedCornerShape(14.dp)).clip(RoundedCornerShape(14.dp)).background(if (ready || busy) C.brand else C.brand.copy(alpha = .35f)).clickable(enabled = ready) {
-                val go = { scope.launch { busy = true; Approvals.decide(id, pick, true); busy = false } }
-                // Máy không cài khoá màn hình thì không có gì để hỏi thêm: duyệt luôn.
-                if (AppLock.available(act)) AppLock.authenticate(act, "Cho máy tính đăng nhập", "Xác thực để duyệt đăng nhập MEGATECH") { ok -> if (ok) go() } else go()
+                val go = { AppLock.approve(act, id, pick) }
+                // Luôn xác thực, dùng mật khẩu MEGATECH nếu máy không có khóa màn hình.
+                AppLock.authenticate(act, "Cho máy tính đăng nhập", "Xác thực để duyệt đăng nhập MEGATECH") { ok -> if (ok) go() }
             }, horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                 run { Icon(Icons.Filled.Fingerprint, null, tint = Color.White, modifier = Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); T("Xác nhận bằng vân tay / khuôn mặt", 14.sp, FontWeight.Bold, Color.White) }
             }
@@ -202,7 +205,7 @@ private fun clientIcon(client: String): ImageVector = when (client) { "ios" -> I
             T("Đăng xuất mọi máy khác", 13.sp, FontWeight.SemiBold, if (others > 0) C.ink else C.inkSoft, modifier = Modifier.weight(1f)); Icon(Icons.Filled.ChevronRight, null, tint = C.inkSoft)
         }
     }
-    if (confirmOthers) AlertDialog({ confirmOthers = false }, title = { T("Đăng xuất mọi máy khác?", 15.sp, FontWeight.Bold) }, text = { T("Mọi máy khác đang vào tài khoản của bạn sẽ phải đăng nhập lại. Máy này vẫn giữ đăng nhập.", 13.sp) },
+    if (confirmOthers) SafeAlert({ confirmOthers = false }, title = { T("Đăng xuất mọi máy khác?", 15.sp, FontWeight.Bold) }, text = { T("Mọi máy khác đang vào tài khoản của bạn sẽ phải đăng nhập lại. Máy này vẫn giữ đăng nhập.", 13.sp) },
         confirmButton = { TextButton({ confirmOthers = false; scope.launch { try { val r = Api.delete("/api/auth/sessions?others=1"); Notice.show("Đã đăng xuất ${r["removed"].i} máy khác.") } catch (e: Exception) { Notice.show(e.message, true) }; d.reload() } }) { T("Đăng xuất", 14.sp, FontWeight.Bold, C.bad) } },
         dismissButton = { TextButton({ confirmOthers = false }) { T("Hủy", 14.sp) } }, containerColor = C.card)
 }

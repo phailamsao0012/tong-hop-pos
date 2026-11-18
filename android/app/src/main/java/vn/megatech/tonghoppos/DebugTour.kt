@@ -1,0 +1,276 @@
+package vn.megatech.tonghoppos
+
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
+
+object DebugTour {
+    var tour by mutableStateOf("")
+    var target by mutableStateOf("")
+    var tick by mutableIntStateOf(0)
+    var period by mutableStateOf<Period>(Period.Last)
+    var tableReady = false
+    var ordersReady = false
+    var compareReady = false
+    var chartReady = false
+    var teamListReady = false
+    var teamOverviewReady = false
+    var teamHasCskh = false
+
+    @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+    @Composable fun TeamAnchor(id: String) {
+        if (!BuildConfig.DEBUG || tour != "team") return
+        val anchor = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+        val height = with(LocalDensity.current) { 360.dp.toPx() }
+        androidx.compose.foundation.layout.Box(Modifier.bringIntoViewRequester(anchor))
+        LaunchedEffect(tick) {
+            if (target == id) anchor.bringIntoView(androidx.compose.ui.geometry.Rect(0f, 0f, 1f, height))
+        }
+    }
+
+    @Composable fun Team() {
+        if (!BuildConfig.DEBUG || tour != "team" || Api.base != "https://demo.tonghopposmegatech.io.vn") return
+        val nav = LocalNav.current
+        val reopen = (androidx.compose.ui.platform.LocalContext.current as? android.app.Activity)?.intent?.getStringExtra("teamCase") == "reopen"
+        val notices = (androidx.compose.ui.platform.LocalContext.current as? android.app.Activity)?.intent?.getStringExtra("teamCase") == "notices"
+        var page by remember { mutableStateOf("home") }
+        LaunchedEffect(Unit) {
+            while (AppLock.locked) delay(250)
+            nav.stack.clear(); period = Period.Last
+            log("[TEAM] dept=all ap=${if (TeamState.unit == null) "khong" else "co"} trang=mo-app")
+            if (reopen) { log("[TEAM] moc=mo-lai"); return@LaunchedEffect }
+            suspend fun waitFor(ready: () -> Boolean): Boolean {
+                repeat(160) { if (ready()) return true; delay(250) }
+                log("[TEAM] moc=loi-tai"); return false
+            }
+            suspend fun mark(value: String) { delay(1500); log("[TEAM] moc=$value"); delay(1500) }
+            teamListReady = false; teamOverviewReady = false
+            delay(1500); tap("team-mo")
+            if (!waitFor { teamListReady }) return@LaunchedEffect
+            mark("danh-sach"); tap("team-chon")
+            if (!waitFor { TeamState.unit?.dept == "sale" && teamOverviewReady }) return@LaunchedEffect
+            if (notices) {
+                // Đoạn riêng để mỗi video screenrecord vẫn dưới 170 giây.
+                for (stage in listOf("sale-chua-loc", "sale-data", "sale-don", "cskh-cuoc-goi",
+                    "cskh-care", "cskh-mua-lai", "cskh-lau", "cskh-kpi", "mkt", "route-cuoc-goi",
+                    "route-tong-quan", "route-pos", "thong-bao", "danh-sach-don", "bao-cao-thang",
+                    "cach-tinh-khong-cau", "bao-mat-khong-cau", "them-khong-cau")) {
+                    page = stage
+                    tap("team-$stage")
+                    mark(stage); delay(2500)
+                }
+                page = "bao-cao-thang"; delay(1000); tap("team-bo")
+                if (!waitFor { TeamState.unit == null }) return@LaunchedEffect
+                mark("thang-khong-team"); delay(2500)
+                log("[TEAM] moc=cau-het")
+                return@LaunchedEffect
+            }
+            tap("team-center"); mark("tong-quan")
+            tap("team-target"); mark("muc-tieu")
+            tap("team-pipeline"); mark("van-hanh")
+            tap("team-customers"); mark("khach-hang")
+            tableReady = false; page = "sale"
+            if (!waitFor { tableReady }) return@LaunchedEffect
+            log("[TEAM] dept=sale ap=co trang=nhan-vien"); tap("xnk-cot"); mark("sale")
+            tableReady = false; page = "cskh"
+            if (!waitFor { tableReady }) return@LaunchedEffect
+            log("[TEAM] dept=cskh ap=khong trang=nhan-vien"); mark("cskh")
+            teamListReady = false; tap("team-mo")
+            if (!waitFor { teamListReady }) return@LaunchedEffect
+            mark("danh-sach-lai")
+            if (teamHasCskh) {
+                tableReady = false; tap("team-chon-cskh")
+                if (!waitFor { TeamState.unit?.dept == "cskh" && tableReady }) return@LaunchedEffect
+                log("[TEAM] dept=cskh ap=co trang=nhan-vien"); mark("cskh-team")
+            } else {
+                tap("team-chon"); delay(500)
+                log("[TEAM] cskh-team=khong"); mark("cskh-team")
+            }
+            tap("team-bo")
+            if (!waitFor { TeamState.unit == null }) return@LaunchedEffect
+            mark("bo")
+            teamListReady = false; tap("team-mo")
+            if (!waitFor { teamListReady }) return@LaunchedEffect
+            tap("team-chon")
+            if (!waitFor { TeamState.unit?.dept == "sale" }) return@LaunchedEffect
+            mark("tat-khi-con-team")
+        }
+        when (page) {
+            "home" -> HomeTab()
+            "sale-chua-loc", "sale-data", "sale-don" -> key(page) { SaleTab() }
+            "cskh-cuoc-goi", "cskh-care", "cskh-mua-lai", "cskh-lau", "cskh-kpi" -> key(page) { CskhTab() }
+            "mkt" -> MktTab()
+            "route-cuoc-goi" -> SubPage("Cuộc gọi CSKH") { CallsContent("cskh") }
+            "route-tong-quan" -> OverviewScreen(null)
+            "route-pos" -> OverviewScreen(Pos.order.firstOrNull())
+            "thong-bao" -> AlertsScreen()
+            "danh-sach-don" -> OrderListScreen(OrderQuery(period.range.first, period.range.second, title = "Danh sách đơn"))
+            "bao-cao-thang" -> PageScreen("monthly")
+            "cach-tinh-khong-cau" -> PageScreen("metrics")
+            "bao-mat-khong-cau" -> PageScreen("security")
+            "them-khong-cau" -> MoreTab()
+            else -> SubPage("Từng nhân viên") { key(page) { CompareContent(page) } }
+        }
+    }
+    fun log(message: String) {
+        if (BuildConfig.DEBUG && Api.base == "https://demo.tonghopposmegatech.io.vn") DebugLog.authenticationState(message)
+    }
+    private fun tap(value: String) { if (BuildConfig.DEBUG) { target = value; tick++ } }
+
+    @Composable fun Warehouse() {
+        if (!BuildConfig.DEBUG || tour != "xnkho" || Api.base != "https://demo.tonghopposmegatech.io.vn") return
+        val nav = LocalNav.current
+        val compareCase = (androidx.compose.ui.platform.LocalContext.current as? android.app.Activity)?.intent?.getStringExtra("compareCase")
+        var team by remember { mutableStateOf("sale") }
+        var largeText by remember { mutableStateOf(false) }
+        var generation by remember { mutableIntStateOf(0) }
+        LaunchedEffect(Unit) {
+            while (AppLock.locked) delay(250)
+            nav.stack.clear()
+            period = Period.Last
+            suspend fun waitFor(ready: () -> Boolean): Boolean {
+                repeat(240) { if (ready()) return true; delay(250) }
+                log("[XNK] moc=loi-tai"); return false
+            }
+            suspend fun stage(action: String, mark: String) {
+                if (action == "xnk-ds" || action == "xnk-chot") ordersReady = false
+                tap(action)
+                if ((action == "xnk-ds" || action == "xnk-chot") && !waitFor { ordersReady }) return
+                delay(2000); log("[XNK] moc=$mark"); delay(2000)
+            }
+            if (compareCase != null) {
+                if (!waitFor { tableReady && compareReady }) return@LaunchedEffect
+                suspend fun compareStage(action: String, mark: String) {
+                    compareReady = false
+                    tap(action)
+                    delay(500)
+                    if (!waitFor { compareReady }) throw kotlinx.coroutines.CancellationException("So cùng kỳ chưa sẵn sàng")
+                    tap("xnk-controls"); delay(1500)
+                    log("[XNK] moc=$mark"); delay(1500)
+                    if (compareCase == "full") {
+                        for (point in listOf("first", "middle", "last")) {
+                            chartReady = false
+                            tap("xnk-chart-$point"); delay(750)
+                            if (!waitFor { chartReady }) return
+                        }
+                        log("[XNK] moc=$mark-chart"); delay(1000)
+                        tap("xnk-chart-clear")
+                    }
+                    tap("xnk-mini"); delay(1500)
+                    log("[XNK] moc=$mark-mini"); delay(1000)
+                }
+                when (compareCase) {
+                    "focus" -> {
+                        suspend fun focusStage(action: String, mark: String, chart: Boolean = false) {
+                            compareReady = false
+                            tap(action); delay(500)
+                            if (!waitFor { compareReady }) throw kotlinx.coroutines.CancellationException("So cùng kỳ chưa sẵn sàng")
+                            delay(1500); log("[XNK] moc=$mark"); delay(1500)
+                            if (chart) {
+                                for (point in listOf("first", "middle", "last")) {
+                                    chartReady = false
+                                    tap("xnk-chart-$point"); delay(750)
+                                    if (!waitFor { chartReady }) throw kotlinx.coroutines.CancellationException("Biểu đồ chưa sẵn sàng")
+                                }
+                                log("[XNK] moc=$mark-chart"); delay(1500)
+                                tap("xnk-chart-clear")
+                            }
+                        }
+                        focusStage("xnk-cmp-default", "rieng-before")
+                        focusStage("xnk-rieng", "rieng", true)
+                        focusStage("xnk-diff", "rieng-diff", true)
+                        focusStage("xnk-cum", "rieng-cum", true)
+                        focusStage("xnk-net", "rieng-net")
+                        focusStage("xnk-rate", "rieng-rate")
+                        focusStage("xnk-weekday", "rieng-mode")
+                        focusStage("xnk-cmp-default", "rieng-reset")
+                        focusStage("xnk-ca-doi", "rieng-ca-doi")
+                        focusStage("xnk-rieng", "rieng-toggle-in")
+                        focusStage("xnk-rieng", "rieng-toggle-out")
+                        tap("xnk-expand"); delay(500)
+                        tap("xnk-last-before"); delay(1500)
+                        log("[XNK] moc=rieng-last-before"); delay(1500)
+                        focusStage("xnk-rieng-last", "rieng-last")
+                        focusStage("xnk-ca-doi", "rieng-end")
+                    }
+                    "remember-read", "custom-read" -> compareStage("xnk-cmp-log", compareCase)
+                    "remember-set" -> { compareStage("xnk-weekday", "remember-mode"); compareStage("xnk-diff", "remember-set") }
+                    "custom-set" -> compareStage("xnk-custom-empty", "custom-set")
+                    "timezone" -> compareStage("xnk-custom", "timezone")
+                    else -> {
+                        compareStage("xnk-cmp-default", "wave")
+                        compareStage("xnk-diff", "diff")
+                        compareStage("xnk-cum", "cum")
+                        compareStage("xnk-weekday", "weekday")
+                        compareStage("xnk-diff", "weekday-diff")
+                        compareStage("xnk-chart-wave", "rate-wave")
+                        compareStage("xnk-rate", "rate")
+                        compareStage("xnk-cum", "rate-cum")
+                        compareStage("xnk-net", "net")
+                        compareStage("xnk-monthday", "monthday")
+                        compareStage("xnk-year", "year")
+                        compareStage("xnk-custom", "custom")
+                        tableReady = false; compareReady = false; team = "cskh"; generation++
+                        if (!waitFor { tableReady && compareReady }) return@LaunchedEffect
+                        compareStage("xnk-cmp-default", "cskh-so")
+                        tableReady = false; compareReady = false; period = Period.Month
+                        if (!waitFor { tableReady && compareReady }) return@LaunchedEffect
+                        compareStage("xnk-cmp-log", "through-today")
+                        tableReady = false; compareReady = false; period = Period.Today
+                        if (!waitFor { tableReady && compareReady }) return@LaunchedEffect
+                        compareStage("xnk-cmp-log", "today")
+                    }
+                }
+                log("[XNK] moc=so-xong")
+                return@LaunchedEffect
+            }
+            if (!waitFor { tableReady }) return@LaunchedEffect
+            stage("xnk-cot", "cot")
+            stage("xnk-o", "giai-thich")
+            tap("xnk-dong"); delay(1000)
+            stage("xnk-ds", "ds")
+            nav.stack.clear(); delay(1000)
+            stage("xnk-chot", "chot")
+            nav.stack.clear(); target = ""; tableReady = false; team = "cskh"; generation++
+            if (!waitFor { tableReady }) return@LaunchedEffect
+            stage("xnk-cot", "cskh")
+            team = "sale"; period = Period.Month; target = ""; tableReady = false; generation++
+            if (!waitFor { tableReady }) return@LaunchedEffect
+            stage("xnk-cot", "dh-thang-nay")
+            stage("xnk-o", "dh-thang-nay-giai-thich")
+            tap("xnk-dong"); delay(1000)
+            stage("xnk-ds", "dh-thang-nay-ds")
+            nav.stack.clear(); target = ""; largeText = true
+            stage("xnk-cot", "chu-lon")
+            largeText = false; target = ""; log("[XNK] moc=xong")
+        }
+        val density = LocalDensity.current
+        CompositionLocalProvider(LocalDensity provides Density(density.density, if (largeText) 2f else density.fontScale)) {
+            SubPage("Từng nhân viên") { key(generation) { CompareContent(team) } }
+        }
+    }
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Composable fun Content() {
+        if (!BuildConfig.DEBUG || tour !in listOf("khoa", "1-khoa", "2-che")) return
+        var hostOk by remember { mutableStateOf(false) }
+        LaunchedEffect(tour) {
+            while (true) {
+                hostOk = Api.base == "https://demo.tonghopposmegatech.io.vn"
+                delay(250)
+            }
+        }
+        var open by remember(tour) { mutableStateOf(true) }
+        if (Auth.state == Auth.State.SignedIn && open) {
+            SafeSheet({ open = false }) {
+                T("Bảng thử bản debug", modifier = Modifier.padding(24.dp))
+                if (hostOk) T("Máy chủ demo", modifier = Modifier.padding(24.dp))
+            }
+        }
+    }
+}

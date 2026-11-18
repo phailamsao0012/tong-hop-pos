@@ -62,6 +62,7 @@ fun statusTone(code: Int?): Tone = when (code) { 3, 16 -> Tone.Green; 2 -> Tone.
     }
     LaunchedEffect(active, tick) { load(false) }
     SubPage(active.title, busy && rows.isNotEmpty(), { tick++ }) {
+        if (TeamState.unit != null) T("Danh sách đơn chưa lọc theo team.")
         T(active.contextLine, 11.sp, color = C.inkSoft)
         SearchBox(search, "Mã đơn, SĐT, tên khách", Modifier.fillMaxWidth(), { search = it; if (it.isEmpty()) tick++ }) { tick++ }
         if (filterable) OrderFilters(active) { active = it }
@@ -165,7 +166,7 @@ fun statusTone(code: Int?): Tone = when (code) { 3, 16 -> Tone.Green; 2 -> Tone.
                     Grid2(listOf(
                         { m -> KpiCard(MI.orders, C.good, "Đơn tạo / chốt", "${Fmt.int(st["orders"].d)} / ${Fmt.int(st["closedOrders"].d)}", modifier = m) },
                         { m -> KpiCard(Icons.Filled.Verified, C.good, "Mua thành công", Fmt.int(st["successOrders"].d), modifier = m) },
-                        { m -> KpiCard(MI.aov, C.teal, "Giá trị TB đơn", Fmt.short(st["averageOrder"].d) + " ₫", modifier = m) },
+                        { m -> KpiCard(MI.aov, C.teal, "Giá trị TB đơn", Fmt.shortMoney(st["averageOrder"].d), modifier = m) },
                         { m -> KpiCard(MI.returned, C.warn, "Hoàn / hủy", "${Fmt.int(st["returnedOrders"].d)} / ${Fmt.int(st["cancelledOrders"].d)}", modifier = m) },
                     ))
                     Panel { SectionHead("Lịch sử mua hàng", "Xem tất cả") { tab = "history" }; OrderTimeline(orders.take(4)) }
