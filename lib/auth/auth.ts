@@ -27,9 +27,10 @@ export const clearActAsCookie = () => `${ACT_AS_COOKIE}=; Path=/; HttpOnly; Secu
 
 export const SESSION_COOKIE = 'thp_session';
 const SESSION_DAYS = 30;
-// PBKDF2 giữ ở mức vừa phải để login không vượt giới hạn CPU của Workers Free;
-// mật khẩu được trộn thêm AUTH_SECRET (pepper) trước khi băm.
-const PBKDF2_ITERATIONS = 30000;
+// Mật khẩu trộn thêm AUTH_SECRET (pepper) trước khi băm. Web chạy trên PC (không còn giới hạn CPU của Workers Free) nên nâng
+// 30.000 → 600.000 vòng (plan sửa web 1.5, 17/11/2026). Mật khẩu cũ vẫn đăng nhập được (số vòng lưu trong chuỗi băm) và
+// được băm lại theo mức mới ở lần đăng nhập đúng tiếp theo (upgradePasswordHash), không ai phải đổi mật khẩu.
+export const PBKDF2_ITERATIONS = 600000;
 
 const encoder = new TextEncoder();
 const toBase64 = (bytes: ArrayBuffer | Uint8Array) =>
@@ -67,6 +68,16 @@ export async function hashPassword(password: string) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const bits = await derive(password, salt, PBKDF2_ITERATIONS);
   return `pbkdf2$${PBKDF2_ITERATIONS}$${toBase64(salt)}$${toBase64(bits)}`;
+}
+
+/** Chuỗi băm cũ (ít vòng hơn mức hiện tại) cần băm lại. */
+export const needsRehash = (stored: string) => { const [scheme, it] = stored.split('$'); return scheme === 'pbkdf2' && Number(it) < PBKDF2_ITERATIONS; };
+/** Sau khi đăng nhập đúng: băm lại mật khẩu theo mức mới (chỉ ghi khi chuỗi băm trong DB chưa đổi). */
+export async function upgradePasswordHash(userId: string, password: string, stored: string) {
+  if (!needsRehash(stored)) return false;
+  const next = await hashPassword(password);
+  const r = await env.DB.prepare('UPDATE users SET password_hash=? WHERE id=? AND password_hash=?').bind(next, userId, stored).run();
+  return Number(r.meta?.changes ?? 0) > 0;
 }
 
 export async function verifyPassword(password: string, stored: string) {

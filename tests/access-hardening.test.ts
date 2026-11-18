@@ -84,7 +84,7 @@ void test('e. MFA bắt buộc chưa bật: chặn API dữ liệu ở máy ch�
   assert.ok(src.lastIndexOf("!pathname.startsWith('/api/auth/')", gate) > 0);
 });
 
-void test('f. KPI (GET /api/targets): nhân viên thường chỉ thấy KPI cá nhân của mình; chủ hệ thống thấy đủ; giám đốc giữ như cũ', async () => {
+void test('f. KPI (GET /api/targets): nhân viên thường chỉ thấy KPI cá nhân của mình; chủ hệ thống thấy đủ; giám đốc chỉ thấy người mình quản lý (plan sửa web 1.3)', async () => {
   const { GET } = await import('../app/api/targets/route');
   const month = '2026-10';
   const now = '2026-10-01T00:00:00Z';
@@ -112,7 +112,9 @@ void test('f. KPI (GET /api/targets): nhân viên thường chỉ thấy KPI cá
     assert.deepEqual(await keys(), [`employee:kpi-other`, 'employee:kpi-own', `pos:${pos}`, 'team:team-x'].sort());
     await loginAs(raw, 'director');
     const dir = await keys();
-    for (const k of ['employee:kpi-own', 'employee:kpi-other', `pos:${pos}`]) assert.ok(dir.includes(k), `giám đốc vẫn thấy ${k}`);
+    // Giám đốc chưa quản lý ai: chỉ còn KPI cấp POS, không thấy KPI cá nhân người khác (17/11/2026).
+    assert.ok(dir.includes(`pos:${pos}`));
+    for (const k of ['employee:kpi-own', 'employee:kpi-other']) assert.ok(!dir.includes(k), `giám đốc không quản lý ${k} thì không thấy`);
   } finally {
     raw.exec(`DELETE FROM targets WHERE month='${month}'; DELETE FROM pos_users WHERE user_id IN ('kpi-own','kpi-other')`);
   }

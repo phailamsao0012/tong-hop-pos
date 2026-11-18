@@ -150,6 +150,11 @@ const VIEW_GATES: [string, string[]][] = [
   // Số chính Marketing (chi phí, doanh thu, ROAS từng marketer) đầu trang Tổng quan: cùng quyền với Chi phí & ROAS.
   ['/api/marketing/analytics', ['mkt-roas']],
   ['/api/marketing/trend', ['marketing']],
+  // Danh sách đơn kèm SĐT khách sau ô "x đơn", chi tiết từng marketer, bảng chéo team Sale × MKT (plan sửa web 1.2, 17/11/2026:
+  // trước đây chỉ kiểm đăng nhập). Danh sách đơn còn mở từ ô số Marketing ở Chi phí & ROAS nên nhận cả quyền đó.
+  ['/api/marketing/orders', ['marketing', 'mkt-roas']],
+  ['/api/marketing/marketer-detail', ['marketing']],
+  ['/api/marketing/cross', ['marketing']],
   // Đối chiếu SĐT / Đơn / DT trên sheet CPQC Daily với đơn Pancake (12/10/2026): cùng quyền.
   ['/api/marketing/sheet-check', ['mkt-roas']],
   ['/api/reports/customer360', ['customer360']],

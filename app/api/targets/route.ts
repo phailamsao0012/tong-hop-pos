@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
 import { isOwner } from '@/lib/auth/access';
-import { canWriteTarget, managedTeams, targetStaff, listTargets, parseTargetCosts, readTargetSetting, visibleTargets, writeTargets } from '@/lib/kpi/targets';
+import { canWriteTarget, lastTargetBackup, managedTeams, targetStaff, listTargets, parseTargetCosts, readTargetSetting, undoTargets, visibleTargets, writeTargets } from '@/lib/kpi/targets';
 import { audit } from '@/lib/ops/audit';
 
 // KPI team/POS chỉ chủ hệ thống; KPI cá nhân kiểm quyền từng người.
@@ -19,11 +19,14 @@ export async function GET(request: Request) {
     const pm = new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 7);
     return { month: pm, items: await listTargets(pm) };
   })()]);
-  if (isOwner(user)) return Response.json({ month, items, previous: prev }, { headers: { 'Cache-Control': 'private, no-store' } });
+  if (isOwner(user)) return Response.json({ month, items, previous: prev, seeKpiOf: null, undo: await lastTargetBackup(month) }, { headers: { 'Cache-Control': 'private, no-store' } });
   const ids = user.role === 'staff' ? [] : await targetStaff(env.DB, user);
   // Leader / mentor / giám đốc: thấy KPI của team mình cầm (chỉ xem, đặt KPI team vẫn chỉ chủ hệ thống).
   const teams = await managedTeams(env.DB, user);
-  return Response.json({ month, items: await visibleTargets(env.DB, user, items, ids, teams), previous: { ...prev, items: await visibleTargets(env.DB, user, prev.items, ids, teams) }, teams, ...(user.role === 'staff' ? {} : { editable: ids }) }, { headers: { 'Cache-Control': 'private, no-store' } });
+  const visible = await visibleTargets(env.DB, user, items, ids, teams);
+  // seeKpiOf: KPI cá nhân của ai xem được (người mình quản lý + chính mình). Trang cộng KPI cả team mà thiếu người thì hiện "–" (17/11/2026).
+  const seeKpiOf = [...new Set([...(ids ?? []), ...visible.filter((i) => i.scope === 'employee').map((i) => i.refId)])];
+  return Response.json({ month, items: visible, previous: { ...prev, items: await visibleTargets(env.DB, user, prev.items, ids, teams) }, teams, seeKpiOf, ...(user.role === 'staff' ? {} : { editable: ids }) }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
 export async function PUT(request: Request) {
@@ -55,4 +58,19 @@ export async function PUT(request: Request) {
   await audit({ action: 'targets.set', userId: user.userId, target: month, detail: JSON.stringify({ keys: only ?? body.items.map((it) => `${it.scope}:${it.refId}`) }), request });
   const saved = await listTargets(month);
   return Response.json({ ok: true, month, items: await visibleTargets(env.DB, user, saved, ids), editable: ids });
+}
+
+/** Hoàn tác lần lưu KPI gần nhất của tháng trên web (chủ hệ thống; plan sửa web 1.1, 17/11/2026). */
+export async function POST(request: Request) {
+  const user = await getSessionUser();
+  if (!user) return unauthorized();
+  if (!isOwner(user)) return forbidden();
+  let body: { month?: string; action?: string };
+  try { body = await request.json(); } catch { return Response.json({ error: 'JSON không hợp lệ.' }, { status: 400 }); }
+  const month = body?.month ?? '';
+  if (body?.action !== 'undo' || !MONTH_RE.test(month)) return Response.json({ error: 'Dữ liệu không hợp lệ.' }, { status: 400 });
+  const done = await undoTargets(month, new Date().toISOString());
+  if (!done) return Response.json({ error: 'Không còn lần lưu nào để hoàn tác.' }, { status: 404 });
+  await audit({ action: 'targets.undo', userId: user.userId, target: month, detail: JSON.stringify(done), request });
+  return Response.json({ ok: true, month, ...done, items: await listTargets(month), undo: await lastTargetBackup(month) });
 }
