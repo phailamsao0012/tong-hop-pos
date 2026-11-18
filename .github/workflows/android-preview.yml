@@ -78,7 +78,7 @@ jobs:
           # Máy ảo thấy 127.0.0.1 của máy GitHub qua 10.0.2.2: vẫn là web ảo, không ra mạng ngoài.
           base="http://10.0.2.2:${BASE##*:}"
           case "$BASE" in http://127.0.0.1:*) ;; *) echo "::error::chup: BASE không phải web ảo"; exit 1;; esac
-          ui_stages=(tab-0 tab-1 tab-2 tab-3 tab-4)
+          ui_stages=(tab-0 hom-nay-2 hom-nay-3 thong-bao-1 thong-bao-2 tab-1 tab-2 tab-3 tab-4)
           adb install -r android/app/build/outputs/apk/debug/app-debug.apk >/dev/null
           # App khoá bằng khoá máy: đặt PIN cho máy ảo, app hỏi thì nhập PIN.
           adb shell locksettings verify --old 2468 >/dev/null 2>&1 || adb shell locksettings set-pin 2468 >/dev/null

@@ -400,7 +400,16 @@ val LocalNoBack = staticCompositionLocalOf { false }
     fun select(i: Int) { tab = i; if (i !in visited) visited.add(i) }
     // Lượt chụp giao diện (chỉ bản debug, CI web ảo): lần lượt mở từng tab, mỗi tab ghi một mốc để CI chụp ảnh.
     if (BuildConfig.DEBUG && DebugTour.tour == "giaodien") LaunchedEffect(Unit) {
-        TABS.indices.forEach { i -> select(i); kotlinx.coroutines.delay(12_000); DebugLog.ui("tab-$i"); kotlinx.coroutines.delay(4_000) }
+        suspend fun go(target: String, moc: String, wait: Long = 3_000) { DebugTour.target = target; DebugTour.tick++; kotlinx.coroutines.delay(wait); DebugLog.ui(moc); kotlinx.coroutines.delay(4_000) }
+        TABS.indices.forEach { i ->
+            select(i); kotlinx.coroutines.delay(12_000); DebugLog.ui("tab-$i"); kotlinx.coroutines.delay(4_000)
+            // Hôm nay: cuộn tới khối MKT / Cần xử lý, rồi mở trang Thông báo (bước A2).
+            if (i == 0) {
+                go("cuon:hom-nay-2", "hom-nay-2"); go("cuon:hom-nay-3", "hom-nay-3")
+                go("thong-bao", "thong-bao-1", 8_000); go("cuon:thong-bao-2", "thong-bao-2")
+                DebugTour.target = "ve"; DebugTour.tick++; kotlinx.coroutines.delay(1_500)
+            }
+        }
         DebugLog.ui("xong")
     }
     // Màn trong máy gập / máy rộng: thanh tab dọc bên trái, nhường chiều cao cho số liệu; màn ngoài giữ thanh dưới.
@@ -417,7 +426,7 @@ val LocalNoBack = staticCompositionLocalOf { false }
                             } else if (BuildConfig.DEBUG && DebugTour.tour == "team") {
                                 DebugTour.Team()
                             } else
-                            when (i) { 0 -> HomeTab(); 1 -> OrdersTab(); 2 -> OverviewTab(); 3 -> DeptsTab(); else -> MoreTab() }
+                            when (i) { 0 -> TodayTab(); 1 -> OrdersTab(); 2 -> OverviewTab(); 3 -> DeptsTab(); else -> MoreTab() }
                         }
                     }
                 }
@@ -483,13 +492,14 @@ internal fun loadErrorText(error: Throwable): String? = when (error) {
 
 /** Trang gốc của tab: thanh đầu xanh + nội dung cuộn trên nền kem, kéo xuống để làm mới. */
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable fun TabPage(tagline: String = "Bán hàng tốt hơn mỗi ngày", refreshing: Boolean = false, onRefresh: () -> Unit = {}, content: @Composable ColumnScope.() -> Unit) {
+@Composable fun TabPage(tagline: String = "Bán hàng tốt hơn mỗi ngày", refreshing: Boolean = false, onRefresh: () -> Unit = {}, header: (@Composable () -> Unit)? = null, scrollState: androidx.compose.foundation.ScrollState? = null, content: @Composable ColumnScope.() -> Unit) {
     val back = LocalBackTitle.current
+    val st = scrollState ?: rememberScrollState()
     Column(Modifier.fillMaxSize().background(C.cream)) {
-        if (back != null) BackBar(back) else AppHeader(tagline)
+        if (back != null) BackBar(back) else if (header != null) header() else AppHeader(tagline)
         PullToRefreshBox(refreshing, onRefresh, Modifier.fillMaxSize()) {
             CompositionLocalProvider(LocalRefreshing provides refreshing) {
-                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp), content = content)
+                Column(Modifier.fillMaxSize().verticalScroll(st).padding(16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp), content = content)
             }
         }
     }
@@ -507,8 +517,9 @@ internal fun loadErrorText(error: Throwable): String? = when (error) {
 
 /** Trang con: thanh đầu có nút quay lại. */
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable fun SubPage(title: String, refreshing: Boolean = false, onRefresh: () -> Unit = {}, actions: (@Composable RowScope.() -> Unit)? = null, scroll: Boolean = true, content: @Composable ColumnScope.() -> Unit) {
+@Composable fun SubPage(title: String, refreshing: Boolean = false, onRefresh: () -> Unit = {}, actions: (@Composable RowScope.() -> Unit)? = null, scroll: Boolean = true, scrollState: androidx.compose.foundation.ScrollState? = null, content: @Composable ColumnScope.() -> Unit) {
     val nav = LocalNav.current
+    val st = scrollState ?: rememberScrollState()
     Column(Modifier.fillMaxSize().background(C.cream)) {
         if (LocalNoBack.current) Row(Modifier.fillMaxWidth().background(C.cream).statusBarsPadding().padding(horizontal = 16.dp).padding(top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             T(title, 26.sp, FontWeight.Bold, C.ink, 1, Modifier.weight(1f))
@@ -516,7 +527,7 @@ internal fun loadErrorText(error: Throwable): String? = when (error) {
         } else BackBar(title, actions)
         PullToRefreshBox(refreshing, onRefresh, Modifier.fillMaxSize()) {
             CompositionLocalProvider(LocalRefreshing provides refreshing) {
-                Column(Modifier.fillMaxSize().then(if (scroll) Modifier.verticalScroll(rememberScrollState()) else Modifier).padding(16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
+                Column(Modifier.fillMaxSize().then(if (scroll) Modifier.verticalScroll(st) else Modifier).padding(16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
             }
         }
     }
