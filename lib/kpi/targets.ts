@@ -176,19 +176,22 @@ export const readTargetSetting = (key: string) => env.DB.prepare('SELECT value F
 export const TARGET_BACKUP_PREFIX = 'targets_backup:';
 const TARGET_BACKUP_KEEP = 20;
 type SettingPart = { rate: Record<string, number | null>; aov: Record<string, number | null>; cost: Record<string, number | null> };
-type TargetBackup = { at: string; by: string; month: string; keys: string[]; rows: Record<string, unknown>[]; wrote: string[]; before: SettingPart; after: SettingPart };
+type TargetBackup = { at: string; by: string; month: string; keys: string[]; rows: Record<string, unknown>[]; wrote: string[]; before: SettingPart; after: SettingPart;
+  /** Khoá cài đặt (target_rate / target_aov / target_cost của tháng) đã có trước lần lưu: hoàn tác xoá khoá lần lưu tạo ra mà nay rỗng. */ had?: Record<'rate' | 'aov' | 'cost', boolean> };
 const costKey = (k: string) => (k.startsWith('team:') ? k.slice(5) : null);
 const part = (keys: string[], rate: Record<string, number>, aov: Record<string, number>, cost: Record<string, number>): SettingPart => ({
   rate: Object.fromEntries(keys.map((k) => [k, rate[k] ?? null])),
   aov: Object.fromEntries(keys.map((k) => [k, aov[k] ?? null])),
   cost: Object.fromEntries(keys.flatMap((k) => { const c = costKey(k); return c ? [[c, cost[c] ?? null]] : []; })),
 });
-async function backupStatements(b: Omit<TargetBackup, 'rows'>) {
+async function backupStatements(b: Omit<TargetBackup, 'rows' | 'had'>) {
   const ids = b.keys.map((k) => `${b.month}:${k}`);
   const rows = ids.length ? (await env.DB.prepare('SELECT * FROM targets WHERE id IN (SELECT value FROM json_each(?))').bind(JSON.stringify(ids)).all<Record<string, unknown>>()).results : [];
+  const present = new Set((await env.DB.prepare('SELECT key FROM app_settings WHERE key IN (?,?,?)').bind(`target_rate:${b.month}`, `target_aov:${b.month}`, `target_cost:${b.month}`).all<{ key: string }>()).results.map((x) => x.key));
+  const had = { rate: present.has(`target_rate:${b.month}`), aov: present.has(`target_aov:${b.month}`), cost: present.has(`target_cost:${b.month}`) };
   const key = `${TARGET_BACKUP_PREFIX}${b.month}:${b.at}`;
   return [
-    env.DB.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at').bind(key, JSON.stringify({ ...b, rows }), b.at),
+    env.DB.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at').bind(key, JSON.stringify({ ...b, rows, had }), b.at),
     // Giữ 20 bản gần nhất của tháng.
     env.DB.prepare(`DELETE FROM app_settings WHERE key LIKE ? AND key NOT IN (SELECT key FROM app_settings WHERE key LIKE ? ORDER BY key DESC LIMIT ${TARGET_BACKUP_KEEP})`).bind(`${TARGET_BACKUP_PREFIX}${b.month}:%`, `${TARGET_BACKUP_PREFIX}${b.month}:%`),
   ];
@@ -210,6 +213,8 @@ export async function undoTargets(month: string, now: string) {
   const ids = b.keys.map((k) => `${month}:${k}`);
   const cur = new Map((ids.length ? (await env.DB.prepare('SELECT id, updated_at FROM targets WHERE id IN (SELECT value FROM json_each(?))').bind(JSON.stringify(ids)).all<{ id: string; updated_at: string | null }>()).results : []).map((x) => [x.id, x]));
   const rate = await readJson(`target_rate:${month}`), aov = await readJson(`target_aov:${month}`), cost = await readJson(`target_cost:${month}`);
+  // Bản trước khi hoàn tác: chỉ ghi khoá cài đặt nào thật sự đổi, không tạo khoá rỗng mới (anh Vũ 18/11/2026).
+  const start = { rate: JSON.stringify(rate), aov: JSON.stringify(aov), cost: JSON.stringify(cost) };
   const same = (now: Record<string, number>, want: Record<string, number | null>, k: string) => !(k in want) || (now[k] ?? null) === want[k];
   const restored: string[] = [], skipped: string[] = [];
   const st: D1PreparedStatement[] = [];
@@ -227,15 +232,23 @@ export async function undoTargets(month: string, now: string) {
     if (c != null && c in b.before.cost) put(cost, b.before.cost[c], c);
   }
   const save = (key: string, v: Record<string, number>) => env.DB.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at').bind(key, JSON.stringify(v), now);
-  if (restored.length) st.push(save(`target_rate:${month}`, rate), save(`target_aov:${month}`, aov), save(`target_cost:${month}`, cost));
+  for (const [name, v] of [['rate', rate], ['aov', aov], ['cost', cost]] as const) {
+    // Khoá do chính lần lưu đó tạo ra (trước đó chưa có) mà nay rỗng: xoá, trả về đúng như trước khi lưu.
+    if (b.had && !b.had[name] && !Object.keys(v).length) st.push(env.DB.prepare('DELETE FROM app_settings WHERE key=?').bind(`target_${name}:${month}`));
+    else if (JSON.stringify(v) !== start[name]) st.push(save(`target_${name}:${month}`, v));
+  }
   st.push(env.DB.prepare('DELETE FROM app_settings WHERE key=?').bind(r.key));
   await env.DB.batch(st);
   return { at: b.at, by: b.by, count: restored.length, skipped };
 }
 
+/** Thay KPI của tháng (chỉ các khoá trong `only`, hoặc khoá của các dòng gửi lên khi không có `only`) và lưu chi phí trần / tỷ lệ chốt;
+ *  trả `only` để ghi nhật ký. Plan sửa web 1.1 (17/11/2026): không bao giờ xoá cả tháng (trước đây thiếu `only` thì xoá hết KPI tháng
+ *  rồi ghi lại theo lô 100 câu); dòng gửi lên mà để trống (0) là xoá dòng đó. Sao lưu các dòng sắp đổi rồi ghi trọn MỘT lần. */
 export async function writeTargets(user: { role: Access['role']; email: string }, body: { only?: string[]; items: { scope?: string; refId?: string; revenue?: number; closedOrders?: number; workingDays?: number | null; costCeiling?: number | null; closeRate?: number | null; aov?: number | null }[] }, month: string, caps: Record<string, number>, storedRates: { value: string } | null, now: string, storedAovJson: string | null = null) {
   const sentKeys = body.items.map((it) => `${it.scope}:${String(it.refId ?? '').slice(0, 100)}`).filter((k) => /^(pos|employee|team|dept_pos):[^\s]{1,100}$/.test(k));
   const only = [...new Set(Array.isArray(body.only) ? body.only.map(String).filter((k) => /^(pos|employee|team|dept_pos):[^\s]{1,100}$/.test(k)) : sentKeys)].slice(0, 500);
+  // KPI bộ phận × POS (dept_pos) chỉ đổi khi gửi đúng khoá của nó (trang Mục tiêu gửi riêng); lưu dòng khác không đụng tới.
   const statements: D1PreparedStatement[] = only.map((k) => env.DB.prepare('DELETE FROM targets WHERE id=?').bind(`${month}:${k}`));
   const storedRateMap = parseTargetCosts(storedRates?.value), capsBefore = { ...caps };
   if (isOwner(user)) for (const k of only) if (k.startsWith('team:')) delete caps[k.slice(5)];
