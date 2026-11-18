@@ -3,13 +3,13 @@
 // Chiều cao tính trước theo số dòng (bossImageHeight) vì ImageResponse cần chiều cao cố định.
 import React from 'react';
 import {
-  BOSS_CLOSE_RED, COACH_MIN_BASE, closeRate, coach, money, num, prevWordOf, rateText, rateVsPrev, rateVsText, vsPrev, vsText, warnings,
+  BOSS_CLOSE_RED, COACH_MIN_BASE, closeRate, coach, coachMkt, money, num, prevWordOf, rateText, rateVsPrev, rateVsText, vsPrev, vsText, warnings,
   type BossData, type BossImage, type TeamRow } from '@/lib/zalo/boss-report';
 
 export const BOSS_IMAGE_WIDTH = 1080;
 const C = { ink: '#14231c', muted: '#5f6f67', line: '#e3ebe6', soft: '#f2f6f3', green: '#2f6b4f', good: '#2e7d32', bad: '#c62828', badSoft: '#fdecea', barBg: '#e3e9e5', head: '#d6efe3' };
 const PAD = 44;
-const H = { mktNote: 40, head: 150, top: 250, secTitle: 48, cards: 150, th: 50, tr: 54, foot: 96, foot1: 124, gap: 30, warn: 64, people: 330, ship: 170 };
+const H = { mktNote: 40, head: 150, top: 250, secTitle: 48, cards: 150, th: 50, tr: 54, foot: 96, foot1: 150, gap: 30, warn: 64, people: 330, ship: 170 };
 const MAX_TEAMS = 12, MAX_POS = 8, MAX_MKT = 7;
 /** Cộng số về các team MKT lớn hơn tổng (một SĐT về từ nhiều team: mỗi team đếm, tổng đếm 1 lần) → chú thích nhỏ dưới bảng (anh Vũ 16/11/2026). */
 export const mktLeadsNote = (d: Pick<BossData, 'mkt'>) => { const sum = d.mkt.teams.reduce((a, t) => a + t.leads, 0); return sum > d.mkt.leads ? `Cộng các team ${num(sum)} số, lớn hơn tổng ${num(d.mkt.leads)} số về: một SĐT về từ nhiều team được đếm ở mỗi team, tổng chỉ đếm 1 lần.` : null; };
@@ -29,7 +29,7 @@ const Lab = ({ children }: { children: React.ReactNode }) => <Txt style={{ fontS
 const Small = ({ children }: { children: React.ReactNode }) => (
   <Txt style={{ fontSize: 20, color: C.muted, marginTop: 4, alignItems: 'baseline', flexWrap: 'wrap' }}>
     {React.Children.map(children, (c) => (typeof c === 'string' || typeof c === 'number')
-      ? <span style={String(c).length < 34 ? { whiteSpace: 'pre' } : { flex: 1, minWidth: 0 }}>{String(c)}</span> : c)}
+      ? <span style={String(c).length < 20 ? { whiteSpace: 'pre' } : { flex: 1, minWidth: 0 }}>{String(c)}</span> : c)}
   </Txt>
 );
 
@@ -96,7 +96,7 @@ export const teamList = (teams: TeamRow[]) => {
   const outside = teams.find((t) => t.name === 'Ngoài team'), rest = teams.filter((t) => t !== outside);
   return outside ? [...rest.slice(0, MAX_TEAMS - 1), outside] : rest.slice(0, MAX_TEAMS);
 };
-const FOOT1 = `So hôm qua: cùng khoảng giờ hôm qua (báo cáo trọn ngày: trọn ngày trước), xanh là nhiều hơn, đỏ là ít hơn, hôm qua bằng 0 ghi "–". Số new: số điện thoại mới chia cho Sale. TL chốt MKT = đơn New chốt ÷ số new. Đỏ: chốt dưới ${BOSS_CLOSE_RED}%. Đã chốt là chốt (ngày chốt đơn).`;
+const FOOT1 = `So hôm qua: cùng khoảng giờ hôm qua (báo cáo trọn ngày: trọn ngày trước), xanh là nhiều hơn, đỏ là ít hơn, hôm qua bằng 0 ghi "–". Đơn: đơn chốt của nhân viên Sale / CSKH tại POS đó (đơn tài khoản MKT tự chốt không nằm ở đây). TL chốt Sale: đơn lên trong khoảng giờ đã chốt ÷ đơn lên. Số new: số điện thoại mới chia cho Sale; TL chốt MKT = đơn New chốt ÷ số new. Chi phí "–": team chưa có chi phí trên sheet. Đỏ: chốt dưới ${BOSS_CLOSE_RED}%. Đã chốt là chốt (ngày chốt đơn).`;
 
 export function bossImageHeight(img: BossImage) {
   const d = img.data;
@@ -128,14 +128,14 @@ function Part1({ d }: { d: BossData }) {
   ]);
   const mktRows: Cell[][] = d.mkt.teams.slice(0, MAX_MKT).map((t) => {
     const r = closeRate({ base: t.leads, closed: t.closed }), lv = vsPrev(t.leads, t.prevLeads), lt = vsText(lv, num);
-    return [{ t: t.name }, { t: money(t.cost) }, { t: money(t.newNet) }, tone(vsPrev(t.newNet, t.prevNewNet)), { t: num(t.leads), extra: { t: lt, tone: toneOf(lv, lt) } }, { t: rateText(r), red: red(r, t.leads) }];
+    return [{ t: t.name }, { t: t.cost ? money(t.cost) : '–' }, { t: money(t.newNet) }, tone(vsPrev(t.newNet, t.prevNewNet)), { t: num(t.leads), extra: { t: lt, tone: toneOf(lv, lt) } }, { t: rateText(r), red: red(r, t.leads) }];
   });
   return (
     <Frame title="MEGATECH · Báo cáo tổng quan" d={d} foot={FOOT1} footHeight={H.foot1}>
       <Box style={{ height: H.top }}>
         <BigTile label="SALE" value={money(d.sale.kpi.todayNet)} width={cw} lines={[
           <Line key="a">{''}<Tone v={saleVs} text={vsText(saleVs)} />{so}</Line>,
-          <Line key="b">{`TL chốt ${rateText(saleRate)}`}<Tone v={saleRateVs} text={rateVsText(saleRateVs)} /></Line>,
+          <Line key="b">{'TL chốt'}<span style={{ marginLeft: 6, whiteSpace: 'pre', ...(saleRate != null && saleRate < BOSS_CLOSE_RED ? { color: C.bad, fontWeight: 700 } : {}) }}>{rateText(saleRate)}</span><Tone v={saleRateVs} text={rateVsText(saleRateVs)} /></Line>,
         ]} />
         <BigTile label="CSKH" value={money(d.cskh.kpi.todayNet)} width={cw} lines={[
           <Line key="a">{''}<Tone v={cskhVs} text={vsText(cskhVs)} />{so}</Line>,
@@ -168,7 +168,7 @@ function Part2({ d }: { d: BossData }) {
   const topSale = [...d.sale.people].sort((a, b) => b.net - a.net).slice(0, 3), topCskh = [...d.cskh.people].sort((a, b) => b.net - a.net).slice(0, 3);
   const topMkt = [...d.mkt.people].sort((a, b) => b.newNet - a.newNet).slice(0, 3);
   const saleCoach = coach(d.sale.people)[0];
-  const mktCoach = d.mkt.people.filter((p) => p.cost >= 2e6).map((p) => ({ ...p, roas: p.newNet / p.cost })).sort((a, b) => a.roas - b.roas)[0];
+  const mktCoach = coachMkt(d.mkt.people)[0];
   const person = (i: number, text: string) => (
     <Box key={i} style={{ fontSize: 20, color: C.muted, marginTop: 4 }}>
       <span style={{ color: C.ink, fontWeight: 700, width: 26, flexShrink: 0 }}>{`${i + 1}.`}</span>
@@ -184,7 +184,7 @@ function Part2({ d }: { d: BossData }) {
     </Col>
   );
   return (
-    <Frame title="MEGATECH · Chi tiết & cảnh báo" d={d} foot="Cần kèm: chốt thấp nhất (dưới 40%) trong người có từ 20 số; MKT: ROAS thấp nhất trong người chi từ 2 tr. Mọi số tính lại từ đơn gốc như trang Điều hành, không dùng số AI.">
+    <Frame title="MEGATECH · Chi tiết & cảnh báo" d={d} foot="Cần kèm: người chốt thấp nhất (dưới 40%) trong người có từ 20 số; MKT: TL chốt = đơn New chốt ÷ số new, từ 20 số new. Top Marketing ghi DT New và TL chốt. Mọi số tính lại từ đơn gốc như trang Điều hành, không dùng số AI.">
       <Title>CẦN CHÚ Ý</Title>
       {(w.length ? w : ['Không có gì cần chú ý']).map((t, i) => (
         <Txt key={i} style={{ height: H.warn - 10, marginBottom: 10, alignItems: 'center', padding: '0 16px', borderRadius: 12, fontSize: 22, background: w.length ? C.badSoft : C.soft, color: w.length ? '#7f1d1d' : C.muted }}>{t}</Txt>
@@ -194,7 +194,7 @@ function Part2({ d }: { d: BossData }) {
       <Box style={{ height: H.people }}>
         {col('Sale', topSale.map((p, i) => person(i, `${p.name} · ${money(p.net)} · ${rateText(closeRate(p), 0)}`)), saleCoach ? <Small>{saleCoach.name} ·<span style={{ color: C.bad, fontWeight: 700, marginLeft: 6, marginRight: 6 }}>{rateText(saleCoach.rate, 0)}</span>/ {num(saleCoach.base)} số</Small> : <Small>Không có</Small>)}
         {col('CSKH', topCskh.map((p, i) => person(i, `${p.name} · ${money(p.net)}`)), <Small>Không xét tỉ lệ chốt CSKH</Small>)}
-        {col('Marketing', topMkt.map((p, i) => person(i, `${p.name} · ${money(p.newNet)}${p.cost ? ` · ${(p.newNet / p.cost).toFixed(1).replace('.', ',')}×` : ''}`)), mktCoach ? <Small>{mktCoach.name} · ROAS<span style={{ color: C.bad, fontWeight: 700, marginLeft: 6 }}>{`${mktCoach.roas.toFixed(1).replace('.', ',')}×`}</span></Small> : <Small>Không có</Small>)}
+        {col('Marketing', topMkt.map((p, i) => person(i, `${p.name} · ${money(p.newNet)} · ${rateText(closeRate({ base: p.leads, closed: p.closed ?? 0 }), 0)}`)), mktCoach ? <Small>{mktCoach.name} ·<span style={{ color: C.bad, fontWeight: 700, marginLeft: 6, marginRight: 6 }}>{rateText(mktCoach.rate, 0)}</span>/ {num(mktCoach.leads)} số</Small> : <Small>Không có</Small>)}
       </Box>
       <Box style={{ height: H.gap }}>{''}</Box>
       <Title>ĐƠN ĐI & VẬN ĐƠN</Title>

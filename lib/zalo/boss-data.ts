@@ -167,7 +167,7 @@ export async function bossReportData(sendDay: string, hour: string, morning: boo
     mo(prevDay, prevDay, prevCut),
   ]);
   type WebTeam = { marketingTeamId: string; createdNewPhones?: number; newConfirmed?: number };
-  type WebM = { marketerId: string; createdNewPhones?: number };
+  type WebM = { marketerId: string; createdNewPhones?: number; newConfirmed?: number };
   const webTeam = (w: typeof wToday, id: string) => (w?.byTeam as WebTeam[] | undefined)?.find((x) => x.marketingTeamId === id);
   const webLeads = (w: typeof wToday) => Number((w?.summary as { createdNewPhones?: number } | undefined)?.createdNewPhones ?? 0);
   const kpi2 = parseKpi2((kpi2Row.results as { value: string }[])[0]?.value) ?? {};
@@ -181,8 +181,9 @@ export async function bossReportData(sendDay: string, hour: string, morning: boo
       prevNewNet: mPrev.teams.find((x) => x.id === t.id)?.newNet ?? 0, prevLeads: Number(webTeam(wPrev, t.id)?.createdNewPhones ?? 0) };
   }).sort((a, b) => b.newNet - a.newNet);
   const teamName = (id: string) => (id === UNASSIGNED_TEAM ? 'Ngoài team' : mToday.teams.find((x) => x.id === id)?.name ?? 'Ngoài team');
-  const webPeople = new Map(((wToday?.byMarketer ?? []) as WebM[]).map((x) => [x.marketerId, Number(x.createdNewPhones ?? 0)]));
-  const mktPeople: MktPersonRow[] = mToday.people.map((p) => ({ name: p.name, team: teamName(p.teamId), cost: p.cost, newNet: p.newNet, leads: webPeople.get(p.id) ?? 0 }));
+  const webPeople = new Map(((wToday?.byMarketer ?? []) as WebM[]).map((x) => [x.marketerId, x]));
+  const mktPeople: MktPersonRow[] = mToday.people.map((p) => ({ name: p.name, team: teamName(p.teamId), cost: p.cost, newNet: p.newNet,
+    leads: Number(webPeople.get(p.id)?.createdNewPhones ?? 0), closed: Number(webPeople.get(p.id)?.newConfirmed ?? 0) }));
   // KPI số cả bộ phận: dòng "dept:mkt" nếu đặt; không thì cộng KPI số các team (team chưa đặt thì cộng KPI số từng người).
   const leadsGoalAll = leadsOf('dept:mkt') || mktTeamRows.reduce((a, t) => a + (t.leadsGoal ?? 0), 0) || null;
 

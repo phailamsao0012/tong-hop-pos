@@ -71,3 +71,11 @@ void test('báo cáo tổng kết trọn ngày: so với trọn ngày trước',
   assert.equal(full16.mkt.prevNewNet, full15.mkt.kpi.todayNet);
   assert.equal(sum(full16.sale.byPos!.map((r) => r.net)), full16.sale.kpi.todayNet);
 });
+
+void test('ảnh 2: "Cần kèm" MKT là marketer TL chốt thấp nhất (từ 20 số new, dưới 40%), không còn theo ROAS', async () => {
+  const { coachMkt } = await import('../lib/zalo/boss-report');
+  const p = (name: string, leads: number, closed: number, cost = 0) => ({ name, team: 't', cost, newNet: 1e6, leads, closed });
+  const c = coachMkt([p('A', 100, 45), p('B', 50, 10), p('C', 10, 0), p('D', 40, 12, 50e6)]);
+  assert.deepEqual(c.map((x) => x.name), ['B', 'D'], 'C dưới 20 số không xét; A trên 40% không cần kèm');
+  assert.equal(Math.round(c[0].rate), 20);
+});

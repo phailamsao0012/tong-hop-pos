@@ -20,7 +20,7 @@ export type MktTeamRow = { name: string; cost: number; newNet: number; leads: nu
 export type SalePosRow = { name: string; net: number; prevNet: number; orders: number; base: number; closed: number; prevBase: number; prevClosed: number };
 /** CSKH theo POS: doanh thu, đơn, doanh thu cùng khoảng giờ hôm qua. Cộng các dòng = ô CSKH. */
 export type CskhPosRow = { name: string; net: number; prevNet: number; orders: number };
-export type MktPersonRow = { name: string; team: string; cost: number; newNet: number; leads: number };
+export type MktPersonRow = { name: string; team: string; cost: number; newNet: number; leads: number; /** Đơn New chốt (trang Marketing). */ closed?: number };
 export type PosRow = { name: string; net: number; orders: number; yesterday: number };
 export type DeptKpi = { goal: number | null; monthNet: number; todayNet: number };
 
@@ -91,6 +91,11 @@ export function withOutside<T extends { name: string }>(teams: T[], outside: T |
   return outside ? [...teams, { ...outside, name: OUTSIDE_TEAM }] : teams;
 }
 
+/** "Cần kèm" MKT (Đầu não kiểm 17–18/11/2026, thay ROAS): marketer chốt thấp nhất, từ 20 số new trở lên, dưới ngưỡng đỏ. TL chốt = đơn New chốt ÷ số new. */
+export function coachMkt(people: MktPersonRow[]) {
+  return people.filter((p) => p.leads >= COACH_MIN_BASE).map((p) => ({ ...p, rate: closeRate({ base: p.leads, closed: p.closed ?? 0 }) ?? 0 }))
+    .filter((p) => p.rate < BOSS_CLOSE_RED).sort((a, b) => a.rate - b.rate);
+}
 /** "Cần kèm": người chốt thấp nhất, có từ 20 số trở lên, chỉ khi dưới ngưỡng đỏ. */
 export function coach(people: PersonRow[]) {
   return people.filter((p) => p.base >= COACH_MIN_BASE).map((p) => ({ ...p, rate: closeRate(p) ?? 0 }))
