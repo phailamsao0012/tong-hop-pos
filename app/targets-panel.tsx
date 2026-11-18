@@ -136,7 +136,7 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
       const r = await fetch('/api/targets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ month, action: 'undo' }) });
       const b = await r.json() as { error?: string; count?: number; skipped?: string[] };
       if (!r.ok) throw new Error(b.error ?? 'Không hoàn tác được.');
-      // Dòng bỏ qua: bản chụp của lần lưu đã dùng xong và bị xoá, nên các dòng này không hoàn tác lại được nữa (anh Vũ 18/11/2026).
+      // Dòng bỏ qua: bản chụp của lần lưu đã dùng xong và bị xoá, nên các dòng này không hoàn tác lại được nữa (Đầu não kiểm 17–18/11/2026).
       toast(`Đã hoàn tác ${b.count ?? 0} dòng KPI${b.skipped?.length ? `. Giữ nguyên ${b.skipped.length} dòng vì đã có người đổi sau lần lưu đó; ${b.skipped.length} dòng này không hoàn tác lại được nữa, cần sửa tay nếu muốn đổi` : ''}`); await load();
     } catch (e) { setError(e instanceof Error ? e.message : 'Không hoàn tác được.'); }
     finally { setSaving(false); }
