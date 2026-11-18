@@ -2,10 +2,9 @@ name: Android APK
 # Phát hành APK đã ký từ nhánh app Android (anh Vũ 30/10/2026 "cho xin lại app apk").
 # Chưa có khóa ký lưu trong secret riêng: mỗi lần phát hành CI tạo khóa tạm, ký rồi xóa, không lưu và không in ra log (repo công khai).
 # Vì vậy bản sau có thể phải gỡ bản cũ trước khi cài; khi có secret khóa ký riêng thì đổi sang ký cố định.
+# Từ Android 1.0 (18/11): chỉ chạy tay khi anh Vũ nhắn "phát hành", không tự phát hành mỗi lần đẩy code.
 on:
-  push:
-    branches: [claude/app-android]
-    paths: ['android/**', '.github/workflows/android-apk.yml']
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:

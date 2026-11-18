@@ -341,6 +341,11 @@ private val TABS = listOf(Tab("Trang chủ", Icons.Filled.Home), Tab("CSKH", Ico
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val visited = remember { mutableStateListOf(0) }
     fun select(i: Int) { tab = i; if (i !in visited) visited.add(i) }
+    // Lượt chụp giao diện (chỉ bản debug, CI web ảo): lần lượt mở từng tab, mỗi tab ghi một mốc để CI chụp ảnh.
+    if (BuildConfig.DEBUG && DebugTour.tour == "giaodien") LaunchedEffect(Unit) {
+        TABS.indices.forEach { i -> select(i); kotlinx.coroutines.delay(12_000); DebugLog.ui("tab-$i") }
+        DebugLog.ui("xong")
+    }
     // Màn trong máy gập / máy rộng: thanh tab dọc bên trái, nhường chiều cao cho số liệu; màn ngoài giữ thanh dưới.
     val wide = isWide()
     // Gập / mở máy không làm mất trang con đang mở ở từng tab.
