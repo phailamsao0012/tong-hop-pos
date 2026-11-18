@@ -98,7 +98,16 @@ jobs:
           unlock_app() {
             for n in $(seq 1 60); do
               if adb logcat -d -s MEGATECH:D '*:S' | grep -q 'hoi-xac-thuc'; then
-                adb shell input text 2468; adb shell input keyevent 66; return 0
+                # Ô PIN có lúc chưa sẵn sàng khi app vừa hỏi: nhập lại tối đa 4 lần tới khi app chạy tiếp.
+                for k in 1 2 3 4; do
+                  sleep 3; adb shell input text 2468; adb shell input keyevent 66
+                  for w in $(seq 1 25); do
+                    adb logcat -d -s MEGATECH:D '*:S' | grep -q '\[UI\] moc=' && return 0
+                    sleep 1
+                  done
+                  echo "chup: nhập lại PIN lần $k"
+                done
+                return 0
               fi
               if adb logcat -d -s MEGATECH:D '*:S' | grep -q '\[UI\] moc='; then return 0; fi
               sleep 1
