@@ -111,7 +111,11 @@ jobs:
               if grep -q "\[UI\] moc=$1\$" "$RUNNER_TEMP/ui-log.txt"; then return 0; fi
               sleep 1
             done
-            echo "::error::chup: thiếu mốc $1"; grep -F '[UI]' "$RUNNER_TEMP/ui-log.txt" | tail -10 || true; exit 1
+            echo "::error::chup: thiếu mốc $1"; grep -F '[UI]' "$RUNNER_TEMP/ui-log.txt" | tail -10 || true
+            adb exec-out screencap -p > "$OUT/loi-$1.png" || true
+            # App văng: in lỗi (chỉ tên lớp/hàm của app, không có số liệu).
+            adb logcat -d -b crash | grep -E 'FATAL|Exception|Error|at vn\.megatech|Caused by' | head -40 || true
+            exit 1
           }
           for mode in sang toi; do
             if [[ "$mode" == toi ]]; then adb shell cmd uimode night yes; else adb shell cmd uimode night no; fi
