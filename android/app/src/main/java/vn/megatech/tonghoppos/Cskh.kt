@@ -26,9 +26,9 @@ import kotlinx.coroutines.launch
 data class SubTab(val id: String, val title: String)
 val CSKH_TABS = listOf(SubTab("calls", "Cuộc gọi CSKH"), SubTab("compare", "Nhân viên"), SubTab("care", "Khách theo nhân viên"), SubTab("repurchase", "Mua lại & Upsell"), SubTab("dormant", "Khách lâu chưa mua"), SubTab("cskh-kpi", "KPI CSKH"))
 
-@Composable fun CskhTab() {
+@Composable fun CskhTab(initial: String? = null) {
     val tabs = CSKH_TABS.filter { Auth.canView(it.id) }
-    var page by remember { mutableStateOf(tabs.firstOrNull()?.id ?: "calls") }
+    var page by remember { mutableStateOf(initial?.takeIf { i -> tabs.any { it.id == i } } ?: tabs.firstOrNull()?.id ?: "calls") }
     if (BuildConfig.DEBUG && DebugTour.tour == "team") LaunchedEffect(DebugTour.tick) {
         when (DebugTour.target) {
             "team-cskh-care" -> page = "care"
@@ -392,7 +392,7 @@ val CSKH_TABS = listOf(SubTab("calls", "Cuộc gọi CSKH"), SubTab("compare", "
 @Composable fun KpiRing(label: String, value: String, sub: String, ring: Double?, modifier: Modifier) {
     Panel(12.dp, modifier) { Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { T(label, 10.sp, color = C.inkSoft, maxLines = 1); Rolling(value, 20.sp); T(sub, 9.sp, color = C.good, maxLines = 1) }; if (ring != null) Ring(ring, 44.dp, 5.dp, if (ring >= .7) C.good else C.warn, "") else Icon(Icons.Filled.Groups, null, tint = C.good) } }
 }
-@Composable fun GoalRow(label: String, value: String) { Row(verticalAlignment = Alignment.CenterVertically) { T(label, 12.sp, modifier = Modifier.weight(1f)); Box(Modifier.widthIn(min = 80.dp).clip(RoundedCornerShape(8.dp)).border(1.dp, Color(0x1F000000), RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 6.dp)) { T(value, 12.sp, FontWeight.Bold) } } }
+@Composable fun GoalRow(label: String, value: String) { Row(verticalAlignment = Alignment.CenterVertically) { T(label, 12.sp, modifier = Modifier.weight(1f)); Box(Modifier.widthIn(min = 80.dp).clip(RoundedCornerShape(8.dp)).border(1.dp, C.line, RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 6.dp)) { T(value, 12.sp, FontWeight.Bold) } } }
 
 @Composable fun TargetDialog(e: J, cur: J?, month: String, dismiss: () -> Unit, done: () -> Unit) {
     val scope = rememberCoroutineScope()

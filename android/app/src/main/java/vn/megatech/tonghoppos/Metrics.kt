@@ -188,7 +188,7 @@ private fun refSum(list: List<J>, ch: String): RefSum {
 }
 
 @Composable private fun RefCell(icon: ImageVector, label: String, value: String, now: Double?, prev: Double?, modifier: Modifier) {
-    Column(modifier.clip(RoundedCornerShape(10.dp)).background(Color(0x0A000000)).padding(10.dp)) {
+    Column(modifier.clip(RoundedCornerShape(10.dp)).background(C.cell).padding(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) { Icon(icon, null, Modifier.size(13.dp), tint = C.inkSoft); Spacer(Modifier.width(4.dp)); T(label, 9.sp, color = C.inkSoft, maxLines = 1) }
         Rolling(value, 15.sp)
         if (now != null && prev != null) RefDelta(now, prev, true)

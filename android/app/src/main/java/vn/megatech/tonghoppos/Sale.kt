@@ -25,9 +25,9 @@ import java.time.LocalTime
 
 val SALE_TABS = listOf(SubTab("shift", "Trong ca"), SubTab("compare", "Nhân viên"), SubTab("batches", "Data"), SubTab("pipeline", "Đơn hàng"))
 
-@Composable fun SaleTab() {
+@Composable fun SaleTab(initial: String? = null) {
     val tabs = SALE_TABS.filter { Auth.canView(it.id) }
-    var page by remember { mutableStateOf(tabs.firstOrNull()?.id ?: "shift") }
+    var page by remember { mutableStateOf(initial?.takeIf { i -> tabs.any { it.id == i } } ?: tabs.firstOrNull()?.id ?: "shift") }
     if (BuildConfig.DEBUG && DebugTour.tour == "team") LaunchedEffect(DebugTour.tick) {
         when (DebugTour.target) {
             "team-sale-data" -> page = "batches"
@@ -209,8 +209,8 @@ val SHIFTS = listOf("auto" to "Ca hiện tại", "morning" to "Ca sáng", "after
         val maxX = (all.maxOfOrNull { it["assignedOrders"].d } ?: 1.0).coerceAtLeast(1.0); val maxW = (all.maxOfOrNull { it["closedNet"].d } ?: 1.0).coerceAtLeast(1.0)
         Canvas(Modifier.fillMaxWidth().height(180.dp)) {
             val w = size.width; val h = size.height
-            listOf(0f, .25f, .5f, .75f, 1f).forEach { f -> drawLine(Color(0x10000000), Offset(0f, h * (1 - f)), Offset(w, h * (1 - f)), 2f) }
-            drawLine(Color(0x10000000), Offset(w / 2, 0f), Offset(w / 2, h), 2f)
+            listOf(0f, .25f, .5f, .75f, 1f).forEach { f -> drawLine(C.line, Offset(0f, h * (1 - f)), Offset(w, h * (1 - f)), 2f) }
+            drawLine(C.line, Offset(w / 2, 0f), Offset(w / 2, h), 2f)
             all.forEach { e -> drawCircle(C.good.copy(alpha = .7f), (8 + 22 * (e["closedNet"].d / maxW)).toFloat(), Offset((w * e["assignedOrders"].d / maxX).toFloat(), (h * (1 - (e.rateD / 100).coerceIn(0.0, 1.0))).toFloat())) }
         }
         Row { T("Chốt tốt, cần thêm data", 9.sp, color = C.inkSoft, modifier = Modifier.weight(1f)); T("Hiệu suất cao", 9.sp, color = C.inkSoft) }

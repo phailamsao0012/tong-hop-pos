@@ -143,6 +143,7 @@ jobs:
         with:
           api-level: 35
           arch: x86_64
+          profile: pixel_6
           disable-animations: true
           script: bash "$RUNNER_TEMP/chup.sh"
       - name: Thu log web ảo

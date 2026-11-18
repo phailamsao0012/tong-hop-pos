@@ -213,7 +213,7 @@ val MORE_GROUPS = listOf(
     Box(Modifier.fillMaxWidth().height(150.dp)) {
         androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
             val w = size.width; val h = size.height - 6; val n = (maxOf(a.size, b.size) - 1).coerceAtLeast(1)
-            for (i in 0..4) { val y = 3 + h * i / 4; drawLine(Color(0x0D000000), androidx.compose.ui.geometry.Offset(0f, y), androidx.compose.ui.geometry.Offset(w, y), 2f) }
+            for (i in 0..4) { val y = 3 + h * i / 4; drawLine(C.line, androidx.compose.ui.geometry.Offset(0f, y), androidx.compose.ui.geometry.Offset(w, y), 2f) }
             fun pts(s: List<Pair<String, Double>>) = s.mapIndexed { i, p -> androidx.compose.ui.geometry.Offset(w * i / n, (3 + h * (1 - p.second / maxV)).toFloat()) }
             listOf(pts(a) to C.good.copy(alpha = .35f), pts(b) to C.good).forEach { (pp, c) ->
                 if (pp.size > 1) { val cut = (pp.size * prog.value).toInt().coerceIn(1, pp.size); val path = androidx.compose.ui.graphics.Path().apply { moveTo(pp[0].x, pp[0].y); pp.take(cut).drop(1).forEach { lineTo(it.x, it.y) } }; drawPath(path, c, style = androidx.compose.ui.graphics.drawscope.Stroke(5f)) }

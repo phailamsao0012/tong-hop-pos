@@ -27,7 +27,7 @@ fun statusTone(code: Int?): Tone = when (code) { 3, 16 -> Tone.Green; 2 -> Tone.
 
 /** Ô tìm kiếm gọn. */
 @Composable fun SearchBox(value: String, placeholder: String, modifier: Modifier = Modifier, onChange: (String) -> Unit, onSubmit: () -> Unit) {
-    Row(modifier.clip(RoundedCornerShape(10.dp)).background(C.card).border(1.dp, Color(0x14000000), RoundedCornerShape(10.dp)).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier.clip(RoundedCornerShape(10.dp)).background(C.card).border(1.dp, C.line, RoundedCornerShape(10.dp)).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Filled.Search, null, tint = C.inkSoft, modifier = Modifier.size(18.dp))
         TextField(value, onChange, Modifier.weight(1f), placeholder = { T(placeholder, 13.sp, color = C.inkSoft, maxLines = 1) }, singleLine = true,
             colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent),

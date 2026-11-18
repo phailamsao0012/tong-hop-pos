@@ -21,6 +21,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -37,6 +38,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.zIndex
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -60,12 +62,18 @@ class MainActivity : FragmentActivity() {
         private set
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge(statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT), navigationBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT))
+        enableEdgeToEdge(statusBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT), navigationBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT))
         Api.init(this)
         AppLock.init(this)
         Privacy.init(this)
         debugExtras(intent)
-        setContent { MaterialTheme(colorScheme = lightColorScheme(primary = C.brand, secondary = C.brandDeep, surface = C.card, background = C.cream)) { Root(this) } }
+        setContent {
+            // Android 1.0: nền sáng/tối theo máy, bộ màu Gemini (C đọc Theme.dark).
+            Theme.dark = androidx.compose.foundation.isSystemInDarkTheme()
+            val scheme = if (Theme.dark) darkColorScheme(primary = C.brand, secondary = C.brandDeep, surface = C.card, background = C.cream, onSurface = C.ink, onBackground = C.ink)
+                else lightColorScheme(primary = C.brand, secondary = C.brandDeep, surface = C.card, background = C.cream, onSurface = C.ink, onBackground = C.ink)
+            MaterialTheme(colorScheme = scheme) { Root(this) }
+        }
     }
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); debugExtras(intent) }
     override fun onResume() { super.onResume(); Privacy.apply(this) }
@@ -301,6 +309,8 @@ sealed interface Screen {
     data class Calls(val team: String) : Screen
     data class Compare(val team: String) : Screen
     data class Candidate(val id: String) : Screen
+    /** Trang phòng ban mở từ tab Phòng ban: "sale", "cskh", "mkt". */
+    data class Dept(val id: String, val page: String? = null) : Screen
 }
 class Navigator { val stack = mutableStateListOf<Screen>(); fun push(s: Screen) { stack.add(s) }; fun pop() { if (stack.isNotEmpty()) stack.removeAt(stack.lastIndex) } }
 val LocalNav = staticCompositionLocalOf { Navigator() }
@@ -331,11 +341,58 @@ private val Blocker = Modifier.fillMaxSize().background(C.cream).pointerInput(Un
         is Screen.Calls -> SubPage(if (s.team == "sale") "Cuộc gọi & đơn chốt Sale" else "Cuộc gọi CSKH") { CallsContent(s.team) }
         is Screen.Compare -> SubPage("So sánh nhân viên") { CompareContent(s.team) }
         is Screen.Candidate -> CandidateScreen(s.id)
+        is Screen.Dept -> CompositionLocalProvider(LocalBackTitle provides DEPT_TITLES[s.id]) { when (s.id) { "sale" -> SaleTab(s.page); "cskh" -> CskhTab(s.page); else -> MktTab() } }
     }
 }
 
 data class Tab(val title: String, val icon: ImageVector)
-private val TABS = listOf(Tab("Trang chủ", Icons.Filled.Home), Tab("CSKH", Icons.Filled.SupportAgent), Tab("Sale", Icons.Filled.ShoppingCart), Tab("MKT", Icons.Filled.Campaign), Tab("Thêm", Icons.Filled.MoreHoriz))
+// Android 1.0: 5 tab như iPhone 1.0.
+private val TABS = listOf(Tab("Trang chủ", Icons.Filled.Home), Tab("Đơn hàng", Icons.Filled.Inventory2), Tab("Tổng quan", Icons.Filled.BarChart), Tab("Phòng ban", Icons.Filled.Apartment), Tab("Thêm", Icons.Filled.MoreHoriz))
+val DEPT_TITLES = mapOf("sale" to "Sale", "cskh" to "CSKH", "mkt" to "Marketing")
+/** Tiêu đề trang khi một tab cũ (Sale, CSKH, MKT) được mở như trang con: có nút quay lại. */
+val LocalBackTitle = staticCompositionLocalOf<String?> { null }
+/** Trang con đặt làm gốc của một tab (Đơn hàng, Tổng quan): không có nút quay lại. */
+val LocalNoBack = staticCompositionLocalOf { false }
+
+@Composable fun OrdersTab() {
+    val today = Period.Today.range
+    CompositionLocalProvider(LocalNoBack provides true) { OrderListScreen(OrderQuery(today.first, today.second, title = "Đơn hàng"), filterable = true) }
+}
+
+@Composable fun OverviewTab() { CompositionLocalProvider(LocalNoBack provides true) { OverviewScreen(null) } }
+
+/** Tab Phòng ban (khung 07 Gemini): mỗi phòng một thẻ, nút tới từng trang con. */
+@Composable fun DeptsTab() {
+    val nav = LocalNav.current
+    Column(Modifier.fillMaxSize().background(C.cream)) {
+        Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp).padding(top = 12.dp, bottom = 4.dp)) { T("Phòng ban", 26.sp, FontWeight.Bold, C.ink) }
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            DeptCard("Sale", "Sale", { nav.push(Screen.Dept("sale")) }, SALE_TABS.filter { Auth.canView(it.id) }.map { t -> t.title to { nav.push(Screen.Dept("sale", t.id)) } })
+            DeptCard("CSKH", "Tổng quan CSKH", { nav.push(Screen.Dept("cskh")) }, CSKH_TABS.filter { Auth.canView(it.id) }.map { t -> t.title to { nav.push(Screen.Dept("cskh", t.id)) } })
+            DeptCard("Marketing", "Phân tích", { nav.push(Screen.Dept("mkt")) }, emptyList())
+        }
+    }
+}
+
+@Composable fun DeptCard(title: String, link: String, open: () -> Unit, items: List<Pair<String, () -> Unit>>) {
+    Panel {
+        Row(Modifier.fillMaxWidth().clickable { open() }, verticalAlignment = Alignment.CenterVertically) {
+            T(title, 17.sp, FontWeight.Bold, C.ink, modifier = Modifier.weight(1f))
+            T(link, 13.sp, FontWeight.SemiBold, C.brand); Icon(Icons.Filled.ChevronRight, null, Modifier.size(16.dp), tint = C.brand)
+        }
+        items.chunked(2).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                row.forEach { (label, go) ->
+                    Row(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(C.cell).border(1.dp, C.line, RoundedCornerShape(12.dp)).clickable { go() }.padding(vertical = 12.dp, horizontal = 8.dp),
+                        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                        T(label, 13.sp, FontWeight.SemiBold, C.ink, 1); Icon(Icons.Filled.ChevronRight, null, Modifier.size(14.dp), tint = C.ink)
+                    }
+                }
+                if (row.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+    }
+}
 
 @Composable fun RootTabs() {
     var tab by rememberSaveable { mutableIntStateOf(0) }
@@ -343,7 +400,7 @@ private val TABS = listOf(Tab("Trang chủ", Icons.Filled.Home), Tab("CSKH", Ico
     fun select(i: Int) { tab = i; if (i !in visited) visited.add(i) }
     // Lượt chụp giao diện (chỉ bản debug, CI web ảo): lần lượt mở từng tab, mỗi tab ghi một mốc để CI chụp ảnh.
     if (BuildConfig.DEBUG && DebugTour.tour == "giaodien") LaunchedEffect(Unit) {
-        TABS.indices.forEach { i -> select(i); kotlinx.coroutines.delay(12_000); DebugLog.ui("tab-$i") }
+        TABS.indices.forEach { i -> select(i); kotlinx.coroutines.delay(12_000); DebugLog.ui("tab-$i"); kotlinx.coroutines.delay(4_000) }
         DebugLog.ui("xong")
     }
     // Màn trong máy gập / máy rộng: thanh tab dọc bên trái, nhường chiều cao cho số liệu; màn ngoài giữ thanh dưới.
@@ -360,7 +417,7 @@ private val TABS = listOf(Tab("Trang chủ", Icons.Filled.Home), Tab("CSKH", Ico
                             } else if (BuildConfig.DEBUG && DebugTour.tour == "team") {
                                 DebugTour.Team()
                             } else
-                            when (i) { 0 -> HomeTab(); 1 -> CskhTab(); 2 -> SaleTab(); 3 -> MktTab(); else -> MoreTab() }
+                            when (i) { 0 -> HomeTab(); 1 -> OrdersTab(); 2 -> OverviewTab(); 3 -> DeptsTab(); else -> MoreTab() }
                         }
                     }
                 }
@@ -369,11 +426,11 @@ private val TABS = listOf(Tab("Trang chủ", Icons.Filled.Home), Tab("CSKH", Ico
     } }
     if (wide) {
         Row(Modifier.fillMaxSize().background(C.cream)) {
-            NavigationRail(containerColor = C.brandDeep, header = { Spacer(Modifier.height(8.dp)) }) {
+            NavigationRail(containerColor = C.card, header = { Spacer(Modifier.height(8.dp)) }) {
                 Spacer(Modifier.weight(1f))
                 TABS.forEachIndexed { i, t ->
-                    NavigationRailItem(selected = tab == i, onClick = { select(i) }, icon = { Icon(t.icon, null) }, label = { T(t.title, 11.sp, FontWeight.SemiBold, if (tab == i) C.lime else Color.White.copy(alpha = .85f)) },
-                        colors = NavigationRailItemDefaults.colors(selectedIconColor = C.brandDeep, indicatorColor = C.lime, unselectedIconColor = Color.White.copy(alpha = .85f)))
+                    NavigationRailItem(selected = tab == i, onClick = { select(i) }, icon = { Icon(t.icon, null) }, label = { T(t.title, 11.sp, FontWeight.SemiBold, if (tab == i) C.brand else C.inkSoft) },
+                        colors = NavigationRailItemDefaults.colors(selectedIconColor = C.brand, indicatorColor = C.brandSoft, unselectedIconColor = C.inkSoft))
                     Spacer(Modifier.height(6.dp))
                 }
                 Spacer(Modifier.weight(1f))
@@ -383,10 +440,10 @@ private val TABS = listOf(Tab("Trang chủ", Icons.Filled.Home), Tab("CSKH", Ico
         return
     }
     Scaffold(containerColor = C.cream, contentWindowInsets = WindowInsets(0), bottomBar = {
-        NavigationBar(containerColor = C.card, tonalElevation = 0.dp, modifier = Modifier.clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))) {
+        NavigationBar(containerColor = C.card, tonalElevation = 0.dp, modifier = Modifier.drawBehind { drawLine(C.line, androidx.compose.ui.geometry.Offset(0f, 0f), androidx.compose.ui.geometry.Offset(size.width, 0f), 1.dp.toPx()) }) {
             TABS.forEachIndexed { i, t ->
-                NavigationBarItem(selected = tab == i, onClick = { select(i) }, icon = { Icon(t.icon, null) }, label = { T(t.title, 11.sp, FontWeight.SemiBold, if (tab == i) C.brand else C.ink) },
-                    colors = NavigationBarItemDefaults.colors(selectedIconColor = C.brand, indicatorColor = C.brandSoft, unselectedIconColor = C.ink))
+                NavigationBarItem(selected = tab == i, onClick = { select(i) }, icon = { Icon(t.icon, null) }, label = { T(t.title, 11.sp, FontWeight.SemiBold, if (tab == i) C.brand else C.inkSoft) },
+                    colors = NavigationBarItemDefaults.colors(selectedIconColor = C.brand, indicatorColor = Color.Transparent, unselectedIconColor = C.inkSoft))
             }
         }
     }) { pad -> pages(Modifier.fillMaxSize().padding(pad)) }
@@ -427,8 +484,9 @@ internal fun loadErrorText(error: Throwable): String? = when (error) {
 /** Trang gốc của tab: thanh đầu xanh + nội dung cuộn trên nền kem, kéo xuống để làm mới. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun TabPage(tagline: String = "Bán hàng tốt hơn mỗi ngày", refreshing: Boolean = false, onRefresh: () -> Unit = {}, content: @Composable ColumnScope.() -> Unit) {
+    val back = LocalBackTitle.current
     Column(Modifier.fillMaxSize().background(C.cream)) {
-        AppHeader(tagline)
+        if (back != null) BackBar(back) else AppHeader(tagline)
         PullToRefreshBox(refreshing, onRefresh, Modifier.fillMaxSize()) {
             CompositionLocalProvider(LocalRefreshing provides refreshing) {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp), content = content)
@@ -437,16 +495,25 @@ internal fun loadErrorText(error: Throwable): String? = when (error) {
     }
 }
 
-/** Trang con: thanh xanh đậm có nút quay lại. */
+/** Thanh đầu trang con kiểu Gemini: nền trang, nút quay lại, tiêu đề đậm. */
+@Composable fun BackBar(title: String, actions: (@Composable RowScope.() -> Unit)? = null) {
+    val nav = LocalNav.current
+    Row(Modifier.fillMaxWidth().background(C.cream).statusBarsPadding().padding(horizontal = 6.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        IconButton({ nav.pop() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = C.ink) }
+        T(title, 20.sp, FontWeight.Bold, C.ink, 1, Modifier.weight(1f))
+        if (actions != null) Row(verticalAlignment = Alignment.CenterVertically, content = actions)
+    }
+}
+
+/** Trang con: thanh đầu có nút quay lại. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun SubPage(title: String, refreshing: Boolean = false, onRefresh: () -> Unit = {}, actions: (@Composable RowScope.() -> Unit)? = null, scroll: Boolean = true, content: @Composable ColumnScope.() -> Unit) {
     val nav = LocalNav.current
     Column(Modifier.fillMaxSize().background(C.cream)) {
-        Row(Modifier.fillMaxWidth().background(C.brandDeep).statusBarsPadding().padding(horizontal = 6.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton({ nav.pop() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White) }
-            T(title, 17.sp, FontWeight.Bold, Color.White, 1, Modifier.weight(1f))
+        if (LocalNoBack.current) Row(Modifier.fillMaxWidth().background(C.cream).statusBarsPadding().padding(horizontal = 16.dp).padding(top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            T(title, 26.sp, FontWeight.Bold, C.ink, 1, Modifier.weight(1f))
             if (actions != null) Row(verticalAlignment = Alignment.CenterVertically, content = actions)
-        }
+        } else BackBar(title, actions)
         PullToRefreshBox(refreshing, onRefresh, Modifier.fillMaxSize()) {
             CompositionLocalProvider(LocalRefreshing provides refreshing) {
                 Column(Modifier.fillMaxSize().then(if (scroll) Modifier.verticalScroll(rememberScrollState()) else Modifier).padding(16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)

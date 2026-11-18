@@ -84,26 +84,34 @@ import java.time.ZoneOffset
 }
 
 /** Bảng màu theo bộ ảnh thiết kế. */
+/** Nền sáng/tối theo máy (Android 1.0, bộ màu Gemini như iPhone 1.0). */
+object Theme { var dark by mutableStateOf(false) }
+private fun dyn(light: Long, dark: Long) = if (Theme.dark) Color(dark) else Color(light)
+
+/** Bảng màu Gemini (Palette.swift của iPhone 1.0): mỗi màu có bản sáng và tối. */
 object C {
-    val brand = Color(0xFF17684B)
-    val brandDeep = Color(0xFF0F3D2E)
-    val brandSoft = Color(0xFFE3F1E8)
-    val cream = Color(0xFFF4F6F3)
+    val brand get() = dyn(0xFF17684B, 0xFF6EE7B7)
+    val brandDeep get() = dyn(0xFF17684B, 0xFF17684B)
+    val brandSoft get() = dyn(0xFFD1FAE5, 0x3310B981)
+    val cream get() = dyn(0xFFF4F7F5, 0xFF071711)
+    val cell get() = dyn(0xFFF4F8F6, 0xFF071912)
     val lime = Color(0xFFD9F36D)
-    val good = Color(0xFF15804A)
-    val bad = Color(0xFFC8403F)
-    val warn = Color(0xFFE08A1E)
-    val blue = Color(0xFF2F6FDB)
-    val purple = Color(0xFF8A4FD1)
-    val teal = Color(0xFF14A3A8)
-    val gray = Color(0xFF8A938E)
-    val ink = Color(0xFF141F1A)
-    val inkSoft = Color(0xFF6B7771)
-    val line = Color(0x14000000)
-    val card = Color.White
+    val good get() = dyn(0xFF0F5E3F, 0xFF6EE7B7)
+    val bad get() = dyn(0xFFBE123C, 0xFFFDA4AF)
+    val badSoft get() = dyn(0xFFFFE4E6, 0x33F43F5E)
+    val warn get() = dyn(0xFFB45309, 0xFFFDE68A)
+    val warnSoft get() = dyn(0xFFFEF3C7, 0x29F59E0B)
+    val blue get() = dyn(0xFF2A5FC4, 0xFF8FB4F2)
+    val purple get() = dyn(0xFF7044A0, 0xFFD1B5FF)
+    val teal get() = dyn(0xFF0F7A68, 0xFF5CC9B3)
+    val gray get() = dyn(0xFF5D6A62, 0xFFA9B5AE)
+    val ink get() = dyn(0xFF0F291E, 0xFFF0FDF4)
+    val inkSoft get() = dyn(0xFF335C4A, 0xFFA7F3D0)
+    val line get() = dyn(0xFFDCE6E0, 0x2E34D399)
+    val card get() = dyn(0xFFFFFFFF, 0xFF0E291F)
 }
 
-enum class Tone(val color: Color) { Green(C.good), Red(C.bad), Orange(C.warn), Blue(C.blue), Gray(C.inkSoft), Purple(C.purple) }
+enum class Tone(private val pick: () -> Color) { Green({ C.good }), Red({ C.bad }), Orange({ C.warn }), Blue({ C.blue }), Gray({ C.inkSoft }), Purple({ C.purple }); val color: Color get() = pick() }
 
 /** Màu tỷ lệ chốt theo ngưỡng chung với web (MetricPrefs.rateGood / rateWarn, mặc định 40 / 25). */
 fun rateTone(r: Double?): Color = when (rateLevel(r)) { "good" -> C.good; "warn" -> C.warn; "bad" -> C.bad; else -> C.inkSoft }
@@ -125,28 +133,28 @@ object Sync {
     val maxAge get() = pos.maxOfOrNull { age(it) } ?: 99999
     val hasError get() = pos.any { it["lastError"].sn != null }
     val alertCount get() = pos.count { it["lastError"].sn != null || age(it) > 15 }
-    val tone get() = when { pos.isEmpty() -> C.gray; hasError -> C.bad; maxAge > 15 -> C.warn; else -> C.lime }
+    val tone get() = when { pos.isEmpty() -> C.gray; hasError -> C.bad; maxAge > 15 -> C.warn; else -> C.good }
     val title get() = when { pos.isEmpty() -> "Đang kiểm tra"; hasError -> "Lỗi đồng bộ"; maxAge > 15 -> "Đồng bộ chậm"; else -> "Đồng bộ OK" }
     val subtitle get() = if (pos.isEmpty()) "…" else maxAge.let { m -> when { m <= 1 -> "Cập nhật vừa xong"; m < 60 -> "$m phút trước"; m < 1440 -> "${m / 60} giờ trước"; else -> "${m / 1440} ngày trước" } }
     suspend fun refresh() { runCatching { Api.syncStatus() }.onSuccess { pos = it.list } }
 }
 
-/** Thanh đầu xanh đậm: MEGATECH + khẩu hiệu, ô trạng thái đồng bộ, chuông. */
+/** Đầu trang kiểu Gemini: nền trang, MEGATECH + khẩu hiệu, ô đồng bộ, chuông (Android 1.0). */
 @Composable fun AppHeader(tagline: String = "Bán hàng tốt hơn mỗi ngày") {
     val nav = LocalNav.current
     LaunchedEffect(Unit) { Sync.refresh() }
-    Row(Modifier.fillMaxWidth().background(C.brandDeep).statusBarsPadding().padding(horizontal = 16.dp).padding(top = 8.dp, bottom = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().background(C.cream).statusBarsPadding().padding(horizontal = 16.dp).padding(top = 10.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            T("MEGATECH", 20.sp, FontWeight.Black, Color.White)
-            T(tagline, 10.sp, color = Color.White.copy(alpha = .75f), maxLines = 2)
+            T("MEGATECH", 22.sp, FontWeight.Black, C.ink)
+            T(tagline, 11.sp, color = C.inkSoft, maxLines = 2)
         }
-        Row(Modifier.clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = .12f)).padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.clip(RoundedCornerShape(12.dp)).background(C.card).border(1.dp, C.line, RoundedCornerShape(12.dp)).padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(7.dp).clip(CircleShape).background(Sync.tone))
             Spacer(Modifier.width(6.dp))
-            Column { T(Sync.title, 11.sp, FontWeight.SemiBold, Color.White); T(Sync.subtitle, 9.sp, color = Color.White.copy(alpha = .75f)) }
+            Column { T(Sync.title, 11.sp, FontWeight.SemiBold, C.ink); T(Sync.subtitle, 9.sp, color = C.inkSoft) }
         }
-        Box(Modifier.padding(start = 8.dp).size(36.dp).clip(CircleShape).clickable { nav.push(Screen.Alerts) }, contentAlignment = Alignment.Center) {
-            Icon(Icons.Filled.Notifications, null, tint = Color.White)
+        Box(Modifier.padding(start = 8.dp).size(38.dp).clip(CircleShape).background(C.card).border(1.dp, C.line, CircleShape).clickable { nav.push(Screen.Alerts) }, contentAlignment = Alignment.Center) {
+            Icon(Icons.Filled.Notifications, null, tint = C.ink, modifier = Modifier.size(20.dp))
             if (Sync.alertCount > 0) Box(Modifier.align(Alignment.TopEnd).size(16.dp).clip(CircleShape).background(C.bad), contentAlignment = Alignment.Center) { T("${Sync.alertCount}", 9.sp, FontWeight.Bold, Color.White) }
         }
     }
@@ -170,7 +178,7 @@ object Sync {
 }
 
 @Composable fun Panel(padding: Dp = 14.dp, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier.fillMaxWidth().thinkingBorder(LocalRefreshing.current).shadow(3.dp, RoundedCornerShape(14.dp), ambientColor = Color(0x14000000), spotColor = Color(0x14000000)).clip(RoundedCornerShape(14.dp)).background(C.card)
+    Column(modifier.fillMaxWidth().thinkingBorder(LocalRefreshing.current).clip(RoundedCornerShape(16.dp)).background(C.card).border(1.dp, C.line, RoundedCornerShape(16.dp))
         .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier).padding(padding), verticalArrangement = Arrangement.spacedBy(10.dp), content = content)
 }
 
@@ -244,7 +252,7 @@ private fun wideCols(size: Int) = when { size <= 4 -> size.coerceAtLeast(1); siz
 
 @Composable fun Chip(label: String, on: Boolean, badge: Int? = null, chevron: Boolean = false, onClick: () -> Unit) {
     val bg by androidx.compose.animation.animateColorAsState(if (on) C.brandDeep else C.card, label = "chip")
-    Row(Modifier.clip(CircleShape).background(bg).border(1.dp, if (on) Color.Transparent else Color(0x1A000000), CircleShape).clickable { onClick() }.padding(horizontal = 12.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.clip(CircleShape).background(bg).border(1.dp, if (on) Color.Transparent else C.line, CircleShape).clickable { onClick() }.padding(horizontal = 12.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
         T(label, 12.sp, FontWeight.SemiBold, if (on) Color.White else C.ink, 1)
         if (badge != null && badge > 0) { Spacer(Modifier.width(5.dp)); Box(Modifier.clip(CircleShape).background(C.bad).padding(horizontal = 5.dp, vertical = 1.dp)) { T("$badge", 9.sp, FontWeight.Bold, Color.White) } }
         if (chevron) Icon(Icons.Filled.KeyboardArrowDown, null, Modifier.size(14.dp), tint = if (on) Color.White else C.ink)
@@ -254,7 +262,7 @@ private fun wideCols(size: Int) = when { size <= 4 -> size.coerceAtLeast(1); siz
 
 /** Bộ chọn phân đoạn: nền xám nhạt, mục chọn xanh đậm. */
 @Composable fun <V> Segmented(selection: V, options: List<Pair<V, String>>, onSelect: (V) -> Unit) {
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0x0D000000)).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.cell).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         options.forEach { (v, label) ->
             val on = v == selection
             val bg by androidx.compose.animation.animateColorAsState(if (on) C.brandDeep else Color.Transparent, label = "seg")
@@ -267,7 +275,7 @@ private fun wideCols(size: Int) = when { size <= 4 -> size.coerceAtLeast(1); siz
 @Composable fun Bar(value: Double, tint: Color = C.good, height: Dp = 6.dp, modifier: Modifier = Modifier) {
     val anim = remember { Animatable(0f) }
     LaunchedEffect(value) { anim.animateTo(value.coerceIn(0.0, 1.0).toFloat(), spring(dampingRatio = .85f, stiffness = 120f)) }
-    Box(modifier.fillMaxWidth().height(height).clip(CircleShape).background(Color(0x12000000))) { Box(Modifier.fillMaxWidth(anim.value).fillMaxHeight().clip(CircleShape).background(tint)) }
+    Box(modifier.fillMaxWidth().height(height).clip(CircleShape).background(C.cell)) { Box(Modifier.fillMaxWidth(anim.value).fillMaxHeight().clip(CircleShape).background(tint)) }
 }
 
 @Composable fun Ring(value: Double, size: Dp = 64.dp, stroke: Dp = 7.dp, tint: Color = C.good, label: String? = null) {
@@ -298,7 +306,7 @@ private fun wideCols(size: Int) = when { size <= 4 -> size.coerceAtLeast(1); siz
 }
 
 @Composable fun Medal(rank: Int) {
-    val c = when (rank) { 1 -> Color(0xFFF2B733); 2 -> Color(0xFFB3B8BF); 3 -> Color(0xFFCC804D); else -> Color(0x0F000000) }
+    val c = when (rank) { 1 -> Color(0xFFF2B733); 2 -> Color(0xFFB3B8BF); 3 -> Color(0xFFCC804D); else -> C.line }
     Box(Modifier.size(22.dp).clip(CircleShape).background(c), contentAlignment = Alignment.Center) { T("$rank", 11.sp, FontWeight.Bold, if (rank <= 3) Color.White else C.inkSoft) }
 }
 
@@ -311,7 +319,7 @@ private fun wideCols(size: Int) = when { size <= 4 -> size.coerceAtLeast(1); siz
         Box(Modifier.fillMaxWidth().height(height)) {
             Canvas(Modifier.fillMaxSize()) {
                 val w = size.width; val h = size.height - 8
-                for (i in 0..3) { val y = 4 + h * i / 3; drawLine(Color(0x0D000000), Offset(0f, y), Offset(w, y), 2f) }
+                for (i in 0..3) { val y = 4 + h * i / 3; drawLine(C.line, Offset(0f, y), Offset(w, y), 2f) }
                 if (points.size > 1) {
                     val n = points.size - 1
                     val pts = points.mapIndexed { i, p -> Offset(w * i / n, (4 + h * (1 - p.second / maxV)).toFloat()) }
@@ -365,12 +373,12 @@ private fun wideCols(size: Int) = when { size <= 4 -> size.coerceAtLeast(1); siz
 }
 
 @Composable fun MiniCell(label: String, value: String, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null) {
-    Column(modifier.clip(RoundedCornerShape(10.dp)).background(Color(0x0A000000)).then(if (onClick != null) Modifier.clickable { onClick() } else Modifier).padding(10.dp)) {
+    Column(modifier.clip(RoundedCornerShape(10.dp)).background(C.cell).then(if (onClick != null) Modifier.clickable { onClick() } else Modifier).padding(10.dp)) {
         T(label, 9.sp, color = C.inkSoft, maxLines = 1); Rolling(value, 15.sp)
     }
 }
 
-@Composable fun Hint(text: String) { Box(Modifier.clip(CircleShape).background(Color(0x0D000000)).padding(horizontal = 6.dp, vertical = 3.dp)) { T(text, 9.sp, FontWeight.Medium, C.inkSoft, 1) } }
+@Composable fun Hint(text: String) { Box(Modifier.clip(CircleShape).background(C.cell).padding(horizontal = 6.dp, vertical = 3.dp)) { T(text, 9.sp, FontWeight.Medium, C.inkSoft, 1) } }
 
 @Composable fun PrimaryButton(title: String, icon: ImageVector? = null, tint: Color = C.brandDeep, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(tint).clickable { onClick() }.padding(vertical = 13.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
@@ -380,7 +388,7 @@ private fun wideCols(size: Int) = when { size <= 4 -> size.coerceAtLeast(1); siz
 }
 
 @Composable fun OutlineButton(title: String, onClick: () -> Unit) {
-    Box(Modifier.clip(RoundedCornerShape(8.dp)).border(1.dp, Color(0x26000000), RoundedCornerShape(8.dp)).clickable { onClick() }.padding(horizontal = 12.dp, vertical = 7.dp)) { T(title, 11.sp, FontWeight.SemiBold) }
+    Box(Modifier.clip(RoundedCornerShape(8.dp)).border(1.dp, C.line, RoundedCornerShape(8.dp)).clickable { onClick() }.padding(horizontal = 12.dp, vertical = 7.dp)) { T(title, 11.sp, FontWeight.SemiBold) }
 }
 
 @Composable fun ErrorLine(msg: String?) { if (msg != null) Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Filled.WifiOff, null, tint = C.bad, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); T(msg, 12.sp, color = C.bad) } }
@@ -391,7 +399,7 @@ private fun wideCols(size: Int) = when { size <= 4 -> size.coerceAtLeast(1); siz
 @Composable fun <V> SelectMenu(text: String, options: List<Pair<V, String>>, icon: ImageVector? = null, modifier: Modifier = Modifier, onPick: (V) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box(modifier) {
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp)).background(C.card).border(1.dp, Color(0x1A000000), RoundedCornerShape(9.dp)).clickable { open = true }.padding(horizontal = 10.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp)).background(C.card).border(1.dp, C.line, RoundedCornerShape(9.dp)).clickable { open = true }.padding(horizontal = 10.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
             if (icon != null) { Icon(icon, null, Modifier.size(14.dp), tint = C.inkSoft); Spacer(Modifier.width(6.dp)) }
             T(text, 12.sp, FontWeight.Medium, maxLines = 1, modifier = Modifier.weight(1f)); Icon(Icons.Filled.KeyboardArrowDown, null, Modifier.size(14.dp), tint = C.inkSoft)
         }
@@ -439,7 +447,7 @@ fun exportCsv(ctx: Context, filename: String, headers: List<String>, rows: List<
 }
 @Composable fun ExportButton(filename: String, headers: List<String>, rows: () -> List<List<String>>) {
     val ctx = LocalContext.current
-    Row(Modifier.clip(RoundedCornerShape(8.dp)).background(C.card).border(1.dp, Color(0x1F000000), RoundedCornerShape(8.dp)).clickable { exportCsv(ctx, filename, headers, rows()) }.padding(horizontal = 10.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.clip(RoundedCornerShape(8.dp)).background(C.card).border(1.dp, C.line, RoundedCornerShape(8.dp)).clickable { exportCsv(ctx, filename, headers, rows()) }.padding(horizontal = 10.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Filled.FileDownload, null, Modifier.size(14.dp), tint = C.ink); Spacer(Modifier.width(4.dp)); T("Xuất Excel", 11.sp, FontWeight.SemiBold)
     }
 }

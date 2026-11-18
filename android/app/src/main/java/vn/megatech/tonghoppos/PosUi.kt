@@ -107,7 +107,7 @@ fun posChipStatus(id: String): Pair<String, Boolean>? = Sync.pos.firstOrNull { i
 @Composable fun PosSelectMenu(selected: String, placeholder: String = "Tất cả POS", full: Boolean = false, modifier: Modifier = Modifier, onPick: (String) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box(modifier) {
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp)).background(C.card).border(1.dp, Color(0x1A000000), RoundedCornerShape(9.dp)).clickable { open = true }.padding(horizontal = 10.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp)).background(C.card).border(1.dp, C.line, RoundedCornerShape(9.dp)).clickable { open = true }.padding(horizontal = 10.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
             if (selected.isEmpty()) { Icon(Icons.Filled.Storefront, null, Modifier.size(14.dp), tint = C.inkSoft); Spacer(Modifier.width(6.dp)) } else { PosBadge(selected, 18.dp); Spacer(Modifier.width(6.dp)) }
             T(if (selected.isEmpty()) placeholder else if (full) Pos.name(selected) else Pos.short(selected), 12.sp, FontWeight.Medium, maxLines = 1, modifier = Modifier.weight(1f)); Icon(Icons.Filled.KeyboardArrowDown, null, Modifier.size(14.dp), tint = C.inkSoft)
         }
