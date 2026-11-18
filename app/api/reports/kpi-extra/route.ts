@@ -6,6 +6,7 @@ import { POS } from '@/lib/shared/report-model';
 import { DATE_RE, comparePeriod, compareWindow, vnRangeUtc } from '@/lib/shared/report-time';
 import { sellerProductQty, type QtyBySeller } from '@/lib/reports/seller-product-qty';
 import { cskhUpsell } from '@/lib/reports/cskh-upsell';
+import { grantedPosIds } from '@/lib/auth/pos-people';
 
 // Số đã đạt cho chỉ tiêu KPI mới (anh Vũ 07/11/2026): số lượng sản phẩm từng người (kỳ này và kỳ trước cùng mốc giờ) và tỷ lệ tự upsell CSKH.
 // Chủ hệ thống, giám đốc thấy mọi người; Leader / Mentor chỉ người mình được chia; nhân viên chỉ chính mình.
@@ -19,7 +20,9 @@ export async function GET(request: Request) {
   const valid = new Set<string>(POS.map((x) => x.id));
   const requested = (p.get('posIds') ?? '').split(',').filter(Boolean);
   if (requested.some((id) => !valid.has(id))) return Response.json({ error: 'POS không hợp lệ.' }, { status: 400 });
-  const posIds = requested.length ? requested : [...valid];
+  // POS xin xem phải nằm trong POS được cấp, kể cả giám đốc (1.4, Đầu não kiểm 17–18/11); trống = POS được cấp.
+  const posIds = grantedPosIds(user, requested);
+  if (!posIds) return Response.json({ error: 'POS này không thuộc phạm vi của bạn.' }, { status: 403 });
   const prev = compareWindow(end, comparePeriod(start, end, 'previous'));
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const [qty, prevQty, upsell] = await Promise.all([
@@ -33,5 +36,5 @@ export async function GET(request: Request) {
   return Response.json({
     period: { start, end }, prevPeriod: { start: prev.start, end: prev.end, cutoff: prev.cutoff },
     qty: keep(qty), prevQty: keep(prevQty), upsell: ids ? upsell.filter((r) => ids.includes(r.cskhId)) : upsell,
-  }, { headers: { 'Cache-Control': 'private, max-age=300' } });
+  }, { headers: { 'Cache-Control': 'private, no-store' } });
 }

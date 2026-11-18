@@ -8,11 +8,19 @@ import {
   syncBackfill, syncProducts, syncRecent, syncUsers, type BackfillCursor,
 } from '@/lib/pancake/sync';
 import { markSyncError, syncStatus } from '@/lib/pancake/sync-status';
+import { allowedPos } from '@/lib/auth/access';
 
 // Trạng thái đồng bộ (lib/pancake/sync-status.ts).
 export async function GET() {
-  if (!(await getSessionUser())) return unauthorized('Đăng nhập để xem dữ liệu POS.');
-  return Response.json(await syncStatus(), { headers: { 'Cache-Control': 'no-store' } });
+  const user = await getSessionUser();
+  if (!user) return unauthorized('Đăng nhập để xem dữ liệu POS.');
+  const status = await syncStatus();
+  if (isOwner(user)) return Response.json(status, { headers: { 'Cache-Control': 'no-store' } });
+  // Người không phải chủ (1.4, Đầu não kiểm 17–18/11): chỉ POS được cấp, không trả nội dung lỗi thô của Pancake / máy chủ.
+  const allowed = allowedPos(user), HIDDEN = 'Đồng bộ đang lỗi, chủ hệ thống xem chi tiết.';
+  return Response.json(status.filter((s) => allowed.includes(s.posId)).map((s) => ({
+    ...s, lastError: s.lastError ? HIDDEN : null, runs: s.runs.map((r) => ({ ...r, error: r.error ? HIDDEN : null })),
+  })), { headers: { 'Cache-Control': 'no-store' } });
 }
 
 type Action = 'recent' | 'backfill' | 'restart' | 'users' | 'products';

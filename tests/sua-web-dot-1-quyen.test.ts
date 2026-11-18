@@ -87,3 +87,73 @@ void test('1.4 webhook tuyển dụng: không nhận mã bí mật trên địa 
   assert.equal((await POST(new Request('http://local/api/recruit/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Recruit-Secret': 'ma-gia-0123456789' }, body }))).status, 400, 'đúng mã qua header thì qua bước xác thực (dữ liệu thiếu nên 400)');
   raw.close();
 });
+
+void test('1.4 thâm niên, ca làm việc, trạng thái nghỉ: chỉ người ở POS người xem; không giữ ở trình duyệt (no-store)', async () => {
+  const { emptyDb } = await import('./support/d1-sqlite');
+  const { loginAs, logout } = await import('./support/session');
+  const { POS } = await import('../lib/shared/report-model');
+  const { raw } = emptyDb();
+  const [a, b] = [POS[0].id, POS[1].id], now = '2026-11-01T00:00:00Z';
+  for (const [pos, id] of [[a, 'nv-a'], [b, 'nv-b']]) raw.prepare("INSERT INTO pos_users (id,pos_id,user_id,name,is_active,fetched_at,source_created_at) VALUES (?,?,?,?,1,?,'2026-01-01')").run(`${pos}:${id}`, pos, id, `NV ${id} SALE`, now);
+  for (const id of ['nv-a', 'nv-b']) raw.prepare('INSERT INTO staff_settings (user_id,shift_start,shift_end,updated_by,updated_at) VALUES (?,8,17,?,?)').run(id, 'test', now);
+  raw.prepare("INSERT INTO app_settings (key,value,updated_at) VALUES ('staff_status_v1',?,?)").run(JSON.stringify({ 'nv-a': 'paused', 'nv-b': 'left' }), now);
+  const tenure = (await import('../app/api/staff-tenure/route')).GET, settings = (await import('../app/api/staff-settings/route')).GET, status = (await import('../app/api/staff-status/route')).GET;
+  const ids = async () => {
+    const rs = [await tenure(), await settings(), await status()];
+    for (const r of rs) assert.equal(r.headers.get('Cache-Control'), 'private, no-store');
+    const [t, s, st] = await Promise.all(rs.map((r) => r.json())) as [{ people: Record<string, unknown> }, { items: { userId: string }[] }, { people: Record<string, unknown> }];
+    return [Object.keys(t.people).sort(), s.items.map((i) => i.userId).sort(), Object.keys(st.people).sort()];
+  };
+  await loginAs(raw, 'staff', { posIds: [a] });
+  assert.deepEqual(await ids(), [['nv-a'], ['nv-a'], ['nv-a']], 'tài khoản chỉ POS A: chỉ người POS A');
+  await loginAs(raw, 'director', { posIds: [b] });
+  assert.deepEqual(await ids(), [['nv-b'], ['nv-b'], ['nv-b']], 'giám đốc chỉ POS B: chỉ người POS B');
+  await loginAs(raw, 'owner');
+  assert.deepEqual(await ids(), [['nv-a', 'nv-b'], ['nv-a', 'nv-b'], ['nv-a', 'nv-b']]);
+  logout();
+  raw.close();
+});
+
+void test('1.4 phần KPI theo POS và KPI thêm: tài khoản 1 POS (kể cả giám đốc) xin POS khác thì bị từ chối, không ra số', async () => {
+  const { emptyDb } = await import('./support/d1-sqlite');
+  const { loginAs, logout } = await import('./support/session');
+  const { POS } = await import('../lib/shared/report-model');
+  const { raw } = emptyDb();
+  const [a, b] = [POS[0].id, POS[1].id];
+  const share = (await import('../app/api/targets/pos-share/route')).GET, extra = (await import('../app/api/reports/kpi-extra/route')).GET;
+  const call = async (posIds: string) => [
+    (await share(new Request(`http://local/api/targets/pos-share?month=2026-11&posIds=${posIds}`))).status,
+    (await extra(new Request(`http://local/api/reports/kpi-extra?start=2026-11-01&end=2026-11-02&posIds=${posIds}`))).status,
+  ];
+  for (const role of ['staff', 'lead', 'director'] as const) {
+    await loginAs(raw, role, { posIds: [a] });
+    assert.deepEqual(await call(b), [403, 403], `${role} chỉ POS A xin POS B: từ chối`);
+    assert.deepEqual(await call(`${a},${b}`), [403, 403], `${role} xin cả POS ngoài phạm vi: từ chối`);
+    assert.deepEqual(await call(a), [200, 200], `${role} xin đúng POS của mình: được`);
+    assert.deepEqual(await call(''), [200, 200], `${role} không ghi POS: chỉ tính POS được cấp`);
+  }
+  await loginAs(raw, 'owner');
+  assert.deepEqual(await call(b), [200, 200]);
+  logout();
+  raw.close();
+});
+
+void test('1.4 trạng thái đồng bộ POS: người không phải chủ không nhận lỗi thô, chỉ POS được cấp; chủ vẫn thấy lỗi', async () => {
+  const { emptyDb } = await import('./support/d1-sqlite');
+  const { loginAs, logout } = await import('./support/session');
+  const { POS } = await import('../lib/shared/report-model');
+  const { raw } = emptyDb();
+  const [a, b] = [POS[0].id, POS[1].id], raw500 = 'Pancake HTTP 500: chi tiết máy chủ bí mật';
+  for (const p of [a, b]) raw.prepare("INSERT INTO pos_shops (id,name,status,last_error) VALUES (?,?,'error',?) ON CONFLICT(id) DO UPDATE SET last_error=excluded.last_error").run(p, p, raw500);
+  raw.prepare("INSERT INTO sync_runs (id,pos_id,started_at,status,records,error) VALUES ('r1',?,?,'error',0,?)").run(a, new Date().toISOString(), raw500);
+  const { GET } = await import('../app/api/sync/pos/route');
+  await loginAs(raw, 'staff', { posIds: [a] });
+  const mine = await (await GET()).json() as { posId: string; lastError: string | null; runs: { error: string | null }[] }[];
+  assert.deepEqual(mine.map((s) => s.posId), [a], 'chỉ POS được cấp');
+  assert.ok(!JSON.stringify(mine).includes('bí mật'), 'không có lỗi thô');
+  assert.match(mine[0].lastError ?? '', /chủ hệ thống xem chi tiết/);
+  await loginAs(raw, 'owner');
+  assert.ok(JSON.stringify(await (await GET()).json()).includes('bí mật'), 'chủ vẫn thấy lỗi chi tiết');
+  logout();
+  raw.close();
+});

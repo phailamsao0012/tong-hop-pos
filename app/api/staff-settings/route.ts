@@ -1,11 +1,15 @@
 import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
 import { isOwner } from '@/lib/auth/access';
 import { listStaffSettings, saveStaffSettings } from '@/lib/teams/staff-settings';
+import { env } from 'cloudflare:workers';
+import { posPeopleFilter } from '@/lib/auth/pos-people';
 
 // Ca làm việc theo giờ của từng nhân viên (không cố định): GET → danh sách; PUT {items:[{userId, shiftStart, shiftEnd}]} (chủ hệ thống).
 export async function GET() {
-  if (!(await getSessionUser())) return unauthorized();
-  return Response.json({ items: await listStaffSettings() }, { headers: { 'Cache-Control': 'private, no-store' } });
+  const user = await getSessionUser();
+  if (!user) return unauthorized();
+  const keep = await posPeopleFilter(env.DB, user), items = await listStaffSettings();
+  return Response.json({ items: keep ? items.filter((i) => keep(i.userId)) : items }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
 export async function PUT(request: Request) {
