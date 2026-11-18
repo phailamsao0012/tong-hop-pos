@@ -213,7 +213,7 @@ export async function undoTargets(month: string, now: string) {
   const ids = b.keys.map((k) => `${month}:${k}`);
   const cur = new Map((ids.length ? (await env.DB.prepare('SELECT id, updated_at FROM targets WHERE id IN (SELECT value FROM json_each(?))').bind(JSON.stringify(ids)).all<{ id: string; updated_at: string | null }>()).results : []).map((x) => [x.id, x]));
   const rate = await readJson(`target_rate:${month}`), aov = await readJson(`target_aov:${month}`), cost = await readJson(`target_cost:${month}`);
-  // Bản trước khi hoàn tác: chỉ ghi khoá cài đặt nào thật sự đổi, không tạo khoá rỗng mới (anh Vũ 18/11/2026).
+  // Bản trước khi hoàn tác: chỉ ghi khoá cài đặt nào thật sự đổi, không tạo khoá rỗng mới (Đầu não kiểm 17–18/11/2026).
   const start = { rate: JSON.stringify(rate), aov: JSON.stringify(aov), cost: JSON.stringify(cost) };
   const same = (now: Record<string, number>, want: Record<string, number | null>, k: string) => !(k in want) || (now[k] ?? null) === want[k];
   const restored: string[] = [], skipped: string[] = [];
