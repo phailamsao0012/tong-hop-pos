@@ -234,3 +234,20 @@ void test('1.3 seeKpiOf: trang biết xem được KPI của ai để không c�
   logout();
   raw.close();
 });
+
+void test('1.1 hoàn tác không tạo khoá rỗng: tháng chưa có cài đặt KPI, lưu rồi hoàn tác thì không còn khoá target_* nào', async () => {
+  const { raw } = emptyDb();
+  await loginAs(raw, 'owner');
+  const keys = () => (raw.prepare("SELECT key FROM app_settings WHERE key GLOB 'target_*' ORDER BY key").all() as { key: string }[]).map((r) => r.key);
+  assert.deepEqual(keys(), [], 'trước khi lưu chưa có khoá nào');
+  await put([{ scope: 'employee', refId: 'nv-a', revenue: 100, closedOrders: 1 }]);
+  assert.ok(keys().length > 0, 'lưu tạo khoá cài đặt của tháng');
+  assert.equal((await undo()).status, 200);
+  assert.deepEqual(keys(), [], 'hoàn tác xoá khoá lần lưu tạo ra, không để khoá rỗng');
+  // Tháng đã có tỉ lệ chốt từ trước: hoàn tác không xoá khoá đó.
+  await put([{ scope: 'employee', refId: 'nv-b', revenue: 100, closedOrders: 1, closeRate: 30 }]);
+  await put([{ scope: 'employee', refId: 'nv-c', revenue: 50, closedOrders: 1 }]);
+  assert.equal((await undo()).status, 200);
+  assert.equal((await items())['employee:nv-b'].closeRate, 30, 'khoá có sẵn giữ nguyên');
+  raw.close();
+});
