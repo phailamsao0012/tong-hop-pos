@@ -6,7 +6,8 @@ import { daysBetween, vnRangeUtc } from '@/lib/shared/report-time';
 import { COUNTED_STAFF } from '@/lib/teams/team';
 import { toIso } from '@/lib/teams/hr-link';
 import { trendQuery } from '@/lib/reports/trend-period';
-import { plausibleJoin, type GrowthData, type GrowthDept, type GrowthPerson, type JoinSource } from '@/lib/reports/growth-calc';
+import { plausibleJoin, type GrowthData, type GrowthDept, type GrowthPerson } from '@/lib/reports/growth-calc';
+import { firstActivity, hrJoinByCode, resolveJoin } from '@/lib/teams/join-date';
 
 /** Ngày vào sửa tay nằm chung people_meta.joinedAt (khóa cũ của trang Con người). */
 export const PEOPLE_META_KEY = 'people_meta';
@@ -28,17 +29,21 @@ const DAY = /^\d{4}-\d{2}-\d{2}/;
 export async function growthData(db: D1Database, dept: GrowthDept, start: string, end: string, today: string, posIds: string[] = []): Promise<GrowthData> {
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const q = growthQuery(dept, startUtc, endUtc, posIds);
-  const [points, users, hr, meta] = await Promise.all([
+  const [points, users, hr, meta, codes, active] = await Promise.all([
     db.prepare(q.sql).bind(...q.binds).all<Point>(),
     db.prepare('SELECT user_id, name, source_created_at FROM pos_users').all<{ user_id: string; name: string | null; source_created_at: string | null }>(),
     db.prepare('SELECT t.pos_user_id AS id, t.status, e.joined_on, e.left_on FROM hr_pos_team t LEFT JOIN hr_employees e ON e.id=t.employee_id')
       .all<{ id: string; status: string | null; joined_on: string | null; left_on: string | null }>().catch(() => ({ results: [] as { id: string; status: string | null; joined_on: string | null; left_on: string | null }[] })),
     db.prepare('SELECT value FROM app_settings WHERE key=?').bind(PEOPLE_META_KEY).first<{ value: string }>(),
+    db.prepare('SELECT code, joined_on FROM hr_employees').all<{ code: string | null; joined_on: string | null }>().catch(() => ({ results: [] as { code: string | null; joined_on: string | null }[] })),
+    firstActivity(db),
   ]);
   let manual: Record<string, { joinedAt?: string | null }> = {};
   try { manual = meta ? JSON.parse(meta.value) : {}; } catch { /* hỏng thì coi như chưa sửa tay */ }
-  const names = new Map<string, string>(), created = new Map<string, string>();
+  const names = new Map<string, string>(), created = new Map<string, string>(), allNames = new Map<string, string[]>();
+  const hrByCode = hrJoinByCode(codes.results);
   for (const u of users.results) {
+    if (u.name) { const l = allNames.get(u.user_id) ?? []; l.push(u.name); allNames.set(u.user_id, l); }
     if (u.name && !names.has(u.user_id)) names.set(u.user_id, u.name.replace(/\s+/g, ' ').trim());
     const c = plausibleJoin(vnDay(toIso(u.source_created_at)));
     if (c && (!created.has(u.user_id) || c < created.get(u.user_id)!)) created.set(u.user_id, c);
@@ -55,12 +60,11 @@ export async function growthData(db: D1Database, dept: GrowthDept, start: string
   }
   const people: GrowthPerson[] = Object.keys(series).map((id) => {
     const h = hrMap.get(id);
-    const hand = manual[id]?.joinedAt && DAY.test(manual[id].joinedAt!) ? manual[id].joinedAt!.slice(0, 10) : null;
-    const fromHr = plausibleJoin(h?.joined_on);
-    // Ngày có đơn đầu tiên chỉ đáng tin khi nằm sau đầu khoảng xem (trước đó có thể đã có đơn).
+    // Ngày có đơn đầu tiên trong khoảng xem chỉ đáng tin khi nằm sau đầu khoảng (trước đó có thể đã có đơn); ngày hoạt động đầu tiên
+    // (đơn, đơn Marketer, ghi chú khách, mọi thời gian) chặn ngày vào không bị muộn. Cùng quy tắc với nhãn T (lib/teams/join-date.ts).
     const firstDay = first.get(id)!;
-    const pick: [string | null, JoinSource][] = [[hand, 'tay'], [fromHr, 'nhan-su'], [created.get(id) ?? null, 'pancake'], [firstDay > start ? firstDay : null, 'don-dau']];
-    const [joined, source] = pick.find(([d]) => d) ?? [null, null];
+    const p = resolveJoin({ manual: manual[id]?.joinedAt, names: allNames.get(id), hrLinked: h?.joined_on, hrByCode, created: created.get(id) ?? null, firstOrder: firstDay > start ? firstDay : null, firstActive: active.get(id) ?? null });
+    const [joined, source] = p ? [p.joined, p.source] : [null, null];
     const left = h?.left_on && DAY.test(h.left_on) ? h.left_on.slice(0, 10) : h?.status === 'da_nghi' ? lastSeen.get(id)! : null;
     return { id, name: names.get(id) ?? `NV ${id.slice(0, 8)}`, joined, source: joined ? source : null, left };
   }).sort((a, b) => a.name.localeCompare(b.name, 'vi'));
