@@ -51,3 +51,34 @@ void test('mktProductSplit: đếm theo dòng sản phẩm, chỉ đơn chia Sal
   assert.equal(line('Bio Nano Clean'), 'nano-clean');
   assert.equal(line('Men vi sinh'), 'khac');
 });
+
+// Ô Tách theo sản phẩm (Đầu não kiểm 19/11/2026): Doxy không vào Oxy; Tổng đơn có hàng + Chưa có sản phẩm = SĐT / Đơn tạo;
+// Đơn chốt theo luật "đã chốt là chốt" (đơn chốt rồi huỷ vẫn tính, tiền hàng thì không).
+void test('mktProductSplit: Doxy ở Khác, dòng có / chưa có sản phẩm cộng đúng số trong ô, đã chốt là chốt', async () => {
+  const { emptyDb } = await import('./support/d1-sqlite');
+  const { mktProductSplit } = await import('../lib/reports/mkt-product-split');
+  const { raw, db } = emptyDb();
+  const now = '2026-11-19T00:00:00Z';
+  const user = raw.prepare("INSERT INTO pos_users (id,pos_id,user_id,name,fetched_at) VALUES (?,?,?,?,?)");
+  user.run('u1', 'p1', 'mkt1', 'Mai MKT', now);
+  user.run('u3', 'p1', 'sale1', 'Hà SALE', now);
+  const order = raw.prepare("INSERT INTO raw_pos_orders (id,pos_id,shop_id,source_order_id,phone,created_at,status_code,seller_id,marketer_id,first_confirmed_at,fetched_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)");
+  const item = raw.prepare("INSERT INTO raw_pos_order_items (id,order_id,pos_id,name,quantity,line_total,is_bonus) VALUES (?,?,?,?,?,?,?)");
+  order.run('o1', 'p1', 's', '1', '0900000001', '2026-11-19T02:00:00Z', 1, 'sale1', 'mkt1', '2026-11-19T03:00:00Z', now);
+  item.run('i1', 'o1', 'p1', 'Thuốc thú y Doxytylo 10g', 1, 100_000, 0);
+  item.run('i2', 'o1', 'p1', 'Thuốc thú y Oxytetra', 1, 200_000, 0);
+  // o2: chốt rồi huỷ: Đơn chốt vẫn tính, tiền hàng không.
+  order.run('o2', 'p1', 's', '2', '0900000002', '2026-11-19T02:00:00Z', 6, 'sale1', 'mkt1', '2026-11-19T03:00:00Z', now);
+  item.run('i3', 'o2', 'p1', 'Thuốc Thú Y Flo - Doxy', 1, 300_000, 0);
+  // o3, o4: chưa có sản phẩm (o4 cùng SĐT với o1 nên không thêm số).
+  order.run('o3', 'p1', 's', '3', '0900000003', '2026-11-19T04:00:00Z', 0, 'sale1', 'mkt1', null, now);
+  order.run('o4', 'p1', 's', '4', '0900000001', '2026-11-19T04:00:00Z', 0, 'sale1', 'mkt1', null, now);
+  const out = await mktProductSplit(db, { posIds: ['p1'], startUtc: '2026-11-18T17:00:00', endUtc: '2026-11-19T17:00:00', team: 'all' });
+  assert.equal(out.byMarketer.mkt1.oxy?.orders, 1);
+  assert.deepEqual(out.byMarketer.mkt1.khac, { orders: 2, phones: 2, confirmed: 2, revenue: 100_000, quantity: 1 });
+  const c = out.coverage.mkt1;
+  assert.deepEqual(c.withProduct, { orders: 2, phones: 2, confirmed: 2, revenue: 300_000, quantity: 2 });
+  assert.deepEqual(c.noProduct, { orders: 2, phones: 1, confirmed: 0, revenue: 0, quantity: 0 });
+  assert.equal(c.withProduct.phones + c.noProduct.phones, 3);
+  assert.equal(c.withProduct.orders + c.noProduct.orders, 4);
+});

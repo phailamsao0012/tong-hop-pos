@@ -6,7 +6,8 @@ import { COUNTED_STAFF, leadSellerFilter, notSan, type Team } from '@/lib/teams/
 
 export const PRODUCT_LINES = [
   { key: 'gentadox', label: 'Gentadox', like: ['%gentadox%'] },
-  { key: 'oxy', label: 'Oxy', like: ['%oxy%'] },
+  // Doxytylo / Flo - Doxy có chữ "oxy" trong tên nhưng không phải Oxytetra (Đầu não kiểm 19/11): không vào dòng Oxy, rơi về Khác.
+  { key: 'oxy', label: 'Oxy', like: ['%oxy%'], notLike: ['%doxy%'] },
   { key: 'nano-shield', label: 'Bio Nano Shield', like: ['%nano shield%'] },
   { key: 'sk-gk', label: 'Combo SK + GK', like: ['%godkill%', '%god kill%', '%sk + gk%', '%sk+gk%'] },
   { key: 'nano-clean', label: 'Nano Clean', like: ['%nano clean%'] },
@@ -17,7 +18,10 @@ export const LINE_LABEL: Record<LineKey, string> = Object.fromEntries([...PRODUC
 
 /** CASE SQL đổi tên sản phẩm (cột `col`) ra mã dòng sản phẩm; dòng nào khớp trước thì lấy dòng đó. */
 export function lineCaseSql(col: string) {
-  const whens = PRODUCT_LINES.map((l) => `WHEN ${l.like.map((p) => `LOWER(${col}) LIKE '${p}'`).join(' OR ')} THEN '${l.key}'`).join(' ');
+  const whens = PRODUCT_LINES.map((l) => {
+    const not = 'notLike' in l ? l.notLike.map((p) => ` AND LOWER(${col}) NOT LIKE '${p}'`).join('') : '';
+    return `WHEN (${l.like.map((p) => `LOWER(${col}) LIKE '${p}'`).join(' OR ')})${not} THEN '${l.key}'`;
+  }).join(' ');
   return `CASE ${whens} ELSE '${OTHER_LINE.key}' END`;
 }
 
@@ -45,13 +49,13 @@ function scopeWhere(scope: SplitScope) {
 /** Có / chưa có sản phẩm theo marketer (byMarketer = false: cả phạm vi). */
 export function coverageSql(scope: SplitScope, byMarketer = true) {
   const marketer = `NULLIF(TRIM(o.marketer_id),'')`;
-  const confirmed = 'o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,6,7)';
+  const confirmed = 'o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,6,7)', ever = 'o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,7)';
   const has = `EXISTS (SELECT 1 FROM raw_pos_order_items i WHERE i.order_id=o.id AND ${SALE_ITEM('i')})`;
   const itemSum = (col: string) => `(SELECT COALESCE(SUM(COALESCE(i.${col},0)),0) FROM raw_pos_order_items i WHERE i.order_id=o.id AND ${SALE_ITEM('i')})`;
   const sql = `SELECT ${byMarketer ? marketer : "''"} AS marketer_id,
-      COUNT(*) AS orders_all, COUNT(DISTINCT NULLIF(TRIM(o.phone),'')) AS phones_all, SUM(CASE WHEN ${confirmed} THEN 1 ELSE 0 END) AS confirmed_all,
+      COUNT(*) AS orders_all, COUNT(DISTINCT NULLIF(TRIM(o.phone),'')) AS phones_all, SUM(CASE WHEN ${ever} THEN 1 ELSE 0 END) AS confirmed_all,
       SUM(CASE WHEN ${has} THEN 1 ELSE 0 END) AS orders_with, COUNT(DISTINCT CASE WHEN ${has} THEN NULLIF(TRIM(o.phone),'') END) AS phones_with,
-      SUM(CASE WHEN ${has} AND ${confirmed} THEN 1 ELSE 0 END) AS confirmed_with,
+      SUM(CASE WHEN ${has} AND ${ever} THEN 1 ELSE 0 END) AS confirmed_with,
       COALESCE(SUM(CASE WHEN ${confirmed} THEN ${itemSum('line_total')} ELSE 0 END),0) AS revenue_with,
       COALESCE(SUM(CASE WHEN ${confirmed} THEN ${itemSum('quantity')} ELSE 0 END),0) AS quantity_with
     FROM raw_pos_orders o WHERE ${scopeWhere(scope)} GROUP BY 1`;
@@ -69,10 +73,10 @@ export function coverageOf(r: CoverageRow): SplitCoverage {
 /** byMarketer = false: gom cả phạm vi theo dòng sản phẩm (hàng Tổng, SĐT đếm duy nhất trên cả phạm vi). */
 export function productSplitSql(scope: SplitScope, byMarketer = true) {
   const marketer = `NULLIF(TRIM(o.marketer_id),'')`;
-  const confirmed = 'o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,6,7)';
+  const confirmed = 'o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,6,7)', ever = 'o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,7)';
   const sql = `SELECT ${byMarketer ? marketer : "''"} AS marketer_id, ${lineCaseSql('i.name')} AS line,
       COUNT(DISTINCT o.id) AS orders, COUNT(DISTINCT NULLIF(TRIM(o.phone),'')) AS phones,
-      COUNT(DISTINCT CASE WHEN ${confirmed} THEN o.id END) AS confirmed,
+      COUNT(DISTINCT CASE WHEN ${ever} THEN o.id END) AS confirmed,
       COALESCE(SUM(CASE WHEN ${confirmed} THEN COALESCE(i.line_total,0) ELSE 0 END),0) AS revenue,
       COALESCE(SUM(CASE WHEN ${confirmed} THEN COALESCE(i.quantity,0) ELSE 0 END),0) AS quantity
     FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
