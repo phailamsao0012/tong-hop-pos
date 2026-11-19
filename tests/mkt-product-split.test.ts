@@ -52,9 +52,9 @@ void test('mktProductSplit: đếm theo dòng sản phẩm, chỉ đơn chia Sal
   assert.equal(line('Men vi sinh'), 'khac');
 });
 
-// Ô Tách theo sản phẩm (Đầu não kiểm 19/11/2026): Doxy không vào Oxy; Tổng đơn có hàng + Chưa có sản phẩm = SĐT / Đơn tạo;
+// Ô Tách theo sản phẩm (anh Vũ 19/11/2026): Doxy dòng riêng, Oxy chỉ Oxytetra; Số đã chốt + Số chưa chốt = SĐT, đơn cộng = Đơn tạo;
 // Đơn chốt theo luật "đã chốt là chốt" (đơn chốt rồi huỷ vẫn tính, tiền hàng thì không).
-void test('mktProductSplit: Doxy ở Khác, dòng có / chưa có sản phẩm cộng đúng số trong ô, đã chốt là chốt', async () => {
+void test('mktProductSplit: Doxy dòng riêng, Số đã chốt + chưa chốt cộng đúng số trong ô, đã chốt là chốt', async () => {
   const { emptyDb } = await import('./support/d1-sqlite');
   const { mktProductSplit } = await import('../lib/reports/mkt-product-split');
   const { raw, db } = emptyDb();
@@ -75,10 +75,15 @@ void test('mktProductSplit: Doxy ở Khác, dòng có / chưa có sản phẩm c
   order.run('o4', 'p1', 's', '4', '0900000001', '2026-11-19T04:00:00Z', 0, 'sale1', 'mkt1', null, now);
   const out = await mktProductSplit(db, { posIds: ['p1'], startUtc: '2026-11-18T17:00:00', endUtc: '2026-11-19T17:00:00', team: 'all' });
   assert.equal(out.byMarketer.mkt1.oxy?.orders, 1);
-  assert.deepEqual(out.byMarketer.mkt1.khac, { orders: 2, phones: 2, confirmed: 2, revenue: 100_000, quantity: 1 });
+  assert.deepEqual(out.byMarketer.mkt1.doxy, { orders: 2, phones: 2, confirmed: 2, revenue: 100_000, quantity: 1 });
+  assert.equal(out.byMarketer.mkt1.khac, undefined);
   const c = out.coverage.mkt1;
-  assert.deepEqual(c.withProduct, { orders: 2, phones: 2, confirmed: 2, revenue: 300_000, quantity: 2 });
-  assert.deepEqual(c.noProduct, { orders: 2, phones: 1, confirmed: 0, revenue: 0, quantity: 0 });
-  assert.equal(c.withProduct.phones + c.noProduct.phones, 3);
-  assert.equal(c.withProduct.orders + c.noProduct.orders, 4);
+  // Số 0900000001 có o1 đã chốt (o4 chưa chốt cùng số vẫn tính là đã chốt), 0900000002 chốt rồi huỷ, 0900000003 chưa chốt.
+  assert.deepEqual(c.closed, { orders: 2, phones: 2, confirmed: 2, revenue: 300_000, quantity: 2 });
+  assert.deepEqual(c.open, { orders: 2, phones: 1, confirmed: 0, revenue: 0, quantity: 0 });
+  assert.equal(c.closed.phones + c.open.phones, 3);
+  assert.equal(c.closed.orders + c.open.orders, 4);
+  // KPI2 vẫn 5 dòng cũ: Doxy vào Khác.
+  const { lineCaseSql } = await import('../lib/reports/mkt-product-split');
+  assert.equal(raw.prepare(`SELECT ${lineCaseSql("'thuốc thú y doxytylo 10g'")} AS k`).get()?.k, 'khac');
 });

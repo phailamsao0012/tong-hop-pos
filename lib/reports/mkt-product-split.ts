@@ -6,19 +6,22 @@ import { COUNTED_STAFF, leadSellerFilter, notSan, type Team } from '@/lib/teams/
 
 export const PRODUCT_LINES = [
   { key: 'gentadox', label: 'Gentadox', like: ['%gentadox%'] },
-  // Doxytylo / Flo - Doxy có chữ "oxy" trong tên nhưng không phải Oxytetra (Đầu não kiểm 19/11): không vào dòng Oxy, rơi về Khác.
+  // Doxytylo / Flo - Doxy có chữ "oxy" trong tên nhưng không phải Oxytetra (anh Vũ 19/11): dòng Oxy chỉ còn Oxytetra.
   { key: 'oxy', label: 'Oxy', like: ['%oxy%'], notLike: ['%doxy%'] },
   { key: 'nano-shield', label: 'Bio Nano Shield', like: ['%nano shield%'] },
   { key: 'sk-gk', label: 'Combo SK + GK', like: ['%godkill%', '%god kill%', '%sk + gk%', '%sk+gk%'] },
   { key: 'nano-clean', label: 'Nano Clean', like: ['%nano clean%'] },
 ] as const;
 export const OTHER_LINE = { key: 'khac', label: 'Khác' } as const;
-export type LineKey = (typeof PRODUCT_LINES)[number]['key'] | typeof OTHER_LINE.key;
-export const LINE_LABEL: Record<LineKey, string> = Object.fromEntries([...PRODUCT_LINES, OTHER_LINE].map((l) => [l.key, l.label])) as Record<LineKey, string>;
+/** Dòng Doxy riêng chỉ ở ô Tách theo sản phẩm trang Marketing (anh Vũ 19/11). KPI2 vẫn dùng PRODUCT_LINES (Doxy nằm ở Khác). */
+export const DOXY_LINE = { key: 'doxy', label: 'Doxy', like: ['%doxy%'] } as const;
+export const SPLIT_LINES = [PRODUCT_LINES[0], PRODUCT_LINES[1], DOXY_LINE, ...PRODUCT_LINES.slice(2)] as const;
+export type LineKey = (typeof SPLIT_LINES)[number]['key'] | typeof OTHER_LINE.key;
+export const LINE_LABEL: Record<LineKey, string> = Object.fromEntries([...SPLIT_LINES, OTHER_LINE].map((l) => [l.key, l.label])) as Record<LineKey, string>;
 
 /** CASE SQL đổi tên sản phẩm (cột `col`) ra mã dòng sản phẩm; dòng nào khớp trước thì lấy dòng đó. */
-export function lineCaseSql(col: string) {
-  const whens = PRODUCT_LINES.map((l) => {
+export function lineCaseSql(col: string, lines: readonly (typeof SPLIT_LINES)[number][] = PRODUCT_LINES) {
+  const whens = lines.map((l) => {
     const not = 'notLike' in l ? l.notLike.map((p) => ` AND LOWER(${col}) NOT LIKE '${p}'`).join('') : '';
     return `WHEN (${l.like.map((p) => `LOWER(${col}) LIKE '${p}'`).join(' OR ')})${not} THEN '${l.key}'`;
   }).join(' ');
@@ -29,7 +32,7 @@ export type SplitCell = { orders: number; phones: number; confirmed: number; rev
 export type ProductSplit = Record<string, Partial<Record<LineKey, SplitCell>>>;
 /** Đơn trong phạm vi tách theo có / chưa có dòng hàng bán (mỗi đơn 1 lần). Số chưa có sản phẩm = SĐT trong ô − SĐT có sản phẩm,
  *  nên "có sản phẩm + chưa có sản phẩm" luôn bằng đúng số trong ô (một SĐT có cả đơn có hàng lẫn đơn chưa có hàng tính vào "có"). */
-export type SplitCoverage = { withProduct: SplitCell; noProduct: SplitCell };
+export type SplitCoverage = { closed: SplitCell; open: SplitCell };
 
 export type SplitScope = {
   posIds: string[]; startUtc: string; endUtc: string; team: Team;
@@ -46,27 +49,26 @@ function scopeWhere(scope: SplitScope) {
       AND o.created_at>=? AND o.created_at<? AND o.status_code<>7`;
 }
 
-/** Có / chưa có sản phẩm theo marketer (byMarketer = false: cả phạm vi). */
+/** Số đã chốt / chưa chốt theo marketer (byMarketer = false: cả phạm vi). */
 export function coverageSql(scope: SplitScope, byMarketer = true) {
   const marketer = `NULLIF(TRIM(o.marketer_id),'')`;
   const confirmed = 'o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,6,7)', ever = 'o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,7)';
-  const has = `EXISTS (SELECT 1 FROM raw_pos_order_items i WHERE i.order_id=o.id AND ${SALE_ITEM('i')})`;
   const itemSum = (col: string) => `(SELECT COALESCE(SUM(COALESCE(i.${col},0)),0) FROM raw_pos_order_items i WHERE i.order_id=o.id AND ${SALE_ITEM('i')})`;
   const sql = `SELECT ${byMarketer ? marketer : "''"} AS marketer_id,
       COUNT(*) AS orders_all, COUNT(DISTINCT NULLIF(TRIM(o.phone),'')) AS phones_all, SUM(CASE WHEN ${ever} THEN 1 ELSE 0 END) AS confirmed_all,
-      SUM(CASE WHEN ${has} THEN 1 ELSE 0 END) AS orders_with, COUNT(DISTINCT CASE WHEN ${has} THEN NULLIF(TRIM(o.phone),'') END) AS phones_with,
-      SUM(CASE WHEN ${has} AND ${ever} THEN 1 ELSE 0 END) AS confirmed_with,
-      COALESCE(SUM(CASE WHEN ${confirmed} THEN ${itemSum('line_total')} ELSE 0 END),0) AS revenue_with,
-      COALESCE(SUM(CASE WHEN ${confirmed} THEN ${itemSum('quantity')} ELSE 0 END),0) AS quantity_with
+      COUNT(DISTINCT CASE WHEN ${ever} THEN NULLIF(TRIM(o.phone),'') END) AS phones_closed,
+      COALESCE(SUM(CASE WHEN ${confirmed} THEN ${itemSum('line_total')} ELSE 0 END),0) AS revenue_closed,
+      COALESCE(SUM(CASE WHEN ${confirmed} THEN ${itemSum('quantity')} ELSE 0 END),0) AS quantity_closed
     FROM raw_pos_orders o WHERE ${scopeWhere(scope)} GROUP BY 1`;
   return { sql, binds: [...scope.posIds, ...(scope.extraBinds ?? []), scope.startUtc, scope.endUtc] };
 }
-type CoverageRow = { marketer_id: string; orders_all: number; phones_all: number; confirmed_all: number; orders_with: number; phones_with: number; confirmed_with: number; revenue_with: number; quantity_with: number };
+type CoverageRow = { marketer_id: string; orders_all: number; phones_all: number; confirmed_all: number; phones_closed: number; revenue_closed: number; quantity_closed: number };
 export function coverageOf(r: CoverageRow): SplitCoverage {
   const n = (v: unknown) => Number(v ?? 0);
   return {
-    withProduct: { orders: n(r.orders_with), phones: n(r.phones_with), confirmed: n(r.confirmed_with), revenue: n(r.revenue_with), quantity: n(r.quantity_with) },
-    noProduct: { orders: n(r.orders_all) - n(r.orders_with), phones: n(r.phones_all) - n(r.phones_with), confirmed: n(r.confirmed_all) - n(r.confirmed_with), revenue: 0, quantity: 0 },
+    // orders = đơn tạo của các số đó (để dòng Cộng khớp Đơn tạo); confirmed = đơn đã chốt (đã chốt là chốt).
+    closed: { orders: n(r.confirmed_all), phones: n(r.phones_closed), confirmed: n(r.confirmed_all), revenue: n(r.revenue_closed), quantity: n(r.quantity_closed) },
+    open: { orders: n(r.orders_all) - n(r.confirmed_all), phones: n(r.phones_all) - n(r.phones_closed), confirmed: 0, revenue: 0, quantity: 0 },
   };
 }
 
@@ -74,7 +76,7 @@ export function coverageOf(r: CoverageRow): SplitCoverage {
 export function productSplitSql(scope: SplitScope, byMarketer = true) {
   const marketer = `NULLIF(TRIM(o.marketer_id),'')`;
   const confirmed = 'o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,6,7)', ever = 'o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,7)';
-  const sql = `SELECT ${byMarketer ? marketer : "''"} AS marketer_id, ${lineCaseSql('i.name')} AS line,
+  const sql = `SELECT ${byMarketer ? marketer : "''"} AS marketer_id, ${lineCaseSql('i.name', SPLIT_LINES)} AS line,
       COUNT(DISTINCT o.id) AS orders, COUNT(DISTINCT NULLIF(TRIM(o.phone),'')) AS phones,
       COUNT(DISTINCT CASE WHEN ${ever} THEN o.id END) AS confirmed,
       COALESCE(SUM(CASE WHEN ${confirmed} THEN COALESCE(i.line_total,0) ELSE 0 END),0) AS revenue,

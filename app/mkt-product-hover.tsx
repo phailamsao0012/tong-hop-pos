@@ -3,7 +3,7 @@
 // (anh Vũ 07/11/2026). Chỉ gọi API ở lần rê đầu tiên của mỗi bộ lọc, để mở trang không tốn thêm lượt đọc.
 import { useState, type ReactNode } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { LINE_LABEL, OTHER_LINE, PRODUCT_LINES, type LineKey, type ProductSplit, type SplitCell, type SplitCoverage } from '@/lib/reports/mkt-product-split';
+import { LINE_LABEL, OTHER_LINE, SPLIT_LINES, type LineKey, type ProductSplit, type SplitCell, type SplitCoverage } from '@/lib/reports/mkt-product-split';
 import { Th, shortMoney, vi } from './ui-kit';
 import { apiJson } from './api-fetch';
 
@@ -26,7 +26,7 @@ export type SplitField = 'phones' | 'orders' | 'confirmed' | 'revenue';
 const COLS: { key: SplitField | 'quantity'; label: string }[] = [
   { key: 'phones', label: 'Số' }, { key: 'confirmed', label: 'Đơn chốt' }, { key: 'quantity', label: 'SL' }, { key: 'revenue', label: 'Tiền hàng' },
 ];
-const LINES: LineKey[] = [...PRODUCT_LINES.map((l) => l.key), OTHER_LINE.key];
+const LINES: LineKey[] = [...SPLIT_LINES.map((l) => l.key), OTHER_LINE.key];
 
 export function ProductSplitHover({ url, marketerId, field, children }: { url: string; marketerId: string | null; field: SplitField; children: ReactNode }) {
   const [state, setState] = useState<{ data?: Partial<Record<LineKey, SplitCell>>; cover?: SplitCoverage | null; error?: boolean }>({});
@@ -45,7 +45,7 @@ export function ProductSplitHover({ url, marketerId, field, children }: { url: s
       </PopoverTrigger>
       <PopoverContent side="bottom" align="end" className="w-[27rem] max-w-[92vw] p-2.5 text-xs">
         <p className="font-semibold">Tách theo sản phẩm</p>
-        {state.error ? <p className="text-bad">Chưa tải được, rê lại sau.</p> : !state.data ? <p className="text-ink-3">Đang tính…</p> : rows.length || cover?.noProduct.orders ? (
+        {state.error ? <p className="text-bad">Chưa tải được, rê lại sau.</p> : !state.data ? <p className="text-ink-3">Đang tính…</p> : rows.length || cover?.open.phones ? (
           <table className="w-full tabular-nums">
             <thead><tr className="text-ink-3"><Th className="py-1 text-left font-normal">Sản phẩm</Th>{COLS.map((c) => <Th key={c.key} className={`py-1 text-right font-normal ${c.key === field ? 'text-ink font-semibold' : ''}`}>{c.label}</Th>)}</tr></thead>
             <tbody>{rows.map((k) => {
@@ -53,13 +53,13 @@ export function ProductSplitHover({ url, marketerId, field, children }: { url: s
               return <tr key={k} className="border-t border-line"><td className="py-1 pr-2">{k === OTHER_LINE.key ? <>Khác<span className="block text-[10px] text-ink-3">đơn có thêm món ngoài dòng chính</span></> : LINE_LABEL[k]}</td>{COLS.map((col) => <td key={col.key} className={`py-1 pl-2 text-right ${col.key === field ? 'font-semibold' : ''}`}>{col.key === 'revenue' ? shortMoney(c.revenue) : vi.format(c[col.key])}</td>)}</tr>;
             })}
             {cover && <>
-              {sumRow('Tổng đơn có hàng (mỗi đơn 1 lần)', cover.withProduct, 'border-ink-3/40 font-medium', true)}
-              {sumRow('Chưa có sản phẩm', cover.noProduct, 'text-warn', false)}
-              {sumRow('Cộng = SĐT trong ô', { orders: cover.withProduct.orders + cover.noProduct.orders, phones: cover.withProduct.phones + cover.noProduct.phones, confirmed: cover.withProduct.confirmed + cover.noProduct.confirmed, revenue: cover.withProduct.revenue, quantity: cover.withProduct.quantity }, 'font-semibold', true)}
+              {sumRow('Số đã chốt', cover.closed, 'border-ink-3/40 font-medium', true)}
+              {sumRow('Số chưa chốt (vẫn là số new)', cover.open, 'text-warn', false)}
+              {sumRow('Cộng = SĐT trong ô', { orders: cover.closed.orders + cover.open.orders, phones: cover.closed.phones + cover.open.phones, confirmed: cover.closed.confirmed, revenue: cover.closed.revenue, quantity: cover.closed.quantity }, 'font-semibold', true)}
             </>}</tbody>
           </table>
         ) : <p className="text-ink-3">Không có dòng sản phẩm nào.</p>}
-        <p className="text-[11px] leading-snug text-ink-3">Số = SĐT trên đơn tạo trong kỳ đã chia cho Sale. Tổng đơn có hàng (mỗi đơn 1 lần) + Chưa có sản phẩm (Sale chưa nhập hàng trên Pancake) = SĐT trong ô. Đơn chốt = đơn đã chốt trên các số đó, đã chốt là chốt (kể cả sau đó huỷ / hoàn), như cột Đơn New. Một đơn có Gentadox / Oxy kèm món khác nằm ở cả dòng chính lẫn dòng Khác, nên không cộng các dòng sản phẩm. Doxy (Doxytylo, Flo - Doxy) nằm ở Khác, không vào Oxy. SL và tiền hàng chỉ tính đơn đã chốt chưa huỷ, không tính quà tặng.</p>
+        <p className="text-[11px] leading-snug text-ink-3">Số = SĐT trên đơn tạo trong kỳ đã chia cho Sale. Số đã chốt (có ít nhất 1 đơn đã chốt) + Số chưa chốt (vẫn là số new) = SĐT trong ô. Đơn chốt = đơn đã chốt trên các số đó, đã chốt là chốt (kể cả sau đó huỷ / hoàn), như cột Đơn New. Một đơn có nhiều món nằm ở nhiều dòng sản phẩm (Gentadox kèm Bổ đậm đặc ở cả dòng Gentadox lẫn dòng Khác), nên không cộng các dòng sản phẩm. Oxy chỉ gồm Oxytetra; Doxytylo, Flo - Doxy ở dòng Doxy. SL và tiền hàng chỉ tính đơn đã chốt chưa huỷ, không tính quà tặng.</p>
       </PopoverContent>
     </Popover>
   );
