@@ -12,27 +12,27 @@ import type { CrossPair } from '@/lib/reports/mkt-cross';
 
 export type SaleTeamOption = { id: string; name: string; memberRefs: { id: string; name: string }[] };
 type MktTeam = { id: string; name: string; memberIds: string[] };
-type Agg = { phones: number; closed: number; net: number; packed: number; cancelled: number; returned: number };
+type Agg = { phones: number; closed: number; saleClosed: number; net: number; packed: number; cancelled: number; returned: number };
 type Metric = 'net' | 'closed' | 'phones' | 'close' | 'packed' | 'go' | 'returnRate' | 'cancelRate' | 'perPhone';
 const METRICS: { value: Metric; label: string }[] = [
   { value: 'net', label: 'Doanh thu' }, { value: 'closed', label: 'Đơn chốt' }, { value: 'phones', label: 'SĐT nhận' }, { value: 'close', label: 'TL chốt' },
   { value: 'packed', label: 'Đơn đi' }, { value: 'go', label: 'Tỉ lệ đi' }, { value: 'returnRate', label: 'Tỉ lệ hoàn' }, { value: 'cancelRate', label: 'Tỉ lệ hủy' }, { value: 'perPhone', label: 'DT/SĐT' },
 ];
-const zero = (): Agg => ({ phones: 0, closed: 0, net: 0, packed: 0, cancelled: 0, returned: 0 });
-const add = (a: Agg, b: Agg) => { a.phones += b.phones; a.closed += b.closed; a.net += b.net; a.packed += b.packed; a.cancelled += b.cancelled; a.returned += b.returned; };
+const zero = (): Agg => ({ phones: 0, closed: 0, saleClosed: 0, net: 0, packed: 0, cancelled: 0, returned: 0 });
+const add = (a: Agg, b: Agg) => { a.phones += b.phones; a.closed += b.closed; a.saleClosed += b.saleClosed; a.net += b.net; a.packed += b.packed; a.cancelled += b.cancelled; a.returned += b.returned; };
 const OUT_SALE = '__out', OUT_MKT = '__nomkt';
 
 function value(a: Agg, m: Metric): number | null {
   switch (m) {
     case 'net': return a.net; case 'closed': return a.closed; case 'phones': return a.phones; case 'packed': return a.packed;
-    case 'close': return ratePctCapped(a.closed, a.phones); case 'go': return ratePct(a.packed, a.closed);
+    case 'close': return ratePctCapped(a.saleClosed, a.phones); /* chỉ đơn người chốt thuộc Sale (Đầu não kiểm 19/11/2026) */ case 'go': return ratePct(a.packed, a.closed);
     case 'returnRate': return ratePct(a.returned, a.packed); case 'cancelRate': return ratePct(a.cancelled, a.packed);
     case 'perPhone': return a.phones ? a.net / a.phones : null;
   }
 }
 const fmt = (v: number | null, m: Metric) => v === null ? '—' : m === 'net' || m === 'perPhone' ? shortMoney(v) : ['close', 'go', 'returnRate', 'cancelRate'].includes(m) ? pct(v) : vi.format(v);
 const tone = (v: number | null, m: Metric) => m === 'close' ? closeRateClass(v) : m === 'returnRate' ? returnRateClass(v) : m === 'cancelRate' ? cancelRateClass(v) : '';
-const tip = (row: string, col: string, a: Agg) => `${row} chốt cho ${col}: DT ${money(a.net)} · ${vi.format(a.closed)} đơn chốt / ${vi.format(a.phones)} SĐT (TL chốt ${pct(ratePctCapped(a.closed, a.phones))}) · đi ${vi.format(a.packed)} · hoàn ${vi.format(a.returned)} · hủy ${vi.format(a.cancelled)}`;
+const tip = (row: string, col: string, a: Agg) => `${row} chốt cho ${col}: DT ${money(a.net)} · ${vi.format(a.closed)} đơn chốt / ${vi.format(a.phones)} SĐT (TL chốt ${pct(ratePctCapped(a.saleClosed, a.phones))}, chỉ đơn Sale chốt) · đi ${vi.format(a.packed)} · hoàn ${vi.format(a.returned)} · hủy ${vi.format(a.cancelled)}`;
 
 export function MktCrossCard({ start, end, posIds, saleTeams, mktTeams, onPick }: {
   start: string; end: string; posIds: string[]; saleTeams: SaleTeamOption[]; mktTeams: MktTeam[];
@@ -52,7 +52,7 @@ export function MktCrossCard({ start, end, posIds, saleTeams, mktTeams, onPick }
     const cells = new Map<string, Agg>(), rowsT = new Map<string, Agg>(), colsT = new Map<string, Agg>(), total = zero();
     for (const p of data.pairs) {
       const r = saleOf.get(p.closerId) ?? OUT_SALE, c = colOf(p.marketerId);
-      const a: Agg = { phones: p.phones, closed: p.closed, net: p.net, packed: p.packed, cancelled: p.cancelled, returned: p.returned };
+      const a: Agg = { phones: p.phones, closed: p.closed, saleClosed: p.saleClosed ?? 0, net: p.net, packed: p.packed, cancelled: p.cancelled, returned: p.returned };
       const k = `${r}|${c}`;
       if (!cells.has(k)) cells.set(k, zero()); add(cells.get(k)!, a);
       if (!rowsT.has(r)) rowsT.set(r, zero()); add(rowsT.get(r)!, a);

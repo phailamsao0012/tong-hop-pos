@@ -240,7 +240,7 @@ function BreakdownTable({ rows, first, onPick, onOrders, totalCost: _totalCost, 
       <div className="max-w-full overflow-x-auto"><SegmentedControl<SortKey> size="sm" ariaLabel="Xếp hạng theo" value={bar.some((x) => x.k === sort.key) ? sort.key : ('' as SortKey)} onChange={(k) => { sort.setKey(k); sort.setDesc(k !== 'cpcLow'); }} options={bar.map((x) => ({ value: x.k, label: x.label }))} /></div>
     </div>}
     <TableWrap stickyFirst><table className="tbl [&_td]:px-2 [&_th]:px-2">
-      <thead><tr><SortTh k="name" label={first} sort={sort} align="left" />{!noCost && <SortTh k="cost" label="Chi phí" sort={sort} className={on('cost')} />}<SortTh k="net" label="Doanh thu" sort={sort} className={on('net')} />{split && <><SortTh k="newNet" label="DT chốt" sort={sort} className={on('newNet')} /><SortTh k="cskhNet" label="DT CSKH" sort={sort} className={on('cskhNet')} /></>}{!noCost && <SortTh k="roas" label="ROAS" sort={sort} className={on('roas')} />}<SortTh k="closed" label="Đơn chốt" sort={sort} className={on('closed')} /><SortTh k="phones" label="Số" sort={sort} className={on('phones')} /><SortTh k="rate" label="TL chốt" hint="Đơn chốt ÷ Số, tối đa 100%. Dưới 40% tô đỏ." sort={sort} className={on('rate')} />{!noCost && <><SortTh k="cpc" label="CP/đơn New" sort={sort} className={on('cpcLow')} /><SortTh k="cpl" label="CP/số" sort={sort} /><SortTh k="share" label="% CP/DT chốt" sort={sort} /></>}</tr></thead>
+      <thead><tr><SortTh k="name" label={first} sort={sort} align="left" />{!noCost && <SortTh k="cost" label="Chi phí" sort={sort} className={on('cost')} />}<SortTh k="net" label="Doanh thu" sort={sort} className={on('net')} />{split && <><SortTh k="newNet" label="DT chốt" sort={sort} className={on('newNet')} /><SortTh k="cskhNet" label="DT CSKH" sort={sort} className={on('cskhNet')} /></>}{!noCost && <SortTh k="roas" label="ROAS" sort={sort} className={on('roas')} />}<SortTh k="closed" hint="Xem Tất cả: chỉ đơn New (người bán Sale chốt), không gồm đơn CSKH, như bảng xếp hạng marketer chính." label="Đơn chốt" sort={sort} className={on('closed')} /><SortTh k="phones" label="Số" sort={sort} className={on('phones')} /><SortTh k="rate" label="TL chốt" hint="Đơn chốt ÷ Số, tối đa 100%. Dưới 40% tô đỏ." sort={sort} className={on('rate')} />{!noCost && <><SortTh k="cpc" label="CP/đơn New" sort={sort} className={on('cpcLow')} /><SortTh k="cpl" label="CP/số" sort={sort} /><SortTh k="share" label="% CP/DT chốt" sort={sort} /></>}</tr></thead>
       <tbody>{shown.map((r) => {
         const share = r.m.costShare == null ? null : r.m.costShare * 100;
         const rk = rankBar && !r.id.startsWith('__') ? ++rank : null;
@@ -356,6 +356,9 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
   const c = data.current, p = data.prev, f = data.filters;
   // Số lưu cũ chưa có team: coi như Tất cả (lib/mkt-analytics.ts trước 12/10/2026).
   const shown: Seg = data.team ?? 'all', split = data.split;
+  // Luật số MKT (Đầu não kiểm 19/11/2026): xem "Tất cả" thì Đơn chốt chỉ đơn New (người bán Sale), không cộng CSKH / người bán chưa hậu tố;
+  // Số là số chia Sale, nên TL chốt = đơn New ÷ số chia Sale, giống bảng xếp hạng marketer chính. Nút Sale / CSKH giữ như cũ (đã đúng bộ phận).
+  const newOnly = <T extends { closed: number }>(m: T): T => shown === 'all' && 'newOrders' in m ? { ...m, closed: Number((m as unknown as NewSplit).newOrders) } : m;
   const revLabel = REV_LABEL[shown];
   const prevLabel = `kỳ trước ${range(data.previous.start, data.previous.end)}${data.previous.cutoff ? ` tới ${data.previous.cutoff}` : ''}${data.previous.costUntil < data.previous.end ? ` (hôm nay chưa có chi phí nên chi phí kỳ trước tính tới hết ${dmy(data.previous.costUntil)})` : ''}`;
   const was = (v: string) => `kỳ trước ${v}`;
@@ -368,11 +371,11 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
   const teamName = new Map(data.teams.map((t) => [t.id, t.name]));
 
   const people: Row[] = data.people.filter((r) => (!teamId || marketerId || r.picked) && (!onPos || onPos(r.id)))
-    .map((r) => ({ id: r.id, name: r.name, sub: teamName.get(r.teamId) ?? (r.teamId === '__unassigned' ? 'Chưa phân team' : undefined), m: r, prevNet: r.prevNet, active: r.id === marketerId, dim: !!marketerId && r.id !== marketerId }));
-  const teams: Row[] = data.teams.map((t) => ({ id: t.id, name: t.name, sub: `${vi.format(t.people)} marketer`, m: t, prevNet: t.prevNet, active: t.id === teamId && !marketerId }));
-  const products: Row[] = data.products.map((r) => ({ id: r.product, name: productName(r.product), m: r, active: r.product === product,
+    .map((r) => ({ id: r.id, name: r.name, sub: teamName.get(r.teamId) ?? (r.teamId === '__unassigned' ? 'Chưa phân team' : undefined), m: newOnly(r), prevNet: r.prevNet, active: r.id === marketerId, dim: !!marketerId && r.id !== marketerId }));
+  const teams: Row[] = data.teams.map((t) => ({ id: t.id, name: t.name, sub: `${vi.format(t.people)} marketer`, m: newOnly(t), prevNet: t.prevNet, active: t.id === teamId && !marketerId }));
+  const products: Row[] = data.products.map((r) => ({ id: r.product, name: productName(r.product), m: newOnly(r), active: r.product === product,
     note: r.linked ? `Khớp đơn: ${r.matched.join(', ')}` : r.product ? 'Chưa khớp nhãn / sản phẩm nào trên đơn Pancake' : undefined }));
-  const time: Row[] = data.timeline.map((r) => ({ id: r.key, name: bucketLabel(r.key, data.bucket), m: r, active: false }));
+  const time: Row[] = data.timeline.map((r) => ({ id: r.key, name: bucketLabel(r.key, data.bucket), m: newOnly(r), active: false }));
   const tabRows = tab === 'people' ? people : tab === 'teams' ? teams : tab === 'products' ? products : time;
   const onPick = tab === 'people' ? pickPerson : tab === 'teams' ? pickTeam : tab === 'products' ? pickProduct : undefined;
   const totalCost = tab === 'time' ? c.cost : tabRows.reduce((s, r) => s + r.m.cost, 0);
@@ -420,7 +423,7 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
       {split && shown === 'all' && <SplitStrip cur={split.current} prev={split.prev} total={c.net} />}
 
       <div className={`grid grid-cols-2 gap-3 ${noCost ? 'lg:grid-cols-2' : 'lg:grid-cols-5'}`}>
-        <Stat icon={CheckCircle2} label="Đơn chốt" value={vi.format(c.closed)} d={delta(c.closed, p.closed)} prevText={`trước ${vi.format(p.closed)}`} spark={spark((m) => m.closed, (n) => vi.format(n))} onClick={onOpen} />
+        <Stat icon={CheckCircle2} label={shown === 'all' ? 'Đơn chốt New' : 'Đơn chốt'} value={vi.format(newOnly(c).closed)} d={delta(newOnly(c).closed, newOnly(p).closed)} prevText={`trước ${vi.format(newOnly(p).closed)}`} spark={spark((m) => newOnly(m).closed, (n) => vi.format(n))} onClick={onOpen} />
         <Stat icon={Phone} label="Số (SĐT khác nhau)" value={vi.format(c.phones)} d={delta(c.phones, p.phones)} prevText={`trước ${vi.format(p.phones)}`} spark={spark((m) => m.phones, (n) => vi.format(n))} onClick={onOpen} />
         {!noCost && <><Stat icon={Coins} label="Chi phí / đơn New" value={c.costPerClosed === null ? '—' : shortMoney(c.costPerClosed)} d={c.costPerClosed !== null && p.costPerClosed !== null ? delta(c.costPerClosed, p.costPerClosed) : null} invert prevText={`trước ${p.costPerClosed === null ? '—' : shortMoney(p.costPerClosed)}`} spark={spark((m) => m.costPerClosed, shortMoney)} onClick={onOpen} />
         <Stat icon={Megaphone} label="Chi phí / số" value={c.costPerLead === null ? '—' : shortMoney(c.costPerLead)} d={c.costPerLead !== null && p.costPerLead !== null ? delta(c.costPerLead, p.costPerLead) : null} invert prevText={`trước ${p.costPerLead === null ? '—' : shortMoney(p.costPerLead)}`} spark={spark((m) => m.costPerLead, shortMoney)} onClick={onOpen} />

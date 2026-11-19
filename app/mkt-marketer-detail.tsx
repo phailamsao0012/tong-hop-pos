@@ -26,7 +26,8 @@ function rangeOf(r: Range, page: { start: string; end: string }) {
   if (r === 'month') return { start: `${t.slice(0, 7)}-01`, end: t };
   return page;
 }
-const rates = (a: MdAgg) => ({ close: ratePctCapped(a.closed, a.phones), go: ratePct(a.packed, a.closed), cancel: ratePct(a.cancelled, a.packed), ret: ratePct(a.returned, a.packed), aov: a.closed ? a.net / a.closed : null });
+// TL chốt chỉ đơn New (người chốt thuộc Sale) ÷ SĐT chia Sale (Đầu não kiểm 19/11/2026), không lẫn đơn CSKH.
+const rates = (a: MdAgg) => ({ close: ratePctCapped(a.newClosed, a.phones), go: ratePct(a.packed, a.closed), cancel: ratePct(a.cancelled, a.packed), ret: ratePct(a.returned, a.packed), aov: a.closed ? a.net / a.closed : null });
 
 function Tile({ label, value, cls = '', d, sub, title }: { label: string; value: string; cls?: string; d?: number | null; sub?: string; title?: string }) {
   return (
@@ -57,7 +58,7 @@ export function MarketerDetailSheet({ marketerId, onClose, posIds, page, saleTea
     for (const s of data.bySale) {
       const name = data.names[s.sellerId] ?? (s.sellerId ? `NV ${s.sellerId.slice(0, 6)}` : 'Chưa có người');
       const key = name.trim().toLocaleLowerCase('vi');
-      const g = by.get(key) ?? { name, rows: [], sum: { phones: 0, created: 0, closed: 0, net: 0, newNet: 0, cskhNet: 0, packed: 0, cancelled: 0, returned: 0 } };
+      const g = by.get(key) ?? { name, rows: [], sum: { phones: 0, created: 0, closed: 0, newClosed: 0, net: 0, newNet: 0, cskhNet: 0, packed: 0, cancelled: 0, returned: 0 } };
       g.rows.push(s);
       for (const k of Object.keys(g.sum) as (keyof MdAgg)[]) g.sum[k] += s[k];
       by.set(key, g);
@@ -72,7 +73,7 @@ export function MarketerDetailSheet({ marketerId, onClose, posIds, page, saleTea
         <td className="whitespace-nowrap text-[12px] text-ink-3">{extra}</td>
         <td className="n">{vi.format(a.phones)}</td>
         <td className="n">{vi.format(a.closed)}</td>
-        <td className={`n ${closeRateClass(x.close)}`} title={`${vi.format(a.closed)} chốt / ${vi.format(a.phones)} SĐT`}>{pct(x.close)}</td>
+        <td className={`n ${closeRateClass(x.close)}`} title={`${vi.format(a.newClosed)} đơn New chốt / ${vi.format(a.phones)} SĐT chia Sale`}>{pct(x.close)}</td>
         <td className="n">{shortMoney(a.net)}</td>
         <td className="n">{x.aov === null ? '—' : shortMoney(x.aov)}</td>
         <td className="n">{vi.format(a.packed)}</td>
@@ -119,7 +120,7 @@ export function MarketerDetailSheet({ marketerId, onClose, posIds, page, saleTea
             {data && data.byDay.length > 1 && <section>
               <button type="button" className="text-[13px] font-semibold text-primary" onClick={() => setShowDays((v) => !v)} aria-expanded={showDays}>{showDays ? '▾' : '▸'} Theo ngày ({data.byDay.length} ngày)</button>
               {showDays && <TableWrap><table className="tbl compact mt-2"><thead><tr><Th>Ngày</Th><Th className="n">SĐT</Th><Th className="n">Đơn chốt</Th><Th className="n">TL chốt</Th><Th className="n">Doanh thu</Th></tr></thead>
-                <tbody>{data.byDay.map((d) => { const cl = ratePctCapped(d.closed, d.phones); return <tr key={d.day}><td>{d.day.slice(8, 10)}/{d.day.slice(5, 7)}</td><td className="n">{vi.format(d.phones)}</td><td className="n">{vi.format(d.closed)}</td><td className={`n ${closeRateClass(cl)}`}>{pct(cl)}</td><td className="n">{shortMoney(d.net)}</td></tr>; })}</tbody></table></TableWrap>}
+                <tbody>{data.byDay.map((d) => { const cl = ratePctCapped(d.newClosed, d.phones); return <tr key={d.day}><td>{d.day.slice(8, 10)}/{d.day.slice(5, 7)}</td><td className="n">{vi.format(d.phones)}</td><td className="n">{vi.format(d.closed)}</td><td className={`n ${closeRateClass(cl)}`}>{pct(cl)}</td><td className="n">{shortMoney(d.net)}</td></tr>; })}</tbody></table></TableWrap>}
             </section>}
           </>}
         </div>

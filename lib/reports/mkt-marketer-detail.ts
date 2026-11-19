@@ -10,17 +10,17 @@ import { NET } from '@/lib/reports/stats';
 import { AFTER_PACK_CANCELLED_SQL, AFTER_PACK_RETURNED_SQL, PACKED_SQL } from '@/lib/reports/van-don';
 import { CLOSER_SQL } from '@/lib/teams/sale-team-filter';
 
-export type MdAgg = { phones: number; created: number; closed: number; net: number; newNet: number; cskhNet: number; packed: number; cancelled: number; returned: number };
+export type MdAgg = { phones: number; created: number; closed: number; newClosed: number; net: number; newNet: number; cskhNet: number; packed: number; cancelled: number; returned: number };
 export type MdSale = MdAgg & { posId: string; sellerId: string };
 export type MarketerDetail = {
   marketerId: string; name: string; period: { start: string; end: string }; previous: { start: string; end: string };
   current: MdAgg & { cost: number }; prev: MdAgg & { cost: number };
-  bySale: MdSale[]; byDay: { day: string; phones: number; closed: number; net: number }[]; names: Record<string, string>;
+  bySale: MdSale[]; byDay: { day: string; phones: number; closed: number; newClosed: number; net: number }[]; names: Record<string, string>;
 };
 
 /** Số cột nhóm = số chữ ' AS ' trong phần nhóm (biểu thức có thể chứa dấu phẩy). */
 const groupCols = (group: string) => Array.from({ length: (group.match(/ AS /g) ?? []).length }, (_, i) => i + 1).join(',');
-const zero = (): MdAgg => ({ phones: 0, created: 0, closed: 0, net: 0, newNet: 0, cskhNet: 0, packed: 0, cancelled: 0, returned: 0 });
+const zero = (): MdAgg => ({ phones: 0, created: 0, closed: 0, newClosed: 0, net: 0, newNet: 0, cskhNet: 0, packed: 0, cancelled: 0, returned: 0 });
 
 export async function marketerDetail(marketerId: string, posIds: string[], start: string, end: string): Promise<MarketerDetail> {
   const prev = comparePeriod(start, end, 'previous');
@@ -28,7 +28,7 @@ export async function marketerDetail(marketerId: string, posIds: string[], start
   const net = NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1');
   const sale = teamSubquery('sale')!, cskh = teamSubquery('cskh')!;
   const base = `o.pos_id IN (${ph}) AND NULLIF(TRIM(o.marketer_id),'')=?`;
-  const closedCols = `COUNT(*) AS closed, COALESCE(SUM(${net}),0) AS net,
+  const closedCols = `COUNT(*) AS closed, SUM(CASE WHEN ${CLOSER_SQL} IN ${sale} THEN 1 ELSE 0 END) AS new_closed, COALESCE(SUM(${net}),0) AS net,
     COALESCE(SUM(CASE WHEN ${CLOSER_SQL} IN ${sale} THEN ${net} ELSE 0 END),0) AS new_net,
     COALESCE(SUM(CASE WHEN ${CLOSER_SQL} IN ${cskh} THEN ${net} ELSE 0 END),0) AS cskh_net,
     SUM(CASE WHEN ${PACKED_SQL('o')} THEN 1 ELSE 0 END) AS packed,
@@ -57,7 +57,7 @@ export async function marketerDetail(marketerId: string, posIds: string[], start
   const n = (v: unknown) => Number(v ?? 0) || 0;
   const fill = (a: MdAgg, l?: Row, c?: Row) => {
     if (l) { a.phones += n(l.phones); a.created += n(l.created); }
-    if (c) { a.closed += n(c.closed); a.net += n(c.net); a.newNet += n(c.new_net); a.cskhNet += n(c.cskh_net); a.packed += n(c.packed); a.cancelled += n(c.cancelled); a.returned += n(c.returned); }
+    if (c) { a.closed += n(c.closed); a.newClosed += n(c.new_closed); a.net += n(c.net); a.newNet += n(c.new_net); a.cskhNet += n(c.cskh_net); a.packed += n(c.packed); a.cancelled += n(c.cancelled); a.returned += n(c.returned); }
     return a;
   };
   const current = { ...fill(zero(), (lc.results as Row[])[0], (cc.results as Row[])[0]), cost: n((costC.results as Row[])[0]?.cost) };
@@ -66,10 +66,10 @@ export async function marketerDetail(marketerId: string, posIds: string[], start
   const saleOf = (pos: string, sid: string) => { const k = `${pos}|${sid}`; let s = sales.get(k); if (!s) { s = { ...zero(), posId: pos, sellerId: sid }; sales.set(k, s); } return s; };
   for (const r of lSale.results as Row[]) fill(saleOf(String(r.pos), String(r.sid)), r);
   for (const r of cSale.results as Row[]) fill(saleOf(String(r.pos), String(r.sid)), undefined, r);
-  const days = new Map<string, { day: string; phones: number; closed: number; net: number }>();
-  const dayOf = (d: string) => { let x = days.get(d); if (!x) { x = { day: d, phones: 0, closed: 0, net: 0 }; days.set(d, x); } return x; };
+  const days = new Map<string, { day: string; phones: number; closed: number; newClosed: number; net: number }>();
+  const dayOf = (d: string) => { let x = days.get(d); if (!x) { x = { day: d, phones: 0, closed: 0, newClosed: 0, net: 0 }; days.set(d, x); } return x; };
   for (const r of lDay.results as Row[]) dayOf(String(r.day)).phones += n(r.phones);
-  for (const r of cDay.results as Row[]) { const x = dayOf(String(r.day)); x.closed += n(r.closed); x.net += n(r.net); }
+  for (const r of cDay.results as Row[]) { const x = dayOf(String(r.day)); x.closed += n(r.closed); x.newClosed += n(r.new_closed); x.net += n(r.net); }
   const used = new Set([marketerId, ...[...sales.values()].map((s) => s.sellerId)]);
   const nameMap = Object.fromEntries((names.results as { user_id: string; name: string }[]).filter((r) => used.has(String(r.user_id))).map((r) => [String(r.user_id), r.name]));
   return {

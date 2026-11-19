@@ -23,7 +23,8 @@ export function buildSections(closed: ClosedAgg[], cohort: CohortAgg[], mktConfi
   };
   const aov = (m: { orders: number; net: number }) => (m.orders ? m.net / m.orders : null);
   const sale = money(of('sale')), cskh = money(of('cskh')), mkt = { orders: Number(mktConfirmed.orders ?? 0), net: Number(mktConfirmed.net ?? 0) };
-  const mktCohort = coh(undefined, true), mktCreated = sum(mktCohort, (r) => r.created), mktConfirmedNow = sum(mktCohort, (r) => r.confirmed_now);
+  // TL chốt MKT chỉ đơn chia Sale (đơn New), không lẫn đơn chia CSKH / người khác (Đầu não kiểm 19/11/2026), như bảng xếp hạng Marketing.
+  const mktCohort = coh('sale', true), mktCreated = sum(mktCohort, (r) => r.created), mktConfirmedNow = sum(mktCohort, (r) => r.confirmed_now);
   return {
     sale: { ...sale, ...rate(coh('sale')) },
     cskh: { ...cskh, aov: aov(cskh), self: money(of('cskh', false)), fromMkt: money(of('cskh', true)) },

@@ -10,7 +10,7 @@ import { NET } from '@/lib/reports/stats';
 import { AFTER_PACK_CANCELLED_SQL, AFTER_PACK_RETURNED_SQL, PACKED_SQL } from '@/lib/reports/van-don';
 import { CLOSER_SQL } from '@/lib/teams/sale-team-filter';
 
-export type CrossPair = { closerId: string; marketerId: string; phones: number; closed: number; net: number; packed: number; cancelled: number; returned: number };
+export type CrossPair = { closerId: string; marketerId: string; phones: number; closed: number; saleClosed: number; net: number; packed: number; cancelled: number; returned: number };
 
 export async function mktCross(posIds: string[], start: string, end: string): Promise<{ pairs: CrossPair[]; names: Record<string, string> }> {
   const { startUtc, endUtc } = vnRangeUtc(start, end);
@@ -21,7 +21,7 @@ export async function mktCross(posIds: string[], start: string, end: string): Pr
   const [leads, closed, names] = await env.DB.batch([
     env.DB.prepare(`SELECT COALESCE(NULLIF(o.seller_id,''),'') AS sid, ${mk} AS mid, COUNT(DISTINCT NULLIF(TRIM(o.phone),'')) AS phones
       FROM raw_pos_orders o WHERE ${base} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7 AND o.seller_id IN ${teamSubquery('sale')} GROUP BY 1,2`).bind(...posIds, startUtc, endUtc),
-    env.DB.prepare(`SELECT COALESCE(${CLOSER_SQL},'') AS sid, ${mk} AS mid, COUNT(*) AS closed, COALESCE(SUM(${net}),0) AS net,
+    env.DB.prepare(`SELECT COALESCE(${CLOSER_SQL},'') AS sid, ${mk} AS mid, COUNT(*) AS closed, SUM(CASE WHEN COALESCE(${CLOSER_SQL},'') IN ${teamSubquery('sale')} THEN 1 ELSE 0 END) AS sale_closed, COALESCE(SUM(${net}),0) AS net,
         SUM(CASE WHEN ${PACKED_SQL('o')} THEN 1 ELSE 0 END) AS packed,
         SUM(CASE WHEN ${AFTER_PACK_CANCELLED_SQL('o')} THEN 1 ELSE 0 END) AS cancelled,
         SUM(CASE WHEN ${PACKED_SQL('o')} AND ${AFTER_PACK_RETURNED_SQL('o')} THEN 1 ELSE 0 END) AS returned
@@ -33,13 +33,13 @@ export async function mktCross(posIds: string[], start: string, end: string): Pr
   const get = (sid: string, mid: string) => {
     const k = key(sid, mid);
     let p = map.get(k);
-    if (!p) { p = { closerId: sid, marketerId: mid, phones: 0, closed: 0, net: 0, packed: 0, cancelled: 0, returned: 0 }; map.set(k, p); }
+    if (!p) { p = { closerId: sid, marketerId: mid, phones: 0, closed: 0, saleClosed: 0, net: 0, packed: 0, cancelled: 0, returned: 0 }; map.set(k, p); }
     return p;
   };
   for (const r of leads.results as { sid: string; mid: string; phones: number }[]) get(r.sid, r.mid).phones += Number(r.phones);
-  for (const r of closed.results as { sid: string; mid: string; closed: number; net: number; packed: number; cancelled: number; returned: number }[]) {
+  for (const r of closed.results as { sid: string; mid: string; closed: number; sale_closed: number; net: number; packed: number; cancelled: number; returned: number }[]) {
     const p = get(r.sid, r.mid);
-    p.closed += Number(r.closed); p.net += Number(r.net); p.packed += Number(r.packed); p.cancelled += Number(r.cancelled); p.returned += Number(r.returned);
+    p.closed += Number(r.closed); p.saleClosed += Number(r.sale_closed); p.net += Number(r.net); p.packed += Number(r.packed); p.cancelled += Number(r.cancelled); p.returned += Number(r.returned);
   }
   const used = new Set([...map.values()].flatMap((p) => [p.closerId, p.marketerId]));
   const nameMap = Object.fromEntries((names.results as { user_id: string; name: string }[]).filter((r) => used.has(String(r.user_id))).map((r) => [String(r.user_id), r.name]));
