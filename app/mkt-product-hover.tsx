@@ -24,7 +24,7 @@ export const splitUrl = (reportUrl: string) => reportUrl.replace('/api/reports/m
 
 export type SplitField = 'phones' | 'orders' | 'confirmed' | 'revenue';
 const COLS: { key: SplitField | 'quantity'; label: string }[] = [
-  { key: 'phones', label: 'Số' }, { key: 'orders', label: 'Đơn tạo' }, { key: 'confirmed', label: 'Đơn XN' }, { key: 'quantity', label: 'SL' }, { key: 'revenue', label: 'Tiền hàng' },
+  { key: 'phones', label: 'Số' }, { key: 'confirmed', label: 'Đơn chốt' }, { key: 'quantity', label: 'SL' }, { key: 'revenue', label: 'Tiền hàng' },
 ];
 const LINES: LineKey[] = [...PRODUCT_LINES.map((l) => l.key), OTHER_LINE.key];
 
@@ -43,7 +43,7 @@ export function ProductSplitHover({ url, marketerId, field, children }: { url: s
       <PopoverTrigger openOnHover delay={250} render={<button type="button" className="tap cursor-help underline decoration-dotted decoration-ink-3/60 underline-offset-4" aria-label="Xem tách theo sản phẩm" />}>
         {children}
       </PopoverTrigger>
-      <PopoverContent side="bottom" align="end" className="w-[30rem] max-w-[92vw] p-2.5 text-xs">
+      <PopoverContent side="bottom" align="end" className="w-[27rem] max-w-[92vw] p-2.5 text-xs">
         <p className="font-semibold">Tách theo sản phẩm</p>
         {state.error ? <p className="text-bad">Chưa tải được, rê lại sau.</p> : !state.data ? <p className="text-ink-3">Đang tính…</p> : rows.length || cover?.noProduct.orders ? (
           <table className="w-full tabular-nums">
@@ -53,13 +53,13 @@ export function ProductSplitHover({ url, marketerId, field, children }: { url: s
               return <tr key={k} className="border-t border-line"><td className="py-1 pr-2">{LINE_LABEL[k]}</td>{COLS.map((col) => <td key={col.key} className={`py-1 pl-2 text-right ${col.key === field ? 'font-semibold' : ''}`}>{col.key === 'revenue' ? shortMoney(c.revenue) : vi.format(c[col.key])}</td>)}</tr>;
             })}
             {cover && <>
-              {sumRow('Có sản phẩm (mỗi đơn 1 lần)', cover.withProduct, 'border-ink-3/40 font-medium', true)}
-              {sumRow('Chưa có sản phẩm', cover.noProduct, 'text-warn', false)}
-              {sumRow('Cộng = số trong ô', { orders: cover.withProduct.orders + cover.noProduct.orders, phones: cover.withProduct.phones + cover.noProduct.phones, confirmed: cover.withProduct.confirmed + cover.noProduct.confirmed, revenue: cover.withProduct.revenue, quantity: cover.withProduct.quantity }, 'font-semibold', true)}
+              {sumRow('Số đã có sản phẩm (mỗi số 1 lần)', cover.withProduct, 'border-ink-3/40 font-medium', true)}
+              {sumRow('Số new chưa chốt (chưa có sản phẩm)', cover.noProduct, 'text-warn', false)}
+              {sumRow('Cộng = SĐT trong ô', { orders: cover.withProduct.orders + cover.noProduct.orders, phones: cover.withProduct.phones + cover.noProduct.phones, confirmed: cover.withProduct.confirmed + cover.noProduct.confirmed, revenue: cover.withProduct.revenue, quantity: cover.withProduct.quantity }, 'font-semibold', true)}
             </>}</tbody>
           </table>
         ) : <p className="text-ink-3">Không có dòng sản phẩm nào.</p>}
-        <p className="text-[11px] leading-snug text-ink-3">Số = SĐT trên đơn tạo trong kỳ, đã chia cho Sale. Một đơn nhiều sản phẩm nằm ở nhiều dòng sản phẩm (đơn có Gentadox kèm Bổ đậm đặc vừa ở dòng Gentadox vừa ở dòng Khác), nên chỉ cộng 2 dòng dưới: Có sản phẩm (mỗi đơn 1 lần) + Chưa có sản phẩm (Sale chưa nhập hàng trên Pancake) = số trong ô. Đơn XN = đơn tạo trong kỳ đã xác nhận, khác cột Đơn New / CSKH (đếm theo ngày chốt, kể cả đơn tạo hôm trước; đơn CSKH không vào đây). SL và tiền hàng chỉ tính đơn đã xác nhận, không tính quà tặng.</p>
+        <p className="text-[11px] leading-snug text-ink-3">Số = SĐT trên đơn tạo trong kỳ đã chia cho Sale, đủ mọi số: số đã có sản phẩm + số new chưa chốt (Sale chưa nhập hàng trên Pancake) = SĐT trong ô. Đơn chốt = đơn đã xác nhận trên các số đó. Một đơn nhiều sản phẩm nằm ở nhiều dòng sản phẩm (Gentadox kèm Bổ đậm đặc vừa ở dòng Gentadox vừa ở dòng Khác), nên chỉ cộng 2 dòng cuối. SL và tiền hàng chỉ tính đơn đã chốt, không tính quà tặng.</p>
       </PopoverContent>
     </Popover>
   );
