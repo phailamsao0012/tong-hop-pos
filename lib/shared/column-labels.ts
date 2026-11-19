@@ -15,6 +15,11 @@ export const COLUMN_LABELS: Record<string, { full: string; short: string; hint: 
     "short": "DT New",
     "hint": "Doanh thu phần New của dòng báo cáo, theo bộ lọc và mốc đang chọn."
   },
+  "Doanh thu chuyển": {
+    "full": "Doanh thu chuyển",
+    "short": "DT chuyển",
+    "hint": "Tiền các đơn ở cột Đơn đi, gồm cả đơn huỷ sau đóng hàng; dòng nhỏ đã trừ hoàn huỷ."
+  },
   "Doanh thu CSKH": {
     "full": "Doanh thu CSKH",
     "short": "DT CSKH",
@@ -79,6 +84,11 @@ export const COLUMN_LABELS: Record<string, { full: string; short: string; hint: 
     "full": "Chi phí / số",
     "short": "CP/số",
     "hint": "Chi phí quảng cáo chia số điện thoại của dòng báo cáo."
+  },
+  "% chi phí / DT chốt": {
+    "full": "% chi phí / DT chốt",
+    "short": "%CP/DT chốt",
+    "hint": "Chi phí quảng cáo chia doanh thu chốt, biểu diễn bằng phần trăm."
   },
   "% chi phí / DT New": {
     "full": "% chi phí / DT New",
@@ -890,11 +900,14 @@ const ALIASES: Record<string, string> = {
   "CP/đơn New": "Chi phí / đơn New",
   "CP/số": "Chi phí / số",
   "% CP/DT New": "% chi phí / DT New",
+  "% CP/DT chốt": "% chi phí / DT chốt",
   "Tỷ lệ XN": "Tỷ lệ xác nhận",
   "Tỉ lệ chốt": "Tỷ lệ chốt",
   "Chi phí/đơn New": "Chi phí / đơn New",
   "Chi phí/số": "Chi phí / số",
   "DT New": "Doanh thu New",
+  "DT chốt": "Doanh thu chốt",
+  "DT chuyển": "Doanh thu chuyển",
   "DT CSKH": "Doanh thu CSKH",
   "DT / SĐT": "Doanh thu / SĐT",
   "Đơn XN": "Đơn xác nhận"

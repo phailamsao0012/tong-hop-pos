@@ -146,7 +146,7 @@ export async function roasReport(opts: { posIds: string[]; start: string; end: s
     definitions: {
       cost: 'Chi phí = số tiền marketer / trưởng team tự nhập theo ngày (nhập tay hoặc tải file Excel theo mẫu). Web không tự lấy từ tài khoản quảng cáo.',
       leads: 'Số = SĐT khác nhau trên đơn tạo trong kỳ có Marketer là người này (trừ đơn xóa).',
-      roas: 'ROAS = DT New (Sale chốt); CP/đơn = chi phí ÷ đơn New; % chi phí = chi phí ÷ DT New. CSKH không vào ROAS. Doanh thu (theo ngày xác nhận lần đầu, sau giảm trừ; chỉ Marketer được tính doanh số, tên có hậu tố MKT…) ÷ chi phí cùng kỳ. Ô tổng chỉ tính các marketer đã nhập chi phí, để marketer chưa nhập không làm ROAS cao ảo.',
+      roas: 'ROAS = DT chốt (Sale chốt); CP/đơn = chi phí ÷ đơn New; % chi phí = chi phí ÷ DT chốt. CSKH không vào ROAS. Doanh thu (theo ngày xác nhận lần đầu, sau giảm trừ; chỉ Marketer được tính doanh số, tên có hậu tố MKT…) ÷ chi phí cùng kỳ. Ô tổng chỉ tính các marketer đã nhập chi phí, để marketer chưa nhập không làm ROAS cao ảo.',
       quality: 'Tỷ lệ chốt số = đơn chốt ÷ đơn tạo; hoàn = đơn chốt đang ở trạng thái hoàn ÷ đơn chốt.',
     },
   };

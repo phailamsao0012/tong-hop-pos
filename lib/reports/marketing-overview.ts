@@ -300,7 +300,7 @@ async function marketingOverviewRaw(user: { role: Role }, p: URLSearchParams, po
       cohort: 'Phễu và tỷ lệ dùng các đơn do marketer mang về, tạo trong kỳ đang chọn. SĐT là số duy nhất có trên các đơn này.',
       selected: basis === 'confirmed' ? 'Chỉ số chính xếp theo ngày xác nhận lần đầu và trạng thái/mốc đang chọn.' : 'Chỉ số chính xếp theo ngày tạo đơn và trạng thái/mốc đang chọn.',
       products: 'Sản phẩm lấy từ dòng hàng bán trên Pancake, loại dòng được đánh dấu quà tặng hoặc có tên bắt đầu bằng Quà Tặng. Một đơn có nhiều sản phẩm được tính vào từng dòng liên quan; hàng tổng đơn dùng số đơn duy nhất.',
-      split: 'DT chốt (trước gọi DT New) = doanh thu đơn do nhân viên Sale chốt (khách mới từ quảng cáo); DT chuyển = phần DT chốt của các đơn đã vào Đang đóng hàng trở đi (cột Đơn đi); DT CSKH = đơn do nhân viên CSKH đứng tên bán (khách cũ mua lại trên data Marketing). Doanh thu = DT chốt + DT CSKH + đơn của người bán chưa có hậu tố SALE / CSKH. Dòng nhỏ: sau hoàn hủy.',
+      split: 'DT chốt (trước gọi DT New) = doanh thu đơn do nhân viên Sale chốt (khách mới từ quảng cáo); DT chuyển = tiền các đơn ở cột Đơn đi, gồm cả đơn huỷ sau đóng hàng; dòng nhỏ đã trừ hoàn huỷ; DT CSKH = đơn do nhân viên CSKH đứng tên bán (khách cũ mua lại trên data Marketing). Doanh thu = DT chốt + DT CSKH + đơn của người bán chưa có hậu tố SALE / CSKH. Dòng nhỏ: sau hoàn hủy.',
       attribution: 'Sale và CSKH lấy từ người bán và người chăm sóc gắn trên đơn. Nguồn đơn lấy từ trường order_sources của Pancake. Page, bài viết và mã quảng cáo chưa có trường chuẩn đủ để lập bộ lọc toàn bộ lịch sử. Bảng đơn chỉ hiện ghi chú của đơn; ghi chú khách chi tiết xem tại Cuộc gọi CSKH.',
     },
   };
