@@ -188,13 +188,13 @@ export function MktRoasView({ owner = false }: { owner?: boolean }) {
                   <thead><tr>
                     <Th className="text-left">Marketer</Th>
                     <SortTh k="cost" label="Chi phí" sort={sort} />
-                    <SortTh k="net" label={team === 'all' ? 'DT MKT (New + CSKH + Khác)' : team === 'sale' ? 'DT New' : 'DT CSKH'} sort={sort} />
-                    {team === 'all' && <><SortTh k="newNet" label="DT New" sort={sort} /><SortTh k="cskhNet" label="DT CSKH" sort={sort} /></>}
+                    <SortTh k="net" label={team === 'all' ? 'DT MKT (chốt + CSKH + Khác)' : team === 'sale' ? 'DT chốt' : 'DT CSKH'} sort={sort} />
+                    {team === 'all' && <><SortTh k="newNet" label="DT chốt" sort={sort} /><SortTh k="cskhNet" label="DT CSKH" sort={sort} /></>}
                     <SortTh k="roas" label="ROAS" sort={sort} />
                     <SortTh k="phones" label="Số" sort={sort} />
                     <SortTh k="costPerLead" label="Chi phí/số" sort={sort} />
                     <SortTh k={team === 'cskh' ? 'closed' : 'newOrders'} label={team === 'cskh' ? 'Đơn CSKH' : 'Đơn New'} sort={sort} />
-                    <SortTh k="costShare" label="% chi phí / DT New" sort={sort} />
+                    <SortTh k="costShare" label="% chi phí / DT chốt" sort={sort} />
                     <SortTh k="costPerClosed" label="Chi phí/đơn New" sort={sort} />
                     <SortTh k="closeRate" label="Chốt số" sort={sort} />
                     <SortTh k="returnRate" label="Hoàn" sort={sort} />
@@ -209,7 +209,7 @@ export function MktRoasView({ owner = false }: { owner?: boolean }) {
                       <td className="n">{vi.format(x.phones)}</td>
                       <td className="n">{shortMoney(x.costPerLead)}</td>
                       <td className="n">{vi.format(team === 'cskh' ? x.closed : x.newOrders)}</td>
-                      <td className="n" title="Chi phí ÷ DT New">{pct(x.costShare === null ? null : x.costShare * 100)}</td>
+                      <td className="n" title="Chi phí ÷ DT chốt">{pct(x.costShare === null ? null : x.costShare * 100)}</td>
                       <td className="n">{shortMoney(x.costPerClosed)}</td>
                       <td className="n">{pct(x.closeRate)}</td>
                       <td className="n">{pct(x.returnRate)}</td>

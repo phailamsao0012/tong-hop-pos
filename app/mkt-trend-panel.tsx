@@ -18,10 +18,10 @@ const columns = [
   ['costPerLead', 'CP/số', 'Chi phí ÷ số về của marketer có chi phí trong cả kỳ (như số chính).', money],
   ['newOrders', 'Đơn New', 'Đơn MKT chốt theo ngày xác nhận lần đầu, người bán thuộc Sale.', (n: number) => vi.format(n)],
   ['closeRate', 'Tỷ lệ chốt', 'Đơn New ÷ số về × 100%.', (n: number) => pct(n)],
-  ['newNet', 'DT New', 'Doanh thu đơn New trong đoạn.', money],
-  ['roas', 'ROAS', 'DT New của marketer có chi phí trong cả kỳ ÷ chi phí; nút CSKH hiển thị —.', (n: number) => `${n.toFixed(2).replace('.', ',')}×`],
-  ['costShare', '% chi phí', 'Chi phí ÷ DT New của marketer có chi phí × 100%.', (n: number) => pct(n)],
-  ['aov', 'AOV New', 'DT New ÷ đơn New.', money],
+  ['newNet', 'DT chốt', 'Doanh thu đơn Sale chốt trong đoạn (trước gọi DT New).', money],
+  ['roas', 'ROAS', 'DT chốt của marketer có chi phí trong cả kỳ ÷ chi phí; nút CSKH hiển thị —.', (n: number) => `${n.toFixed(2).replace('.', ',')}×`],
+  ['costShare', '% chi phí', 'Chi phí ÷ DT chốt của marketer có chi phí × 100%.', (n: number) => pct(n)],
+  ['aov', 'AOV New', 'DT chốt ÷ đơn New.', money],
 ] as const;
 type Key = (typeof columns)[number][0];
 // Thấp hơn là tốt: CP/số và % chi phí. Chi phí để màu trung tính.

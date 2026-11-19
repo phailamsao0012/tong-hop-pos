@@ -158,6 +158,9 @@ async function marketingOverviewRaw(user: { role: Role }, p: URLSearchParams, po
     `COALESCE(SUM(CASE WHEN ${EVER_CONFIRMED} AND o.seller_id IN ${saleSellers} AND ${PACKED_SQL('o')} THEN 1 ELSE 0 END),0) AS xp_packed_new`,
     `COALESCE(SUM(CASE WHEN ${EVER_CONFIRMED} AND o.seller_id IN ${saleSellers} AND ${AFTER_PACK_CANCELLED_SQL('o')} THEN 1 ELSE 0 END),0) AS xp_cancelled_new`,
     `COALESCE(SUM(CASE WHEN ${EVER_CONFIRMED} AND o.seller_id IN ${saleSellers} AND ${PACKED_SQL('o')} AND ${AFTER_PACK_RETURNED_SQL('o')} THEN 1 ELSE 0 END),0) AS xp_returned_new`,
+    // DT chuyển (anh Vũ 19/11/2026: "đóng hàng trở đi là doanh thu chuyển"): tiền các đơn của cột Đơn đi (New); dòng nhỏ trừ đơn đang hoàn / đã hoàn / hủy.
+    `COALESCE(SUM(CASE WHEN ${EVER_CONFIRMED} AND o.seller_id IN ${saleSellers} AND ${PACKED_SQL('o')} THEN ${rankNet} ELSE 0 END),0) AS xp_ship_net_new`,
+    `COALESCE(SUM(CASE WHEN ${EVER_CONFIRMED} AND o.seller_id IN ${saleSellers} AND ${PACKED_SQL('o')} AND o.status_code IN (4,5,15,6) THEN ${rankNet} ELSE 0 END),0) AS xp_ship_refund_new`,
   ]).join(',');
   const rankFrom = basis === 'confirmed'
     ? 'raw_pos_orders o INDEXED BY idx_raw_orders_pos_confirmed_status_money'
@@ -205,6 +208,7 @@ async function marketingOverviewRaw(user: { role: Role }, p: URLSearchParams, po
       packedCancelled: num(row?.xp_cancelled), packedReturned: num(row?.xp_returned),
       newConfirmed: num(row?.xp_confirmed_new), cskhConfirmed: num(row?.xp_confirmed_cskh), newPacked: num(row?.xp_packed_new),
       newCancelled: num(row?.xp_cancelled_new), newReturned: num(row?.xp_returned_new),
+      shipNet: num(row?.xp_ship_net_new), shipAfterRefund: num(row?.xp_ship_net_new) - num(row?.xp_ship_refund_new),
     };
   };
 
@@ -277,7 +281,7 @@ async function marketingOverviewRaw(user: { role: Role }, p: URLSearchParams, po
       selectedRate: base.orders ? current.orders / base.orders * 100 : null,
     },
     byMarketer, byTeam, stageSummary: rankFields(rankResults[0].results[0] as RankAggregate).stageMetrics,
-    afterPackSummary: (({ everConfirmed, everPacked, packedCancelled, packedReturned, newConfirmed, cskhConfirmed, newPacked, newCancelled, newReturned }) => ({ everConfirmed, everPacked, packedCancelled, packedReturned, newConfirmed, cskhConfirmed, newPacked, newCancelled, newReturned }))(rankFields(rankResults[0].results[0] as RankAggregate)),
+    afterPackSummary: (({ everConfirmed, everPacked, packedCancelled, packedReturned, newConfirmed, cskhConfirmed, newPacked, newCancelled, newReturned, shipNet, shipAfterRefund }) => ({ everConfirmed, everPacked, packedCancelled, packedReturned, newConfirmed, cskhConfirmed, newPacked, newCancelled, newReturned, shipNet, shipAfterRefund }))(rankFields(rankResults[0].results[0] as RankAggregate)),
     byProduct: (products.results as ProductRow[]).map((r) => ({ productKey: r.product_key, productName: r.product_name, orders: num(r.orders), phones: num(r.phones), quantity: num(r.quantity), lineTotal: num(r.line_total) })),
     recentOrders: (recentOrders.results as RecentOrder[]).map((r) => ({
       id: r.id, orderId: r.source_order_id, posId: r.pos_id, posName: POS.find((x) => x.id === r.pos_id)?.name ?? r.pos_id,
@@ -296,7 +300,7 @@ async function marketingOverviewRaw(user: { role: Role }, p: URLSearchParams, po
       cohort: 'Phễu và tỷ lệ dùng các đơn do marketer mang về, tạo trong kỳ đang chọn. SĐT là số duy nhất có trên các đơn này.',
       selected: basis === 'confirmed' ? 'Chỉ số chính xếp theo ngày xác nhận lần đầu và trạng thái/mốc đang chọn.' : 'Chỉ số chính xếp theo ngày tạo đơn và trạng thái/mốc đang chọn.',
       products: 'Sản phẩm lấy từ dòng hàng bán trên Pancake, loại dòng được đánh dấu quà tặng hoặc có tên bắt đầu bằng Quà Tặng. Một đơn có nhiều sản phẩm được tính vào từng dòng liên quan; hàng tổng đơn dùng số đơn duy nhất.',
-      split: 'DT New = doanh thu đơn do nhân viên Sale chốt (khách mới từ quảng cáo); DT CSKH = đơn do nhân viên CSKH đứng tên bán (khách cũ mua lại trên data Marketing). Doanh thu = New + CSKH + đơn của người bán chưa có hậu tố SALE / CSKH. Dòng nhỏ: sau hoàn hủy.',
+      split: 'DT chốt (trước gọi DT New) = doanh thu đơn do nhân viên Sale chốt (khách mới từ quảng cáo); DT chuyển = phần DT chốt của các đơn đã vào Đang đóng hàng trở đi (cột Đơn đi); DT CSKH = đơn do nhân viên CSKH đứng tên bán (khách cũ mua lại trên data Marketing). Doanh thu = DT chốt + DT CSKH + đơn của người bán chưa có hậu tố SALE / CSKH. Dòng nhỏ: sau hoàn hủy.',
       attribution: 'Sale và CSKH lấy từ người bán và người chăm sóc gắn trên đơn. Nguồn đơn lấy từ trường order_sources của Pancake. Page, bài viết và mã quảng cáo chưa có trường chuẩn đủ để lập bộ lọc toàn bộ lịch sử. Bảng đơn chỉ hiện ghi chú của đơn; ghi chú khách chi tiết xem tại Cuộc gọi CSKH.',
     },
   };

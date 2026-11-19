@@ -121,7 +121,7 @@ function Tip({ active, label, rows, title, revLabel = 'Doanh thu MKT' }: { activ
 const CHART_CONFIG = { costM: { label: 'Chi phí QC', color: 'var(--t-orange)' }, netM: { label: 'Doanh thu MKT', color: 'var(--primary)' } };
 // Nút Sale / CSKH đầu trang (anh Vũ 12/10/2026): Sale chốt = doanh thu New, CSKH chốt = doanh thu CSKH; Tất cả = mọi người bán
 // (New + CSKH + người bán chưa có hậu tố SALE / CSKH), có dòng tách bên dưới.
-const REV_LABEL: Record<Seg, string> = { all: 'Doanh thu MKT', sale: 'Doanh thu New', cskh: 'Doanh thu CSKH' };
+const REV_LABEL: Record<Seg, string> = { all: 'Doanh thu MKT', sale: 'Doanh thu chốt', cskh: 'Doanh thu CSKH' };
 const REV_WHO: Record<Seg, string> = { all: 'mọi người bán', sale: 'Sale chốt', cskh: 'CSKH chốt' };
 
 // Hằng số (không tạo mới mỗi lần vẽ) để biểu đồ không chạy lại hiệu ứng mỗi lần số đếm lên.
@@ -192,7 +192,7 @@ const splitOfRow = (m: Row['m']) => 'newNet' in m ? m as Metrics & NewSplit : nu
  *  rankBar: hàng nút "Xếp hạng theo" + số hạng (hạng 1–3 tô màu), anh Vũ 11/11/2026 phương án A, không có thẻ Top.
  *  sheet: bật "So với sheet" thì dưới Chi phí / Doanh thu / Đơn chốt / Số có dòng phụ số sheet và lệch (chỉ khi dòng là marketer). */
 const RANK_KEYS: { k: SortKey; label: string; cost?: boolean; split?: boolean }[] = [
-  { k: 'net', label: 'Doanh thu' }, { k: 'newNet', label: 'DT New', split: true }, { k: 'cskhNet', label: 'DT CSKH', split: true }, { k: 'rate', label: 'TL chốt' },
+  { k: 'net', label: 'Doanh thu' }, { k: 'newNet', label: 'DT chốt', split: true }, { k: 'cskhNet', label: 'DT CSKH', split: true }, { k: 'rate', label: 'TL chốt' },
   { k: 'roas', label: 'ROAS', cost: true }, { k: 'closed', label: 'Đơn chốt' }, { k: 'phones', label: 'Số' }, { k: 'cpcLow', label: 'CP/đơn thấp', cost: true },
 ];
 const RANK_TONE = ['', 'bg-[#fbf1cf] text-[#9a7400] dark:bg-[#3d3414] dark:text-[#f2c94c]', 'bg-surface-3 text-ink-2', 'bg-t-orange-bg text-t-orange'];
@@ -240,7 +240,7 @@ function BreakdownTable({ rows, first, onPick, onOrders, totalCost: _totalCost, 
       <div className="max-w-full overflow-x-auto"><SegmentedControl<SortKey> size="sm" ariaLabel="Xếp hạng theo" value={bar.some((x) => x.k === sort.key) ? sort.key : ('' as SortKey)} onChange={(k) => { sort.setKey(k); sort.setDesc(k !== 'cpcLow'); }} options={bar.map((x) => ({ value: x.k, label: x.label }))} /></div>
     </div>}
     <TableWrap stickyFirst><table className="tbl [&_td]:px-2 [&_th]:px-2">
-      <thead><tr><SortTh k="name" label={first} sort={sort} align="left" />{!noCost && <SortTh k="cost" label="Chi phí" sort={sort} className={on('cost')} />}<SortTh k="net" label="Doanh thu" sort={sort} className={on('net')} />{split && <><SortTh k="newNet" label="DT New" sort={sort} className={on('newNet')} /><SortTh k="cskhNet" label="DT CSKH" sort={sort} className={on('cskhNet')} /></>}{!noCost && <SortTh k="roas" label="ROAS" sort={sort} className={on('roas')} />}<SortTh k="closed" label="Đơn chốt" sort={sort} className={on('closed')} /><SortTh k="phones" label="Số" sort={sort} className={on('phones')} /><SortTh k="rate" label="TL chốt" hint="Đơn chốt ÷ Số, tối đa 100%. Dưới 40% tô đỏ." sort={sort} className={on('rate')} />{!noCost && <><SortTh k="cpc" label="CP/đơn New" sort={sort} className={on('cpcLow')} /><SortTh k="cpl" label="CP/số" sort={sort} /><SortTh k="share" label="% CP/DT New" sort={sort} /></>}</tr></thead>
+      <thead><tr><SortTh k="name" label={first} sort={sort} align="left" />{!noCost && <SortTh k="cost" label="Chi phí" sort={sort} className={on('cost')} />}<SortTh k="net" label="Doanh thu" sort={sort} className={on('net')} />{split && <><SortTh k="newNet" label="DT chốt" sort={sort} className={on('newNet')} /><SortTh k="cskhNet" label="DT CSKH" sort={sort} className={on('cskhNet')} /></>}{!noCost && <SortTh k="roas" label="ROAS" sort={sort} className={on('roas')} />}<SortTh k="closed" label="Đơn chốt" sort={sort} className={on('closed')} /><SortTh k="phones" label="Số" sort={sort} className={on('phones')} /><SortTh k="rate" label="TL chốt" hint="Đơn chốt ÷ Số, tối đa 100%. Dưới 40% tô đỏ." sort={sort} className={on('rate')} />{!noCost && <><SortTh k="cpc" label="CP/đơn New" sort={sort} className={on('cpcLow')} /><SortTh k="cpl" label="CP/số" sort={sort} /><SortTh k="share" label="% CP/DT chốt" sort={sort} /></>}</tr></thead>
       <tbody>{shown.map((r) => {
         const share = r.m.costShare == null ? null : r.m.costShare * 100;
         const rk = rankBar && !r.id.startsWith('__') ? ++rank : null;
@@ -289,7 +289,7 @@ function BreakdownTable({ rows, first, onPick, onOrders, totalCost: _totalCost, 
 /** Tách doanh thu MKT khi xem Tất cả: New (Sale chốt), CSKH chốt, và người bán ngoài hai bộ phận nếu có. Bấm một ô thì đổi nút đầu trang sang bộ phận đó. */
 function SplitStrip({ cur, prev, total }: { cur: Split; prev: Split; total: number }) {
   const parts = [
-    { key: 'sale' as const, label: 'Doanh thu New', who: 'Sale chốt', tone: 'var(--primary)' },
+    { key: 'sale' as const, label: 'Doanh thu chốt', who: 'Sale chốt', tone: 'var(--primary)' },
     { key: 'cskh' as const, label: 'Doanh thu CSKH', who: 'CSKH chốt', tone: 'var(--t-blue)' },
     { key: 'other' as const, label: 'Người bán khác', who: 'chưa có hậu tố SALE, CSKH', tone: 'var(--ink-4)' },
   ].filter((x) => x.key !== 'other' || cur.other.closed || cur.other.net);
@@ -425,7 +425,7 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
         {!noCost && <><Stat icon={Coins} label="Chi phí / đơn New" value={c.costPerClosed === null ? '—' : shortMoney(c.costPerClosed)} d={c.costPerClosed !== null && p.costPerClosed !== null ? delta(c.costPerClosed, p.costPerClosed) : null} invert prevText={`trước ${p.costPerClosed === null ? '—' : shortMoney(p.costPerClosed)}`} spark={spark((m) => m.costPerClosed, shortMoney)} onClick={onOpen} />
         <Stat icon={Megaphone} label="Chi phí / số" value={c.costPerLead === null ? '—' : shortMoney(c.costPerLead)} d={c.costPerLead !== null && p.costPerLead !== null ? delta(c.costPerLead, p.costPerLead) : null} invert prevText={`trước ${p.costPerLead === null ? '—' : shortMoney(p.costPerLead)}`} spark={spark((m) => m.costPerLead, shortMoney)} onClick={onOpen} />
         {/* % chi phí / DT New lên ô riêng cho dễ thấy (anh Vũ 07/11/2026: "phần trăm chi phí trên doanh thu đâu"). */}
-        <Stat icon={Percent} label="% chi phí / DT New" value={c.costShare == null ? '—' : pctText(c.costShare)} d={c.costShare != null && p.costShare != null ? delta(c.costShare, p.costShare) : null} invert prevText={`trước ${p.costShare == null ? '—' : pctText(p.costShare)}`} spark={spark((m) => m.costShare ?? null, pctText)} onClick={onOpen} /></>}
+        <Stat icon={Percent} label="% chi phí / DT chốt" value={c.costShare == null ? '—' : pctText(c.costShare)} d={c.costShare != null && p.costShare != null ? delta(c.costShare, p.costShare) : null} invert prevText={`trước ${p.costShare == null ? '—' : pctText(p.costShare)}`} spark={spark((m) => m.costShare ?? null, pctText)} onClick={onOpen} /></>}
       </div>
 
       {timeRows.length > 1 && (
