@@ -28,8 +28,8 @@ async function fixture(schedule?: ReportSchedule) {
   const hour = () => new Date(clock + 7 * 3600000).getUTCHours();
   const snapshot = async (_leader: Contact, day: string) => ({ total: day === '2026-10-26' ? 90 : hour() * 100, orders: hour(), people: { a: { name: 'Nhân viên demo SALE', total: hour() * 100, orders: hour() } } });
   const morningData = async (_leader: Contact, today: string) => ({ team: 'Team demo', dept: 'sale' as const, today, days: [{ day: '2026-10-26', net: 90_000_000, orders: 9, created: 20, createdClosed: 8 }], monthNet: 900_000_000, goal: null, workingDays: null, people: [] });
-  // Zalo giả không nhận ảnh → bản chữ đi vào messages (để đọc được nội dung).
-  const sendPhoto = async () => false;
+  // Zalo giả nhận ảnh, ghi chữ kèm ảnh vào messages để đọc nội dung (từ 20/11/2026 sếp không còn nhận bản chữ thay ảnh, ảnh lỗi thì chờ gửi lại).
+  const sendPhoto = async (chat: string, _url: string, caption: string) => { messages.push({ chat, text: caption }); return true; };
   // Lượt gửi thử cho sếp chỉ chạy một lần; coi như đã gửi.
   raw.prepare("INSERT INTO app_settings (key,value,updated_at) VALUES ('zalo_tick_v1','{\"morningTest\":\"anh-1\"}','2026-10-27T00:00:00Z')").run();
   if (schedule) await writeZaloSetting(db, REPORT_SCHEDULE_KEY, schedule);

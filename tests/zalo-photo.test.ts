@@ -33,18 +33,24 @@ void test('gửi ảnh Zalo: tải ảnh trước, đưa Zalo đường sau chuy
     assert.ok(errors.some((e) => e.includes('HTTP 400') && e.includes('mã 408') && e.includes('Không tải được ảnh')), 'log có lý do');
     assert.ok(!errors.some((e) => e.includes('khoa-gia')), 'log không có khoá bot');
     calls.length = 0; sentPhotos.length = 0; zaloCalls = 0; failFirst = 2;
-    assert.equal(await sendZaloPhoto('khoa-gia', 'chat-1', OLD, 'chú thích'), false, '2 lần lỗi: nơi gọi gửi bản chữ');
+    assert.equal(await sendZaloPhoto('khoa-gia', 'chat-1', OLD, 'chú thích'), false, '2 lần lỗi: trả false (sếp: chờ gửi lại ảnh; leader: bản chữ)');
     assert.deepEqual(calls, ['anh', 'zalo', 'zalo'], 'chỉ gửi lại 1 lần');
-    // Tải ảnh trước bị lỗi (không phải ảnh): vẫn gửi Zalo đường gốc như cũ.
+    // Tải ảnh trước trả về không phải ảnh (200): vẫn gửi Zalo đường gốc như cũ.
     sentPhotos.length = 0;
+    let warmStatus = 200;
     globalThis.fetch = (async (url: string | URL, init?: RequestInit) => {
-      if (!String(url).includes('zaloplatforms')) return new Response('lỗi', { status: 500 });
+      if (!String(url).includes('zaloplatforms')) return new Response('lỗi', { status: warmStatus, headers: { 'content-type': 'text/html' } });
       sentPhotos.push((JSON.parse(init?.body as string) as { photo: string }).photo);
       return Response.json({ ok: true, result: {} });
     }) as typeof fetch;
     assert.equal(await sendZaloPhoto('khoa-gia', 'chat-1', OLD, 'chú thích'), true);
     assert.deepEqual(sentPhotos, [OLD]);
-    assert.ok(errors.some((e) => e.includes('zalo photo warm: HTTP 500')));
+    assert.ok(errors.some((e) => e.includes('zalo photo warm: HTTP 200')));
+    // Tải ảnh trước lỗi 5xx (vd 530 khi đường hầm chết, 20/11/2026): Zalo cũng không tải được, không gọi Zalo, trả false để nơi gọi chờ gửi lại.
+    sentPhotos.length = 0; warmStatus = 530;
+    assert.equal(await sendZaloPhoto('khoa-gia', 'chat-1', OLD, 'chú thích'), false);
+    assert.deepEqual(sentPhotos, []);
+    assert.ok(errors.some((e) => e.includes('zalo photo warm: HTTP 530')));
   } finally { globalThis.fetch = original; console.error = originalError; photoRetry.ms = 20000; raw.close(); }
 });
 

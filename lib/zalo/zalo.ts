@@ -37,7 +37,7 @@ export async function sendZaloPhoto(token: string | undefined, chatId: string, p
   if (env.DEMO_MODE === '1') { await sendZalo(token, chatId, `[Ảnh] ${photoUrl}\n${caption}`, db, now); return true; }
   if (!token?.trim()) return false;
   // 17/11/2026: 12h và 17h ảnh không tới (web bận, Zalo tải ảnh quá lâu). Vẽ sẵn ảnh trước (đường ảnh giữ ảnh đã vẽ 30 phút),
-  // gửi; lỗi thì ghi lý do, chờ 20 giây gửi lại 1 lần; vẫn lỗi thì nơi gọi gửi bản chữ như cũ.
+  // gửi; lỗi thì ghi lý do, chờ 20 giây gửi lại 1 lần; vẫn lỗi thì trả false: báo cáo sếp vào hàng chờ ảnh (lib/zalo/photo-wait.ts), leader nhận bản chữ.
   // Đường ảnh trên tên miền cũ trả 307 sang posmegatech.com; Zalo có thể không đi theo chuyển hướng (từ 22h 16/11/2026 mọi ảnh đều hỏng).
   // Tự tải ảnh trước: vừa vẽ sẵn, vừa lấy đường cuối cùng sau chuyển hướng để đưa Zalo đúng đường trả thẳng ảnh PNG.
   let url = photoUrl;
@@ -46,6 +46,8 @@ export async function sendZaloPhoto(token: string | undefined, chatId: string, p
     await r.arrayBuffer();
     if (r.ok && (r.headers.get('content-type') ?? '').startsWith('image/') && r.url.startsWith('https://')) url = r.url;
     else console.error(`zalo photo warm: HTTP ${r.status} ${r.headers.get('content-type') ?? ''}`);
+    // 5xx (vd 530 khi đường hầm Cloudflare chết, 20/11/2026): Zalo cũng không tải được ảnh, khỏi gửi; nơi gọi giữ ảnh chờ gửi lại.
+    if (r.status >= 500) return false;
   } catch (e) { console.error('zalo photo warm failed', e instanceof Error ? e.message : e); }
   for (let attempt = 1; attempt <= 2; attempt++) {
     try { await call(token.trim(), 'sendPhoto', { chat_id: chatId, photo: url, caption: caption.slice(0, 2000) }, 30000); return true; }

@@ -6,6 +6,7 @@ import { countedFilter, teamFilter } from '@/lib/teams/team';
 import { todayVn, addDays, vnDayStartUtc, vnRangeUtc } from '@/lib/shared/report-time';
 import { createZaloSender, sendZaloPhoto } from '@/lib/zalo/zalo';
 import { saveMorningImage, pruneMorningImages } from '@/lib/zalo/morning-store';
+import { queuePhoto, retryWaitingPhotos } from '@/lib/zalo/photo-wait';
 import { webOrigin } from '@/lib/notify/origin';
 import { logMessage, pruneMessages, type ChatKind } from '@/lib/zalo/zalo-chat';
 import { loadReportTargets } from '@/lib/zalo/team-link';
@@ -113,14 +114,14 @@ export async function sendBossReportNow(db: D1Database, day: string, hour: strin
   const bosses = (await listContacts(db)).filter((c) => c.active && c.kind === 'boss' && c.chat_id);
   if (!bosses.length) return [];
   const data = await (opts.bossData ?? bossReportData)(day, hour, morning, at, db);
-  const sender = opts.send ?? createZaloSender(db);
   const photo = opts.sendPhoto ?? ((chatId: string, url: string, caption: string) => sendZaloPhoto(env.ZALO_BOT_TOKEN, chatId, url, caption, db));
   const out: { name: string; part: 1 | 2; photo: boolean }[] = [];
   for (const c of bosses) for (const part of [1, 2] as const) {
     const text = (part === 1 ? bossText(data) : `Chi tiết & cảnh báo · ${data.title}`).slice(0, 2000);
     const id = await saveMorningImage(db, { kind: 'bossReport', part, data }, Date.now());
     const ok = await photo(c.chat_id!, `${webOrigin()}/api/zalo/anh/${id}`, text);
-    if (!ok) { try { await sender(c.chat_id!, text); } catch { console.error('zalo boss now send failed'); } }
+    // Ảnh chưa gửi được: chờ gửi lại ảnh (lib/zalo/photo-wait.ts), không gửi bản chữ thay ảnh (anh Vũ 20/11/2026).
+    if (!ok) await queuePhoto(db, { imageId: id, chatId: c.chat_id!, caption: text, label: `${part === 1 ? 'tổng quan' : 'chi tiết'} ${data.title}`, first: Date.now() }, Date.now());
     out.push({ name: c.name, part, photo: ok });
   }
   return out;
@@ -143,10 +144,17 @@ async function maybeBossNow(db: D1Database) {
 export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database; send?: ZaloSend; snapshot?: typeof zaloTeamSnapshot; morningData?: typeof zaloMorningData; sendPhoto?: ZaloPhotoSend; kpi2?: typeof zaloKpi2;
   /** Số báo cáo sếp (test thay bằng số giả). */ bossData?: typeof bossReportData;
   /** Gửi ảnh gộp doanh số các team kiểu cũ (chỉ còn dùng trong test cũ). */ legacyBossSlot?: boolean;
-  /** Chạy sổ nhắc việc trong test (production luôn chạy). */ memo?: boolean } = {}) {
+  /** Chạy sổ nhắc việc trong test (production luôn chạy). */ memo?: boolean;
+  /** Thử lại ảnh đang chờ trong test (production luôn chạy). */ photoWait?: boolean } = {}) {
   if (env.DEMO_MODE !== '1' && !env.ZALO_BOT_TOKEN?.trim()) return;
   const db = options.db ?? env.DB;
   if (!options.db) await maybeBossNow(db);
+  // Ảnh báo cáo sếp đang chờ gửi lại (2 phút một lần, tối đa 60 phút). Chạy mỗi phút, trước mọi điều kiện thoát sớm.
+  if (!options.db || options.photoWait) {
+    const retryPhoto = options.sendPhoto ?? ((chatId: string, url: string, caption: string) => sendZaloPhoto(env.ZALO_BOT_TOKEN, chatId, url, caption, db, now));
+    const textSender = options.send ?? createZaloSender(db, now);
+    await retryWaitingPhotos(db, now, retryPhoto, (chatId, t) => textSender(chatId, t), (id) => `${webOrigin()}/api/zalo/anh/${id}`).catch((e) => console.error('zalo photo wait failed', e));
+  }
   // Sổ nhắc việc (lib/zalo/memo.ts): đóng sổ im 15 phút, nhắc việc có hẹn, tin 8h15. Lỗi không chặn phần còn lại.
   if (!options.db || options.memo) await memoTick(db, now, options.send ?? createZaloSender(db, now)).catch((e) => console.error('zalo memo tick failed', e));
   const local = new Date(now + 7 * 3600000).toISOString(), day = todayVn(now), time = local.slice(11, 16), hour = local.slice(11, 13);
@@ -204,7 +212,9 @@ export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database
     if (await photo(c.chat_id, `${webOrigin()}/api/zalo/anh/${id}`, text)) {
       sent++;
       if (c.kind !== 'boss') await logMessage(db, { contactId: c.id, dir: 'out', kind: 'text', body: `[Ảnh ${label}]\n` + text, delivered: true, now });
-    } else await send(c, text);
+    } else if (c.kind === 'boss') await queuePhoto(db, { imageId: id, chatId: c.chat_id, caption: text, label, first: now }, now);
+    // Leader / nhân viên giữ cách cũ: không có ảnh thì gửi bản chữ.
+    else await send(c, text);
   };
   const sendMorning = (c: Contact, report: MorningReport, prefix = '') => sendImage(c, report, prefix + morningText(report), `báo cáo ${timeLabel(schedule.morning.time)}`);
   if (morning || slot) {
@@ -267,8 +277,8 @@ export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database
         for (const full of kinds) {
           const data = await (options.bossData ?? bossReportData)(day, key.slice(0, 2), full, now, db);
           for (const boss of bosses) {
-            await sendImage(boss, { kind: 'bossReport', part: 1, data }, bossText(data), 'báo cáo tổng quan');
-            await sendImage(boss, { kind: 'bossReport', part: 2, data }, `Chi tiết & cảnh báo · ${data.title}`, 'chi tiết & cảnh báo');
+            await sendImage(boss, { kind: 'bossReport', part: 1, data }, bossText(data), `tổng quan ${data.title}`);
+            await sendImage(boss, { kind: 'bossReport', part: 2, data }, `Chi tiết & cảnh báo · ${data.title}`, `chi tiết ${data.title}`);
           }
         }
       } catch (e) { console.error('zalo boss report failed', e); }

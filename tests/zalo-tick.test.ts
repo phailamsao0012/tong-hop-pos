@@ -32,7 +32,9 @@ void test('Z4 clock: morning once, slot deltas at 12/17/22, disabled reports', a
   await f.tick('08:00'); assert.equal(f.messages.length, 1); assert.match(f.messages[0].text, /Doanh số hôm qua: 90 tr/);
   await f.tick('08:00'); await f.tick('08:01'); assert.equal(f.messages.length, 1);
   await f.tick('12:00'); assert.match(f.messages[1].text, /^📊 Team demo\nBáo cáo 12h thứ Ba 27\/10 · số từ 0h tới 12h\nDoanh số tới 12h: 0 tr/); assert.match(f.messages[1].text, /Đơn chốt 12 ·/);
-  await f.tick('17:00'); await f.tick('22:00'); assert.match(f.messages.at(-2)!.text, /Báo cáo 22h/); assert.match(f.messages.at(-2)!.text, /Đơn chốt 22/); assert.match(f.messages.at(-1)!.text, /^Doanh số các team\nTeam demo · khung 17h–22h: 500/);
+  await f.tick('17:00'); await f.tick('22:00'); assert.match(f.messages.at(-1)!.text, /Báo cáo 22h/); assert.match(f.messages.at(-1)!.text, /Đơn chốt 22/);
+  // Sếp không nhận bản chữ thay ảnh nữa (20/11/2026): ảnh lỗi thì chờ gửi lại; nội dung nằm ở chữ kèm ảnh.
+  assert.match(f.photos.at(-1)!.caption, /^Doanh số các team\nTeam demo · khung 17h–22h: 500/); assert(!f.messages.some((m) => m.chat === f.boss.id));
   await writeZaloSetting(f.db, 'zalo_settings_v1', { ...DEFAULT_ZALO_SETTINGS, slotReports: false });
   await writeZaloSetting(f.db, 'zalo_tick_v1', { morningTest: 'anh-1' }); f.messages.length = 0; await f.tick('12:00'); assert.equal(f.messages.length, 0);
 });
@@ -49,10 +51,10 @@ void test('báo cáo 8h: gửi ảnh kèm chữ; Zalo không nhận ảnh thì g
   await f.tick('09:31'); assert.equal(f.photos.length, 1);
 });
 void test('Z4 missing snapshot explicitly says from start of day; morning disabled still captures 08', async () => {
-  const f = await fixture(); await f.tick('12:00'); assert.match(f.messages[0].text, /số từ 0h tới 12h/); assert.match(f.messages[1].text, /từ đầu ngày tới 12h|khung 8h–12h/);
+  const f = await fixture(); await f.tick('12:00'); assert.match(f.messages[0].text, /số từ 0h tới 12h/); assert.match(f.photos.at(-1)!.caption, /từ đầu ngày tới 12h|khung 8h–12h/);
   await writeZaloSetting(f.db, 'zalo_tick_v1', {});
   await writeZaloSetting(f.db, 'zalo_settings_v1', { ...DEFAULT_ZALO_SETTINGS, morningBrief: false });
-  f.messages.length = 0; await f.tick('08:00'); assert.equal(f.messages.length, 0); await f.tick('12:00'); assert.match(f.messages[0].text, /Đơn chốt 12/); assert.match(f.messages[1].text, /khung 8h–12h: 400/);
+  f.messages.length = 0; await f.tick('08:00'); assert.equal(f.messages.length, 0); await f.tick('12:00'); assert.match(f.messages[0].text, /Đơn chốt 12/); assert.match(f.photos.at(-1)!.caption, /khung 8h–12h: 400/);
 });
 void test('Z4 due alerts go to recipient and assigner; meeting reminds once except declined/cancelled', async () => {
   const f = await fixture();
