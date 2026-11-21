@@ -20,6 +20,8 @@ import { SheetCostLink } from './sheet-cost-link';
 import { Th, ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, dmy, money, pct, shortMoney, toast, useSort, vi } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
 import { SegmentHintNote } from './segment-hint-note';
+import { NumDetail } from './num-detail';
+import { mktCellDetail, type MktCell, type MktNumbers } from '@/lib/shared/num-detail';
 
 type Roas = Awaited<ReturnType<typeof roasReport>>;
 type Draft = { day: string; marketerId: string; amount: number; campaign?: string; note?: string };
@@ -59,6 +61,9 @@ export function MktRoasView({ owner = false }: { owner?: boolean }) {
   const days = useMemo(() => { const out: { day: string; amount: number }[] = []; const m = new Map((r?.daily ?? []).map((d) => [d.day, d.amount]));
     for (let d = start; d <= end && out.length < 400; d = addDays(d, 1)) out.push({ day: d, amount: m.get(d) ?? 0 }); return out; }, [r, start, end]);
   const periodLabel = `${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`;
+  // Khung chi tiết khi rê chuột vào số trong bảng (lib/shared/num-detail.ts), dựng từ số dòng đã có.
+  const detailScope = `${periodLabel} · ${posIds.length >= POS.length ? 'mọi POS' : `${posIds.length}/${POS.length} POS`}`;
+  const dt = (cell: MktCell, x: MktNumbers & { name: string }) => mktCellDetail(cell, x, { name: x.name, scope: detailScope });
 
   const save = async (list: Draft[]) => {
     setBusy(true);
@@ -202,15 +207,15 @@ export function MktRoasView({ owner = false }: { owner?: boolean }) {
                   <tbody>{rows.map((x) => (
                     <tr key={x.marketerId}>
                       <td className="text-left font-medium text-ink">{x.name}{x.department && <span className="block text-[11px] font-normal text-ink-3">{x.department}</span>}</td>
-                      <td className="n">{x.cost ? shortMoney(x.cost) : <span className="text-ink-4">—</span>}</td>
-                      <td className="n">{shortMoney(x.net)}{team === 'all' && <small className="block text-ink-3">New {shortMoney(x.newNet)} · CSKH {shortMoney(x.cskhNet)} · Khác {shortMoney(x.otherNet)}</small>}</td>
-                      {team === 'all' && <><td className="n">{shortMoney(x.newNet)}</td><td className="n text-ink-3">{shortMoney(x.cskhNet)}</td></>}
-                      <td className={`n font-semibold ${x.roas === null ? '' : x.roas >= 3 ? 'text-good' : x.roas >= 1.5 ? 'text-warn' : 'text-bad'}`}>{roasText(x.roas)}</td>
-                      <td className="n">{vi.format(x.phones)}</td>
-                      <td className="n">{shortMoney(x.costPerLead)}</td>
+                      <td className="n">{x.cost ? <NumDetail spec={dt('cost', x)}>{shortMoney(x.cost)}</NumDetail> : <span className="text-ink-4">—</span>}</td>
+                      <td className="n"><NumDetail spec={dt('net', x)}>{shortMoney(x.net)}</NumDetail>{team === 'all' && <small className="block text-ink-3">New {shortMoney(x.newNet)} · CSKH {shortMoney(x.cskhNet)} · Khác {shortMoney(x.otherNet)}</small>}</td>
+                      {team === 'all' && <><td className="n"><NumDetail spec={dt('newNet', x)}>{shortMoney(x.newNet)}</NumDetail></td><td className="n text-ink-3"><NumDetail spec={dt('cskhNet', x)}>{shortMoney(x.cskhNet)}</NumDetail></td></>}
+                      <td className={`n font-semibold ${x.roas === null ? '' : x.roas >= 3 ? 'text-good' : x.roas >= 1.5 ? 'text-warn' : 'text-bad'}`}><NumDetail spec={dt('roas', x)}>{roasText(x.roas)}</NumDetail></td>
+                      <td className="n"><NumDetail spec={dt('phones', x)}>{vi.format(x.phones)}</NumDetail></td>
+                      <td className="n"><NumDetail spec={dt('cpl', x)}>{shortMoney(x.costPerLead)}</NumDetail></td>
                       <td className="n">{vi.format(team === 'cskh' ? x.closed : x.newOrders)}</td>
-                      <td className="n" title="Chi phí ÷ DT chốt">{pct(x.costShare === null ? null : x.costShare * 100)}</td>
-                      <td className="n">{shortMoney(x.costPerClosed)}</td>
+                      <td className="n"><NumDetail spec={dt('share', x)}>{pct(x.costShare === null ? null : x.costShare * 100)}</NumDetail></td>
+                      <td className="n"><NumDetail spec={dt('cpc', x)}>{shortMoney(x.costPerClosed)}</NumDetail></td>
                       <td className="n">{pct(x.closeRate)}</td>
                       <td className="n">{pct(x.returnRate)}</td>
                     </tr>

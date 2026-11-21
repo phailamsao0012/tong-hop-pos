@@ -15,9 +15,12 @@ import type { LucideIcon } from 'lucide-react';
 import { Area, Bar, BarChart, CartesianGrid, ComposedChart, LabelList, XAxis, YAxis } from 'recharts';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip } from '@/components/ui/chart';
 import { CountUp } from './ui/count-up';
-import { Th, DeltaPill, EmptyState, StatusChip, orderStatusTone, SegmentedControl, SortTh, TableWrap, delta, dmy, money, short, shortMoney, useSort, vi } from './ui-kit';
+import { Th, DeltaPill, EmptyState, StatusChip, orderStatusTone, SegmentedControl, SortTh, TableWrap, delta, dmy, money, posName, short, shortMoney, useSort, vi } from './ui-kit';
 import { useApi } from './use-api';
 import { closeRateClass, ratePctCapped } from '@/lib/shared/close-rate';
+import { NumDetail } from './num-detail';
+import { mktCellDetail, type MktCell, type MktNumbers } from '@/lib/shared/num-detail';
+import { POS } from '@/lib/shared/report-model';
 import { compareSheet, gapOf, verdict, type SheetCheckData, type SheetCompare } from '@/lib/shared/mkt-sheet-compare';
 import { MktSheetCheck } from './mkt-sheet-check';
 import { useMotionOK } from './ui/motion';
@@ -205,7 +208,7 @@ function SheetLine({ sheet, pos, fmt, label = 'sheet' }: { sheet: number; pos: n
     {label} {fmt(sheet)} · {sign}{fmt(Math.abs(g.diff))} <StatusChip tone={v.tone}>{v.text}</StatusChip>
   </span>;
 }
-function BreakdownTable({ rows, first, onPick, onOrders, totalCost: _totalCost, keepOrder, showSplit = false, profile = false, noCost = false, onDetail, rankBar = false, sheet = null }: { rows: Row[]; first: string; onPick?: (id: string) => void; onOrders?: (row: Row, kind: OrderKind) => void; totalCost: number; keepOrder?: boolean; showSplit?: boolean; profile?: boolean; noCost?: boolean; onDetail?: (id: string) => void; rankBar?: boolean; sheet?: SheetCompare | null }) {
+function BreakdownTable({ rows, first, onPick, onOrders, totalCost: _totalCost, keepOrder, showSplit = false, profile = false, noCost = false, onDetail, rankBar = false, sheet = null, scope = '' }: { scope?: string; rows: Row[]; first: string; onPick?: (id: string) => void; onOrders?: (row: Row, kind: OrderKind) => void; totalCost: number; keepOrder?: boolean; showSplit?: boolean; profile?: boolean; noCost?: boolean; onDetail?: (id: string) => void; rankBar?: boolean; sheet?: SheetCompare | null }) {
   const profileOn = useProfileEnabled();
   const sort = useSort<SortKey>('net');
   const shown = keepOrder && sort.key === 'net' && sort.desc ? rows : sort.apply(rows, (r, k) => {
@@ -235,6 +238,8 @@ function BreakdownTable({ rows, first, onPick, onOrders, totalCost: _totalCost, 
   const bar = RANK_KEYS.filter((x) => (!x.cost || !noCost) && (!x.split || split));
   let rank = 0;
   const sh = (id: string) => sheet?.byMarketer.get(id);
+  // Khung chi tiết khi rê chuột vào số (lib/shared/num-detail.ts): dựng từ số dòng đã có, không gọi thêm API.
+  const dt = (cell: MktCell, r: Row) => mktCellDetail(cell, { ...r.m, ...splitOfRow(r.m) } as MktNumbers, { name: r.name, scope, prevNet: r.prevNet, ordersHint: !!onOrders && (cell === 'newNet' || cell === 'cskhNet') });
   return (<>
     {rankBar && <div className="mb-2 flex min-w-0 flex-wrap items-center gap-2">
       <span className="text-[12.5px] font-semibold text-ink-2">Xếp hạng theo</span>
@@ -263,23 +268,23 @@ function BreakdownTable({ rows, first, onPick, onOrders, totalCost: _totalCost, 
               </span>
               {(r.sub || r.note) && <span className="block max-w-72 whitespace-normal text-[11px] font-normal leading-snug text-ink-3">{[r.sub, r.note].filter(Boolean).join(' · ')}</span>}
             </td>
-            {!noCost && <td className={`n ${on('cost')}`}><span title={money(r.m.cost)}>{shortMoney(r.m.cost)}</span>{cmp && <span className="block w-0 min-w-full whitespace-normal text-[11px] font-normal text-ink-3" title={`Chi phí QC marketer ghi trên sheet: ${money(x.sheet.cost)}`}>CP sheet {shortMoney(x.sheet.cost)}</span>}</td>}
-            <td className={`n font-semibold ${on('net')}`}><span title={money(r.m.net)}>{shortMoney(r.m.net)}</span>{r.prevNet !== undefined && (r.prevNet || r.m.net) > 0 && <span className="block"><DeltaPill value={delta(r.m.net, r.prevNet)} variant="plain" /></span>}
+            {!noCost && <td className={`n ${on('cost')}`}><NumDetail spec={dt('cost', r)}>{shortMoney(r.m.cost)}</NumDetail>{cmp && <span className="block w-0 min-w-full whitespace-normal text-[11px] font-normal text-ink-3" title={`Chi phí QC marketer ghi trên sheet: ${money(x.sheet.cost)}`}>CP sheet {shortMoney(x.sheet.cost)}</span>}</td>}
+            <td className={`n font-semibold ${on('net')}`}><NumDetail spec={dt('net', r)}>{shortMoney(r.m.net)}</NumDetail>{r.prevNet !== undefined && (r.prevNet || r.m.net) > 0 && <span className="block"><DeltaPill value={delta(r.m.net, r.prevNet)} variant="plain" /></span>}
               {cmp && (!x.counted ? <span className="block text-[11px] font-normal text-warn">không so (chưa có hậu tố MKT)</span> : x.noSheet ? <span className="block text-[11px] font-normal text-ink-3">sheet chưa ghi</span> : <SheetLine sheet={x.sheet.revenue} pos={x.posNet} fmt={shortMoney} />)}</td>
             {split && (() => {
               const y = splitOfRow(r.m);
               const count = (n: number, kind: OrderKind) => onOrders && n > 0 && r.id !== '__unassigned'
                 ? <button type="button" onClick={() => onOrders(r, kind)} className="block w-full text-right text-[11px] text-primary underline decoration-dotted underline-offset-2 tap" title="Bấm xem danh sách đơn">{vi.format(n)} đơn</button>
                 : <span className="block text-[11px] text-ink-3">{vi.format(n)} đơn</span>;
-              return <><td className={`n ${on('newNet')}`}>{y ? shortMoney(y.newNet) : '—'}{y && count(y.newOrders, 'new')}</td><td className={`n ${on('cskhNet')}`}>{y ? shortMoney(y.cskhNet) : '—'}{y && count(y.cskhOrders, 'cskh')}</td></>;
+              return <><td className={`n ${on('newNet')}`}>{y ? <NumDetail spec={dt('newNet', r)}>{shortMoney(y.newNet)}</NumDetail> : '—'}{y && count(y.newOrders, 'new')}</td><td className={`n ${on('cskhNet')}`}>{y ? <NumDetail spec={dt('cskhNet', r)}>{shortMoney(y.cskhNet)}</NumDetail> : '—'}{y && count(y.cskhOrders, 'cskh')}</td></>;
             })()}
-            {!noCost && <td className={`n font-semibold ${on('roas')}`}>{roasText(r.m.roas)}</td>}
-            <td className={`n ${on('closed')}`}>{vi.format(r.m.closed)}{cmp && x.counted && !x.noSheet && <SheetLine sheet={x.sheet.orders} pos={x.posClosed} fmt={(n) => vi.format(n)} />}</td>
-            <td className={`n ${on('phones')}`}>{vi.format(r.m.phones)}{cmp && x.counted && !x.noSheet && <SheetLine sheet={x.sheet.phones} pos={x.posPhones} fmt={(n) => vi.format(n)} />}</td>
-            <td className={`n ${on('rate')} ${closeRateClass(rate)}`} title={`${vi.format(r.m.closed)} đơn chốt / ${vi.format(r.m.phones)} số`}>{rate === null ? '—' : `${rate.toFixed(1).replace('.', ',')}%`}</td>
-            {!noCost && <><td className={`n ${on('cpcLow')}`}>{r.m.costPerClosed === null ? '—' : shortMoney(r.m.costPerClosed)}</td>
-            <td className="n">{r.m.costPerLead === null ? '—' : shortMoney(r.m.costPerLead)}</td>
-            <td className="n" aria-label={`${(share ?? 0).toFixed(1)}% chi phí`}><span className="num">{share === null ? '—' : `${share.toFixed(1).replace('.', ',')}%`}</span></td></>}
+            {!noCost && <td className={`n font-semibold ${on('roas')}`}><NumDetail spec={dt('roas', r)}>{roasText(r.m.roas)}</NumDetail></td>}
+            <td className={`n ${on('closed')}`}><NumDetail spec={dt('closed', r)}>{vi.format(r.m.closed)}</NumDetail>{cmp && x.counted && !x.noSheet && <SheetLine sheet={x.sheet.orders} pos={x.posClosed} fmt={(n) => vi.format(n)} />}</td>
+            <td className={`n ${on('phones')}`}><NumDetail spec={dt('phones', r)}>{vi.format(r.m.phones)}</NumDetail>{cmp && x.counted && !x.noSheet && <SheetLine sheet={x.sheet.phones} pos={x.posPhones} fmt={(n) => vi.format(n)} />}</td>
+            <td className={`n ${on('rate')} ${closeRateClass(rate)}`}><NumDetail spec={dt('rate', r)}>{rate === null ? '—' : `${rate.toFixed(1).replace('.', ',')}%`}</NumDetail></td>
+            {!noCost && <><td className={`n ${on('cpcLow')}`}><NumDetail spec={dt('cpc', r)}>{r.m.costPerClosed === null ? '—' : shortMoney(r.m.costPerClosed)}</NumDetail></td>
+            <td className="n"><NumDetail spec={dt('cpl', r)}>{r.m.costPerLead === null ? '—' : shortMoney(r.m.costPerLead)}</NumDetail></td>
+            <td className="n" aria-label={`${(share ?? 0).toFixed(1)}% chi phí`}><NumDetail spec={dt('share', r)} className="num">{share === null ? '—' : `${share.toFixed(1).replace('.', ',')}%`}</NumDetail></td></>}
           </tr>
         );
       })}</tbody>
@@ -341,6 +346,7 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
   const [dayView, setDayView] = useState(false);
   const sheetUrl = cmpOn && !noCost ? `/api/marketing/sheet-check?${new URLSearchParams({ start, end, posIds: posIds.join(',') })}` : null;
   const sheetApi = useApi<SheetCheckData>(sheetUrl, { keep: true });
+  const detailScope = `${range(start, end)} · ${posIds.length >= POS.length ? 'mọi POS' : posIds.map(posName).join(', ')}`;
   const sheet = useMemo(() => sheetApi.data && cmpOn ? compareSheet(sheetApi.data, seg === 'sale' ? 'sale' : seg === 'cskh' ? 'cskh' : 'net') : null, [sheetApi.data, cmpOn, seg]);
   const { data, loading, error, reload } = useApi<Analytics>(url, { keep: true });
   const motionOn = useMotionOK();
@@ -474,7 +480,7 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
             })}
           </span>}
         </div>}
-        <BreakdownTable rows={tabRows} first={tab === 'people' ? 'Marketer' : tab === 'teams' ? 'Team' : tab === 'products' ? 'Sản phẩm' : data.bucket === 'day' ? 'Ngày' : data.bucket === 'week' ? 'Tuần' : 'Tháng'}
+        <BreakdownTable scope={detailScope} rows={tabRows} first={tab === 'people' ? 'Marketer' : tab === 'teams' ? 'Team' : tab === 'products' ? 'Sản phẩm' : data.bucket === 'day' ? 'Ngày' : data.bucket === 'week' ? 'Tuần' : 'Tháng'}
           rankBar={tab === 'people' || tab === 'teams'} sheet={tab === 'people' ? sheet : null}
           onPick={onPick} totalCost={totalCost} keepOrder={tab === 'time'} showSplit={shown === 'all'} profile={tab === 'people'} noCost={noCost} onDetail={tab === 'people' ? onDetail : undefined}
           onOrders={product === null && (tab === 'people' || tab === 'teams') ? (row, kind) => setOrders({ row, kind, team: tab === 'teams' }) : undefined} />
