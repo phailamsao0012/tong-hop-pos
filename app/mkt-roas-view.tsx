@@ -219,6 +219,7 @@ export function MktRoasView({ owner = false }: { owner?: boolean }) {
                 </table>
               </TableWrap>
             ) : <EmptyState text="Chưa có đơn nào có marketer trong kỳ." />}
+            {!!r.unmatchedSheet?.length && <p className="mt-2 text-[12px] text-ink-3">Tên trên sheet chưa ghép với POS (không cộng vào chi phí, ROAS): {r.unmatchedSheet.map((u) => `${u.name} ${shortMoney(u.cost)}`).join(', ')}. Ghép tên với tài khoản POS để tính chi phí cho đúng người.</p>}
           </ChartCard>
 
           <ChartCard icon={Wallet} title={`Các dòng chi phí · ${r.entries.length}`} subtitle="Mới nhất trước · xóa dòng nhập sai rồi nhập lại">

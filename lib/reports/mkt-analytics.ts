@@ -8,9 +8,9 @@ import { saleTeamSql } from '@/lib/teams/sale-team-filter';
 // Sản phẩm: cột "Sản phẩm" của sheet (lưu ở ad_costs.campaign). Đơn Pancake thuộc sản phẩm đó khi nhãn đơn hoặc tên sản phẩm trong đơn chứa đúng tên ấy
 // (so không dấu, bỏ dấu cách); "Kháng sinh" / "Combo" dùng nhóm chính của web. Một đơn nhiều sản phẩm được tính ở mỗi sản phẩm.
 import { env } from 'cloudflare:workers';
-import { ensureAdCostSchema, mktTotal, emptyNewSplit, newSplitSql, type NewSplit } from '@/lib/ops/ad-costs';
+import { ensureAdCostSchema, mktTotal, emptyNewSplit, newSplitSql, unmatchedSheetCosts, type NewSplit } from '@/lib/ops/ad-costs';
 import { NET } from '@/lib/reports/stats';
-import { COUNTED_STAFF, type Team, leadSellerFilter, notSan, teamSubquery } from '@/lib/teams/team';
+import { MKT_STAFF, type Team, leadSellerFilter, notSan, teamSubquery } from '@/lib/teams/team';
 import { MARKETING_TEAMS_KEY, UNASSIGNED_TEAM } from '@/lib/teams/marketing-teams';
 import { MAIN_GROUPS, mainGroupSql } from '@/lib/reports/product-groups';
 import { addDays, bucketExpr, comparePeriod, compareWindow, daysBetween, vnRangeUtc } from '@/lib/shared/report-time';
@@ -128,7 +128,7 @@ export async function mktAnalytics(opts: { posIds: string[]; start: string; end:
   const team = opts.team ?? 'all';
   // Team Sale (anh Vũ 12/11/2026): chỉ đơn do người của team đó xác nhận; số về theo Sale được gán. Chi phí không đổi (trang ẩn chi phí khi chọn team Sale).
   const st = saleTeamSql(opts.saleTeam);
-  const closedWhere = (from: string, to: string) => [`o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,6,7) AND ${mk} IS NOT NULL AND o.marketer_id IN ${COUNTED_STAFF}${notSan('o.marketer_id')}${st ? ` AND ${st.closer}` : ''}`, [...opts.posIds, from, to]] as const;
+  const closedWhere = (from: string, to: string) => [`o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,6,7) AND ${mk} IS NOT NULL AND o.marketer_id IN ${MKT_STAFF}${notSan('o.marketer_id')}${st ? ` AND ${st.closer}` : ''}`, [...opts.posIds, from, to]] as const;
   // Số về: đơn chia Sale là số Sale, chia CSKH là số CSKH, chưa chia / người khác không tính; theo nút Sale / CSKH (anh Vũ 04/11/2026, ý sếp).
   const leadWhere = (from: string, to: string) => [`o.pos_id IN (${ph}) AND o.created_at>=? AND o.created_at<? AND o.status_code<>7 AND ${mk} IS NOT NULL ${leadSellerFilter('o.seller_id', team)}${notSan('o.marketer_id')}${st ? ` AND ${st.lead}` : ''}`, [...opts.posIds, from, to]] as const;
   const net = NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1');
@@ -259,5 +259,6 @@ export async function mktAnalytics(opts: { posIds: string[]; start: string; end:
     filters: { marketerId: opts.marketerId ?? null, marketerName: opts.marketerId ? who(opts.marketerId) : null, teamId: opts.teamId ?? null, teamName: opts.teamId === UNASSIGNED_TEAM ? 'Chưa phân team' : teams.find((t) => t.id === opts.teamId)?.name ?? null, product },
     team, split: { current: splitOf(rowsOf(3)), prev: splitOf(rowsOf(6)) },
     current, prev: previous, timeline, people, teams: teamRows, products: productRows,
+    unmatchedSheet: await unmatchedSheetCosts(db, opts.posIds, opts.start, opts.end),
   };
 }

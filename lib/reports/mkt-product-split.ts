@@ -2,7 +2,7 @@
 // bao nhiêu số, oxy bao nhiêu số"). Cùng phạm vi với phễu ở trang Tổng quan MKT: đơn tạo trong kỳ, marketer có hậu tố được tính,
 // số về chỉ tính đơn chia cho Sale (nút CSKH: đơn chia CSKH). Một đơn có nhiều dòng sản phẩm thì nằm ở từng dòng nó có,
 // nên cộng các dòng có thể lớn hơn tổng của ô.
-import { COUNTED_STAFF, leadSellerFilter, notSan, type Team } from '@/lib/teams/team';
+import { MKT_STAFF, leadSellerFilter, notSan, type Team } from '@/lib/teams/team';
 
 export const PRODUCT_LINES = [
   { key: 'gentadox', label: 'Gentadox', like: ['%gentadox%'] },
@@ -45,7 +45,7 @@ const SALE_ITEM = (i: string) => `${i}.is_bonus=0 AND ${i}.quantity>0 AND TRIM($
 function scopeWhere(scope: SplitScope) {
   const marketer = `NULLIF(TRIM(o.marketer_id),'')`;
   const ph = scope.posIds.map(() => '?').join(',');
-  return `o.pos_id IN (${ph}) AND ${marketer} IS NOT NULL AND ${marketer} IN ${COUNTED_STAFF}${notSan('o.marketer_id')}${scope.extraSql ?? ''}${leadSellerFilter('o.seller_id', scope.team)}
+  return `o.pos_id IN (${ph}) AND ${marketer} IS NOT NULL AND ${marketer} IN ${MKT_STAFF}${notSan('o.marketer_id')}${scope.extraSql ?? ''}${leadSellerFilter('o.seller_id', scope.team)}
       AND o.created_at>=? AND o.created_at<? AND o.status_code<>7`;
 }
 

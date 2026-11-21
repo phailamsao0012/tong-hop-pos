@@ -69,3 +69,21 @@ void test('luật Sàn: khớp nguyên từ "Sàn" như hậu tố, không bắt
   const hit = new Set((raw.prepare(`SELECT user_id FROM pos_users WHERE user_id IN ${SAN_ACCOUNTS}`).all() as { user_id: string }[]).map((x) => x.user_id));
   assert.deepEqual(names.map(([n], i) => [n, hit.has(`u${i}`)]), names);
 });
+
+void test('số MKT 19/11: người chỉ mang hậu tố SALE / CSKH đứng ô Marketer không tính vào Marketing', async () => {
+  const { emptyDb } = await import('./support/d1-sqlite');
+  const { MKT_STAFF, notSan } = await import('../lib/teams/team');
+  const { raw } = emptyDb();
+  // [tên ở POS 1, tên ở POS 2 (nếu có), có trong MKT_STAFF]
+  const people: [string, string | null, boolean][] = [
+    ['NV901 - Trần Văn An MKT', null, true], ['NV902 - Lê Thị Bình CSKH', null, false], ['Đỗ Chi SALE', null, false],
+    ['NV903 - Hoàng Dũng LEADER MKT', null, true], ['Phạm Em CSKH', 'Phạm Em MKT', true], ['Vũ Giang SALE PART', null, false],
+  ];
+  const ins = raw.prepare('INSERT INTO pos_users (id,pos_id,user_id,name,fetched_at) VALUES (?,?,?,?,?)');
+  people.forEach(([a, b], i) => { ins.run(`p1:${i}`, 'p1', `u${i}`, a, 'x'); if (b) ins.run(`p2:${i}`, 'p2', `u${i}`, b, 'x'); });
+  const inMkt = new Set((raw.prepare(`SELECT user_id FROM pos_users WHERE user_id IN ${MKT_STAFF}`).all() as { user_id: string }[]).map((x) => x.user_id));
+  assert.deepEqual(people.map(([a], i) => [a, inMkt.has(`u${i}`)]), people.map(([a, , ok]) => [a, ok]));
+  // notSan cũng loại người chỉ Sale / CSKH và chi phí ghi theo tên sheet chưa ghép ("sheet:<tên>"); đơn chưa có marketer giữ nguyên.
+  const kept = (raw.prepare(`SELECT v FROM (SELECT 'u1' AS v UNION SELECT 'u0' UNION SELECT '' UNION SELECT 'sheet:NAMX') t WHERE 1=1${notSan('t.v')} ORDER BY v`).all() as { v: string }[]).map((x) => x.v);
+  assert.deepEqual(kept, ['', 'u0']);
+});

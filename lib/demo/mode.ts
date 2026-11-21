@@ -157,6 +157,8 @@ async function seedAdCosts() {
       const cpl = 90000 + (Number.parseInt(marketerId.slice(0, 4), 16) % 51) * 1000;
       rows.push([`demo:${day}:${marketerId}:${productKey}`, day, marketerId, Math.round(n * cpl / 1000) * 1000, SHEET_PRODUCT[productKey] ?? 'Khác', null, 'demo', now, now]);
     }
+    // Một tên trên sheet chưa ghép tài khoản POS (tên giả): không cộng vào số Marketing, hiện ở dòng nhắc "Tên trên sheet chưa ghép" (19/11/2026).
+    rows.push([`demo:${day}:sheet-chua-ghep`, day, 'sheet:DEMO KHA', 350000, 'Khác', null, 'demo', now, now]);
   }
   // 11 dòng mỗi câu lệnh (99 tham số, D1 giới hạn 100), 50 câu mỗi lô.
   const stmts: D1PreparedStatement[] = [];

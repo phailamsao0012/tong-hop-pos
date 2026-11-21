@@ -11,7 +11,7 @@ import { NET } from '@/lib/reports/stats';
 import { ORDER_STATUS } from '@/lib/pancake/pancake';
 import { STAGES, SOURCE_FIELD, itemKey, productExists, saleItemPredicate, stageSql, type MarketingStage } from '@/lib/reports/marketing-report';
 import { MARKETING_TEAMS_KEY, parseMarketingTeams, UNASSIGNED_TEAM, marketingTeamFilter, marketingTeamGroupSql } from '@/lib/teams/marketing-teams';
-import { parseTeam, COUNTED_STAFF, teamFilter, teamSubquery, leadSellerFilter, notSan } from '@/lib/teams/team';
+import { parseTeam, MKT_STAFF, teamFilter, teamSubquery, leadSellerFilter, notSan } from '@/lib/teams/team';
 import { RANK_STAGES, type RankStage } from '@/lib/reports/mkt-rank';
 import { AFTER_PACK_CANCELLED_SQL, AFTER_PACK_RETURNED_SQL, PACKED_SQL } from '@/lib/reports/van-don';
 import { saleTeamSql } from '@/lib/teams/sale-team-filter';
@@ -105,7 +105,7 @@ async function marketingOverviewRaw(user: { role: Role }, p: URLSearchParams, po
   const saleTeam = saleTeamSql(p.get('saleTeam'));
   if (saleTeam) extra.push(saleTeam.closer);
   // Chỉ Marketer được tính doanh số (tên có hậu tố MKT…, lib/team.ts).
-  const scopeWith = (sellerSql: string) => `o.pos_id IN (${ph}) AND ${marketer} IS NOT NULL AND ${marketer} IN ${COUNTED_STAFF}${notSan('o.marketer_id')}${marketingTeam.sql}${sellerSql}${extra.length ? ` AND ${extra.join(' AND ')}` : ''}`;
+  const scopeWith = (sellerSql: string) => `o.pos_id IN (${ph}) AND ${marketer} IS NOT NULL AND ${marketer} IN ${MKT_STAFF}${notSan('o.marketer_id')}${marketingTeam.sql}${sellerSql}${extra.length ? ` AND ${extra.join(' AND ')}` : ''}`;
   const scoped = scopeWith(teamFilter('o.seller_id', team));
   const period = `${timeCol}>=? AND ${timeCol}<?`;
   const selectedWhere = `${scoped} AND ${period} AND ${stageSql(stage)}`;

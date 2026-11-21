@@ -97,8 +97,21 @@ export const COUNTED_STAFF = `(SELECT DISTINCT user_id FROM pos_users WHERE ${CO
 export const SAN_WORDS = ['sàn', 'Sàn', 'SÀN'].flatMap((w) => [w, w.normalize('NFD')]);
 /** Nguyên từ "Sàn" ở bất kỳ vị trí nào trong tên (tách từ như nhận hậu tố MKT / CSKH / SALE: bỏ phần trong ngoặc, '-' '_' là khoảng trắng). "Sàng" không tính. */
 export const SAN_ACCOUNTS = `(SELECT DISTINCT user_id FROM pos_users WHERE ${SAN_WORDS.map((w) => `${NAME_WORDS} LIKE '% ${w} %'`).join(' OR ')})`;
-/** ` AND <cột marketer> không phải tài khoản Sàn` (đơn chưa có marketer giữ nguyên). */
-export const notSan = (column: string) => ` AND COALESCE(${column},'') NOT IN ${SAN_ACCOUNTS}`;
+/** Người chỉ mang hậu tố SALE / CSKH (không có hậu tố MKT ở POS nào, không thuộc team MKT trên web tổng hay web nhân sự): không thuộc Marketing
+ *  dù đứng ô Marketer trên đơn (anh Vũ 19/11/2026). */
+const SALE_CSKH_ONLY = `(SELECT user_id FROM pos_users GROUP BY user_id HAVING MAX(${nameSuffixDept(['sale', 'cskh'])} IS NOT NULL)=1 AND MAX(${nameSuffix('mkt')})=0
+  AND user_id NOT IN (SELECT m.value FROM app_settings s, json_each(s.value) t, json_each(t.value, '$.memberIds') m WHERE s.key='marketing_teams_v1' AND json_valid(s.value))
+  AND user_id NOT IN (SELECT pos_user_id FROM hr_pos_team WHERE team='mkt'))`;
+/** ` AND <cột marketer> không phải tài khoản Sàn, không phải người Sale / CSKH, không phải tên trên sheet chi phí chưa ghép tài khoản POS
+ *  ("sheet:<tên>"; vẫn nhắc ở dòng "Tên trên sheet chưa ghép với POS" để ghép sau)` (đơn chưa có marketer giữ nguyên). Loại khỏi mọi số Marketing:
+ *  số về, đơn, doanh thu, chi phí (anh Vũ 19/11/2026 "bỏ hẳn đi, có liên quan gì đến mkt đâu"). */
+export const notSan = (column: string) => ` AND COALESCE(${column},'') NOT IN ${SAN_ACCOUNTS} AND COALESCE(${column},'') NOT IN ${SALE_CSKH_ONLY} AND COALESCE(${column},'') NOT LIKE 'sheet:%'`;
+/**
+ * Người được tính số MKT ở ô Marketer (anh Vũ 19/11/2026 "bỏ hẳn đi, có liên quan gì đến mkt đâu"): người được tính doanh số, trừ người
+ * mang hậu tố SALE / CSKH mà không có hậu tố MKT ở POS nào (người CSKH, Sale đứng nhầm ô Marketer trên đơn). Lead, Marketer không hậu tố
+ * đã xếp team hoặc bật "Vẫn tính" vẫn giữ. Tài khoản Sàn luôn bị loại (cùng luật notSan).
+ */
+export const MKT_STAFF = `(SELECT user_id FROM ${COUNTED_STAFF} AS c WHERE user_id NOT IN ${SALE_CSKH_ONLY} AND user_id NOT IN ${SAN_ACCOUNTS})`;
 /** ` AND <cột người> được tính` (đơn chưa có người giữ nguyên, vì không thuộc ai). Dùng cho số doanh thu khi xem tất cả. */
 export const countedFilter = (column: string) => ` AND (NULLIF(${column},'') IS NULL OR ${column} IN ${COUNTED_STAFF})`;
 /** Biểu thức 1/0: người trên cột này được tính doanh số (chưa có người = 1). */

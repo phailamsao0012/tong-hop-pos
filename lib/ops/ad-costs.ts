@@ -5,7 +5,7 @@ import { env } from 'cloudflare:workers';
 import { adCostSource } from '@/lib/ops/cost-allocation';
 import { NET } from '@/lib/reports/stats';
 import { vnRangeUtc } from '@/lib/shared/report-time';
-import { COUNTED_STAFF, leadSellerFilter, teamSubquery, type Team, notSan } from '@/lib/teams/team';
+import { MKT_STAFF, leadSellerFilter, teamSubquery, type Team, notSan } from '@/lib/teams/team';
 
 // Nhớ bằng cờ, không giữ Promise dùng chung giữa các yêu cầu (yêu cầu bị hủy giữa chừng làm yêu cầu khác chờ mãi).
 // Các lệnh đều IF NOT EXISTS / kiểm tra cột trước, chạy trùng khi hai yêu cầu cùng lúc vẫn an toàn.
@@ -56,6 +56,13 @@ export async function deleteCost(id: string, userId: string, canAll: boolean) {
 export type NewSplit = { newOrders: number; newNet: number; cskhOrders: number; cskhNet: number; otherNet: number };
 export const emptyNewSplit = (): NewSplit => ({ newOrders: 0, newNet: 0, cskhOrders: 0, cskhNet: 0, otherNet: 0 });
 /** Đơn New = đơn MKT đã xác nhận do người bán thuộc Sale chốt. */
+/** Chi phí ghi theo tên trên sheet chưa ghép tài khoản POS ("sheet:<tên>") trong kỳ: không cộng vào số Marketing (anh Vũ 19/11/2026
+ *  "bỏ hẳn đi"), chỉ để nhắc ghép ở bảng Marketer và trang Chi phí & ROAS. */
+export async function unmatchedSheetCosts(db: D1Database, posIds: string[], start: string, end: string) {
+  const r = await db.prepare(`SELECT substr(marketer_id,7) AS name, SUM(amount) AS cost FROM ${adCostSource(posIds, start, end)} WHERE day>=? AND day<=? AND marketer_id LIKE 'sheet:%' GROUP BY 1 HAVING SUM(amount)>0 ORDER BY 2 DESC`)
+    .bind(start, end).all<{ name: string; cost: number }>().catch(() => ({ results: [] as { name: string; cost: number }[] }));
+  return r.results.map((x) => ({ name: x.name, cost: Number(x.cost) }));
+}
 export function newSplitSql(seller = 'seller_id', net = NET) {
   const sale = `${seller} IN ${teamSubquery('sale')}`, care = `${seller} IN ${teamSubquery('cskh')}`;
   return `SUM(CASE WHEN ${sale} THEN 1 ELSE 0 END) AS newOrders,
@@ -92,7 +99,7 @@ export async function mktSummary(opts: { posIds: string[]; start: string; end: s
   const [costs, leads, closed] = await db.batch([
     db.prepare(`SELECT marketer_id, SUM(amount) AS amount FROM ${adCostSource(opts.posIds, opts.start, opts.end)} WHERE day>=? AND day<=?${notSan('marketer_id')} GROUP BY marketer_id`).bind(opts.start, opts.end),
     db.prepare(`SELECT ${mk} AS marketer_id, COUNT(*) AS orders, COUNT(DISTINCT phone) AS phones FROM raw_pos_orders WHERE pos_id IN (${ph}) AND created_at>=? AND created_at<? AND status_code<>7 AND ${mk} IS NOT NULL ${leadSellerFilter('seller_id', opts.team)}${notSan('marketer_id')} GROUP BY 1`).bind(...opts.posIds, startUtc, endUtc),
-    db.prepare(`SELECT ${mk} AS marketer_id, COUNT(*) AS closed, COALESCE(SUM(${NET}),0) AS net, ${newSplitSql()} FROM raw_pos_orders WHERE pos_id IN (${ph}) AND first_confirmed_at>=? AND first_confirmed_at<? AND status_code NOT IN (0,17,6,7) AND ${mk} IS NOT NULL AND marketer_id IN ${COUNTED_STAFF}${notSan('marketer_id')} GROUP BY 1`).bind(...opts.posIds, startUtc, endUtc),
+    db.prepare(`SELECT ${mk} AS marketer_id, COUNT(*) AS closed, COALESCE(SUM(${NET}),0) AS net, ${newSplitSql()} FROM raw_pos_orders WHERE pos_id IN (${ph}) AND first_confirmed_at>=? AND first_confirmed_at<? AND status_code NOT IN (0,17,6,7) AND ${mk} IS NOT NULL AND marketer_id IN ${MKT_STAFF}${notSan('marketer_id')} GROUP BY 1`).bind(...opts.posIds, startUtc, endUtc),
   ]);
   const m = new Map<string, MktRow>();
   const get = (id: string) => { let x = m.get(id); if (!x) { x = { cost: 0, orders: 0, phones: 0, closed: 0, net: 0, ...emptyNewSplit() }; m.set(id, x); } return x; };
@@ -113,9 +120,9 @@ export async function roasReport(opts: { posIds: string[]; start: string; end: s
     db.prepare(`SELECT marketer_id, SUM(amount) AS amount, COUNT(*) AS n FROM ${adCostSource(opts.posIds, opts.start, opts.end)} WHERE day>=? AND day<=?${notSan('marketer_id')} GROUP BY marketer_id`).bind(opts.start, opts.end),
     db.prepare('SELECT id, day, marketer_id, amount, campaign, note, created_at FROM ad_costs WHERE day>=? AND day<=? ORDER BY day DESC, created_at DESC LIMIT 500').bind(opts.start, opts.end),
     db.prepare(`SELECT ${mk} AS marketer_id, COUNT(*) AS orders, COUNT(DISTINCT phone) AS phones, SUM(status_code NOT IN (0,17,6,7)) AS closed_leads FROM raw_pos_orders WHERE pos_id IN (${ph}) AND created_at>=? AND created_at<? AND status_code<>7 AND ${mk} IS NOT NULL ${leadSellerFilter('seller_id', opts.team)}${notSan('marketer_id')} GROUP BY 1`).bind(...opts.posIds, startUtc, endUtc),
-    db.prepare(`SELECT ${mk} AS marketer_id, COUNT(*) AS closed, COALESCE(SUM(${NET}),0) AS net, ${newSplitSql()}, SUM(status_code IN (4,5,15)) AS returned FROM raw_pos_orders WHERE pos_id IN (${ph}) AND first_confirmed_at>=? AND first_confirmed_at<? AND status_code NOT IN (0,17,6,7) AND ${mk} IS NOT NULL AND marketer_id IN ${COUNTED_STAFF}${notSan('marketer_id')} GROUP BY 1`).bind(...opts.posIds, startUtc, endUtc),
+    db.prepare(`SELECT ${mk} AS marketer_id, COUNT(*) AS closed, COALESCE(SUM(${NET}),0) AS net, ${newSplitSql()}, SUM(status_code IN (4,5,15)) AS returned FROM raw_pos_orders WHERE pos_id IN (${ph}) AND first_confirmed_at>=? AND first_confirmed_at<? AND status_code NOT IN (0,17,6,7) AND ${mk} IS NOT NULL AND marketer_id IN ${MKT_STAFF}${notSan('marketer_id')} GROUP BY 1`).bind(...opts.posIds, startUtc, endUtc),
     db.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE name<>'' GROUP BY user_id"),
-    db.prepare(`SELECT day, SUM(amount) AS amount FROM ${adCostSource(opts.posIds, opts.start, opts.end)} WHERE day>=? AND day<=? GROUP BY day ORDER BY day`).bind(opts.start, opts.end),
+    db.prepare(`SELECT day, SUM(amount) AS amount FROM ${adCostSource(opts.posIds, opts.start, opts.end)} WHERE day>=? AND day<=?${notSan('marketer_id')} GROUP BY day ORDER BY day`).bind(opts.start, opts.end),
   ]);
   const nameRows = names.results as { user_id: string; name: string; department: string | null }[];
   const nameMap = new Map(nameRows.map((r) => [r.user_id, r]));
@@ -138,7 +145,7 @@ export async function roasReport(opts: { posIds: string[]; start: string; end: s
   return {
     period: { start: opts.start, end: opts.end },
     total: mktTotal(rows, opts.team), team: opts.team ?? 'all',
-    rows,
+    rows, unmatchedSheet: await unmatchedSheetCosts(db, opts.posIds, opts.start, opts.end),
     daily: (daily.results as { day: string; amount: number }[]).map((r) => ({ day: r.day, amount: Number(r.amount) })),
     entries: (entries.results as { id: string; day: string; marketer_id: string; amount: number; campaign: string | null; note: string | null; created_at: string }[])
       .map((e) => ({ id: e.id, day: e.day, marketerId: e.marketer_id, marketerName: who(e.marketer_id), amount: Number(e.amount), campaign: e.campaign, note: e.note, createdAt: e.created_at })),

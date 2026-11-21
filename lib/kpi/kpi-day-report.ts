@@ -5,7 +5,7 @@
 // - MKT: DT New = đơn có Marketer được tính, người bán thuộc Sale, theo ngày xác nhận đầu; không trừ hủy / hoàn.
 // Chỉ tính các POS đang chọn (quy tắc POS là lớp tính đầu tiên).
 import { env } from 'cloudflare:workers';
-import { COUNTED_STAFF, teamSubquery } from '@/lib/teams/team';
+import { MKT_STAFF, teamSubquery } from '@/lib/teams/team';
 import { todayVn, vnRangeUtc } from '@/lib/shared/report-time';
 import { kpiDay, type KpiDay } from '@/lib/kpi/kpi-day';
 import { DEPT_POS_DEPTS, type DeptPosDept } from '@/lib/kpi/targets';
@@ -27,7 +27,7 @@ export async function kpiDayReport(posIds: string[]): Promise<KpiDayReport> {
     env.DB.prepare("SELECT ref_id, revenue FROM targets WHERE month=? AND scope='dept_pos'").bind(month),
     sumBy(`o.status_code<>7 AND o.seller_id IN ${teamSubquery('sale')}`, 'o.first_closed_at'),
     sumBy(`o.status_code<>7 AND o.seller_id IN ${teamSubquery('cskh')}`, 'o.first_closed_at'),
-    sumBy(`o.status_code NOT IN (0,17,7) AND NULLIF(TRIM(o.marketer_id),'') IS NOT NULL AND o.marketer_id IN ${COUNTED_STAFF} AND o.seller_id IN ${teamSubquery('sale')}`, 'o.first_confirmed_at'),
+    sumBy(`o.status_code NOT IN (0,17,7) AND NULLIF(TRIM(o.marketer_id),'') IS NOT NULL AND o.marketer_id IN ${MKT_STAFF} AND o.seller_id IN ${teamSubquery('sale')}`, 'o.first_confirmed_at'),
     env.DB.prepare('SELECT value FROM app_settings WHERE key=?').bind(`target_emp_pos:${month}`),
     env.DB.prepare("SELECT pos_user_id AS id, team FROM hr_pos_team WHERE team IN ('sale','cskh')"),
   ]);

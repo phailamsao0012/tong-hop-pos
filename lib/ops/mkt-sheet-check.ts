@@ -6,7 +6,7 @@ import { env } from 'cloudflare:workers';
 import { adCostSource, sheetStatsSource } from '@/lib/ops/cost-allocation';
 import { ensureSheetCostSchema } from '@/lib/ops/sheet-costs';
 import { NET } from '@/lib/reports/stats';
-import { COUNTED_STAFF, type Team, leadSellerFilter, teamFilter, teamSubquery } from '@/lib/teams/team';
+import { MKT_STAFF, type Team, leadSellerFilter, teamFilter, teamSubquery } from '@/lib/teams/team';
 import { bucketExpr, vnRangeUtc } from '@/lib/shared/report-time';
 
 export type PosSide = { orders: number; phones: number; closed: number; net: number; sale: number; cskh: number; other: number; saleClosed: number; cskhClosed: number };
@@ -31,7 +31,7 @@ export async function mktSheetCheck(opts: { posIds: string[]; start: string; end
   const saleSub = teamSubquery('sale')!, cskhSub = teamSubquery('cskh')!;
   // Tài khoản chỉ xem một bộ phận (lib/access.ts ép ?team=): doanh thu POS chỉ còn đơn bộ phận đó chốt; số về, đơn tạo giữ nguyên.
   const seg = teamFilter('o.seller_id', opts.team ?? 'all');
-  const closedNow = `o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,6,7) AND o.marketer_id IN ${COUNTED_STAFF}${seg}`;
+  const closedNow = `o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,6,7) AND o.marketer_id IN ${MKT_STAFF}${seg}`;
   const split = (cond: string) => `COALESCE(SUM(CASE WHEN ${cond} AND o.seller_id IN ${saleSub} THEN ${net} ELSE 0 END),0) AS sale,
     COALESCE(SUM(CASE WHEN ${cond} AND o.seller_id IN ${cskhSub} THEN ${net} ELSE 0 END),0) AS cskh,
     SUM(CASE WHEN ${cond} AND o.seller_id IN ${saleSub} THEN 1 ELSE 0 END) AS sale_closed, SUM(CASE WHEN ${cond} AND o.seller_id IN ${cskhSub} THEN 1 ELSE 0 END) AS cskh_closed`;
@@ -43,14 +43,14 @@ export async function mktSheetCheck(opts: { posIds: string[]; start: string; end
       .bind(opts.start, opts.end),
     // Mốc ngày xác nhận lần đầu: đúng như ô Doanh thu MKT.
     db.prepare(`SELECT ${mk} AS m, ${bucketExpr('o.first_confirmed_at', 'day')} AS d, COUNT(*) AS closed, COALESCE(SUM(${net}),0) AS net, ${split('1')}
-      FROM raw_pos_orders o WHERE ${base} AND o.marketer_id IN ${COUNTED_STAFF} AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,6,7)${seg} GROUP BY 1,2`)
+      FROM raw_pos_orders o WHERE ${base} AND o.marketer_id IN ${MKT_STAFF} AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,6,7)${seg} GROUP BY 1,2`)
       .bind(...opts.posIds, cur.startUtc, cur.endUtc),
     // Mốc ngày tạo đơn: đơn tạo trong ngày, SĐT khác nhau, và bao nhiêu đơn trong số đó tới nay đã chốt.
     db.prepare(`SELECT ${mk} AS m, ${bucketExpr('o.created_at', 'day')} AS d, COUNT(*) AS orders, COUNT(DISTINCT NULLIF(TRIM(o.phone),'')) AS phones,
       SUM(CASE WHEN ${closedNow} THEN 1 ELSE 0 END) AS closed, COALESCE(SUM(CASE WHEN ${closedNow} THEN ${net} ELSE 0 END),0) AS net, ${split(closedNow)}
       FROM raw_pos_orders o WHERE ${base} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7${leadSellerFilter('o.seller_id', opts.team ?? 'all')} GROUP BY 1,2`)
       .bind(...opts.posIds, cur.startUtc, cur.endUtc),
-    db.prepare(`SELECT user_id, MAX(name) AS name, MAX(user_id IN ${COUNTED_STAFF}) AS counted FROM pos_users WHERE name<>'' GROUP BY user_id`),
+    db.prepare(`SELECT user_id, MAX(name) AS name, MAX(user_id IN ${MKT_STAFF}) AS counted FROM pos_users WHERE name<>'' GROUP BY user_id`),
     db.prepare("SELECT MAX(received_at) AS at, COUNT(*) AS n FROM sheet_cost_sources"),
     // Chi phí QC từ sheet báo cáo (cùng bảng ad_costs mà ô Chi phí của trang Marketing đọc), theo marketer × ngày.
     db.prepare(`SELECT marketer_id AS m, day AS d, COALESCE(SUM(amount),0) AS cost FROM ${adCostSource(opts.posIds, opts.start, opts.end)} WHERE day>=? AND day<=? GROUP BY 1,2`)

@@ -1,6 +1,6 @@
 import { addDays, COMPANY_START, daysBetween, vnRangeUtc } from '@/lib/shared/report-time';
 import { validAiDate } from '@/lib/ai/ai-pack';
-import { COUNTED_STAFF } from '@/lib/teams/team';
+import { COUNTED_STAFF, notSan } from '@/lib/teams/team';
 import { advisorReasonQuery, classifyReason } from '@/lib/bot/advisor';
 import { POS } from '@/lib/shared/report-model';
 import { STATUS_GROUPS } from '@/lib/reports/stats';
@@ -77,7 +77,7 @@ export async function buildAskPack(db: D1Database, today: string) {
     counts.set(key, (counts.get(key) ?? 0)+1);
   }
   // Cùng nguồn daily của Chi phí & ROAS, chỉ đọc; không gọi ensureAdCostSchema.
-  const costs = await db.prepare('SELECT day,SUM(amount) AS amount FROM ad_costs WHERE day>=? AND day<=? GROUP BY day ORDER BY day').bind(start,end).all<{ day: string; amount: number }>();
+  const costs = await db.prepare(`SELECT day,SUM(amount) AS amount FROM ad_costs WHERE day>=? AND day<=?${notSan('marketer_id')} GROUP BY day ORDER BY day`).bind(start,end).all<{ day: string; amount: number }>();
   const rest = ['Theo ngày — 14 ngày đến hôm qua', await peopleCsv(db,start,end,null,'ngay'), 'Giờ vàng — 28 ngày đến hôm qua', await hoursCsv(db,addDays(today,-28),end,null), 'Lý do chưa chốt — 14 ngày', 'ma;ly_do;so_don', ...[...counts].sort(([a],[b]) => a < b ? -1 : a > b ? 1 : 0).map(([k,n]) => `${k};${n}`), 'Chi phí MKT — toàn công ty, triệu đồng', 'ngay;chi_phi_tr', ...costs.results.map(r => `${r.day};${money(r.amount)}`)].join('\n');
   return limitAskPack(weeks,rest);
 }

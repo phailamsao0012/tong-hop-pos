@@ -6,7 +6,7 @@ import { lensDatabase, type resolveMktLens } from '@/lib/shared/scope-filter';
 import { packedBySeller } from '@/lib/reports/sale-packed';
 import { parseTeam } from '@/lib/teams/team';
 import { vnRangeUtc } from '@/lib/shared/report-time';
-import { COUNTED_STAFF, teamSubquery } from '@/lib/teams/team';
+import { MKT_STAFF, teamSubquery } from '@/lib/teams/team';
 import { buildSections, type ClosedAgg, type CohortAgg, type MktAgg } from '@/lib/reports/sections';
 import { CLOSED, sentAtReady } from '@/lib/reports/stats';
 import { isSegment, EMPTY_ORDER_FILTERS, orderFilterSql } from '@/lib/pancake/order-segments';
@@ -32,7 +32,7 @@ export async function sectionsReport(p: URLSearchParams, posIds: string[], start
   const ph = posIds.map(() => '?').join(',');
   const team = `CASE WHEN o.seller_id IN ${teamSubquery('sale')} THEN 'sale' WHEN o.seller_id IN ${teamSubquery('cskh')} THEN 'cskh' ELSE 'other' END`;
   // MKT: chỉ Marketer được tính doanh số (tên có hậu tố MKT…); Sale / CSKH đã lọc trong teamSubquery.
-  const mkt = `CASE WHEN NULLIF(TRIM(o.marketer_id),'') IS NOT NULL AND o.marketer_id IN ${COUNTED_STAFF} THEN 1 ELSE 0 END`;
+  const mkt = `CASE WHEN NULLIF(TRIM(o.marketer_id),'') IS NOT NULL AND o.marketer_id IN ${MKT_STAFF} THEN 1 ELSE 0 END`;
   const sent = `o.status_code IN (${SENT_CODES.join(',')})`, returned = `o.status_code IN (${RETURNED_CODES.join(',')})`;
   // MKT khi xem mọi nhóm đơn: số về, đơn chốt, doanh thu, chi phí, chi phí / số, / đơn lấy chung với trang Chi phí & ROAS (lib/ad-costs.ts mktSummary)
   // để mọi trang ra một số MKT. Lọc nhóm đơn (Gentadox / SK + GK): chi phí không tách được theo nhóm đơn nên chỉ có đơn và doanh thu.
@@ -49,7 +49,7 @@ export async function sectionsReport(p: URLSearchParams, posIds: string[], start
         FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.created_at>=? AND o.created_at<? AND o.status_code<>7 GROUP BY 1, 2`).bind(...posIds, startUtc, endUtc),
       db.prepare(`SELECT MAX(last_sync_at) AS at FROM pos_shops WHERE id IN (${ph})`).bind(...posIds),
       ...(whole ? [] : [mktDb.prepare(`SELECT COUNT(*) AS orders, COALESCE(SUM(${NET}),0) AS net, ${newSplitSql('o.seller_id', NET)} FROM raw_pos_orders o
-        WHERE o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND ${IS_CONFIRMED} AND NULLIF(TRIM(o.marketer_id),'') IS NOT NULL AND o.marketer_id IN ${COUNTED_STAFF}${seg}`).bind(...posIds, startUtc, endUtc)]),
+        WHERE o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND ${IS_CONFIRMED} AND NULLIF(TRIM(o.marketer_id),'') IS NOT NULL AND o.marketer_id IN ${MKT_STAFF}${seg}`).bind(...posIds, startUtc, endUtc)]),
     ]),
     whole ? lens
       ? mktAnalytics({ posIds, start, end, team: parseTeam(p.get('team')), teamId: lens.id, db: mktDb }).then(({ current }) => ({ ...current, hasCost: current.cost > 0 }))

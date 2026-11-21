@@ -11,7 +11,7 @@ import { addDays, todayVn, vnRangeUtc } from '@/lib/shared/report-time';
 import { RETURNED_CODES, SENT_CODES } from '@/lib/reports/shipping-lines';
 import { CLOSED, STATUS_GROUPS, dayExpr, sellerProductStatsReady, sentAtReady } from '@/lib/reports/stats';
 import { mktStatsReady } from '@/lib/reports/stats-mkt';
-import { COUNTED_STAFF, countedCase, teamSubquery } from '@/lib/teams/team';
+import { MKT_STAFF, countedCase, teamSubquery } from '@/lib/teams/team';
 import { TREND_DAYS, buildTrends, type ClosedTrendRow, type CohortRow, type MktTrendRow, type ProductTrendRow } from '@/lib/reports/trends';
 
 const NET = 'COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0))';
@@ -72,10 +72,10 @@ export async function trendsReport(opts: TrendsOpts) {
   // 4–8 giây làm Điều hành "Không tải được"); bảng chưa điền đủ lịch sử hoặc có lọc nhóm hàng thì quét đơn gốc như trước.
   const mktQuery = opts.productSegment === 'all' && await mktStatsReady(env.DB)
     ? env.DB.prepare(`SELECT day, marketer_id, SUM(orders) AS n, SUM(net) AS net FROM stats_daily_mkt
-        WHERE pos_id IN (${ph}) AND day>=? AND day<=? AND marketer_id IN ${COUNTED_STAFF} GROUP BY 1, 2`).bind(...opts.posIds, first, end)
+        WHERE pos_id IN (${ph}) AND day>=? AND day<=? AND marketer_id IN ${MKT_STAFF} GROUP BY 1, 2`).bind(...opts.posIds, first, end)
     : env.DB.prepare(`SELECT ${dayExpr('o.first_confirmed_at')} AS day, o.marketer_id, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net
       FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,6,7)
-        AND NULLIF(TRIM(o.marketer_id),'') IS NOT NULL AND o.marketer_id IN ${COUNTED_STAFF}${seg} GROUP BY 1, 2`).bind(...binds);
+        AND NULLIF(TRIM(o.marketer_id),'') IS NOT NULL AND o.marketer_id IN ${MKT_STAFF}${seg} GROUP BY 1, 2`).bind(...binds);
   // Vận đơn theo ngày gửi hàng (anh Vũ 10/10/2026) khi đã điền đủ giờ gửi đơn cũ: đơn đi lấy riêng theo first_sent_at (dòng counted=0 chỉ cộng vào
   // Vận đơn), đơn chốt không còn cờ đi / hoàn. Chưa đủ thì như cũ: đơn đi trong các đơn chốt theo ngày chốt.
   const bySent = await sentAtReady(env.DB);

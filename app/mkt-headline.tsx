@@ -35,6 +35,7 @@ type Analytics = {
   filters: { marketerId: string | null; marketerName: string | null; teamId: string | null; teamName: string | null; product: string | null };
   team?: Seg; split?: { current: Split; prev: Split };
   current: Metrics; prev: Metrics; timeline: Point[]; people: Person[]; teams: Team[]; products: ProductRow[];
+  /** Chi phí theo tên trên sheet chưa ghép POS: không cộng vào số, chỉ nhắc (19/11/2026). */ unmatchedSheet?: { name: string; cost: number }[];
 };
 type Tab = 'people' | 'teams' | 'products' | 'time';
 type Row = { id: string; name: string; sub?: string; m: Metrics | Point; prevNet?: number; active: boolean; dim?: boolean; note?: string };
@@ -477,6 +478,7 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
           rankBar={tab === 'people' || tab === 'teams'} sheet={tab === 'people' ? sheet : null}
           onPick={onPick} totalCost={totalCost} keepOrder={tab === 'time'} showSplit={shown === 'all'} profile={tab === 'people'} noCost={noCost} onDetail={tab === 'people' ? onDetail : undefined}
           onOrders={product === null && (tab === 'people' || tab === 'teams') ? (row, kind) => setOrders({ row, kind, team: tab === 'teams' }) : undefined} />
+        {tab === 'people' && !sheet && !!data.unmatchedSheet?.length && <p className="text-[12px] text-ink-3">Tên trên sheet chưa ghép với POS (không cộng vào chi phí, ROAS): {data.unmatchedSheet.map((u) => `${u.name} ${shortMoney(u.cost)}`).join(', ')} · ghép ở trang Chi phí &amp; ROAS.</p>}
         {tab === 'people' && sheet && <div className="flex flex-col gap-1.5 text-[12px] text-ink-3">
           {sheet.unmatched.length > 0 && <span>Tên trên sheet chưa ghép với POS: {sheet.unmatched.map((u) => `${u.name.replace(/ \(Sheet\)$/, '')} (CP ${shortMoney(u.cost)} · DT ${shortMoney(u.revenue)})`).join(', ')} · ghép ở trang Chi phí &amp; ROAS.</span>}
           <button type="button" className="self-start font-semibold text-primary underline decoration-dotted underline-offset-2" aria-expanded={dayView} onClick={() => setDayView((v) => !v)}>{dayView ? 'Ẩn lệch theo từng ngày' : 'Xem lệch theo từng ngày'}</button>

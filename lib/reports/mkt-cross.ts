@@ -5,7 +5,7 @@
 //   theo người bấm xác nhận (anh Vũ: "tính cho người bấm xác nhận đơn").
 import { env } from 'cloudflare:workers';
 import { vnRangeUtc } from '@/lib/shared/report-time';
-import { COUNTED_STAFF, teamSubquery } from '@/lib/teams/team';
+import { MKT_STAFF, teamSubquery } from '@/lib/teams/team';
 import { NET } from '@/lib/reports/stats';
 import { AFTER_PACK_CANCELLED_SQL, AFTER_PACK_RETURNED_SQL, PACKED_SQL } from '@/lib/reports/van-don';
 import { CLOSER_SQL } from '@/lib/teams/sale-team-filter';
@@ -17,7 +17,7 @@ export async function mktCross(posIds: string[], start: string, end: string): Pr
   const ph = posIds.map(() => '?').join(',');
   const mk = "NULLIF(TRIM(o.marketer_id),'')";
   const net = NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1');
-  const base = `o.pos_id IN (${ph}) AND ${mk} IS NOT NULL AND ${mk} IN ${COUNTED_STAFF}`;
+  const base = `o.pos_id IN (${ph}) AND ${mk} IS NOT NULL AND ${mk} IN ${MKT_STAFF}`;
   const [leads, closed, names] = await env.DB.batch([
     env.DB.prepare(`SELECT COALESCE(NULLIF(o.seller_id,''),'') AS sid, ${mk} AS mid, COUNT(DISTINCT NULLIF(TRIM(o.phone),'')) AS phones
       FROM raw_pos_orders o WHERE ${base} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7 AND o.seller_id IN ${teamSubquery('sale')} GROUP BY 1,2`).bind(...posIds, startUtc, endUtc),
