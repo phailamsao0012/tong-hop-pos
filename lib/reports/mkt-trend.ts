@@ -5,6 +5,7 @@ import { mktStatsReady } from '@/lib/reports/stats-mkt';
 import { MARKETING_TEAMS_KEY, UNASSIGNED_TEAM, parseMarketingTeams } from '@/lib/teams/marketing-teams';
 import { addDays, daysBetween, todayVn, vnRangeUtc } from '@/lib/shared/report-time';
 import { metrics, trendChartRows, type Base } from '@/lib/reports/mkt-trend-rows';
+import { mktClosedStatus } from '@/lib/reports/mkt-closed';
 
 export { metrics, trendChartRows, type Base };
 
@@ -59,7 +60,7 @@ export function trendQueries(posIds: string[], start: string, end: string, fromS
     { sql: `SELECT ${mk} AS m, date(MIN(o.created_at), '+7 hours') AS day FROM raw_pos_orders o WHERE ${scope} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7 AND ${mk} IS NOT NULL AND o.phone IS NOT NULL${leadSellerFilter('o.seller_id', team)}${notSan('o.marketer_id')} GROUP BY 1,o.phone`, binds: [...posIds, range.startUtc, range.endUtc] },
     fromStats
       ? { sql: `SELECT NULLIF(TRIM(s.marketer_id),'') AS m, s.day, SUM(s.orders) AS newOrders, SUM(s.net) AS newNet FROM stats_daily_mkt s WHERE s.pos_id IN (${ph}) AND s.day>=? AND s.day<=? AND s.marketer_id IN ${MKT_STAFF} AND s.seller_id IN ${teamSubquery('sale')} GROUP BY 1,2`, binds: [...posIds, start, end] }
-      : { sql: `SELECT ${mk} AS m, date(o.first_confirmed_at, '+7 hours') AS day, COUNT(*) AS newOrders, SUM(${net}) AS newNet FROM raw_pos_orders o WHERE ${scope} AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,6,7) AND ${mk} IS NOT NULL AND o.marketer_id IN ${MKT_STAFF} AND o.seller_id IN ${teamSubquery('sale')} GROUP BY 1,2`, binds: [...posIds, range.startUtc, range.endUtc] },
+      : { sql: `SELECT ${mk} AS m, date(o.first_confirmed_at, '+7 hours') AS day, COUNT(*) AS newOrders, SUM(${net}) AS newNet FROM raw_pos_orders o WHERE ${scope} AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND ${mktClosedStatus('o.status_code')} AND ${mk} IS NOT NULL AND o.marketer_id IN ${MKT_STAFF} AND o.seller_id IN ${teamSubquery('sale')} GROUP BY 1,2`, binds: [...posIds, range.startUtc, range.endUtc] },
   ];
 }
 export async function mktTrend(opts: { start: string; end: string; posIds: string[]; marketerId?: string | null; teamId?: string | null; bucket: Bucket; team?: string }) {

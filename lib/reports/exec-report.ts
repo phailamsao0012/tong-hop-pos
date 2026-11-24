@@ -3,6 +3,7 @@ import { env } from 'cloudflare:workers';
 import { addDays, compareWindow, todayVn, vnRangeUtc } from '@/lib/shared/report-time';
 import { CLOSED, NET } from '@/lib/reports/stats';
 import { MKT_STAFF, countedFilter, teamFilter } from '@/lib/teams/team';
+import { mktClosedStatus } from '@/lib/reports/mkt-closed';
 
 // Màn Điều hành (kế hoạch quản trị, giai đoạn 2b · 26/09/2026): tiến độ tháng và ba bộ phận.
 // - daily: doanh thu đơn chốt từng ngày từ đầu tháng tới hôm nay (để vẽ cộng dồn so mục tiêu và dự báo cuối tháng).
@@ -38,7 +39,7 @@ export async function execReport(posIds: string[], asked: string) {
   const MKT = ` AND NULLIF(TRIM(marketer_id),'') IS NOT NULL AND marketer_id IN ${MKT_STAFF}`;
   // Số MKT theo ngày xác nhận lần đầu, đơn đã xác nhận (không tính Chờ xác nhận), cùng cách Tổng quan POS / Marketing (anh Vũ 06/11/2026).
   const mkt = (r: { startUtc: string; endUtc: string }) =>
-    env.DB.prepare(`SELECT COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders WHERE pos_id IN (${ph}) AND first_confirmed_at>=? AND first_confirmed_at<? AND status_code NOT IN (0,17,6,7)${MKT}`).bind(...posIds, r.startUtc, r.endUtc);
+    env.DB.prepare(`SELECT COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders WHERE pos_id IN (${ph}) AND first_confirmed_at>=? AND first_confirmed_at<? AND ${mktClosedStatus('status_code')}${MKT}`).bind(...posIds, r.startUtc, r.endUtc);
   const saleF = teamFilter('seller_id', 'sale');
   const parts = [
     { key: 'sale', label: 'Sale', cur: stat(saleF, monthStart, today), prev: raw(saleF, prev) },

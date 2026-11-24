@@ -13,8 +13,9 @@ import { STAGES, SOURCE_FIELD, itemKey, productExists, saleItemPredicate, stageS
 import { MARKETING_TEAMS_KEY, parseMarketingTeams, UNASSIGNED_TEAM, marketingTeamFilter, marketingTeamGroupSql } from '@/lib/teams/marketing-teams';
 import { parseTeam, MKT_STAFF, teamFilter, teamSubquery, leadSellerFilter, notSan } from '@/lib/teams/team';
 import { RANK_STAGES, type RankStage } from '@/lib/reports/mkt-rank';
-import { AFTER_PACK_CANCELLED_SQL, AFTER_PACK_RETURNED_SQL, PACKED_SQL } from '@/lib/reports/van-don';
+import { AFTER_PACK_CANCELLED_SQL, AFTER_PACK_RETURNED_SQL, NEVER_SENT_CANCELLED_SQL, PACKED_SQL } from '@/lib/reports/van-don';
 import { saleTeamSql } from '@/lib/teams/sale-team-filter';
+import { mktClosedSql } from '@/lib/reports/mkt-closed';
 
 /** Đã xác nhận lần đầu, kể cả sau đó hủy / hoàn (chỉ trừ mới / chờ / xoá). */
 const EVER_CONFIRMED = "(o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,7))";
@@ -117,7 +118,7 @@ async function marketingOverviewRaw(user: { role: Role }, p: URLSearchParams, po
   const cohortBinds = [...posIds, ...marketingTeam.binds, ...extraBinds, startUtc, endUtc];
   const cskhSellers = teamSubquery('cskh')!, saleSellers = teamSubquery('sale')!;
   const sums = `COUNT(*) AS orders,COUNT(DISTINCT NULLIF(TRIM(o.phone),'')) AS phones,COALESCE(SUM(COALESCE(o.current_total,0)),0) AS gross,COALESCE(SUM(${NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1')}),0) AS net,
-    SUM(o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,6,7)) AS confirmed,SUM(o.status_code IN (2,3,16,4,5,15)) AS shipped,SUM(o.status_code IN (3,16)) AS delivered,SUM(o.status_code IN (4,5,15)) AS returned,SUM(o.status_code=6) AS cancelled,
+    SUM(${mktClosedSql('o')}) AS confirmed,SUM(o.status_code IN (2,3,16,4,5,15)) AS shipped,SUM(o.status_code IN (3,16)) AS delivered,SUM(o.status_code IN (4,5,15)) AS returned,SUM(o.status_code=6) AS cancelled,
     COALESCE(SUM(CASE WHEN o.status_code IN (4,5,15,6) THEN ${NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1')} ELSE 0 END),0) AS refund_net,
     SUM(o.seller_id IN ${cskhSellers}) AS cskh_orders,
     COALESCE(SUM(CASE WHEN o.seller_id IN ${cskhSellers} THEN ${NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1')} ELSE 0 END),0) AS cskh_net,
@@ -156,7 +157,8 @@ async function marketingOverviewRaw(user: { role: Role }, p: URLSearchParams, po
     `COALESCE(SUM(CASE WHEN ${EVER_CONFIRMED} AND o.seller_id IN ${saleSellers} THEN 1 ELSE 0 END),0) AS xp_confirmed_new`,
     `COALESCE(SUM(CASE WHEN ${EVER_CONFIRMED} AND o.seller_id IN ${cskhSellers} THEN 1 ELSE 0 END),0) AS xp_confirmed_cskh`,
     `COALESCE(SUM(CASE WHEN ${EVER_CONFIRMED} AND o.seller_id IN ${saleSellers} AND ${PACKED_SQL('o')} THEN 1 ELSE 0 END),0) AS xp_packed_new`,
-    `COALESCE(SUM(CASE WHEN ${EVER_CONFIRMED} AND o.seller_id IN ${saleSellers} AND ${AFTER_PACK_CANCELLED_SQL('o')} THEN 1 ELSE 0 END),0) AS xp_cancelled_new`,
+    // Tỉ lệ hủy MKT (anh Vũ 24/11/2026: "hủy trên tổng cả chốt cả hủy"): mọi đơn New đã chốt rồi hủy mà chưa từng giao ĐVVC ÷ Đơn New.
+    `COALESCE(SUM(CASE WHEN ${EVER_CONFIRMED} AND o.seller_id IN ${saleSellers} AND ${NEVER_SENT_CANCELLED_SQL('o')} THEN 1 ELSE 0 END),0) AS xp_cancelled_new`,
     `COALESCE(SUM(CASE WHEN ${EVER_CONFIRMED} AND o.seller_id IN ${saleSellers} AND ${PACKED_SQL('o')} AND ${AFTER_PACK_RETURNED_SQL('o')} THEN 1 ELSE 0 END),0) AS xp_returned_new`,
     // DT chuyển (anh Vũ 19/11/2026: "đóng hàng trở đi là doanh thu chuyển"): tiền các đơn của cột Đơn đi (New); dòng nhỏ trừ đơn đang hoàn / đã hoàn / hủy.
     `COALESCE(SUM(CASE WHEN ${EVER_CONFIRMED} AND o.seller_id IN ${saleSellers} AND ${PACKED_SQL('o')} THEN ${rankNet} ELSE 0 END),0) AS xp_ship_net_new`,
@@ -300,7 +302,7 @@ async function marketingOverviewRaw(user: { role: Role }, p: URLSearchParams, po
       cohort: 'Phễu và tỷ lệ dùng các đơn do marketer mang về, tạo trong kỳ đang chọn. SĐT là số duy nhất có trên các đơn này.',
       selected: basis === 'confirmed' ? 'Chỉ số chính xếp theo ngày xác nhận lần đầu và trạng thái/mốc đang chọn.' : 'Chỉ số chính xếp theo ngày tạo đơn và trạng thái/mốc đang chọn.',
       products: 'Sản phẩm lấy từ dòng hàng bán trên Pancake, loại dòng được đánh dấu quà tặng hoặc có tên bắt đầu bằng Quà Tặng. Một đơn có nhiều sản phẩm được tính vào từng dòng liên quan; hàng tổng đơn dùng số đơn duy nhất.',
-      split: 'DT chốt (trước gọi DT New) = doanh thu đơn do nhân viên Sale chốt (khách mới từ quảng cáo); DT chuyển = tiền các đơn ở cột Đơn đi, gồm cả đơn huỷ sau đóng hàng; dòng nhỏ đã trừ hoàn huỷ; DT CSKH = đơn do nhân viên CSKH đứng tên bán (khách cũ mua lại trên data Marketing). Doanh thu = DT chốt + DT CSKH + đơn của người bán chưa có hậu tố SALE / CSKH. Dòng nhỏ: sau hoàn hủy.',
+      split: 'DT chốt (trước gọi DT New) = tiền mọi đơn do nhân viên Sale chốt (khách mới từ quảng cáo), kể cả đơn hủy / hoàn sau đó; DT chuyển = tiền các đơn ở cột Đơn đi (đã đóng hàng trở đi), kể cả hủy / hoàn sau đó, luôn không quá DT chốt; tỉ lệ hủy, hoàn chia cho Đơn New; dòng nhỏ đã trừ hoàn hủy; DT CSKH = đơn do nhân viên CSKH đứng tên bán (khách cũ mua lại trên data Marketing). Doanh thu = DT chốt + DT CSKH + đơn của người bán chưa có hậu tố SALE / CSKH. Dòng nhỏ: sau hoàn hủy.',
       attribution: 'Sale và CSKH lấy từ người bán và người chăm sóc gắn trên đơn. Nguồn đơn lấy từ trường order_sources của Pancake. Page, bài viết và mã quảng cáo chưa có trường chuẩn đủ để lập bộ lọc toàn bộ lịch sử. Bảng đơn chỉ hiện ghi chú của đơn; ghi chú khách chi tiết xem tại Cuộc gọi CSKH.',
     },
   };

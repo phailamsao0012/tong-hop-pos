@@ -365,7 +365,7 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
   const shown: Seg = data.team ?? 'all', split = data.split;
   // Luật số MKT (Đầu não kiểm 19/11/2026): xem "Tất cả" thì Đơn chốt chỉ đơn New (người bán Sale), không cộng CSKH / người bán chưa hậu tố;
   // Số là số chia Sale, nên TL chốt = đơn New ÷ số chia Sale, giống bảng xếp hạng marketer chính. Nút Sale / CSKH giữ như cũ (đã đúng bộ phận).
-  // Đã chốt là chốt (anh Vũ 19/11/2026): cộng đơn Sale chốt rồi huỷ (newCancelled), khớp cột Đơn New của bảng xếp hạng chính.
+  // Đã chốt là chốt: từ 24/11/2026 đơn chốt rồi huỷ đã nằm trong newOrders (newCancelled luôn 0), khớp cột Đơn New của bảng xếp hạng chính.
   const newOnly = <T extends { closed: number }>(m: T): T => shown === 'all' && 'newOrders' in m ? { ...m, closed: Number((m as unknown as NewSplit).newOrders) + Number((m as unknown as { newCancelled?: number }).newCancelled ?? 0) } : m;
   const revLabel = REV_LABEL[shown];
   const prevLabel = `kỳ trước ${range(data.previous.start, data.previous.end)}${data.previous.cutoff ? ` tới ${data.previous.cutoff}` : ''}${data.previous.costUntil < data.previous.end ? ` (hôm nay chưa có chi phí nên chi phí kỳ trước tính tới hết ${dmy(data.previous.costUntil)})` : ''}`;

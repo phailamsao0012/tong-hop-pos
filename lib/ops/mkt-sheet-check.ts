@@ -8,6 +8,7 @@ import { ensureSheetCostSchema } from '@/lib/ops/sheet-costs';
 import { NET } from '@/lib/reports/stats';
 import { MKT_STAFF, type Team, leadSellerFilter, teamFilter, teamSubquery } from '@/lib/teams/team';
 import { bucketExpr, vnRangeUtc } from '@/lib/shared/report-time';
+import { mktClosedSql, mktClosedStatus } from '@/lib/reports/mkt-closed';
 
 export type PosSide = { orders: number; phones: number; closed: number; net: number; sale: number; cskh: number; other: number; saleClosed: number; cskhClosed: number };
 /** cost: chi phí QC marketer ghi trên sheet báo cáo (ad_costs). Anh Vũ 11/11/2026 "cột chi phí lấy trên sheet báo cáo, tên cột là cp sheet". */
@@ -31,7 +32,7 @@ export async function mktSheetCheck(opts: { posIds: string[]; start: string; end
   const saleSub = teamSubquery('sale')!, cskhSub = teamSubquery('cskh')!;
   // Tài khoản chỉ xem một bộ phận (lib/access.ts ép ?team=): doanh thu POS chỉ còn đơn bộ phận đó chốt; số về, đơn tạo giữ nguyên.
   const seg = teamFilter('o.seller_id', opts.team ?? 'all');
-  const closedNow = `o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,6,7) AND o.marketer_id IN ${MKT_STAFF}${seg}`;
+  const closedNow = `${mktClosedSql('o')} AND o.marketer_id IN ${MKT_STAFF}${seg}`;
   const split = (cond: string) => `COALESCE(SUM(CASE WHEN ${cond} AND o.seller_id IN ${saleSub} THEN ${net} ELSE 0 END),0) AS sale,
     COALESCE(SUM(CASE WHEN ${cond} AND o.seller_id IN ${cskhSub} THEN ${net} ELSE 0 END),0) AS cskh,
     SUM(CASE WHEN ${cond} AND o.seller_id IN ${saleSub} THEN 1 ELSE 0 END) AS sale_closed, SUM(CASE WHEN ${cond} AND o.seller_id IN ${cskhSub} THEN 1 ELSE 0 END) AS cskh_closed`;
@@ -43,7 +44,7 @@ export async function mktSheetCheck(opts: { posIds: string[]; start: string; end
       .bind(opts.start, opts.end),
     // Mốc ngày xác nhận lần đầu: đúng như ô Doanh thu MKT.
     db.prepare(`SELECT ${mk} AS m, ${bucketExpr('o.first_confirmed_at', 'day')} AS d, COUNT(*) AS closed, COALESCE(SUM(${net}),0) AS net, ${split('1')}
-      FROM raw_pos_orders o WHERE ${base} AND o.marketer_id IN ${MKT_STAFF} AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,6,7)${seg} GROUP BY 1,2`)
+      FROM raw_pos_orders o WHERE ${base} AND o.marketer_id IN ${MKT_STAFF} AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND ${mktClosedStatus('o.status_code')}${seg} GROUP BY 1,2`)
       .bind(...opts.posIds, cur.startUtc, cur.endUtc),
     // Mốc ngày tạo đơn: đơn tạo trong ngày, SĐT khác nhau, và bao nhiêu đơn trong số đó tới nay đã chốt.
     db.prepare(`SELECT ${mk} AS m, ${bucketExpr('o.created_at', 'day')} AS d, COUNT(*) AS orders, COUNT(DISTINCT NULLIF(TRIM(o.phone),'')) AS phones,

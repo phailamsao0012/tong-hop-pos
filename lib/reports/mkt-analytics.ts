@@ -8,6 +8,7 @@ import { saleTeamSql } from '@/lib/teams/sale-team-filter';
 // Sản phẩm: cột "Sản phẩm" của sheet (lưu ở ad_costs.campaign). Đơn Pancake thuộc sản phẩm đó khi nhãn đơn hoặc tên sản phẩm trong đơn chứa đúng tên ấy
 // (so không dấu, bỏ dấu cách); "Kháng sinh" / "Combo" dùng nhóm chính của web. Một đơn nhiều sản phẩm được tính ở mỗi sản phẩm.
 import { env } from 'cloudflare:workers';
+import { mktClosedStatus } from '@/lib/reports/mkt-closed';
 import { ensureAdCostSchema, mktTotal, emptyNewSplit, newSplitSql, unmatchedSheetCosts, type NewSplit } from '@/lib/ops/ad-costs';
 import { NET } from '@/lib/reports/stats';
 import { MKT_STAFF, type Team, leadSellerFilter, notSan, teamSubquery } from '@/lib/teams/team';
@@ -18,7 +19,7 @@ import { addDays, bucketExpr, comparePeriod, compareWindow, daysBetween, vnRange
 export const NO_PRODUCT = '';
 export type Bucket = 'day' | 'week' | 'month';
 export type Metrics = NewSplit & { cost: number; net: number; closed: number; orders: number; phones: number; coveredNet: number; coveredClosed: number; coveredPhones: number; marketers: number; roas: number | null; costPerClosed: number | null; costPerLead: number | null };
-/** newCancelled: đơn người bán Sale đã chốt trong kỳ rồi huỷ; cộng với newOrders thành đơn chốt New theo luật "đã chốt là chốt" (bảng đầu trang). */
+/** newCancelled: giữ cho tương thích, luôn 0 từ 24/11/2026 (đơn chốt rồi huỷ đã nằm trong newOrders). Trước đây: đơn người bán Sale đã chốt trong kỳ rồi huỷ (bảng đầu trang). */
 type Base = NewSplit & Pick<Metrics, 'cost' | 'net' | 'closed' | 'orders' | 'phones'> & { newCancelled: number };
 /** Doanh thu MKT tách theo người bán trên đơn (anh Vũ 12/10/2026): Sale chốt = doanh thu New, CSKH chốt = doanh thu CSKH, Khác = người bán ngoài hai bộ phận. */
 export type Split = { sale: { net: number; closed: number }; cskh: { net: number; closed: number }; other: { net: number; closed: number } };
@@ -128,7 +129,7 @@ export async function mktAnalytics(opts: { posIds: string[]; start: string; end:
   const team = opts.team ?? 'all';
   // Team Sale (anh Vũ 12/11/2026): chỉ đơn do người của team đó xác nhận; số về theo Sale được gán. Chi phí không đổi (trang ẩn chi phí khi chọn team Sale).
   const st = saleTeamSql(opts.saleTeam);
-  const closedWhere = (from: string, to: string) => [`o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,6,7) AND ${mk} IS NOT NULL AND o.marketer_id IN ${MKT_STAFF}${notSan('o.marketer_id')}${st ? ` AND ${st.closer}` : ''}`, [...opts.posIds, from, to]] as const;
+  const closedWhere = (from: string, to: string) => [`o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND ${mktClosedStatus('o.status_code')} AND ${mk} IS NOT NULL AND o.marketer_id IN ${MKT_STAFF}${notSan('o.marketer_id')}${st ? ` AND ${st.closer}` : ''}`, [...opts.posIds, from, to]] as const;
   // Số về: đơn chia Sale là số Sale, chia CSKH là số CSKH, chưa chia / người khác không tính; theo nút Sale / CSKH (anh Vũ 04/11/2026, ý sếp).
   const leadWhere = (from: string, to: string) => [`o.pos_id IN (${ph}) AND o.created_at>=? AND o.created_at<? AND o.status_code<>7 AND ${mk} IS NOT NULL ${leadSellerFilter('o.seller_id', team)}${notSan('o.marketer_id')}${st ? ` AND ${st.lead}` : ''}`, [...opts.posIds, from, to]] as const;
   const net = NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1');
@@ -170,14 +171,7 @@ export async function mktAnalytics(opts: { posIds: string[]; start: string; end:
       ];
     }),
   ];
-  // Đơn Sale đã chốt trong kỳ rồi huỷ (luật "đã chốt là chốt", anh Vũ 19/11/2026): chỉ để đếm Đơn chốt New / TL chốt, không vào doanh thu.
-  const cancelled = (w: string) => w.replace('o.status_code NOT IN (0,17,6,7)', 'o.status_code=6') + ` AND o.seller_id IN ${saleSub}`;
-  if (!cw.includes('o.status_code NOT IN (0,17,6,7)')) throw new Error('closedWhere đổi, sửa lại câu đơn chốt rồi huỷ');
-  const cancelIdx = stmts.length;
-  stmts.push(
-    db.prepare(`SELECT ${mk} AS m, ${bucketExpr('o.first_confirmed_at', bucket)} AS b, COUNT(*) AS n FROM raw_pos_orders o WHERE ${cancelled(cw)}${pfSql} GROUP BY 1,2`).bind(...cb, ...pfBinds),
-    db.prepare(`SELECT ${mk} AS m, COUNT(*) AS n FROM raw_pos_orders o WHERE ${cancelled(pcw)}${pfSql} GROUP BY 1`).bind(...pcb, ...pfBinds),
-  );
+  // Từ 24/11/2026 đơn chốt rồi huỷ đã nằm trong đơn chốt (mktClosedStatus), không đếm thêm riêng nữa (newCancelled luôn 0).
   const res = await db.batch(stmts);
   type R = Record<string, string | number | null>;
   const rowsOf = (i: number) => res[i].results as R[];
@@ -189,8 +183,6 @@ export async function mktAnalytics(opts: { posIds: string[]; start: string; end:
   for (const r of rowsOf(0)) get(byM, String(r.marketer_id)).cost += n(r.amount);
   for (const r of rowsOf(3)) { const x = get(byM, String(r.m)); x.closed += n(r.closed); x.net += n(r.net); for (const k of ["newOrders", "newNet", "cskhOrders", "cskhNet", "otherNet"] as const) x[k] += n(r[k]); }
   for (const r of rowsOf(4)) { const x = get(byM, String(r.m)); x.orders = n(r.orders); x.phones = n(r.phones); }
-  for (const r of rowsOf(cancelIdx)) get(byM, String(r.m)).newCancelled += n(r.n);
-  for (const r of rowsOf(cancelIdx + 1)) get(prevM, String(r.m)).newCancelled += n(r.n);
   // Kỳ đang xem tới hôm nay mà hôm nay chưa có chi phí (sheet thường ghi sau): chi phí kỳ trước cũng chỉ tính tới hết ngày áp chót, để so cùng mốc.
   const todayCost = rowsOf(0).some((r) => r.day === opts.end && picked(String(r.marketer_id)) && n(r.amount) > 0);
   const costUntil = win.cutoff && !todayCost ? addDays(prev.end, -1) : prev.end;
@@ -229,7 +221,6 @@ export async function mktAnalytics(opts: { posIds: string[]; start: string; end:
   const at = (k: string) => series.get(k);
   for (const r of rowsOf(0)) if (picked(String(r.marketer_id))) { const x = at(bucketKey(String(r.day), bucket)); if (x) x.cost += n(r.amount); }
   for (const r of rowsOf(3)) if (picked(String(r.m))) { const x = at(String(r.b)); if (x) { x.closed += n(r.closed); x.net += n(r.net); for (const k of ["newOrders", "newNet", "cskhOrders", "cskhNet", "otherNet"] as const) x[k] += n(r[k]); if (paidNow(String(r.m))) { x.coveredNet += n(r.newNet); x.coveredClosed += n(r.newOrders); } } }
-  for (const r of rowsOf(cancelIdx)) if (picked(String(r.m))) { const x = at(String(r.b)); if (x) x.newCancelled += n(r.n); }
   for (const r of rowsOf(5)) if (picked(String(r.m))) { const x = at(String(r.b)); if (x) { x.orders += n(r.orders); x.phones += n(r.phones); if (paidNow(String(r.m))) x.coveredPhones += n(r.phones); } }
   const timeline = [...series.entries()].map(([key, x]) => ({ key, ...x, costShare: team !== 'cskh' && x.coveredNet ? x.cost / x.coveredNet : null, net: team === 'sale' ? x.newNet : team === 'cskh' ? x.cskhNet : x.net, closed: team === 'sale' ? x.newOrders : team === 'cskh' ? x.cskhOrders : x.closed,
     roas: team !== 'cskh' && x.cost ? x.coveredNet / x.cost : null, costPerClosed: team !== 'cskh' && x.cost && x.coveredClosed ? x.cost / x.coveredClosed : null, costPerLead: x.cost && x.coveredPhones ? x.cost / x.coveredPhones : null }));

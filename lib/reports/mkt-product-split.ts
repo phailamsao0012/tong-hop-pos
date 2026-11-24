@@ -3,6 +3,7 @@
 // số về chỉ tính đơn chia cho Sale (nút CSKH: đơn chia CSKH). Một đơn có nhiều dòng sản phẩm thì nằm ở từng dòng nó có,
 // nên cộng các dòng có thể lớn hơn tổng của ô.
 import { MKT_STAFF, leadSellerFilter, notSan, type Team } from '@/lib/teams/team';
+import { mktClosedSql } from '@/lib/reports/mkt-closed';
 
 export const PRODUCT_LINES = [
   { key: 'gentadox', label: 'Gentadox', like: ['%gentadox%'] },
@@ -52,7 +53,7 @@ function scopeWhere(scope: SplitScope) {
 /** Số đã chốt / chưa chốt theo marketer (byMarketer = false: cả phạm vi). */
 export function coverageSql(scope: SplitScope, byMarketer = true) {
   const marketer = `NULLIF(TRIM(o.marketer_id),'')`;
-  const confirmed = 'o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,6,7)', ever = 'o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,7)';
+  const confirmed = mktClosedSql('o'), ever = 'o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,7)';
   const itemSum = (col: string) => `(SELECT COALESCE(SUM(COALESCE(i.${col},0)),0) FROM raw_pos_order_items i WHERE i.order_id=o.id AND ${SALE_ITEM('i')})`;
   const sql = `SELECT ${byMarketer ? marketer : "''"} AS marketer_id,
       COUNT(*) AS orders_all, COUNT(DISTINCT NULLIF(TRIM(o.phone),'')) AS phones_all, SUM(CASE WHEN ${ever} THEN 1 ELSE 0 END) AS confirmed_all,
@@ -75,7 +76,7 @@ export function coverageOf(r: CoverageRow): SplitCoverage {
 /** byMarketer = false: gom cả phạm vi theo dòng sản phẩm (hàng Tổng, SĐT đếm duy nhất trên cả phạm vi). */
 export function productSplitSql(scope: SplitScope, byMarketer = true) {
   const marketer = `NULLIF(TRIM(o.marketer_id),'')`;
-  const confirmed = 'o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,6,7)', ever = 'o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,7)';
+  const confirmed = mktClosedSql('o'), ever = 'o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,7)';
   const sql = `SELECT ${byMarketer ? marketer : "''"} AS marketer_id, ${lineCaseSql('i.name', SPLIT_LINES)} AS line,
       COUNT(DISTINCT o.id) AS orders, COUNT(DISTINCT NULLIF(TRIM(o.phone),'')) AS phones,
       COUNT(DISTINCT CASE WHEN ${ever} THEN o.id END) AS confirmed,

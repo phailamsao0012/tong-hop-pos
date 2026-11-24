@@ -12,12 +12,14 @@ import { CLOSED, sentAtReady } from '@/lib/reports/stats';
 import { isSegment, EMPTY_ORDER_FILTERS, orderFilterSql } from '@/lib/pancake/order-segments';
 import { RETURNED_CODES, SENT_CODES } from '@/lib/reports/shipping-lines';
 import { mktSummary, newSplitSql, type NewSplit } from '@/lib/ops/ad-costs';
+import { mktClosedSql } from '@/lib/reports/mkt-closed';
 
 // Tổng quan 4 mục (Sale / CSKH / MKT / Vận đơn), xem lib/sections.ts. Nhóm theo người bán trên đơn (bộ phận Sale / CSKH);
 // MKT = đơn có Marketer. Đơn chốt Sale / CSKH = từ Chờ xác nhận trở đi theo ngày chốt (cùng Tổng quan POS); MKT chốt = đã xác nhận.
 const NET = 'COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0))';
 const IS_CLOSED = `o.first_closed_at IS NOT NULL AND o.${CLOSED}`;
-const IS_CONFIRMED = 'o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,6,7)';
+// Đơn MKT đã chốt, kể cả hủy / hoàn sau đó (lib/reports/mkt-closed.ts, anh Vũ 24/11/2026).
+const IS_CONFIRMED = mktClosedSql('o');
 
 type Lens = Exclude<Awaited<ReturnType<typeof resolveMktLens>>, Response>;
 /** Tổng quan 4 mục; `p` là tham số URL (nhóm đơn, team, chi nhánh), `lens` đã kiểm ở route. */

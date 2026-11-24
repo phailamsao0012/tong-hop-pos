@@ -3,6 +3,7 @@
 // đơn chốt theo ngày xác nhận lần đầu, bỏ trạng thái 0/17/6/7, marketer được tính doanh số, người bán thuộc Sale (New) hoặc CSKH.
 import { NET } from '@/lib/reports/stats';
 import { MKT_STAFF, teamSubquery } from '@/lib/teams/team';
+import { mktClosedStatus } from '@/lib/reports/mkt-closed';
 
 export type MktOrderKind = 'new' | 'cskh';
 export const MKT_ORDER_LIMIT = 500;
@@ -14,7 +15,7 @@ export function mktOrdersSql(opts: { posIds: string[]; marketerIds: string[]; ki
   return {
     sql: `SELECT o.id, o.source_order_id, o.pos_id, o.phone, o.first_confirmed_at, o.status_code, o.marketer_id, o.seller_id, ${net} AS net
       FROM raw_pos_orders o WHERE o.pos_id IN (${ph(opts.posIds)}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<?
-      AND o.status_code NOT IN (0,17,6,7) AND NULLIF(TRIM(o.marketer_id),'') IN (${ph(opts.marketerIds)}) AND o.marketer_id IN ${MKT_STAFF}
+      AND ${mktClosedStatus('o.status_code')} AND NULLIF(TRIM(o.marketer_id),'') IN (${ph(opts.marketerIds)}) AND o.marketer_id IN ${MKT_STAFF}
       AND o.seller_id IN ${sellers} ORDER BY o.first_confirmed_at DESC, o.id DESC LIMIT ${MKT_ORDER_LIMIT + 1}`,
     binds: [...opts.posIds, opts.startUtc, opts.endUtc, ...opts.marketerIds],
   };

@@ -4,13 +4,14 @@
 // làm các khối khác của Điều hành chờ quá giờ ("Không tải được"). Lọc người được tính / team Sale làm lúc đọc nên đổi team không cần dựng lại.
 import { addDays, vnDayStartUtc } from '@/lib/shared/report-time';
 import { diffStatements, run } from '@/lib/reports/stats-write';
+import { mktClosedStatus } from '@/lib/reports/mkt-closed';
 
 type Row = Record<string, string | number | null>;
 
 export const MKT_COLUMNS = ['orders', 'net'] as const;
 /** Đơn MKT được tính: đã xác nhận (Đã xác nhận trở đi) và có Marketer; giống điều kiện cũ của Xu hướng / Hiệu quả MKT. */
 export const MKT_CONFIRMED =
-  "status_code NOT IN (0,17,6,7) AND NULLIF(TRIM(marketer_id),'') IS NOT NULL";
+  `${mktClosedStatus('status_code')} AND NULLIF(TRIM(marketer_id),'') IS NOT NULL`;
 const NET =
   'COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0))';
 export const mktSql = `SELECT date(datetime(first_confirmed_at,'+7 hours')) AS day, marketer_id, COALESCE(seller_id,'') AS seller_id,

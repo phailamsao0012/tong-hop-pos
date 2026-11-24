@@ -13,6 +13,7 @@ import { CLOSED, STATUS_GROUPS, dayExpr, sellerProductStatsReady, sentAtReady } 
 import { mktStatsReady } from '@/lib/reports/stats-mkt';
 import { MKT_STAFF, countedCase, teamSubquery } from '@/lib/teams/team';
 import { TREND_DAYS, buildTrends, type ClosedTrendRow, type CohortRow, type MktTrendRow, type ProductTrendRow } from '@/lib/reports/trends';
+import { mktClosedStatus } from '@/lib/reports/mkt-closed';
 
 const NET = 'COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0))';
 const GROUP_CASE = `CASE ${Object.entries(STATUS_GROUPS).map(([k, codes]) => `WHEN o.status_code IN (${codes.join(',')}) THEN '${k}'`).join(' ')} END`;
@@ -74,7 +75,7 @@ export async function trendsReport(opts: TrendsOpts) {
     ? env.DB.prepare(`SELECT day, marketer_id, SUM(orders) AS n, SUM(net) AS net FROM stats_daily_mkt
         WHERE pos_id IN (${ph}) AND day>=? AND day<=? AND marketer_id IN ${MKT_STAFF} GROUP BY 1, 2`).bind(...opts.posIds, first, end)
     : env.DB.prepare(`SELECT ${dayExpr('o.first_confirmed_at')} AS day, o.marketer_id, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net
-      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,6,7)
+      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND ${mktClosedStatus('o.status_code')}
         AND NULLIF(TRIM(o.marketer_id),'') IS NOT NULL AND o.marketer_id IN ${MKT_STAFF}${seg} GROUP BY 1, 2`).bind(...binds);
   // Vận đơn theo ngày gửi hàng (anh Vũ 10/10/2026) khi đã điền đủ giờ gửi đơn cũ: đơn đi lấy riêng theo first_sent_at (dòng counted=0 chỉ cộng vào
   // Vận đơn), đơn chốt không còn cờ đi / hoàn. Chưa đủ thì như cũ: đơn đi trong các đơn chốt theo ngày chốt.

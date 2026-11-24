@@ -29,6 +29,8 @@ const historyHas = (a: string, codes: string) =>
  */
 export const AFTER_PACK_CANCELLED_SQL = (a = 'o') =>
   `(${a}.status_code=6 AND ${historyHas(a, '8')} AND NOT ${historyHas(a, '2,3,16,4,15,5')})`;
+/** Đơn đã chốt rồi hủy mà CHƯA TỪNG giao ĐVVC (hủy trước đóng hàng hoặc sau đóng hàng chưa gửi). Tỉ lệ hủy MKT (anh Vũ 24/11/2026). */
+export const NEVER_SENT_CANCELLED_SQL = (a = 'o') => `(${a}.status_code=6 AND NOT ${historyHas(a, '2,3,16,4,15,5')})`;
 export const AFTER_PACK_RETURNED_SQL = (a = 'o') =>
   `(${a}.status_code IN (4,15,5) OR (${a}.status_code=6 AND ${historyHas(a, '8')} AND ${historyHas(a, '2,3,16,4,15,5')}))`;
 

@@ -49,17 +49,17 @@ export function mktCellDetail(cell: MktCell, m: MktNumbers, ctx: { name: string;
         ...(m.otherNet ? [{ label: 'Người bán khác', value: m.otherNet, kind: 'money' as const }] : []),
         { label: 'Doanh thu', value: m.net, kind: 'money', strong: true },
       ];
-      return { title: 'Doanh thu MKT', scope, op: 'sum', parts, how: `Đơn chốt theo ngày xác nhận lần đầu, sau giảm giá · ${m.closed} đơn.`, prev: ctx.prevNet === undefined ? undefined : { value: ctx.prevNet, kind: 'money' }, hint };
+      return { title: 'Doanh thu MKT', scope, op: 'sum', parts, how: `Đơn chốt theo ngày xác nhận lần đầu, sau giảm giá, kể cả đơn hủy / hoàn sau đó (đã chốt là chốt) · ${m.closed} đơn.`, prev: ctx.prevNet === undefined ? undefined : { value: ctx.prevNet, kind: 'money' }, hint };
     }
     case 'newNet': return {
       title: 'Doanh thu chốt (New)', scope,
       parts: [{ label: 'Số đơn New', value: m.newOrders ?? 0, kind: 'count' }, { label: 'DT chốt', value: m.newNet ?? 0, kind: 'money', strong: true }],
-      how: 'Đơn có Marketer này, người bán thuộc Sale, đã chốt trong kỳ.', hint,
+      how: 'Đơn có Marketer này, người bán thuộc Sale, đã chốt trong kỳ, kể cả đơn hủy / hoàn sau đó.', hint,
     };
     case 'cskhNet': return {
       title: 'Doanh thu CSKH', scope,
       parts: [{ label: 'Số đơn CSKH', value: m.cskhOrders ?? 0, kind: 'count' }, { label: 'DT CSKH', value: m.cskhNet ?? 0, kind: 'money', strong: true }],
-      how: 'Đơn có Marketer này, người bán thuộc CSKH, đã chốt trong kỳ. Không vào ROAS.', hint,
+      how: 'Đơn có Marketer này, người bán thuộc CSKH, đã chốt trong kỳ, kể cả đơn hủy / hoàn sau đó. Không vào ROAS.', hint,
     };
     case 'roas': return {
       title: 'ROAS', scope, op: 'div',

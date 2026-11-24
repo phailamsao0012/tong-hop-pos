@@ -1,4 +1,5 @@
 import { PACKED_SQL } from '@/lib/reports/van-don';
+import { mktClosedSql } from '@/lib/reports/mkt-closed';
 
 export const STAGES = ['all', 'unconfirmed', 'confirmed', 'packed', 'confirmed_now', 'stock', 'packing', 'waiting', 'shipping', 'shipped', 'delivered', 'returned', 'cancelled', 'deleted'] as const;
 export type MarketingStage = typeof STAGES[number];
@@ -8,7 +9,7 @@ export const stageSql = (stage: MarketingStage, alias = 'o'): string => {
   switch (stage) {
     case 'packed': return `(${stageSql('confirmed', alias)}) AND ${PACKED_SQL(alias)}`;
     case 'unconfirmed': return `${status} IN (0,17)`;
-    case 'confirmed': return `${alias}.first_confirmed_at IS NOT NULL AND ${status} NOT IN (0,17,6,7)`;
+    case 'confirmed': return mktClosedSql(alias);
     case 'confirmed_now': return `${status}=1`;
     case 'stock': return `${status} IN (11,12,13,20)`;
     case 'packing': return `${status}=8`;

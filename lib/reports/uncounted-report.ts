@@ -6,6 +6,7 @@ import { POS } from '@/lib/shared/report-model';
 import { DATE_RE, vnRangeUtc } from '@/lib/shared/report-time';
 import { CLOSED } from '@/lib/reports/stats';
 import { COUNTED, COUNTED_NAME, COUNTED_STAFF } from '@/lib/teams/team';
+import { mktClosedStatus } from '@/lib/reports/mkt-closed';
 
 // Doanh thu của người KHÔNG được tính (anh Vũ 08/10/2026: chỉ tính người có hậu tố MKT / CSKH / SALE trong tên Pancake, ở mọi POS;
 // "những người còn lại nếu phát sinh doanh thu trên pos thì phải làm 1 bảng báo cáo riêng để tôi thống kê xem nguyên nhân do đâu").
@@ -16,7 +17,7 @@ export const NOTES_KEY = 'uncounted_notes';
 export type Role = 'seller' | 'marketer';
 const ROLE_SQL: Record<Role, { col: string; date: string; where: string }> = {
   seller: { col: 'o.seller_id', date: 'o.first_closed_at', where: `o.${CLOSED}` },
-  marketer: { col: 'o.marketer_id', date: 'o.first_confirmed_at', where: 'o.status_code NOT IN (0,17,6,7)' },
+  marketer: { col: 'o.marketer_id', date: 'o.first_confirmed_at', where: mktClosedStatus('o.status_code') },
 };
 export type Note = { text: string; by: string; at: string };
 

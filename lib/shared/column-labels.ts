@@ -18,7 +18,7 @@ export const COLUMN_LABELS: Record<string, { full: string; short: string; hint: 
   "Doanh thu chuyển": {
     "full": "Doanh thu chuyển",
     "short": "DT chuyển",
-    "hint": "Tiền các đơn ở cột Đơn đi, gồm cả đơn huỷ sau đóng hàng; dòng nhỏ đã trừ hoàn huỷ."
+    "hint": "Tiền các đơn ở cột Đơn đi (đã đóng hàng trở đi), kể cả đơn hủy / hoàn sau đó; luôn không quá DT chốt. Dòng nhỏ đã trừ hoàn hủy."
   },
   "Doanh thu CSKH": {
     "full": "Doanh thu CSKH",
