@@ -67,7 +67,7 @@ void test('mktProductSplit: Doxy dòng riêng, Số đã chốt + chưa chốt c
   order.run('o1', 'p1', 's', '1', '0900000001', '2026-11-19T02:00:00Z', 1, 'sale1', 'mkt1', '2026-11-19T03:00:00Z', now);
   item.run('i1', 'o1', 'p1', 'Thuốc thú y Doxytylo 10g', 1, 100_000, 0);
   item.run('i2', 'o1', 'p1', 'Thuốc thú y Oxytetra', 1, 200_000, 0);
-  // o2: chốt rồi huỷ: Đơn chốt vẫn tính, tiền hàng không.
+  // o2: chốt rồi huỷ: từ 24/11/2026 Đơn chốt và tiền hàng đều tính (đã chốt là chốt, hủy tính riêng).
   order.run('o2', 'p1', 's', '2', '0900000002', '2026-11-19T02:00:00Z', 6, 'sale1', 'mkt1', '2026-11-19T03:00:00Z', now);
   item.run('i3', 'o2', 'p1', 'Thuốc Thú Y Flo - Doxy', 1, 300_000, 0);
   // o3, o4: chưa có sản phẩm (o4 cùng SĐT với o1 nên không thêm số).
@@ -75,11 +75,11 @@ void test('mktProductSplit: Doxy dòng riêng, Số đã chốt + chưa chốt c
   order.run('o4', 'p1', 's', '4', '0900000001', '2026-11-19T04:00:00Z', 0, 'sale1', 'mkt1', null, now);
   const out = await mktProductSplit(db, { posIds: ['p1'], startUtc: '2026-11-18T17:00:00', endUtc: '2026-11-19T17:00:00', team: 'all' });
   assert.equal(out.byMarketer.mkt1.oxy?.orders, 1);
-  assert.deepEqual(out.byMarketer.mkt1.doxy, { orders: 2, phones: 2, confirmed: 2, revenue: 100_000, quantity: 1 });
+  assert.deepEqual(out.byMarketer.mkt1.doxy, { orders: 2, phones: 2, confirmed: 2, revenue: 400_000, quantity: 2 }); // o1 100k + o2 (hủy) 300k
   assert.equal(out.byMarketer.mkt1.khac, undefined);
   const c = out.coverage.mkt1;
   // Số 0900000001 có o1 đã chốt (o4 chưa chốt cùng số vẫn tính là đã chốt), 0900000002 chốt rồi huỷ, 0900000003 chưa chốt.
-  assert.deepEqual(c.closed, { orders: 2, phones: 2, confirmed: 2, revenue: 300_000, quantity: 2 });
+  assert.deepEqual(c.closed, { orders: 2, phones: 2, confirmed: 2, revenue: 600_000, quantity: 3 }); // o1 300k / 2 món + o2 (hủy) 300k / 1 món
   assert.deepEqual(c.open, { orders: 2, phones: 1, confirmed: 0, revenue: 0, quantity: 0 });
   assert.equal(c.closed.phones + c.open.phones, 3);
   assert.equal(c.closed.orders + c.open.orders, 4);

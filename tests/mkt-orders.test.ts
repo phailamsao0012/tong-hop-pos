@@ -20,6 +20,7 @@ void test('danh sách đơn New / CSKH của một marketer khớp điều kiệ
       ('4','A4','p2','0903','2026-11-06T05:00:00',3,'m1','s1',70,NULL,NULL),
       ('5','A5','p1','0904','2026-11-08T05:00:00',3,'m1','s1',70,NULL,NULL);`);
   const run = (kind: 'new' | 'cskh') => { const q = mktOrdersSql({ posIds: ['p1'], marketerIds: ['m1'], kind, startUtc: '2026-11-05T17:00:00', endUtc: '2026-11-06T17:00:00' }); return (d.prepare(q.sql).all(...q.binds) as { source_order_id: string; net: number }[]).map((r) => [r.source_order_id, r.net]); };
-  assert.deepEqual(run('new'), [['A1', 100]]);
+  // Từ 24/11/2026 đơn đã chốt rồi hủy (A3) vẫn là đơn chốt; mới xếp trước.
+  assert.deepEqual(run('new'), [['A3', 70], ['A1', 100]]);
   assert.deepEqual(run('cskh'), [['A2', 50]]);
 });

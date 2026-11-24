@@ -144,13 +144,13 @@ void test('stats_daily_mkt gives the same MKT numbers as the raw order queries',
   assert.ok(mktRaw.length > 0);
   assert.deepEqual(rows(mktPre), rows(mktRaw));
 
-  // Đơn đổi trạng thái (hủy sau khi xác nhận): dựng lại ngày bẩn thì bảng theo kịp.
+  // Đơn đổi trạng thái (xoá sau khi xác nhận; từ 24/11/2026 hủy vẫn là đơn chốt MKT nên dùng xoá): dựng lại ngày bẩn thì bảng theo kịp.
   const victim = raw
     .prepare(`SELECT id, pos_id, first_confirmed_at FROM raw_pos_orders WHERE status_code NOT IN (0,17,7) AND first_confirmed_at IS NOT NULL
     AND NULLIF(TRIM(marketer_id),'') IS NOT NULL LIMIT 1`)
     .get() as { id: string; pos_id: string; first_confirmed_at: string };
   raw
-    .prepare('UPDATE raw_pos_orders SET status_code=6 WHERE id=?')
+    .prepare('UPDATE raw_pos_orders SET status_code=7 WHERE id=?')
     .run(victim.id);
   const dirty: DirtyBuckets = new Map();
   markDirty(dirty, victim.pos_id, victim.first_confirmed_at);

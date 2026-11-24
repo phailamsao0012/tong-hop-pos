@@ -24,7 +24,7 @@ void test('mkt-rank-stage: hạng theo đơn, hòa theo doanh thu rồi tên; đ
   assert.deepEqual(rows, before);
 });
 
-void test('mkt-rank-stage: packed dùng PACKED_SQL nhưng loại đơn hủy đã qua 8 khỏi tập MKT chốt', () => {
+void test('mkt-rank-stage: packed dùng PACKED_SQL; từ 24/11/2026 đơn đã chốt rồi hủy sau đóng hàng vẫn nằm trong tập MKT chốt', () => {
   const { raw } = emptyDb();
   try {
     const insert = raw.prepare('INSERT INTO raw_pos_orders (id,pos_id,shop_id,source_order_id,status_code,status_history_json,first_confirmed_at,created_at,fetched_at) VALUES (?,?,?,?,?,?,?,?,?)');
@@ -33,9 +33,9 @@ void test('mkt-rank-stage: packed dùng PACKED_SQL nhưng loại đơn hủy đ�
     }
     const cancelled = raw.prepare(`SELECT ${PACKED_SQL()} AS packed, (${stageSql('packed')}) AS mktPacked FROM raw_pos_orders o WHERE status_code=6`).get() as { packed: number; mktPacked: number };
     assert.equal(cancelled.packed, 1);
-    assert.equal(cancelled.mktPacked, 0);
+    assert.equal(cancelled.mktPacked, 1);
     const counts = RANK_STAGES.map((stage) => (raw.prepare(`SELECT COUNT(*) AS n FROM raw_pos_orders o WHERE ${stageSql(stage)}`).get() as { n: number }).n);
-    assert.deepEqual(counts, [9, 8, 6, 2]);
+    assert.deepEqual(counts, [10, 9, 6, 2]); // chốt và đóng hàng có thêm đơn hủy (6); giao, nhận không đổi
     assert.match(stageSql('packed', 'x'), /x\.status_history_json/);
   } finally { raw.close(); }
 });

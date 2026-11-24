@@ -17,10 +17,10 @@ function fixture() {
   return db;
 }
 
-void test('Marketing trạng thái chốt loại đơn hủy và chưa xác nhận; trạng thái giao vận bao gồm đơn đã nhận', () => {
+void test('Marketing trạng thái chốt gồm cả đơn đã chốt rồi hủy (24/11/2026), loại chưa xác nhận; trạng thái giao vận bao gồm đơn đã nhận', () => {
   const db = fixture();
   const count = (stage: Parameters<typeof stageSql>[0]) => Number((db.prepare(`SELECT COUNT(*) AS n FROM raw_pos_orders o WHERE o.marketer_id IS NOT NULL AND ${stageSql(stage)}`).get() as { n: number }).n);
-  assert.equal(count('confirmed'), 2);
+  assert.equal(count('confirmed'), 3); // a, b và c (đã chốt rồi hủy); d chưa xác nhận
   assert.equal(count('shipped'), 1);
   assert.equal(count('unconfirmed'), 1);
   assert.equal(count('cancelled'), 1);
