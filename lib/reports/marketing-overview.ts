@@ -136,14 +136,15 @@ async function marketingOverviewRaw(user: { role: Role }, p: URLSearchParams, po
     const condition = stageSql(key);
     const count = (extra = '1') => `COALESCE(SUM(CASE WHEN (${condition}) AND (${extra}) THEN 1 ELSE 0 END),0)`;
     const sum = (value: string, extra = '1') => `COALESCE(SUM(CASE WHEN (${condition}) AND (${extra}) THEN ${value} ELSE 0 END),0)`;
-    const refund = 'o.status_code IN (4,5,15,6)';
+    const refund = 'o.status_code IN (4,5,15,6)', cskhNotCancelled = 'o.status_code<>6';
     const fields = {
       orders: count(), phones: `COUNT(DISTINCT CASE WHEN ${condition} THEN NULLIF(TRIM(o.phone),'') END)`,
       gross: sum('COALESCE(o.current_total,0)'), net: sum(rankNet), refund_net: sum(rankNet, refund),
       sale_orders: count(`o.seller_id IN ${saleSellers}`), sale_net: sum(rankNet, `o.seller_id IN ${saleSellers}`),
       sale_refund_net: sum(rankNet, `o.seller_id IN ${saleSellers} AND ${refund}`),
-      cskh_orders: count(`o.seller_id IN ${cskhSellers}`), cskh_net: sum(rankNet, `o.seller_id IN ${cskhSellers}`),
-      cskh_refund_net: sum(rankNet, `o.seller_id IN ${cskhSellers} AND ${refund}`),
+      // Số của người bán CSKH giữ cách cũ (anh Vũ 24/11/2026: CSKH "không quan trọng cái hủy đấy lắm"): không tính đơn hủy.
+      cskh_orders: count(`o.seller_id IN ${cskhSellers} AND ${cskhNotCancelled}`), cskh_net: sum(rankNet, `o.seller_id IN ${cskhSellers} AND ${cskhNotCancelled}`),
+      cskh_refund_net: sum(rankNet, `o.seller_id IN ${cskhSellers} AND ${cskhNotCancelled} AND ${refund}`),
     };
     return Object.entries(fields).map(([field, expression]) => `${expression} AS ${key}_${field}`);
   }).concat([
