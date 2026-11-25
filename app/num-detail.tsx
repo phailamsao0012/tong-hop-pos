@@ -39,6 +39,18 @@ export function NumDetailBody({ spec, more }: { spec: NumDetailSpec; more?: Reac
           </tbody>
         </table>
       )}
+      {!!spec.extra?.length && (
+        <table className="w-full tabular-nums">
+          <tbody>
+            {spec.extra.map((p, i) => (
+              <tr key={i} className={i ? '' : 'border-t border-line'}>
+                <td className="py-0.5 pr-3 text-ink-3">{p.label}</td>
+                <td className={`py-0.5 text-right ${toneClass(p.tone)}`}>{fmtNum(p.value, p.kind)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
       {spec.how && <p className="text-[11px] leading-snug text-ink-3">{spec.how}</p>}
       {prev && <p className="text-[11px] text-ink-2">{prev.label ?? 'Kỳ trước cùng mốc'}: <b>{fmtNum(prev.value, prev.kind)}</b>{delta !== null && <span className={delta >= 0 ? 'text-good' : 'text-bad'}> ({delta >= 0 ? '+' : ''}{delta.toFixed(1).replace('.', ',')}%)</span>}</p>}
       {more}

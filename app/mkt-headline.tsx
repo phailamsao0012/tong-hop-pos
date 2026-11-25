@@ -10,7 +10,7 @@ import { useMemo, useState } from 'react';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { usePosStaffFilter } from './pos-store';
 import { ProfileLink, useProfileEnabled } from './staff-profile-link';
-import { ArrowRight, BadgeDollarSign, CalendarDays, Check, FileSpreadsheet, Filter, CheckCircle2, Coins, Megaphone, Package, Percent, Phone, TrendingUp, UsersRound, UserRound, Wallet, X } from 'lucide-react';
+import { ArrowRight, BadgeDollarSign, CalendarDays, Check, Filter, CheckCircle2, Coins, Megaphone, Package, Percent, Phone, TrendingUp, UsersRound, UserRound, Wallet, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Area, Bar, BarChart, CartesianGrid, ComposedChart, LabelList, XAxis, YAxis } from 'recharts';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip } from '@/components/ui/chart';
@@ -21,8 +21,7 @@ import { closeRateClass, ratePctCapped } from '@/lib/shared/close-rate';
 import { NumDetail } from './num-detail';
 import { mktCellDetail, type MktCell, type MktNumbers } from '@/lib/shared/num-detail';
 import { POS } from '@/lib/shared/report-model';
-import { compareSheet, gapOf, verdict, type SheetCheckData, type SheetCompare } from '@/lib/shared/mkt-sheet-compare';
-import { MktSheetCheck } from './mkt-sheet-check';
+import { gapOf, verdict, type SheetCompare } from '@/lib/shared/mkt-sheet-compare';
 import { useMotionOK } from './ui/motion';
 import { setTeam, useTeam, type Team as Seg } from './team-store';
 
@@ -40,7 +39,8 @@ type Analytics = {
   current: Metrics; prev: Metrics; timeline: Point[]; people: Person[]; teams: Team[]; products: ProductRow[];
   /** Chi phí theo tên trên sheet chưa ghép POS: không cộng vào số, chỉ nhắc (19/11/2026). */ unmatchedSheet?: { name: string; cost: number }[];
 };
-type Tab = 'people' | 'teams' | 'products' | 'time';
+// Tab Marketer đã gộp vào bảng xếp hạng marketer bên dưới (25/11/2026, app/marketing-view.tsx); còn Team, Sản phẩm, thời gian.
+type Tab = 'teams' | 'products' | 'time';
 type Row = { id: string; name: string; sub?: string; m: Metrics | Point; prevNet?: number; active: boolean; dim?: boolean; note?: string };
 
 const pctText = (n: number) => `${(n * 100).toFixed(1).replace('.', ',')}%`;
@@ -321,13 +321,13 @@ function SplitStrip({ cur, prev, total }: { cur: Split; prev: Split; total: numb
   );
 }
 
-export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer, onTeam, onOpen, saleTeam = null, onDetail }: {
-  start: string; end: string; posIds: string[]; marketerId: string | null; teamId: string | null; /** Team Sale đang chọn: lọc đơn, ẩn chi phí. */ saleTeam?: string | null; /** Bấm tên marketer: mở khung chi tiết. */ onDetail?: (id: string) => void;
+export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer, onTeam, onOpen, saleTeam = null }: {
+  start: string; end: string; posIds: string[]; marketerId: string | null; teamId: string | null; /** Team Sale đang chọn: lọc đơn, ẩn chi phí. */ saleTeam?: string | null; /** Không còn dùng (tab Marketer đã gộp vào bảng xếp hạng); giữ để chỗ gọi cũ không gãy. */ onDetail?: (id: string) => void;
   onMarketer: (id: string | null) => void; onTeam: (id: string | null) => void; onOpen: () => void;
 }) {
   const [product, setProduct] = useState<string | null>(null);
   const [orders, setOrders] = useState<{ row: Row; kind: OrderKind; team: boolean } | null>(null);
-  const [tab, setTab] = useState<Tab>('people');
+  const [tab, setTab] = useState<Tab>('teams');
   const seg = useTeam();
   // Chọn POS nào chỉ hiện người có tài khoản trên POS đó (anh Vũ 04/11/2026); tổng giữ nguyên.
   const onPos = usePosStaffFilter();
@@ -341,13 +341,7 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
     return `/api/marketing/analytics?${p}`;
   }, [start, end, posIds, seg, marketerId, teamId, product, saleTeam]);
   const noCost = !!saleTeam;
-  // So với sheet (phương án A): chỉ tải số sheet khi bật; tắt thì không gọi.
-  const [cmpOn, setCmpOn] = useState(false);
-  const [dayView, setDayView] = useState(false);
-  const sheetUrl = cmpOn && !noCost ? `/api/marketing/sheet-check?${new URLSearchParams({ start, end, posIds: posIds.join(',') })}` : null;
-  const sheetApi = useApi<SheetCheckData>(sheetUrl, { keep: true });
   const detailScope = `${range(start, end)} · ${posIds.length >= POS.length ? 'mọi POS' : posIds.map(posName).join(', ')}`;
-  const sheet = useMemo(() => sheetApi.data && cmpOn ? compareSheet(sheetApi.data, seg === 'sale' ? 'sale' : seg === 'cskh' ? 'cskh' : 'net') : null, [sheetApi.data, cmpOn, seg]);
   const { data, loading, error, reload } = useApi<Analytics>(url, { keep: true });
   const motionOn = useMotionOK();
   const timeRows = useMemo<ChartRow[]>(() => (data?.timeline ?? []).map((r) => ({ key: r.key, label: bucketLabel(r.key, data!.bucket), cost: r.cost, net: r.net, costM: r.cost / 1e6, netM: r.net / 1e6, closed: r.closed, roas: r.roas })), [data]);
@@ -373,19 +367,16 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
   const roasD = c.roas !== null && p.roas !== null ? delta(c.roas, p.roas) : null;
   const partial = c.net > c.coveredNet;
   const filtered = !!(marketerId || teamId || product !== null);
-  const pickPerson = (id: string) => { onTeam(null); onMarketer(id === marketerId ? null : id); };
   const pickTeam = (id: string) => { onMarketer(null); onTeam(id === teamId ? null : id); };
   const pickProduct = (id: string) => setProduct(id === product ? null : id);
   const teamName = new Map(data.teams.map((t) => [t.id, t.name]));
 
-  const people: Row[] = data.people.filter((r) => (!teamId || marketerId || r.picked) && (!onPos || onPos(r.id)))
-    .map((r) => ({ id: r.id, name: r.name, sub: teamName.get(r.teamId) ?? (r.teamId === '__unassigned' ? 'Chưa phân team' : undefined), m: newOnly(r), prevNet: r.prevNet, active: r.id === marketerId, dim: !!marketerId && r.id !== marketerId }));
   const teams: Row[] = data.teams.map((t) => ({ id: t.id, name: t.name, sub: `${vi.format(t.people)} marketer`, m: newOnly(t), prevNet: t.prevNet, active: t.id === teamId && !marketerId }));
   const products: Row[] = data.products.map((r) => ({ id: r.product, name: productName(r.product), m: newOnly(r), active: r.product === product,
     note: r.linked ? `Khớp đơn: ${r.matched.join(', ')}` : r.product ? 'Chưa khớp nhãn / sản phẩm nào trên đơn Pancake' : undefined }));
   const time: Row[] = data.timeline.map((r) => ({ id: r.key, name: bucketLabel(r.key, data.bucket), m: newOnly(r), active: false }));
-  const tabRows = tab === 'people' ? people : tab === 'teams' ? teams : tab === 'products' ? products : time;
-  const onPick = tab === 'people' ? pickPerson : tab === 'teams' ? pickTeam : tab === 'products' ? pickProduct : undefined;
+  const tabRows = tab === 'teams' ? teams : tab === 'products' ? products : time;
+  const onPick = tab === 'teams' ? pickTeam : tab === 'products' ? pickProduct : undefined;
   const totalCost = tab === 'time' ? c.cost : tabRows.reduce((s, r) => s + r.m.cost, 0);
 
   const tl = data.timeline, tlLabels = tl.map((r) => bucketLabel(r.key, data.bucket));
@@ -460,36 +451,17 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-base font-semibold text-ink">Tách theo</h3>
           <SegmentedControl<Tab> ariaLabel="Tách số Marketing theo" value={tab} onChange={setTab} options={[
-            { value: 'people', label: 'Marketer', icon: UserRound }, { value: 'teams', label: 'Team', icon: UsersRound },
+            { value: 'teams', label: 'Team', icon: UsersRound },
             { value: 'products', label: 'Sản phẩm', icon: Package }, { value: 'time', label: data.bucket === 'day' ? 'Ngày' : data.bucket === 'week' ? 'Tuần' : 'Tháng', icon: CalendarDays },
           ]} />
         </div>
         {tab === 'products' && <p className="text-[11.5px] leading-snug text-ink-3">Sản phẩm theo cột Sản phẩm của sheet chi phí. Doanh thu, đơn, số lấy từ đơn Pancake có nhãn hoặc tên sản phẩm khớp (dòng nào khớp ghi ngay dưới tên). Một đơn có nhiều sản phẩm được tính ở mỗi sản phẩm.</p>}
         {tab === 'teams' && !data.teams.some((t) => t.id !== '__unassigned') && <p className="text-[11.5px] text-ink-3">Chưa chia team Marketing. Chia ở nút <b>Quản lý team MKT</b> đầu trang.</p>}
         {tab !== 'time' && onPick && <RankChart seg={shown} rows={[...tabRows].sort((a, b) => (b.m.net + b.m.cost) - (a.m.net + a.m.cost))} onPick={onPick} motionOn={motionOn} />}
-        {tab === 'people' && !noCost && <div className="flex flex-wrap items-center gap-2">
-          <button type="button" aria-pressed={cmpOn} onClick={() => setCmpOn((v) => !v)} className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[12.5px] font-semibold tap ${cmpOn ? 'border-primary bg-primary text-primary-ink' : 'border-line-3 text-ink-2 hover:border-primary'}`}><FileSpreadsheet size={14} />So với sheet</button>
-          {cmpOn && sheetApi.loading && !sheet && <span className="text-[11.5px] text-ink-3">Đang tải số sheet…</span>}
-          {cmpOn && sheetApi.error && !sheet && <span className="text-[11.5px] text-bad">Không tải được số sheet. <button type="button" className="underline" onClick={sheetApi.reload}>Tải lại</button></span>}
-          {sheet && !(sheet.total.sheet.phones || sheet.total.sheet.orders || sheet.total.sheet.revenue) && <span className="text-[12px] text-ink-3">{sheetApi.data?.sheet.connected ? 'Sheet chưa có số SĐT / Đơn / DT trong kỳ này (sheet gửi mỗi giờ).' : 'Chưa nối Google Sheet chi phí (nối ở trang Chi phí & ROAS).'}</span>}
-          {sheet && !!(sheet.total.sheet.phones || sheet.total.sheet.orders || sheet.total.sheet.revenue) && <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-ink-3">
-            <span>Sheet tới hết <b className="text-ink-2">{dmy(sheet.cutoff)}</b></span>
-            {([['SĐT', sheet.total.sheet.phones, sheet.total.posPhones, (n: number) => vi.format(n)], ['Đơn', sheet.total.sheet.orders, sheet.total.posClosed, (n: number) => vi.format(n)], ['DT', sheet.total.sheet.revenue, sheet.total.posNet, shortMoney]] as const).map(([l, sv, pv, fm]) => {
-              const g = gapOf(sv, pv), v = verdict(g.pct);
-              return <span key={l}>{l} <b className="text-ink-2">{fm(sv)}</b> / POS <b className="text-ink-2">{fm(pv)}</b> <StatusChip tone={v.tone}>{v.text} {g.pct > 0 ? '+' : ''}{g.pct.toFixed(1).replace('.', ',')}%</StatusChip></span>;
-            })}
-          </span>}
-        </div>}
-        <BreakdownTable scope={detailScope} rows={tabRows} first={tab === 'people' ? 'Marketer' : tab === 'teams' ? 'Team' : tab === 'products' ? 'Sản phẩm' : data.bucket === 'day' ? 'Ngày' : data.bucket === 'week' ? 'Tuần' : 'Tháng'}
-          rankBar={tab === 'people' || tab === 'teams'} sheet={tab === 'people' ? sheet : null}
-          onPick={onPick} totalCost={totalCost} keepOrder={tab === 'time'} showSplit={shown === 'all'} profile={tab === 'people'} noCost={noCost} onDetail={tab === 'people' ? onDetail : undefined}
-          onOrders={product === null && (tab === 'people' || tab === 'teams') ? (row, kind) => setOrders({ row, kind, team: tab === 'teams' }) : undefined} />
-        {tab === 'people' && !sheet && !!data.unmatchedSheet?.length && <p className="text-[12px] text-ink-3">Tên trên sheet chưa ghép với POS (không cộng vào chi phí, ROAS): {data.unmatchedSheet.map((u) => `${u.name} ${shortMoney(u.cost)}`).join(', ')} · ghép ở trang Chi phí &amp; ROAS.</p>}
-        {tab === 'people' && sheet && <div className="flex flex-col gap-1.5 text-[12px] text-ink-3">
-          {sheet.unmatched.length > 0 && <span>Tên trên sheet chưa ghép với POS: {sheet.unmatched.map((u) => `${u.name.replace(/ \(Sheet\)$/, '')} (CP ${shortMoney(u.cost)} · DT ${shortMoney(u.revenue)})`).join(', ')} · ghép ở trang Chi phí &amp; ROAS.</span>}
-          <button type="button" className="self-start font-semibold text-primary underline decoration-dotted underline-offset-2" aria-expanded={dayView} onClick={() => setDayView((v) => !v)}>{dayView ? 'Ẩn lệch theo từng ngày' : 'Xem lệch theo từng ngày'}</button>
-          {dayView && <MktSheetCheck start={start} end={end} posIds={posIds} />}
-        </div>}
+        <BreakdownTable scope={detailScope} rows={tabRows} first={tab === 'teams' ? 'Team' : tab === 'products' ? 'Sản phẩm' : data.bucket === 'day' ? 'Ngày' : data.bucket === 'week' ? 'Tuần' : 'Tháng'}
+          rankBar={tab === 'teams'} sheet={null}
+          onPick={onPick} totalCost={totalCost} keepOrder={tab === 'time'} showSplit={shown === 'all'} noCost={noCost}
+          onOrders={product === null && tab === 'teams' ? (row, kind) => setOrders({ row, kind, team: true }) : undefined} />
         <OrdersSheet pick={orders} start={start} end={end} posIds={posIds} team={false} onClose={() => setOrders(null)} />
       </div>
     </section>

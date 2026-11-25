@@ -17,6 +17,8 @@ export type NumDetailSpec = {
   hint?: string;
   /** Kết quả phép chia bị chặn trên (tỷ lệ chốt tối đa 100%). */
   cap?: number;
+  /** Số đi kèm (không thuộc phép cộng / chia ở trên), vd cột cũ đã gộp vào khung: AOV, Cho ĐVVC (25/11/2026). */
+  extra?: DetailPart[];
 };
 
 /** Số MKT của một dòng (bảng Marketer / team / sản phẩm / ngày, ô tổng): cùng tên trường với lib/reports/mkt-analytics.ts và lib/ops/ad-costs.ts. */

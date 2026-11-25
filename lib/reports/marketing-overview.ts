@@ -26,7 +26,7 @@ type Basis = typeof BASES[number];
 type AggregateRow = {
   orders: number; phones: number; gross: number; net: number;
   confirmed: number; shipped: number; delivered: number; returned: number; cancelled: number; refund_net: number;
-  cskh_orders: number; cskh_net: number; cskh_refund_net: number; sale_orders: number; sale_net: number; sale_refund_net: number; sale_phones: number;
+  cskh_orders: number; cskh_net: number; cskh_refund_net: number; sale_orders: number; sale_net: number; sale_refund_net: number; sale_phones: number; sale_closed_phones?: number;
 };
 type MarketerRow = AggregateRow & { marketer_id: string };
 type MarketingTeamRow = AggregateRow & { marketing_team_id: string };
@@ -43,6 +43,7 @@ const aggregate = (r?: Partial<AggregateRow>) => ({
   cskhOrders: num(r?.cskh_orders), cskhNet: num(r?.cskh_net), cskhAfterRefund: num(r?.cskh_net) - num(r?.cskh_refund_net),
   newOrders: num(r?.sale_orders), newNet: num(r?.sale_net), newAfterRefund: num(r?.sale_net) - num(r?.sale_refund_net),
   /** SĐT trên đơn chia cho Sale (mẫu số TL chốt New). */ newPhones: num(r?.sale_phones),
+  /** Trong đó SĐT đã chốt: có ít nhất một đơn đã chốt (kể cả hủy sau đó), như dòng "Số đã chốt" của khung tách sản phẩm (25/11/2026). */ newClosedPhones: num(r?.sale_closed_phones),
 });
 
 type Lens = Exclude<Awaited<ReturnType<typeof resolveMktLens>>, Response>;
@@ -126,7 +127,8 @@ async function marketingOverviewRaw(user: { role: Role }, p: URLSearchParams, po
     SUM(o.seller_id IN ${saleSellers}) AS sale_orders,
     COALESCE(SUM(CASE WHEN o.seller_id IN ${saleSellers} THEN ${NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1')} ELSE 0 END),0) AS sale_net,
     COALESCE(SUM(CASE WHEN o.seller_id IN ${saleSellers} AND o.status_code IN (4,5,15,6) THEN ${NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1')} ELSE 0 END),0) AS sale_refund_net,
-    COUNT(DISTINCT CASE WHEN o.seller_id IN ${saleSellers} THEN NULLIF(TRIM(o.phone),'') END) AS sale_phones`;
+    COUNT(DISTINCT CASE WHEN o.seller_id IN ${saleSellers} THEN NULLIF(TRIM(o.phone),'') END) AS sale_phones,
+    COUNT(DISTINCT CASE WHEN o.seller_id IN ${saleSellers} AND ${EVER_CONFIRMED} THEN NULLIF(TRIM(o.phone),'') END) AS sale_closed_phones`;
 
   const optionScope = `o.pos_id IN (${ph}) AND ${marketer} IS NOT NULL${marketingTeam.sql}${teamFilter('o.seller_id', team)} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7`;
   const optionBinds = [...posIds, ...marketingTeam.binds, startUtc, endUtc];
@@ -230,7 +232,7 @@ async function marketingOverviewRaw(user: { role: Role }, p: URLSearchParams, po
     return {
       ...rankFields(rankMaps[0].get(id)),
       marketerId: id, marketerName: nameMap.get(id) ?? `MKT ${id.slice(0, 8)}`, marketingTeamName: teamByMember.get(id) ?? 'Chưa phân nhóm',
-      ...current, createdOrders: base.orders, createdPhones: base.phones, createdNewPhones: base.newPhones, confirmedOrders: base.confirmed,
+      ...current, createdOrders: base.orders, createdPhones: base.phones, createdNewPhones: base.newPhones, createdNewClosedPhones: base.newClosedPhones, confirmedOrders: base.confirmed,
       confirmationRate: base.orders ? base.confirmed / base.orders * 100 : null,
       shippedOrders: base.shipped, shippingRate: base.confirmed ? base.shipped / base.confirmed * 100 : null,
       deliveredOrders: base.delivered, deliveryRate: base.shipped ? base.delivered / base.shipped * 100 : null,
@@ -252,7 +254,7 @@ async function marketingOverviewRaw(user: { role: Role }, p: URLSearchParams, po
       ...rankFields(rankMaps[1].get(id)),
       marketingTeamId: id, marketingTeamName: configured?.name ?? (id === UNASSIGNED_TEAM ? 'Chưa phân nhóm' : id),
       marketerCount: byMarketer.filter((m) => id === UNASSIGNED_TEAM ? !teamByMember.has(m.marketerId) : configured?.memberIds.includes(m.marketerId)).length,
-      ...current, createdOrders: base.orders, createdPhones: base.phones, createdNewPhones: base.newPhones, confirmedOrders: base.confirmed,
+      ...current, createdOrders: base.orders, createdPhones: base.phones, createdNewPhones: base.newPhones, createdNewClosedPhones: base.newClosedPhones, confirmedOrders: base.confirmed,
       confirmationRate: base.orders ? base.confirmed / base.orders * 100 : null,
       shippedOrders: base.shipped, shippingRate: base.confirmed ? base.shipped / base.confirmed * 100 : null,
       deliveredOrders: base.delivered, deliveryRate: base.shipped ? base.delivered / base.shipped * 100 : null,
@@ -271,7 +273,7 @@ async function marketingOverviewRaw(user: { role: Role }, p: URLSearchParams, po
     period: { start, end }, basis, stage,
     filters: { marketerId, sellerId, careId, productKey, source, marketingTeamId },
     summary: {
-      ...current, createdOrders: base.orders, createdPhones: base.phones, createdNewPhones: base.newPhones, confirmedOrders: base.confirmed,
+      ...current, createdOrders: base.orders, createdPhones: base.phones, createdNewPhones: base.newPhones, createdNewClosedPhones: base.newClosedPhones, confirmedOrders: base.confirmed,
       confirmationRate: base.orders ? base.confirmed / base.orders * 100 : null,
       shippedOrders: base.shipped, shippingRate: base.confirmed ? base.shipped / base.confirmed * 100 : null,
       deliveredOrders: base.delivered, deliveryRate: base.shipped ? base.delivered / base.shipped * 100 : null,

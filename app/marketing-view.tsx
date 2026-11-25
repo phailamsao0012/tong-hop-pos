@@ -5,11 +5,11 @@ import { usePosIds, usePosStaffFilter } from './pos-store';
 import { usePeriod } from './period-store';
 import { ICON } from './icons';
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, CheckCircle2, Megaphone, PackageCheck, Phone, Target, Truck, UsersRound } from 'lucide-react';
+import { BarChart3, Check, CheckCircle2, Filter, Megaphone, PackageCheck, Phone, Target, Truck, UsersRound } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { MarketingTeam } from '@/lib/teams/marketing-teams';
 import { PeriodToolbar, PosChips } from './overview-view';
-import { Th, ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, ProgressBar, SkeletonKpis, SortTh, StatusChip, TableWrap, Toolbar, money, pct, shortMoney, toast, useSort, vi } from './ui-kit';
+import { Th, ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SortTh, StatusChip, TableWrap, Toolbar, dmy, money, pct, shortMoney, toast, useSort, vi } from './ui-kit';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import { TrendNotes } from './overview-trends';
@@ -23,13 +23,17 @@ import { MktProductsCard, MktRecentCard } from './mkt-compact-cards';
 import { MktCrossCard, type SaleTeamOption } from './mkt-cross-card';
 import { MarketerDetailSheet } from './mkt-marketer-detail';
 import { cancelRateClass, closeRateClass, ratePct, ratePctCapped, returnRateClass } from '@/lib/shared/close-rate';
-import { ProductSplitHover, splitUrl } from './mkt-product-hover';
+import { NumDetail } from './num-detail';
+import { mktCellDetail, type MktNumbers } from '@/lib/shared/num-detail';
+import { COL_GROUPS, cancelReturnDetail, closedPhonesDetail, costIndex, deliveredDetail, newNetDetail, packedDetail, type ColGroup, type RankNums } from '@/lib/shared/mkt-rank-groups';
+import { MktSheetBar, SheetLine } from './mkt-sheet-bar';
+import type { SheetCompare } from '@/lib/shared/mkt-sheet-compare';
 
 type Basis = 'created' | 'confirmed';
 type Stage = 'all' | 'unconfirmed' | 'confirmed' | 'packed' | 'confirmed_now' | 'stock' | 'packing' | 'waiting' | 'shipping' | 'shipped' | 'delivered' | 'returned' | 'cancelled' | 'deleted';
 type Summary = {
   orders: number; phones: number; gross: number; net: number; selectedRate: number | null; averageOrder: number | null; revenuePerPhone: number | null;
-  createdOrders: number; createdPhones: number; createdNewPhones?: number; confirmedOrders: number; confirmationRate: number | null;
+  createdOrders: number; createdPhones: number; createdNewPhones?: number; /** Trong đó SĐT đã chốt (25/11/2026). */ createdNewClosedPhones?: number; confirmedOrders: number; confirmationRate: number | null;
   shippedOrders: number; shippingRate: number | null; deliveredOrders: number; deliveryRate: number | null;
   returnedOrders: number; cancelledOrders: number;
   /** Tiền các đơn hoàn / hủy trong phạm vi đang xem, và doanh thu còn lại sau khi trừ. */ refundNet: number; netAfterRefund: number;
@@ -55,7 +59,13 @@ type Report = {
   productOptions: { key: string; name: string; orders: number }[];
   definitions: Record<string, string>;
 };
-type SortKey = 'rank' | 'name' | 'team' | 'created' | 'phones' | 'confirmed' | 'rate' | 'atConfirmed' | 'atPacked' | 'goRate' | 'cancelRate' | 'returnRate' | 'cskhConfirmed' | 'orders' | 'net' | 'newNet' | 'shipNet' | 'cskhNet' | 'refund' | 'afterRefund' | 'perPhone' | 'aov' | 'shipped' | 'delivered' | 'delivery' | 'returned';
+type SortKey = 'rank' | 'name' | 'team' | 'created' | 'phones' | 'confirmed' | 'rate' | 'atConfirmed' | 'atPacked' | 'goRate' | 'cancelRate' | 'returnRate' | 'cskhConfirmed' | 'orders' | 'net' | 'newNet' | 'shipNet' | 'cskhNet' | 'refund' | 'afterRefund' | 'perPhone' | 'aov' | 'shipped' | 'delivered' | 'delivery' | 'returned' | 'closedPhones' | 'cost' | 'roas';
+// Số chi phí của bảng gộp, nhóm cột Chi phí: đúng số của /api/marketing/analytics (lib/reports/mkt-analytics.ts), ghép theo id.
+type CostRow = MktNumbers & { id: string };
+type CostData = { team?: string; current: MktNumbers; people: CostRow[]; teams: CostRow[]; unmatchedSheet?: { name: string; cost: number }[] };
+type Nums = RankNums & OutStats;
+const roasText = (n: number | null | undefined) => n === null || n === undefined ? '—' : `${n.toFixed(2).replace('.', ',')}×`;
+const roasClass = (n: number | null | undefined) => n === null || n === undefined ? '' : n >= 3 ? 'text-good' : n >= 1.5 ? 'text-warn' : 'text-bad';
 
 const BASES: Record<Basis, string> = { created: 'Theo ngày tạo đơn', confirmed: 'Theo ngày xác nhận' };
 const STAGES: Record<Stage, string> = {
@@ -68,6 +78,7 @@ const SORTS: Record<SortKey, string> = {
   rank: 'Hạng theo mốc',
   name: 'Tên marketer', team: 'Team Marketing', created: 'Đơn tạo', phones: 'Số điện thoại', confirmed: 'Đơn xác nhận', rate: 'TL chốt', atConfirmed: 'Đơn chốt New', cskhConfirmed: 'Đơn chốt CSKH', atPacked: 'Đơn đi (New)', goRate: 'Tỉ lệ đi', cancelRate: 'Tỉ lệ hủy', returnRate: 'Tỉ lệ hoàn', orders: 'Đơn theo mốc', net: 'Doanh thu', newNet: 'Doanh thu chốt', shipNet: 'Doanh thu chuyển', cskhNet: 'Doanh thu CSKH', refund: 'Tiền hoàn / hủy', afterRefund: 'Doanh thu sau hoàn hủy', perPhone: 'Doanh thu / SĐT',
   aov: 'AOV', shipped: 'Đã cho ĐVVC', delivered: 'Đã nhận', delivery: 'Tỷ lệ giao thành công', returned: 'Hoàn / hủy',
+  closedPhones: 'Số đã chốt', cost: 'Chi phí', roas: 'ROAS',
 };
 const TEAM_SORTS = { ...SORTS, name: 'Tên team', team: 'Tên team' };
 
@@ -103,6 +114,9 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
   const marketingTeamId = selectedMkt?.id ?? '__all';
   const setMarketingTeamId = (id: string) => setMktTeam(id === '__all' ? null : { id, name: marketingTeams.find((t) => t.id === id)?.name ?? (id === '__unassigned' ? 'Không thuộc team MKT' : 'đã chọn') });
   const [rankingMode, setRankingMode] = useState<'marketer' | 'team'>('marketer');
+  // Bảng xếp hạng gộp (25/11/2026): một bảng, nút chọn nhóm cột Chốt | Chi phí | Giao hàng.
+  const [colGroup, setColGroup] = useState<ColGroup>('chot');
+  const [sheet, setSheet] = useState<SheetCompare | null>(null);
   const [marketingTeams, setMarketingTeams] = useState<MarketingTeam[]>([]);
   const [sellerId, setSellerId] = useState('__all');
   const [careId, setCareId] = useState('__all');
@@ -138,6 +152,21 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
   }, [start, end, posIds, team, basis, stage, branch, marketingTeamId, marketerId, sellerId, careId, productKey, source, saleTeam]);
   const { data, at, stale, loading, error, reload } = useApi<Report>(url, { keep: false });
   const productUrl = splitUrl(url);
+  // Chi phí chỉ khi người xem được trang Chi phí & ROAS và không lọc team Sale (chi phí là của Marketing); chỉ tải khi mở nhóm Chi phí hoặc sắp theo chi phí.
+  const noCost = !onOpenRoas || saleTeam !== '__all';
+  const costOn = !noCost && (colGroup === 'chiphi' || sort.key === 'cost' || sort.key === 'roas');
+  const costUrl = useMemo(() => {
+    if (!costOn) return null;
+    const p = new URLSearchParams({ start, end, posIds: posIds.join(',') });
+    if (team !== 'all') p.set('team', team);
+    if (marketingTeamId !== '__all') p.set('teamId', marketingTeamId);
+    return `/api/marketing/analytics?${p}`;
+  }, [costOn, start, end, posIds, team, marketingTeamId]);
+  const costApi = useApi<CostData>(costUrl, { keep: true });
+  const costPeople = useMemo(() => costIndex(costApi.data?.people), [costApi.data]);
+  const costTeams = useMemo(() => costIndex(costApi.data?.teams), [costApi.data]);
+  // Xem Tất cả: DT chốt nhóm Chi phí là DT New (như cột DT chốt bảng trên cũ); nút Sale / CSKH thì là doanh thu bộ phận đó.
+  const costSeg = costApi.data?.team ?? 'all';
   const s = data?.summary;
   const sortedRows = useMemo(() => sort.apply((data?.byMarketer ?? []).filter((r) => !onPos || onPos(r.marketerId)).map((r) => ({ ...r, ...(!otherStages ? r.stageMetrics[rankStage] : {}) })), (r, k) => {
     switch (k) {
@@ -166,9 +195,12 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
       case 'delivered': return r.deliveredOrders;
       case 'delivery': return r.deliveryRate;
       case 'returned': return r.returnedOrders + r.cancelledOrders;
+      case 'closedPhones': return r.createdNewClosedPhones ?? 0;
+      case 'cost': return costPeople.get(r.marketerId)?.cost ?? -1;
+      case 'roas': return costPeople.get(r.marketerId)?.roas ?? -1;
       default: return 0;
     }
-  }), [data, sort, rankStage, otherStages, onPos]);
+  }), [data, sort, rankStage, otherStages, onPos, costPeople]);
   const sortedTeamRows = useMemo(() => sort.apply((data?.byTeam ?? []).map((r) => {
     if (!onPos) return r;
     // Số marketer chỉ đếm người trên POS; team không còn ai trên POS và không có đơn thì ẩn.
@@ -203,9 +235,12 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
       case 'delivered': return r.deliveredOrders;
       case 'delivery': return r.deliveryRate;
       case 'returned': return r.returnedOrders + r.cancelledOrders;
+      case 'closedPhones': return r.createdNewClosedPhones ?? 0;
+      case 'cost': return costTeams.get(r.marketingTeamId)?.cost ?? -1;
+      case 'roas': return costTeams.get(r.marketingTeamId)?.roas ?? -1;
       default: return 0;
     }
-  }), [data, sort, rankStage, otherStages, onPos, marketingTeams]);
+  }), [data, sort, rankStage, otherStages, onPos, marketingTeams, costTeams]);
   // Hạng theo DT chốt (trước gọi DT New) rồi đơn New ở mốc đang chọn (đơn CSKH không cộng vào hạng).
   const newOnly = <T extends { orders: number; net: number; newOrders?: number; newNet?: number }>(m: Record<string, T>) => Object.fromEntries(Object.entries(m).map(([k, v]) => [k, { ...v, orders: v.newOrders ?? 0, net: v.newNet ?? 0 }])) as Record<RankStage, T>;
   const rows = rankByStage(sortedRows.map((r) => ({ ...r, rankName: r.marketerName, stageMetrics: newOnly(otherStages ? { ...r.stageMetrics, [stage]: { orders: r.orders, net: r.net, newOrders: r.newOrders, newNet: r.newNet } } : r.stageMetrics) })), otherStages ? stage : rankStage, 'net')
@@ -224,16 +259,69 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
   </>;
   const productTotals = useMemo(() => (data?.byProduct ?? []).reduce((a, r) => ({ quantity: a.quantity + r.quantity, lineTotal: a.lineTotal + r.lineTotal }), { quantity: 0, lineTotal: 0 }), [data]);
 
-  // Đơn chốt / Đơn đi / TL chốt / Tỉ lệ đi / hủy / hoàn (anh Vũ 12/11/2026). Tỉ lệ dòng Tổng tính từ tổng số, không lấy trung bình.
-  const outHeads = <><SortTh k="atConfirmed" label="Đơn New" hint="Đơn chốt do người bán Sale (New): xác nhận lần đầu trong kỳ, kể cả sau đó hủy / hoàn (đã chốt là chốt); trừ đơn xoá." sort={sort} /><SortTh k="cskhConfirmed" label="Đơn CSKH" hint="Đơn chốt do người bán CSKH, cùng cách đếm. Không cộng vào Đơn New." sort={sort} /><SortTh k="newNet" label="DT chốt" hint="Tiền mọi đơn New đã chốt trong kỳ, kể cả đơn hủy / hoàn sau đó (đã chốt là chốt). Dòng nhỏ: sau hoàn hủy." sort={sort} /><SortTh k="cskhNet" label="DT CSKH" sort={sort} /><SortTh k="atPacked" label="Đơn đi" hint="Đơn New đã vào Đang đóng hàng trở đi (đóng hàng, chờ lấy, đã gửi, đã nhận, hoàn, hủy sau đóng hàng)." sort={sort} /><SortTh k="shipNet" label="DT chuyển" hint="Tiền các đơn ở cột Đơn đi (đã đóng hàng trở đi), kể cả đơn hủy / hoàn sau đó; luôn ≤ DT chốt. Dòng nhỏ đã trừ hoàn hủy." sort={sort} /><SortTh k="rate" label="TL chốt" hint="Đơn New ÷ SĐT trên đơn chia cho Sale, tối đa 100% (đơn chốt trong kỳ có thể gồm đơn tạo từ kỳ trước). Dưới 40% tô đỏ." sort={sort} /><SortTh k="goRate" label="Tỉ lệ đi" hint="Đơn đi ÷ Đơn New." sort={sort} /><SortTh k="cancelRate" label="Tỉ lệ hủy" hint="Đơn New đã chốt rồi hủy khi chưa giao ĐVVC (trước hoặc sau đóng hàng) ÷ Đơn New. Từ 5% tô đỏ." sort={sort} /><SortTh k="returnRate" label="Tỉ lệ hoàn" hint="(Đơn New đang hoàn / đã hoàn + hủy sau khi đã giao ĐVVC) ÷ Đơn New. Từ 7% tô đỏ." sort={sort} /></>;
-  const outCells = (x: OutStats) => {
-    const r = outRates(x);
-    const cell = (v: number | null, cls: string, title: string) => <td className={`n ${cls}`} title={title}>{v === null ? '—' : pct(v)}</td>;
-    return <><td className="n">{vi.format(x.newConfirmed)}</td><td className="n">{vi.format(x.cskhConfirmed)}</td><td className="n">{money(x.newNet)}<span className="block w-0 min-w-full whitespace-normal text-[11px] font-normal text-ink-3" title={`${vi.format(x.newOrders)} đơn · sau hoàn hủy ${money(x.newAfterRefund)}`}>sau hoàn hủy {shortMoney(x.newAfterRefund)}</span></td><td className="n">{money(x.cskhNet)}<span className="block w-0 min-w-full whitespace-normal text-[11px] font-normal text-ink-3" title={`${vi.format(x.cskhOrders)} đơn · sau hoàn hủy ${money(x.cskhAfterRefund)}`}>sau hoàn hủy {shortMoney(x.cskhAfterRefund)}</span></td><td className="n">{vi.format(x.newPacked)}</td><td className="n">{money(x.shipNet)}<span className="block w-0 min-w-full whitespace-normal text-[11px] font-normal text-ink-3" title={`${vi.format(x.newPacked)} đơn đi · sau hoàn hủy ${money(x.shipAfterRefund)}`}>sau hoàn hủy {shortMoney(x.shipAfterRefund)}</span></td>
-      {cell(r.close, closeRateClass(r.close), `${vi.format(x.newConfirmed)} đơn New / ${vi.format(x.createdNewPhones)} SĐT chia cho Sale`)}
-      {cell(r.go, '', `${vi.format(x.newPacked)} đơn đi / ${vi.format(x.newConfirmed)} đơn New`)}
-      {cell(r.cancel, cancelRateClass(r.cancel), `${vi.format(x.newCancelled)} đơn hủy chưa giao ĐVVC / ${vi.format(x.newConfirmed)} đơn New`)}
-      {cell(r.ret, returnRateClass(r.ret), `${vi.format(x.newReturned)} đơn hoàn / ${vi.format(x.newConfirmed)} đơn New`)}</>;
+  // Bảng gộp (anh Vũ 25/11/2026): nhóm cột Chốt | Chi phí | Giao hàng; Hạng, Đổi hạng, Marketer luôn hiện. Cột cũ bỏ khỏi bảng nằm trong khung rê chuột.
+  // Số và công thức giữ nguyên: Chốt / Giao hàng lấy từ /api/reports/marketing (như trước), Chi phí lấy từ /api/marketing/analytics (như bảng Marketer cũ ở khối trên).
+  const detailScope = start === end ? dmy(start) : `${dmy(start)}–${dmy(end)}`;
+  const sub = (text: string, title?: string) => <span className="block w-0 min-w-full whitespace-normal text-[11px] font-normal text-ink-3" title={title}>{text}</span>;
+  const GROUP_COLS = 6;
+  const groupHeads = colGroup === 'chot' ? <>
+    <SortTh k="closedPhones" label="Số đã chốt" hint="SĐT chia Sale có ít nhất 1 đơn đã chốt (kể cả hủy / hoàn sau đó). Rê chuột: tổng số về, số chưa chốt, đơn tạo." sort={sort} />
+    <SortTh k="atConfirmed" label="Đơn New" hint="Đơn chốt do người bán Sale (New): xác nhận lần đầu trong kỳ, kể cả sau đó hủy / hoàn (đã chốt là chốt); trừ đơn xoá." sort={sort} />
+    <SortTh k="rate" label="TL chốt" hint="Đơn New ÷ SĐT trên đơn chia cho Sale, tối đa 100% (đơn chốt trong kỳ có thể gồm đơn tạo từ kỳ trước). Dưới 40% tô đỏ." sort={sort} />
+    <SortTh k="newNet" label="DT chốt" hint="Tiền mọi đơn New đã chốt trong kỳ, kể cả đơn hủy / hoàn sau đó (đã chốt là chốt). Dòng nhỏ: sau hoàn hủy. Rê chuột: tiền hoàn hủy, DT / SĐT, AOV." sort={sort} />
+    <SortTh k="cskhConfirmed" label="Đơn CSKH" hint="Đơn chốt do người bán CSKH, cùng cách đếm. Không cộng vào Đơn New." sort={sort} />
+    <SortTh k="cskhNet" label="DT CSKH" sort={sort} />
+  </> : colGroup === 'chiphi' ? <>
+    <SortTh k="cost" label="Chi phí" hint="Chi phí QC trên sheet CPQC (và nhập tay) theo ngày. Số như bảng Marketer cũ ở khối số chính." sort={sort} />
+    <Th className="n" hint="DT chốt theo ngày xác nhận lần đầu (đơn New khi xem Tất cả), cùng số dùng tính ROAS.">DT chốt</Th>
+    <SortTh k="roas" label="ROAS" hint="DT chốt của người có chi phí ÷ chi phí. Xanh từ 3×, vàng từ 1,5×, đỏ dưới 1,5×." sort={sort} />
+    <Th className="n" hint="Chi phí ÷ đơn New của người có chi phí.">CP / đơn New</Th>
+    <Th className="n" hint="Chi phí ÷ số của người có chi phí.">CP / số</Th>
+    <Th className="n" hint="Chi phí ÷ DT chốt của người có chi phí.">% CP / DT chốt</Th>
+  </> : <>
+    <SortTh k="atPacked" label="Đơn đi" hint="Đơn New đã vào Đang đóng hàng trở đi (đóng hàng, chờ lấy, đã gửi, đã nhận, hoàn, hủy sau đóng hàng). Rê chuột: Đã cho ĐVVC." sort={sort} />
+    <SortTh k="shipNet" label="DT chuyển" hint="Tiền các đơn ở cột Đơn đi (đã đóng hàng trở đi), kể cả đơn hủy / hoàn sau đó; luôn ≤ DT chốt. Dòng nhỏ đã trừ hoàn hủy." sort={sort} />
+    <SortTh k="goRate" label="Tỉ lệ đi" hint="Đơn đi ÷ Đơn New." sort={sort} />
+    <SortTh k="cancelRate" label="Tỉ lệ hủy" hint="Đơn New đã chốt rồi hủy khi chưa giao ĐVVC (trước hoặc sau đóng hàng) ÷ Đơn New. Từ 5% tô đỏ." sort={sort} />
+    <SortTh k="returnRate" label="Tỉ lệ hoàn" hint="(Đơn New đang hoàn / đã hoàn + hủy sau khi đã giao ĐVVC) ÷ Đơn New. Từ 7% tô đỏ." sort={sort} />
+    <SortTh k="delivered" label="Đã nhận" hint="Đơn đã nhận / đã thu tiền theo mốc. Rê chuột: % giao thành công." sort={sort} />
+  </>;
+  const dash = (n: number, why?: string) => Array.from({ length: n }, (_, i) => <td key={i} className="n text-ink-3" title={why}>—</td>);
+  type SheetRow = SheetCompare['byMarketer'] extends Map<string, infer V> ? V : never;
+  /** split: mã marketer / null (dòng tổng) cho khung tách sản phẩm; undefined = không có (team, người ngoài POS). */
+  const groupCells = (x: Nums, name: string, cost: CostRow | null | undefined, sh?: SheetRow, split?: string | null) => {
+    const r = outRates(x), ctx = { name, scope: detailScope };
+    if (colGroup === 'chot') return <>
+      <td className="n font-semibold"><NumDetail spec={closedPhonesDetail(x, ctx)} more={split === undefined ? undefined : () => <ProductSplitHover url={productUrl} marketerId={split} field="phones"><span className="text-[11px] font-semibold text-primary">Tách theo sản phẩm ›</span></ProductSplitHover>}>{vi.format(x.createdNewClosedPhones ?? 0)}</NumDetail></td>
+      <td className="n">{vi.format(x.newConfirmed)}</td>
+      <td className={`n ${closeRateClass(r.close)}`} title={`${vi.format(x.newConfirmed)} đơn New / ${vi.format(x.createdNewPhones)} SĐT chia cho Sale`}>{r.close === null ? '—' : pct(r.close)}</td>
+      <td className="n"><NumDetail spec={newNetDetail(x, ctx)}>{money(x.newNet)}</NumDetail>{sub(`sau hoàn hủy ${shortMoney(x.newAfterRefund)}`, `${vi.format(x.newOrders)} đơn · sau hoàn hủy ${money(x.newAfterRefund)}`)}</td>
+      <td className="n">{vi.format(x.cskhConfirmed)}</td>
+      <td className="n">{money(x.cskhNet)}{sub(`sau hoàn hủy ${shortMoney(x.cskhAfterRefund)}`, `${vi.format(x.cskhOrders)} đơn · sau hoàn hủy ${money(x.cskhAfterRefund)}`)}</td>
+    </>;
+    if (colGroup === 'chiphi') {
+      if (noCost) return dash(GROUP_COLS, 'Không hiện chi phí khi lọc team Sale (chi phí là của Marketing).');
+      if (!cost) return dash(GROUP_COLS, costApi.loading ? 'Đang tải chi phí…' : 'Không có dòng chi phí');
+      const share = cost.costShare == null ? null : cost.costShare * 100;
+      const cmp = !!sheet && !!sh, ok = !!sh && cmp && sh.counted && !sh.noSheet;
+      return <>
+        <td className="n"><NumDetail spec={mktCellDetail('cost', cost, ctx)}>{shortMoney(cost.cost)}</NumDetail>{sh && cmp && sub(`CP sheet ${shortMoney(sh.sheet.cost)}`, `Chi phí QC marketer ghi trên sheet: ${money(sh.sheet.cost)}`)}</td>
+        <td className="n"><NumDetail spec={mktCellDetail(costSeg === 'all' ? 'newNet' : 'net', cost, ctx)}>{shortMoney(costSeg === 'all' ? cost.newNet ?? 0 : cost.net)}</NumDetail>
+          {sh && cmp && (!sh.counted ? <span className="block text-[11px] font-normal text-warn">không so (chưa có hậu tố MKT)</span> : sh.noSheet ? <span className="block text-[11px] font-normal text-ink-3">sheet chưa ghi</span> : <SheetLine sheet={sh.sheet.revenue} pos={sh.posNet} fmt={shortMoney} />)}</td>
+        <td className={`n font-semibold ${roasClass(cost.roas)}`}><NumDetail spec={mktCellDetail('roas', cost, ctx)}>{roasText(cost.roas)}</NumDetail></td>
+        <td className="n"><NumDetail spec={mktCellDetail('cpc', cost, ctx)}>{cost.costPerClosed === null ? '—' : shortMoney(cost.costPerClosed)}</NumDetail>{sh && ok && <SheetLine label="đơn sheet" sheet={sh.sheet.orders} pos={sh.posClosed} fmt={(n) => vi.format(n)} />}</td>
+        <td className="n"><NumDetail spec={mktCellDetail('cpl', cost, ctx)}>{cost.costPerLead === null ? '—' : shortMoney(cost.costPerLead)}</NumDetail>{sh && ok && <SheetLine label="số sheet" sheet={sh.sheet.phones} pos={sh.posPhones} fmt={(n) => vi.format(n)} />}</td>
+        <td className="n"><NumDetail spec={mktCellDetail('share', cost, ctx)}>{share === null ? '—' : pct(share)}</NumDetail></td>
+      </>;
+    }
+    return <>
+      <td className="n"><NumDetail spec={packedDetail(x, ctx)}>{vi.format(x.newPacked)}</NumDetail></td>
+      <td className="n">{money(x.shipNet)}{sub(`sau hoàn hủy ${shortMoney(x.shipAfterRefund)}`, `${vi.format(x.newPacked)} đơn đi · sau hoàn hủy ${money(x.shipAfterRefund)}`)}</td>
+      <td className="n" title={`${vi.format(x.newPacked)} đơn đi / ${vi.format(x.newConfirmed)} đơn New`}>{r.go === null ? '—' : pct(r.go)}</td>
+      <td className={`n ${cancelRateClass(r.cancel)}`}><NumDetail spec={cancelReturnDetail('cancel', x, ctx)}>{r.cancel === null ? '—' : pct(r.cancel)}</NumDetail></td>
+      <td className={`n ${returnRateClass(r.ret)}`}><NumDetail spec={cancelReturnDetail('return', x, ctx)}>{r.ret === null ? '—' : pct(r.ret)}</NumDetail></td>
+      <td className="n"><NumDetail spec={deliveredDetail(x, ctx)}>{vi.format(x.deliveredOrders)}</NumDetail></td>
+    </>;
   };
   const outTotal: OutStats = { ...NEW_FIELDS, ...data?.afterPackSummary, createdNewPhones: s?.createdNewPhones ?? 0, newNet: rankingSummary.newNet ?? 0, newOrders: rankingSummary.newOrders ?? 0, newAfterRefund: rankingSummary.newAfterRefund ?? 0, cskhNet: rankingSummary.cskhNet ?? 0, cskhOrders: rankingSummary.cskhOrders ?? 0, cskhAfterRefund: rankingSummary.cskhAfterRefund ?? 0 };
 
@@ -242,18 +330,19 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
   const os = outside.reduce((a, r) => ({ created: a.created + r.createdOrders, phones: a.phones + r.createdPhones, everConfirmed: a.everConfirmed + r.everConfirmed, everPacked: a.everPacked + r.everPacked,
     packedCancelled: a.packedCancelled + r.packedCancelled, packedReturned: a.packedReturned + r.packedReturned, orders: a.orders + r.orders, net: a.net + r.net, newNet: a.newNet + r.newNet, cskhNet: a.cskhNet + r.cskhNet,
     newOrders: a.newOrders + r.newOrders, cskhOrders: a.cskhOrders + r.cskhOrders, newAfterRefund: a.newAfterRefund + r.newAfterRefund, cskhAfterRefund: a.cskhAfterRefund + r.cskhAfterRefund,
-    createdNewPhones: a.createdNewPhones + r.createdNewPhones, newConfirmed: a.newConfirmed + r.newConfirmed, cskhConfirmed: a.cskhConfirmed + r.cskhConfirmed, newPacked: a.newPacked + r.newPacked, newCancelled: a.newCancelled + r.newCancelled, newReturned: a.newReturned + r.newReturned, shipNet: a.shipNet + r.shipNet, shipAfterRefund: a.shipAfterRefund + r.shipAfterRefund,
+    createdNewPhones: a.createdNewPhones + r.createdNewPhones, createdNewClosedPhones: a.createdNewClosedPhones + (r.createdNewClosedPhones ?? 0), newConfirmed: a.newConfirmed + r.newConfirmed, cskhConfirmed: a.cskhConfirmed + r.cskhConfirmed, newPacked: a.newPacked + r.newPacked, newCancelled: a.newCancelled + r.newCancelled, newReturned: a.newReturned + r.newReturned, shipNet: a.shipNet + r.shipNet, shipAfterRefund: a.shipAfterRefund + r.shipAfterRefund,
     refundNet: a.refundNet + r.refundNet, after: a.after + r.netAfterRefund, shipped: a.shipped + r.shippedOrders, delivered: a.delivered + r.deliveredOrders, returned: a.returned + r.returnedOrders, cancelled: a.cancelled + r.cancelledOrders }),
-    { created: 0, phones: 0, everConfirmed: 0, everPacked: 0, packedCancelled: 0, packedReturned: 0, orders: 0, net: 0, newNet: 0, cskhNet: 0, newOrders: 0, cskhOrders: 0, newAfterRefund: 0, cskhAfterRefund: 0, ...NEW_FIELDS, refundNet: 0, after: 0, shipped: 0, delivered: 0, returned: 0, cancelled: 0 });
+    { created: 0, phones: 0, everConfirmed: 0, everPacked: 0, packedCancelled: 0, packedReturned: 0, orders: 0, net: 0, newNet: 0, cskhNet: 0, newOrders: 0, cskhOrders: 0, newAfterRefund: 0, cskhAfterRefund: 0, ...NEW_FIELDS, createdNewClosedPhones: 0, refundNet: 0, after: 0, shipped: 0, delivered: 0, returned: 0, cancelled: 0 });
+  const outsideNums: Nums = { ...os, createdOrders: os.created, shippedOrders: os.shipped, deliveredOrders: os.delivered, deliveryRate: os.shipped ? os.delivered / os.shipped * 100 : null,
+    revenuePerPhone: os.phones ? os.net / os.phones : null, averageOrder: os.orders ? os.net / os.orders : null };
   const outsideRow = outside.length && (os.created || os.everConfirmed || os.net || os.newConfirmed || os.cskhConfirmed) ? <tr className="text-ink-2" title={`Đơn trên POS đang chọn của ${outside.map((r) => r.marketerName).join(', ')} (không có tài khoản trên POS này)`}>
     <td className="num text-ink-3">–</td>{!otherStages && rankStage !== 'confirmed' && <td className="n">–</td>}
     <td className="max-w-56 whitespace-normal italic">Người ngoài POS này<span className="block text-[11px] font-normal not-italic text-ink-3">{vi.format(outside.length)} marketer không có tài khoản trên POS đang chọn</span></td>
-    <td className="n">{vi.format(os.created)}</td><td className="n">{vi.format(os.phones)}</td>
-    {outCells(os)}
-    <td className="n text-bad">{os.refundNet ? `−${money(os.refundNet)}` : money(0)}</td><td className="n font-semibold">{money(os.after)}</td>
-    <td className="n">{os.phones ? money(os.net / os.phones) : '—'}</td><td className="n">{os.orders ? money(os.net / os.orders) : '—'}</td>
-    <td className="n">{vi.format(os.shipped)}</td><td className="n">{vi.format(os.delivered)}</td><td className="n">{os.shipped ? pct(os.delivered / os.shipped * 100) : '—'}</td><td className="n">{vi.format(os.returned)} / {vi.format(os.cancelled)}</td>
+    {groupCells(outsideNums, 'Người ngoài POS này', null)}
   </tr> : null;
+  // Dòng tổng: số như dòng Tổng cũ (Đơn tạo, Đã cho ĐVVC, Đã nhận theo tổng trang; DT / SĐT, AOV theo mốc xếp hạng).
+  const totalNums: Nums = { ...outTotal, createdOrders: s?.createdOrders ?? 0, createdNewClosedPhones: s?.createdNewClosedPhones ?? 0, shippedOrders: s?.shippedOrders ?? 0, deliveredOrders: s?.deliveredOrders ?? 0,
+    deliveryRate: s?.deliveryRate ?? null, revenuePerPhone: rankingSummary.revenuePerPhone ?? null, averageOrder: rankingSummary.averageOrder ?? null };
   const outXlsx = (x: OutStats) => { const r = outRates(x); const p = (v: number | null) => v === null ? '' : Math.round(v * 10) / 10; return [x.newConfirmed, x.cskhConfirmed, x.newNet, x.cskhNet, x.newPacked, x.shipNet, p(r.close), p(r.go), p(r.cancel), p(r.ret)]; };
   const exportExcel = async () => {
     if (!data) return;
@@ -371,16 +460,28 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
               <button type="button" className={`rounded-md px-3 py-1.5 text-xs font-semibold tap ${rankingMode === 'marketer' ? 'bg-primary text-white' : 'text-ink-2 hover:bg-surface-2'}`} aria-pressed={rankingMode === 'marketer'} onClick={() => setRankingMode('marketer')}>Theo nhân viên</button>
             </fieldset>
             <MarketingTeamSelect teams={marketingTeams} onPos={onPos} value={marketingTeamId} label="Lọc team trong xếp hạng" onChange={(v) => { setMarketingTeamId(v); setMarketerId('__all'); }} />
-            <Select value={sort.key} items={rankingMode === 'team' ? TEAM_SORTS : SORTS} onValueChange={(v) => sort.setKey(v as SortKey)}><SelectTrigger className="min-w-44" aria-label="Sắp xếp xếp hạng Marketing"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(rankingMode === 'team' ? TEAM_SORTS : SORTS).filter(([k]) => rankingMode !== 'team' || k !== 'team').map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent></Select>
+            <Select value={sort.key} items={rankingMode === 'team' ? TEAM_SORTS : SORTS} onValueChange={(v) => sort.setKey(v as SortKey)}><SelectTrigger className="min-w-44" aria-label="Sắp xếp xếp hạng Marketing"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(rankingMode === 'team' ? TEAM_SORTS : SORTS).filter(([k]) => (rankingMode !== 'team' || k !== 'team') && (!noCost || (k !== 'cost' && k !== 'roas'))).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent></Select>
           </div>}>
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="text-[12.5px] font-semibold text-ink-2">Xem nhóm cột</span>
+            <SegmentedControl<ColGroup> size="sm" ariaLabel="Nhóm cột bảng xếp hạng" value={colGroup} onChange={setColGroup} options={COL_GROUPS.filter((g) => g.value !== 'chiphi' || !noCost)} />
+            {colGroup === 'chiphi' && <span className="text-[11.5px] text-ink-3">Chi phí, ROAS theo ngày xác nhận lần đầu, như khối số chính (không đổi theo mốc Đóng hàng / Đã gửi / Đã nhận).</span>}
+          </div>
+          {colGroup === 'chiphi' && rankingMode === 'marketer' && !noCost && <MktSheetBar start={start} end={end} posIds={posIds} unmatchedSheet={costApi.data?.unmatchedSheet} onSheet={setSheet} />}
           {rankingMode === 'team' ? (teamRows.length ? <>
             <p className="mb-3 text-xs text-ink-3">Bấm tên team để xem thành viên. SĐT được đếm duy nhất trong từng team; hàng tổng đếm duy nhất trên toàn bộ phạm vi lọc.</p>
-            <TableWrap><table className="tbl"><thead><tr><Th title="Cách tính: DT chốt tại mốc giảm dần, rồi số đơn New, rồi tên. Đơn CSKH không tính vào hạng.">Hạng</Th>{!otherStages && rankStage !== 'confirmed' && <Th className="n">Đổi hạng</Th>}<SortTh k="name" label="Team Marketing" sort={sort} align="left" /><Th className="n">Marketer</Th><SortTh k="created" label="Đơn tạo" sort={sort} /><SortTh k="phones" label="SĐT" sort={sort} />{outHeads}<SortTh k="refund" label="Hoàn / hủy (tiền)" sort={sort} /><SortTh k="afterRefund" label="Sau hoàn hủy" sort={sort} /><SortTh k="perPhone" label="DT / SĐT" sort={sort} /><SortTh k="aov" label="AOV" sort={sort} /><SortTh k="shipped" label="Đã cho ĐVVC" sort={sort} /><SortTh k="delivered" label="Đã nhận" sort={sort} /><SortTh k="delivery" label="% giao TC" sort={sort} /><SortTh k="returned" label="Hoàn / hủy" sort={sort} /></tr></thead>
-              <tbody>{teamRows.map((r) => <tr key={r.marketingTeamId}><td className="num text-ink-3">{r.rank}</td>{rankColumns(r)}<td><button type="button" className="font-semibold text-primary underline-offset-2 hover:underline tap" onClick={() => { setMarketingTeamId(r.marketingTeamId); setMarketerId('__all'); setRankingMode('marketer'); }}>{r.marketingTeamName}</button></td><td className="n">{vi.format(r.marketerCount)}</td><td className="n">{vi.format(r.createdOrders)}</td><td className="n">{vi.format(r.createdPhones)}</td>{outCells(r)}<td className="n text-bad">{r.refundNet ? `−${money(r.refundNet)}` : money(0)}</td><td className="n font-semibold">{money(r.netAfterRefund)}</td><td className="n">{money(r.revenuePerPhone)}</td><td className="n">{money(r.averageOrder)}</td><td className="n">{vi.format(r.shippedOrders)}</td><td className="n">{vi.format(r.deliveredOrders)}</td><td className="n">{pct(r.deliveryRate)}</td><td className="n">{vi.format(r.returnedOrders)} / {vi.format(r.cancelledOrders)}</td></tr>)}</tbody>
-              <tfoot><tr><td><span className="sr-only">Tổng</span></td>{!otherStages && rankStage !== 'confirmed' && <td className="n">–</td>}<td>Tổng đơn duy nhất</td><td className="n">{vi.format(rows.length)}</td><td className="n">{vi.format(s.createdOrders)}</td><td className="n">{vi.format(s.createdPhones)}</td>{outCells(outTotal)}<td className="n text-bad">{rankingSummary.refundNet ? `−${money(rankingSummary.refundNet)}` : money(0)}</td><td className="n font-semibold">{money(rankingSummary.netAfterRefund)}</td><td className="n">{money(rankingSummary.revenuePerPhone)}</td><td className="n">{money(rankingSummary.averageOrder)}</td><td className="n">{vi.format(s.shippedOrders)}</td><td className="n">{vi.format(s.deliveredOrders)}</td><td className="n">{pct(s.deliveryRate)}</td><td className="n">{vi.format(s.returnedOrders)} / {vi.format(s.cancelledOrders)}</td></tr></tfoot></table></TableWrap>
-          </> : <EmptyState text="Không có team hoặc đơn Marketing trong phạm vi đang chọn." />) : rows.length ? <TableWrap><table className="tbl"><thead><tr><Th title="Cách tính: DT chốt tại mốc giảm dần, rồi số đơn New, rồi tên. Đơn CSKH không tính vào hạng.">Hạng</Th>{!otherStages && rankStage !== 'confirmed' && <Th className="n">Đổi hạng</Th>}<SortTh k="name" label="Marketer · team" sort={sort} align="left" /><SortTh k="created" label="Đơn tạo" sort={sort} /><SortTh k="phones" label="SĐT" sort={sort} />{outHeads}<SortTh k="refund" label="Hoàn / hủy (tiền)" sort={sort} /><SortTh k="afterRefund" label="Sau hoàn hủy" sort={sort} /><SortTh k="perPhone" label="DT / SĐT" sort={sort} /><SortTh k="aov" label="AOV" sort={sort} /><SortTh k="shipped" label="Đã cho ĐVVC" sort={sort} /><SortTh k="delivered" label="Đã nhận" sort={sort} /><SortTh k="delivery" label="% giao TC" sort={sort} /><SortTh k="returned" label="Hoàn / hủy" sort={sort} /></tr></thead>
-            <tbody>{rows.map((r) => <tr key={r.marketerId}><td className="num text-ink-3">{r.rank}</td>{rankColumns(r)}<td className="max-w-56 whitespace-normal font-medium"><button type="button" className="text-left font-medium underline-offset-2 hover:text-primary hover:underline tap" title="Xem chi tiết marketer" onClick={() => setDetailId(r.marketerId)}>{r.marketerName}</button><span className="block text-[11px] font-normal text-ink-3">{r.marketingTeamName}</span></td><td className="n"><ProductSplitHover url={productUrl} marketerId={r.marketerId} field="orders">{vi.format(r.createdOrders)}</ProductSplitHover></td><td className="n"><ProductSplitHover url={productUrl} marketerId={r.marketerId} field="phones">{vi.format(r.createdPhones)}</ProductSplitHover></td>{outCells(r)}<td className="n text-bad">{r.refundNet ? `−${money(r.refundNet)}` : money(0)}</td><td className="n font-semibold">{money(r.netAfterRefund)}</td><td className="n">{money(r.revenuePerPhone)}</td><td className="n">{money(r.averageOrder)}</td><td className="n">{vi.format(r.shippedOrders)}</td><td className="n">{vi.format(r.deliveredOrders)}</td><td className="n">{pct(r.deliveryRate)}</td><td className="n">{vi.format(r.returnedOrders)} / {vi.format(r.cancelledOrders)}</td></tr>)}{outsideRow}</tbody>
-            <tfoot><tr><td><span className="sr-only">Tổng</span></td>{!otherStages && rankStage !== 'confirmed' && <td className="n">–</td>}<td>Tổng đơn duy nhất<span className="block text-[11px] font-normal text-ink-3">{marketingTeamId === '__all' ? 'Mọi team' : marketingTeamId === '__unassigned' ? 'Chưa phân nhóm' : marketingTeams.find((t) => t.id === marketingTeamId)?.name ?? 'Team đã chọn'}</span></td><td className="n"><ProductSplitHover url={productUrl} marketerId={null} field="orders">{vi.format(s.createdOrders)}</ProductSplitHover></td><td className="n"><ProductSplitHover url={productUrl} marketerId={null} field="phones">{vi.format(s.createdPhones)}</ProductSplitHover></td>{outCells(outTotal)}<td className="n text-bad">{rankingSummary.refundNet ? `−${money(rankingSummary.refundNet)}` : money(0)}</td><td className="n font-semibold">{money(rankingSummary.netAfterRefund)}</td><td className="n">{money(rankingSummary.revenuePerPhone)}</td><td className="n">{money(rankingSummary.averageOrder)}</td><td className="n">{vi.format(s.shippedOrders)}</td><td className="n">{vi.format(s.deliveredOrders)}</td><td className="n">{pct(s.deliveryRate)}</td><td className="n">{vi.format(s.returnedOrders)} / {vi.format(s.cancelledOrders)}</td></tr></tfoot></table></TableWrap> : <EmptyState text="Không có đơn gắn Marketer trong phạm vi đang chọn." />}
+            <TableWrap><table className="tbl"><thead><tr><Th title="Cách tính: DT chốt tại mốc giảm dần, rồi số đơn New, rồi tên. Đơn CSKH không tính vào hạng.">Hạng</Th>{!otherStages && rankStage !== 'confirmed' && <Th className="n">Đổi hạng</Th>}<SortTh k="name" label="Team Marketing" sort={sort} align="left" /><Th className="n">Marketer</Th>{groupHeads}</tr></thead>
+              <tbody>{teamRows.map((r) => <tr key={r.marketingTeamId}><td className="num text-ink-3">{r.rank}</td>{rankColumns(r)}<td><button type="button" className="font-semibold text-primary underline-offset-2 hover:underline tap" onClick={() => { setMarketingTeamId(r.marketingTeamId); setMarketerId('__all'); setRankingMode('marketer'); }}>{r.marketingTeamName}</button></td><td className="n">{vi.format(r.marketerCount)}</td>{groupCells(r, r.marketingTeamName, costTeams.get(r.marketingTeamId))}</tr>)}</tbody>
+              <tfoot><tr><td><span className="sr-only">Tổng</span></td>{!otherStages && rankStage !== 'confirmed' && <td className="n">–</td>}<td>Tổng đơn duy nhất</td><td className="n">{vi.format(rows.length)}</td>{groupCells(totalNums, 'Tổng đơn duy nhất', costApi.data?.current ? { ...costApi.data.current, id: '__total' } : null, undefined, null)}</tr></tfoot></table></TableWrap>
+          </> : <EmptyState text="Không có team hoặc đơn Marketing trong phạm vi đang chọn." />) : rows.length ? <TableWrap><table className="tbl"><thead><tr><Th title="Cách tính: DT chốt tại mốc giảm dần, rồi số đơn New, rồi tên. Đơn CSKH không tính vào hạng.">Hạng</Th>{!otherStages && rankStage !== 'confirmed' && <Th className="n">Đổi hạng</Th>}<SortTh k="name" label="Marketer · team" sort={sort} align="left" />{groupHeads}</tr></thead>
+            <tbody>{rows.map((r) => <tr key={r.marketerId} className={marketerId === r.marketerId ? 'bg-tint-2' : ''}><td className="num text-ink-3">{r.rank}</td>{rankColumns(r)}<td className="max-w-56 whitespace-normal font-medium">
+              <span className="flex items-start gap-1">
+                {/* Nút lọc như tab Marketer cũ ở khối trên: lọc cả trang (khối số chính + bảng) theo người này; bấm lại để bỏ. */}
+                <button type="button" onClick={() => setMarketerId(marketerId === r.marketerId ? '__all' : r.marketerId)} aria-pressed={marketerId === r.marketerId} aria-label={marketerId === r.marketerId ? `Bỏ lọc ${r.marketerName}` : `Lọc cả trang theo ${r.marketerName}`} title={marketerId === r.marketerId ? 'Bỏ lọc' : 'Lọc cả trang theo người này'}
+                  className={`grid size-6 shrink-0 place-items-center rounded-md tap hover:bg-tint-2 hover:text-primary ${marketerId === r.marketerId ? 'text-primary' : 'text-ink-3'}`}>{marketerId === r.marketerId ? <Check size={14} /> : <Filter size={13} />}</button>
+                <span className="min-w-0"><button type="button" className="text-left font-medium underline-offset-2 hover:text-primary hover:underline tap" title="Xem chi tiết marketer" onClick={() => setDetailId(r.marketerId)}>{r.marketerName}</button><span className="block text-[11px] font-normal text-ink-3">{r.marketingTeamName}</span></span>
+              </span></td>{groupCells(r, r.marketerName, costPeople.get(r.marketerId), sheet?.byMarketer.get(r.marketerId), r.marketerId)}</tr>)}{outsideRow}</tbody>
+            <tfoot><tr><td><span className="sr-only">Tổng</span></td>{!otherStages && rankStage !== 'confirmed' && <td className="n">–</td>}<td>Tổng đơn duy nhất<span className="block text-[11px] font-normal text-ink-3">{marketingTeamId === '__all' ? 'Mọi team' : marketingTeamId === '__unassigned' ? 'Chưa phân nhóm' : marketingTeams.find((t) => t.id === marketingTeamId)?.name ?? 'Team đã chọn'}</span></td>{groupCells(totalNums, 'Tổng đơn duy nhất', costApi.data?.current ? { ...costApi.data.current, id: '__total' } : null, undefined, null)}</tr></tfoot></table></TableWrap> : <EmptyState text="Không có đơn gắn Marketer trong phạm vi đang chọn." />}
         </ChartCard>
 
         <MktCrossCard start={start} end={end} posIds={posIds} saleTeams={saleTeams} mktTeams={marketingTeams.filter((t) => !onPos || t.memberIds.some((id) => onPos(id)))}
