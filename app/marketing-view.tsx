@@ -71,7 +71,7 @@ const roasClass = (n: number | null | undefined) => n === null || n === undefine
 const BASES: Record<Basis, string> = { created: 'Theo ngày tạo đơn', confirmed: 'Theo ngày xác nhận' };
 const STAGES: Record<Stage, string> = {
   packed: 'Đóng hàng trở đi',
-  all: 'Mọi đơn chưa xóa', unconfirmed: 'Mới / chờ xác nhận', confirmed: 'Đơn chốt (đang hiệu lực)', confirmed_now: 'Hiện đang: đã xác nhận',
+  all: 'Mọi đơn chưa xóa', unconfirmed: 'Mới / chờ xác nhận', confirmed: 'Đơn đã chốt (kể cả hủy sau đó)', confirmed_now: 'Hiện đang: đã xác nhận',
   stock: 'Chờ hàng / in / đã in', packing: 'Đang đóng hàng', waiting: 'Chờ chuyển hàng', shipping: 'Đã gửi hàng · đang giao',
   shipped: 'Đã cho ĐVVC / trạng thái sau đó', delivered: 'Đã nhận / đã thu tiền', returned: 'Đang hoàn / đã hoàn', cancelled: 'Đã hủy', deleted: 'Đã xóa',
 };
@@ -260,6 +260,7 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
   </>;
   const productTotals = useMemo(() => (data?.byProduct ?? []).reduce((a, r) => ({ quantity: a.quantity + r.quantity, lineTotal: a.lineTotal + r.lineTotal }), { quantity: 0, lineTotal: 0 }), [data]);
 
+  // ROAS để cột cuối nhóm Chi phí (anh Vũ 25/11/2026: "roas là thông số k quan trọng, cho xuống cuối cùng").
   // Bảng gộp (anh Vũ 25/11/2026): nhóm cột Chốt | Chi phí | Giao hàng; Hạng, Đổi hạng, Marketer luôn hiện. Cột cũ bỏ khỏi bảng nằm trong khung rê chuột.
   // Số và công thức giữ nguyên: Chốt / Giao hàng lấy từ /api/reports/marketing (như trước), Chi phí lấy từ /api/marketing/analytics (như bảng Marketer cũ ở khối trên).
   const detailScope = start === end ? dmy(start) : `${dmy(start)}–${dmy(end)}`;
@@ -275,10 +276,10 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
   </> : colGroup === 'chiphi' ? <>
     <SortTh k="cost" label="Chi phí" hint="Chi phí QC trên sheet CPQC (và nhập tay) theo ngày. Số như bảng Marketer cũ ở khối số chính." sort={sort} />
     <Th className="n" hint="DT chốt theo ngày xác nhận lần đầu (đơn New khi xem Tất cả), cùng số dùng tính ROAS.">DT chốt</Th>
-    <SortTh k="roas" label="ROAS" hint="DT chốt của người có chi phí ÷ chi phí. Xanh từ 3×, vàng từ 1,5×, đỏ dưới 1,5×." sort={sort} />
     <Th className="n" hint="Chi phí ÷ đơn New của người có chi phí.">CP / đơn New</Th>
     <Th className="n" hint="Chi phí ÷ số của người có chi phí.">CP / số</Th>
     <Th className="n" hint="Chi phí ÷ DT chốt của người có chi phí.">% CP / DT chốt</Th>
+    <SortTh k="roas" label="ROAS" hint="DT chốt của người có chi phí ÷ chi phí. Xanh từ 3×, vàng từ 1,5×, đỏ dưới 1,5×." sort={sort} />
   </> : <>
     <SortTh k="atPacked" label="Đơn đi" hint="Đơn New đã vào Đang đóng hàng trở đi (đóng hàng, chờ lấy, đã gửi, đã nhận, hoàn, hủy sau đóng hàng). Rê chuột: Đã cho ĐVVC." sort={sort} />
     <SortTh k="shipNet" label="DT chuyển" hint="Tiền các đơn ở cột Đơn đi (đã đóng hàng trở đi), kể cả đơn hủy / hoàn sau đó; luôn ≤ DT chốt. Dòng nhỏ đã trừ hoàn hủy." sort={sort} />
@@ -309,10 +310,10 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
         <td className="n"><NumDetail spec={mktCellDetail('cost', cost, ctx)}>{shortMoney(cost.cost)}</NumDetail>{sh && cmp && sub(`CP sheet ${shortMoney(sh.sheet.cost)}`, `Chi phí QC marketer ghi trên sheet: ${money(sh.sheet.cost)}`)}</td>
         <td className="n"><NumDetail spec={mktCellDetail(costSeg === 'all' ? 'newNet' : 'net', cost, ctx)}>{shortMoney(costSeg === 'all' ? cost.newNet ?? 0 : cost.net)}</NumDetail>
           {sh && cmp && (!sh.counted ? <span className="block text-[11px] font-normal text-warn">không so (chưa có hậu tố MKT)</span> : sh.noSheet ? <span className="block text-[11px] font-normal text-ink-3">sheet chưa ghi</span> : <SheetLine sheet={sh.sheet.revenue} pos={sh.posNet} fmt={shortMoney} />)}</td>
-        <td className={`n font-semibold ${roasClass(cost.roas)}`}><NumDetail spec={mktCellDetail('roas', cost, ctx)}>{roasText(cost.roas)}</NumDetail></td>
         <td className="n"><NumDetail spec={mktCellDetail('cpc', cost, ctx)}>{cost.costPerClosed === null ? '—' : shortMoney(cost.costPerClosed)}</NumDetail>{sh && ok && <SheetLine label="đơn sheet" sheet={sh.sheet.orders} pos={sh.posClosed} fmt={(n) => vi.format(n)} />}</td>
         <td className="n"><NumDetail spec={mktCellDetail('cpl', cost, ctx)}>{cost.costPerLead === null ? '—' : shortMoney(cost.costPerLead)}</NumDetail>{sh && ok && <SheetLine label="số sheet" sheet={sh.sheet.phones} pos={sh.posPhones} fmt={(n) => vi.format(n)} />}</td>
         <td className="n"><NumDetail spec={mktCellDetail('share', cost, ctx)}>{share === null ? '—' : pct(share)}</NumDetail></td>
+        <td className={`n ${roasClass(cost.roas)}`}><NumDetail spec={mktCellDetail('roas', cost, ctx)}>{roasText(cost.roas)}</NumDetail></td>
       </>;
     }
     return <>
