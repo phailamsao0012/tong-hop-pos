@@ -65,6 +65,8 @@ type SortKey = 'rank' | 'name' | 'team' | 'created' | 'phones' | 'confirmed' | '
 type CostRow = MktNumbers & { id: string };
 type CostData = { team?: string; current: MktNumbers; people: CostRow[]; teams: CostRow[]; unmatchedSheet?: { name: string; cost: number }[] };
 type Nums = RankNums & OutStats;
+// Bảng xếp hạng gộp chỉ còn ~8 cột: bảng rộng theo nội dung, không kéo giãn hết bề ngang thẻ (anh Vũ 25/11/2026: "khoảng cách các cột bớt ô trống lại").
+const RANK_TABLE_STYLE = { width: 'auto' } as const;
 const roasText = (n: number | null | undefined) => n === null || n === undefined ? '—' : `${n.toFixed(2).replace('.', ',')}×`;
 const roasClass = (n: number | null | undefined) => n === null || n === undefined ? '' : n >= 3 ? 'text-good' : n >= 1.5 ? 'text-warn' : 'text-bad';
 
@@ -472,10 +474,10 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
           {colGroup === 'chiphi' && rankingMode === 'marketer' && !noCost && <MktSheetBar start={start} end={end} posIds={posIds} unmatchedSheet={costApi.data?.unmatchedSheet} onSheet={setSheet} />}
           {rankingMode === 'team' ? (teamRows.length ? <>
             <p className="mb-3 text-xs text-ink-3">Bấm tên team để xem thành viên. SĐT được đếm duy nhất trong từng team; hàng tổng đếm duy nhất trên toàn bộ phạm vi lọc.</p>
-            <TableWrap><table className="tbl"><thead><tr><Th title="Cách tính: DT chốt tại mốc giảm dần, rồi số đơn New, rồi tên. Đơn CSKH không tính vào hạng.">Hạng</Th>{!otherStages && rankStage !== 'confirmed' && <Th className="n">Đổi hạng</Th>}<SortTh k="name" label="Team Marketing" sort={sort} align="left" /><Th className="n">Marketer</Th>{groupHeads}</tr></thead>
+            <TableWrap><table className="tbl compact" style={RANK_TABLE_STYLE}><thead><tr><Th title="Cách tính: DT chốt tại mốc giảm dần, rồi số đơn New, rồi tên. Đơn CSKH không tính vào hạng.">Hạng</Th>{!otherStages && rankStage !== 'confirmed' && <Th className="n">Đổi hạng</Th>}<SortTh k="name" label="Team Marketing" sort={sort} align="left" /><Th className="n">Marketer</Th>{groupHeads}</tr></thead>
               <tbody>{teamRows.map((r) => <tr key={r.marketingTeamId}><td className="num text-ink-3">{r.rank}</td>{rankColumns(r)}<td><button type="button" className="font-semibold text-primary underline-offset-2 hover:underline tap" onClick={() => { setMarketingTeamId(r.marketingTeamId); setMarketerId('__all'); setRankingMode('marketer'); }}>{r.marketingTeamName}</button></td><td className="n">{vi.format(r.marketerCount)}</td>{groupCells(r, r.marketingTeamName, costTeams.get(r.marketingTeamId))}</tr>)}</tbody>
               <tfoot><tr><td><span className="sr-only">Tổng</span></td>{!otherStages && rankStage !== 'confirmed' && <td className="n">–</td>}<td>Tổng đơn duy nhất</td><td className="n">{vi.format(rows.length)}</td>{groupCells(totalNums, 'Tổng đơn duy nhất', costApi.data?.current ? { ...costApi.data.current, id: '__total' } : null, undefined, null)}</tr></tfoot></table></TableWrap>
-          </> : <EmptyState text="Không có team hoặc đơn Marketing trong phạm vi đang chọn." />) : rows.length ? <TableWrap><table className="tbl"><thead><tr><Th title="Cách tính: DT chốt tại mốc giảm dần, rồi số đơn New, rồi tên. Đơn CSKH không tính vào hạng.">Hạng</Th>{!otherStages && rankStage !== 'confirmed' && <Th className="n">Đổi hạng</Th>}<SortTh k="name" label="Marketer · team" sort={sort} align="left" />{groupHeads}</tr></thead>
+          </> : <EmptyState text="Không có team hoặc đơn Marketing trong phạm vi đang chọn." />) : rows.length ? <TableWrap><table className="tbl compact" style={RANK_TABLE_STYLE}><thead><tr><Th title="Cách tính: DT chốt tại mốc giảm dần, rồi số đơn New, rồi tên. Đơn CSKH không tính vào hạng.">Hạng</Th>{!otherStages && rankStage !== 'confirmed' && <Th className="n">Đổi hạng</Th>}<SortTh k="name" label="Marketer · team" sort={sort} align="left" />{groupHeads}</tr></thead>
             <tbody>{rows.map((r) => <tr key={r.marketerId} className={marketerId === r.marketerId ? 'bg-tint-2' : ''}><td className="num text-ink-3">{r.rank}</td>{rankColumns(r)}<td className="max-w-56 whitespace-normal font-medium">
               <span className="flex items-start gap-1">
                 {/* Nút lọc như tab Marketer cũ ở khối trên: lọc cả trang (khối số chính + bảng) theo người này; bấm lại để bỏ. */}
