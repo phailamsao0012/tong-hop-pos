@@ -8,7 +8,6 @@
 // Theo bộ lọc kỳ + POS chung của web. Số liệu: lib/mkt-analytics.ts.
 import { useMemo, useState } from 'react';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { usePosStaffFilter } from './pos-store';
 import { ProfileLink, useProfileEnabled } from './staff-profile-link';
 import { ArrowRight, BadgeDollarSign, CalendarDays, Check, Filter, CheckCircle2, Coins, Megaphone, Package, Percent, Phone, TrendingUp, UsersRound, UserRound, Wallet, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -329,8 +328,6 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
   const [orders, setOrders] = useState<{ row: Row; kind: OrderKind; team: boolean } | null>(null);
   const [tab, setTab] = useState<Tab>('teams');
   const seg = useTeam();
-  // Chọn POS nào chỉ hiện người có tài khoản trên POS đó (anh Vũ 04/11/2026); tổng giữ nguyên.
-  const onPos = usePosStaffFilter();
   const url = useMemo(() => {
     const p = new URLSearchParams({ start, end, posIds: posIds.join(',') });
     if (seg !== 'all') p.set('team', seg);
@@ -369,7 +366,6 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
   const filtered = !!(marketerId || teamId || product !== null);
   const pickTeam = (id: string) => { onMarketer(null); onTeam(id === teamId ? null : id); };
   const pickProduct = (id: string) => setProduct(id === product ? null : id);
-  const teamName = new Map(data.teams.map((t) => [t.id, t.name]));
 
   const teams: Row[] = data.teams.map((t) => ({ id: t.id, name: t.name, sub: `${vi.format(t.people)} marketer`, m: newOnly(t), prevNet: t.prevNet, active: t.id === teamId && !marketerId }));
   const products: Row[] = data.products.map((r) => ({ id: r.product, name: productName(r.product), m: newOnly(r), active: r.product === product,

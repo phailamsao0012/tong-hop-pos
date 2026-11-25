@@ -40,7 +40,9 @@ void test('bảng gộp: mọi khung cộng / chia ra đúng số đang hiện; 
   // Tỉ lệ hủy, hoàn chia trên mọi đơn New đã chốt; tô đỏ từ 5% / 7%.
   assert.equal(specs.cancel.parts[2].value, 3 / 47 * 100);
   assert.equal(specs.cancel.parts[2].tone, 'bad');
-  assert.equal(specs.ret.parts[2].tone, undefined);
+  assert.equal(specs.ret.parts[2].tone, 'bad', '4 / 47 = 8,5% hoàn: từ 7% tô đỏ');
+  assert.equal(g.cancelReturnDetail('return', { ...row, newReturned: 3 }, ctx).parts[2].tone, undefined, '3 / 47 = 6,4% hoàn: chưa tô đỏ');
+  assert.equal(g.cancelReturnDetail('cancel', { ...row, newCancelled: 2 }, ctx).parts[2].tone, undefined, '2 / 47 = 4,3% hủy: chưa tô đỏ');
   // Không có đơn New: tỉ lệ trống, không chia cho 0.
   assert.equal(g.cancelReturnDetail('cancel', { ...row, newConfirmed: 0, newCancelled: 0 }, ctx).parts[2].value, null);
   assert.deepEqual(g.COL_GROUPS.map((x) => x.label), ['Chốt', 'Chi phí', 'Giao hàng']);

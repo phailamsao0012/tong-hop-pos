@@ -23,6 +23,7 @@ import { MktProductsCard, MktRecentCard } from './mkt-compact-cards';
 import { MktCrossCard, type SaleTeamOption } from './mkt-cross-card';
 import { MarketerDetailSheet } from './mkt-marketer-detail';
 import { cancelRateClass, closeRateClass, ratePct, ratePctCapped, returnRateClass } from '@/lib/shared/close-rate';
+import { ProductSplitHover, splitUrl } from './mkt-product-hover';
 import { NumDetail } from './num-detail';
 import { mktCellDetail, type MktNumbers } from '@/lib/shared/num-detail';
 import { COL_GROUPS, cancelReturnDetail, closedPhonesDetail, costIndex, deliveredDetail, newNetDetail, packedDetail, type ColGroup, type RankNums } from '@/lib/shared/mkt-rank-groups';
