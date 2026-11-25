@@ -14,6 +14,7 @@ import { PosBadge } from './pos-badge';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import { ChevronRight, Database, FileDown, PhoneCall, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -24,7 +25,7 @@ import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import { Th,
   BackfillNotice, ChartCard, Definitions, ErrorBox, EmptyState, HoverReveal, KpiCard, PageHeader, ProgressBar, SkeletonKpis, SkeletonTable, SortTh, Sparkline, StatusChip, TableWrap,
-  dmy, dt, posVar, scrollToEl, short, timeOnly, toast, useMotionOK, vi, type SortState,
+  dmy, dt, posVar, short, timeOnly, toast, useMotionOK, vi, type SortState,
 } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
 
@@ -70,11 +71,11 @@ export function CallsView({ canExport = false }: { canExport?: boolean }) {
   const reload = () => { manualRef.current = true; refetch(); };
   useEffect(() => { if (!loading && manualRef.current) { manualRef.current = false; if (!error) toast('Đã cập nhật số liệu cuộc gọi'); } }, [loading, error]);
 
-  const openHistory = async (s: Staff, scroll = true) => {
+  // Lịch sử mở trong khung nổi giữa màn (anh Vũ 25/11/2026: "phải hiện ra popup ở giữa màn, đẩy xuống dưới khó kiểm soát và xem"), không cuộn trang nữa.
+  const openHistory = async (s: Staff) => {
     histCtrl.current?.abort();
     const ac = new AbortController(); histCtrl.current = ac;
     setSelected(s); setHistory(null); setHistoryError(null); setHistoryState('loading');
-    if (scroll && window.innerWidth < 1280) setTimeout(() => scrollToEl(document.getElementById('call-history')), 50);
     try {
       const r = await fetch(`/api/reports/calls/history?${new URLSearchParams({ authorId: s.authorId, start, end, posIds: posIds.join(',') })}`, { cache: 'no-store', signal: ac.signal });
       const body = await r.json().catch(() => ({})) as History & { error?: string };
@@ -263,12 +264,20 @@ export function CallsView({ canExport = false }: { canExport?: boolean }) {
               </TableWrap>
             ) : <EmptyState text={report.coverage.notes ? 'Không có nhân viên nào khớp bộ lọc trong kỳ.' : 'Chưa có dữ liệu ghi chú.'} />}
           </ChartCard>
-          <div id="call-history" className="scroll-mt-16">
+          {/* Khung nổi giữa màn: rộng tối đa ~960px, cao tối đa 85vh, phần dưới tiêu đề cuộn bên trong; điện thoại gần kín màn. Đóng: nút X, Đóng, Esc, bấm ra ngoài. */}
+          <Dialog open={!!selected} onOpenChange={(o) => { if (!o) closeHistory(); }}>
             {selected && (
-              <ChartCard icon={PhoneCall} title={`Lịch sử cuộc gọi · ${selected.name}`} subtitle={`${periodLabel} · mỗi dòng một ghi chú; đơn chốt cùng ngày của khách đó gắn vào ghi chú đầu tiên trong ngày · tổng đơn chốt/doanh thu theo ngày tính theo người bán trên đơn`}
-                action={<>{canExport && <Button size="sm" onClick={exportHistory} disabled={!history}><FileDown size={14} />Xuất Excel lịch sử</Button>}<Button size="sm" variant="ghost" onClick={closeHistory}>Đóng</Button></>}>
+              <DialogContent className="flex max-h-[85vh] w-full max-w-[min(960px,calc(100%-2rem))] flex-col gap-3 p-0 sm:max-w-[min(960px,calc(100%-2rem))] max-sm:h-[96dvh] max-sm:max-h-[96dvh] max-sm:max-w-[calc(100%-1rem)]">
+                <div className="flex flex-wrap items-start justify-between gap-2 border-b border-line px-4 pt-4 pb-3 pr-12">
+                  <div className="min-w-0">
+                    <DialogTitle className="flex items-center gap-2 text-base"><PhoneCall size={16} className="shrink-0 text-primary" />Lịch sử cuộc gọi · {selected.name}</DialogTitle>
+                    <DialogDescription className="mt-0.5 text-xs">{`${periodLabel} · mỗi dòng một ghi chú; đơn chốt cùng ngày của khách đó gắn vào ghi chú đầu tiên trong ngày · tổng đơn chốt/doanh thu theo ngày tính theo người bán trên đơn`}</DialogDescription>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">{canExport && <Button size="sm" onClick={exportHistory} disabled={!history}><FileDown size={14} />Xuất Excel lịch sử</Button>}<Button size="sm" variant="ghost" onClick={closeHistory}>Đóng</Button></div>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
                 {historyState === 'loading' && <SkeletonTable rows={5} cols={6} />}
-                {historyState === 'error' && <ErrorBox error={historyError ?? 'Không tải được lịch sử cuộc gọi.'} onRetry={() => void openHistory(selected, false)} />}
+                {historyState === 'error' && <ErrorBox error={historyError ?? 'Không tải được lịch sử cuộc gọi.'} onRetry={() => void openHistory(selected)} />}
                 {history && (
                   <>
                     <div className="mb-3 flex flex-wrap gap-2">
@@ -280,7 +289,7 @@ export function CallsView({ canExport = false }: { canExport?: boolean }) {
                       ))}
                     </div>
                     {history.items.length ? (
-                      <TableWrap maxHeight="36rem" minWidth={760}>
+                      <TableWrap minWidth={760}>
                         <table className="tbl">
                           <thead><tr><Th>Giờ</Th><Th>Khách hàng</Th><Th>POS</Th><Th>Nội dung ghi chú</Th></tr></thead>
                           <tbody>
@@ -298,9 +307,10 @@ export function CallsView({ canExport = false }: { canExport?: boolean }) {
                     ) : <EmptyState text="Không có ghi chú trong kỳ." />}
                   </>
                 )}
-              </ChartCard>
+                </div>
+              </DialogContent>
             )}
-          </div>
+          </Dialog>
           <Definitions items={[report.definitions.call, 'Đơn chốt, doanh thu của CSKH xem ở Tổng quan CSKH và Tự ups & từ MKT.', report.definitions.assigned, report.definitions.coverage, `Ghi chú sớm nhất đã gom: ${dt(report.coverage.firstNote, true)}.`].filter((s): s is string => !!s)} />
           {(report.coverage.pendingCustomers ?? 0) > 0 && <p className="text-xs text-muted-foreground">Số liệu ghi chú còn thiếu: {vi.format(report.coverage.pendingCustomers ?? 0)} khách đang chờ lấy đủ ghi chú trong các POS đã chọn (mọi ngày, mọi nhân viên). Hệ thống tự lấy bù ở nền.</p>}
         </>
