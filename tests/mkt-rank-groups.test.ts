@@ -68,7 +68,8 @@ void test('báo cáo Marketing: Số đã chốt không vượt số về, tổn
     assert.ok(x.createdNewClosedPhones >= 0 && x.createdNewClosedPhones <= x.createdNewPhones, 'đã chốt ≤ số về');
   }
   // Tiền hủy / hoàn New: không âm, không có đơn thì không có tiền; cộng từng marketer = tổng.
-  const after = (await (await GET(new Request(`http://local/api/reports/marketing?${params}`))).json() as { afterPackSummary: R; byMarketer: R[] });
+  const after = (await (await GET(new Request(`http://local/api/reports/marketing?${params}`))).json() as { afterPackSummary: R; byMarketer: R[]; summary: { newNet: number } });
+  assert.ok(after.afterPackSummary.newCancelledNet + after.afterPackSummary.newReturnedNet <= after.summary.newNet, 'tiền hủy + tiền hoàn ≤ DT chốt');
   for (const x of after.byMarketer) {
     assert.ok(x.newCancelledNet >= 0 && x.newReturnedNet >= 0);
     if (!x.newCancelled) assert.equal(x.newCancelledNet, 0);
