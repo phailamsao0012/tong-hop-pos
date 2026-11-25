@@ -14,6 +14,7 @@ export type RankNums = {
   createdOrders: number; createdNewPhones: number; createdNewClosedPhones?: number;
   newConfirmed: number; newNet: number; newAfterRefund: number; newOrders: number;
   newPacked: number; newCancelled: number; newReturned: number; shipNet: number; shipAfterRefund: number;
+  /** Tiền đơn hủy / hoàn New: số lớn của ô Hủy / Hoàn (25/11/2026). */ newCancelledNet?: number; newReturnedNet?: number;
   shippedOrders: number; deliveredOrders: number; deliveryRate: number | null;
   revenuePerPhone: number | null; averageOrder: number | null;
 };
@@ -68,7 +69,7 @@ export function packedDetail(x: RankNums, ctx: Ctx): NumDetailSpec {
   };
 }
 
-/** Tỉ lệ hủy / hoàn: số đơn ÷ Đơn New; kèm cả số đơn hủy và đơn hoàn. */
+/** Ô Hủy / Hoàn: số lớn là tiền, dòng nhỏ là tỉ lệ = số đơn ÷ Đơn New. Khung: phép chia tỉ lệ, kèm tiền và số đơn hủy, hoàn. */
 export function cancelReturnDetail(kind: 'cancel' | 'return', x: RankNums, ctx: Ctx): NumDetailSpec {
   const cancel = kind === 'cancel', n = cancel ? x.newCancelled : x.newReturned, r = rate(n, x.newConfirmed);
   const bad = r !== null && r >= (cancel ? 5 : 7);
@@ -80,6 +81,8 @@ export function cancelReturnDetail(kind: 'cancel' | 'return', x: RankNums, ctx: 
       { label: cancel ? 'Tỉ lệ hủy' : 'Tỉ lệ hoàn', value: r, kind: 'pct', strong: true, tone: bad ? 'bad' : undefined },
     ],
     extra: [
+      { label: 'Tiền đơn hủy', value: x.newCancelledNet ?? 0, kind: 'money', strong: cancel },
+      { label: 'Tiền đơn hoàn', value: x.newReturnedNet ?? 0, kind: 'money', strong: !cancel },
       { label: 'Đơn hủy', value: x.newCancelled, kind: 'count' },
       { label: 'Đơn hoàn', value: x.newReturned, kind: 'count' },
     ],

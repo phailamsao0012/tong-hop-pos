@@ -43,7 +43,7 @@ export function NumDetailBody({ spec, more }: { spec: NumDetailSpec; more?: Reac
         <table className="w-full tabular-nums">
           <tbody>
             {spec.extra.map((p, i) => (
-              <tr key={i} className={i ? '' : 'border-t border-line'}>
+              <tr key={i} className={`${i ? '' : 'border-t border-line'} ${p.strong ? 'font-semibold' : ''}`}>
                 <td className="py-0.5 pr-3 text-ink-3">{p.label}</td>
                 <td className={`py-0.5 text-right ${toneClass(p.tone)}`}>{fmtNum(p.value, p.kind)}</td>
               </tr>

@@ -162,6 +162,9 @@ async function marketingOverviewRaw(user: { role: Role }, p: URLSearchParams, po
     // Tỉ lệ hủy MKT (anh Vũ 24/11/2026: "hủy trên tổng cả chốt cả hủy"): mọi đơn New đã chốt rồi hủy mà chưa từng giao ĐVVC ÷ Đơn New.
     `COALESCE(SUM(CASE WHEN ${EVER_CONFIRMED} AND o.seller_id IN ${saleSellers} AND ${NEVER_SENT_CANCELLED_SQL('o')} THEN 1 ELSE 0 END),0) AS xp_cancelled_new`,
     `COALESCE(SUM(CASE WHEN ${EVER_CONFIRMED} AND o.seller_id IN ${saleSellers} AND ${PACKED_SQL('o')} AND ${AFTER_PACK_RETURNED_SQL('o')} THEN 1 ELSE 0 END),0) AS xp_returned_new`,
+    // Tiền đơn hủy / hoàn New (anh Vũ 25/11/2026: ô Tỉ lệ hủy / hoàn hiện tiền ở trên, % ở dưới). Cùng điều kiện với hai số đơn ngay trên.
+    `COALESCE(SUM(CASE WHEN ${EVER_CONFIRMED} AND o.seller_id IN ${saleSellers} AND ${NEVER_SENT_CANCELLED_SQL('o')} THEN ${rankNet} ELSE 0 END),0) AS xp_cancelled_net_new`,
+    `COALESCE(SUM(CASE WHEN ${EVER_CONFIRMED} AND o.seller_id IN ${saleSellers} AND ${PACKED_SQL('o')} AND ${AFTER_PACK_RETURNED_SQL('o')} THEN ${rankNet} ELSE 0 END),0) AS xp_returned_net_new`,
     // DT chuyển (anh Vũ 19/11/2026: "đóng hàng trở đi là doanh thu chuyển"): tiền các đơn của cột Đơn đi (New); dòng nhỏ trừ đơn đang hoàn / đã hoàn / hủy.
     `COALESCE(SUM(CASE WHEN ${EVER_CONFIRMED} AND o.seller_id IN ${saleSellers} AND ${PACKED_SQL('o')} THEN ${rankNet} ELSE 0 END),0) AS xp_ship_net_new`,
     `COALESCE(SUM(CASE WHEN ${EVER_CONFIRMED} AND o.seller_id IN ${saleSellers} AND ${PACKED_SQL('o')} AND o.status_code IN (4,5,15,6) THEN ${rankNet} ELSE 0 END),0) AS xp_ship_refund_new`,
@@ -212,6 +215,7 @@ async function marketingOverviewRaw(user: { role: Role }, p: URLSearchParams, po
       packedCancelled: num(row?.xp_cancelled), packedReturned: num(row?.xp_returned),
       newConfirmed: num(row?.xp_confirmed_new), cskhConfirmed: num(row?.xp_confirmed_cskh), newPacked: num(row?.xp_packed_new),
       newCancelled: num(row?.xp_cancelled_new), newReturned: num(row?.xp_returned_new),
+      newCancelledNet: num(row?.xp_cancelled_net_new), newReturnedNet: num(row?.xp_returned_net_new),
       shipNet: num(row?.xp_ship_net_new), shipAfterRefund: num(row?.xp_ship_net_new) - num(row?.xp_ship_refund_new),
     };
   };
@@ -285,7 +289,7 @@ async function marketingOverviewRaw(user: { role: Role }, p: URLSearchParams, po
       selectedRate: base.orders ? current.orders / base.orders * 100 : null,
     },
     byMarketer, byTeam, stageSummary: rankFields(rankResults[0].results[0] as RankAggregate).stageMetrics,
-    afterPackSummary: (({ everConfirmed, everPacked, packedCancelled, packedReturned, newConfirmed, cskhConfirmed, newPacked, newCancelled, newReturned, shipNet, shipAfterRefund }) => ({ everConfirmed, everPacked, packedCancelled, packedReturned, newConfirmed, cskhConfirmed, newPacked, newCancelled, newReturned, shipNet, shipAfterRefund }))(rankFields(rankResults[0].results[0] as RankAggregate)),
+    afterPackSummary: (({ everConfirmed, everPacked, packedCancelled, packedReturned, newConfirmed, cskhConfirmed, newPacked, newCancelled, newReturned, newCancelledNet, newReturnedNet, shipNet, shipAfterRefund }) => ({ everConfirmed, everPacked, packedCancelled, packedReturned, newConfirmed, cskhConfirmed, newPacked, newCancelled, newReturned, newCancelledNet, newReturnedNet, shipNet, shipAfterRefund }))(rankFields(rankResults[0].results[0] as RankAggregate)),
     byProduct: (products.results as ProductRow[]).map((r) => ({ productKey: r.product_key, productName: r.product_name, orders: num(r.orders), phones: num(r.phones), quantity: num(r.quantity), lineTotal: num(r.line_total) })),
     recentOrders: (recentOrders.results as RecentOrder[]).map((r) => ({
       id: r.id, orderId: r.source_order_id, posId: r.pos_id, posName: POS.find((x) => x.id === r.pos_id)?.name ?? r.pos_id,

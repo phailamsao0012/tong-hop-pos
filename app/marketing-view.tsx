@@ -44,17 +44,18 @@ type Summary = {
 // Bảng xếp hạng tách New / CSKH (anh Vũ 14/11/2026, ý sếp: "số đơn không được gộp, doanh thu cũng phải tách new và cskh"):
 // Đơn New = đơn chốt do người bán Sale, Đơn CSKH = do người bán CSKH. TL chốt, tỉ lệ đi / hủy / hoàn chỉ tính đơn New (khớp Pancake lọc nhân viên SALE).
 type OutStats = { createdNewPhones: number; newConfirmed: number; cskhConfirmed: number; newPacked: number; newCancelled: number; newReturned: number; shipNet: number; shipAfterRefund: number;
+  /** Tiền đơn hủy / hoàn New (25/11/2026); số lưu cũ chưa có thì 0. */ newCancelledNet?: number; newReturnedNet?: number;
   newNet: number; newOrders: number; newAfterRefund: number; cskhNet: number; cskhOrders: number; cskhAfterRefund: number };
 const outRates = (x: OutStats) => ({ close: ratePctCapped(x.newConfirmed, x.createdNewPhones), go: ratePct(x.newPacked, x.newConfirmed), cancel: ratePct(x.newCancelled, x.newConfirmed), ret: ratePct(x.newReturned, x.newConfirmed) });
-const NEW_FIELDS = { createdNewPhones: 0, newConfirmed: 0, cskhConfirmed: 0, newPacked: 0, newCancelled: 0, newReturned: 0, shipNet: 0, shipAfterRefund: 0 };
-type Ranking = Omit<RankRow, 'rankName' | 'stageMetrics'> & { everConfirmed: number; everPacked: number; packedCancelled: number; packedReturned: number; createdNewPhones: number; newConfirmed: number; cskhConfirmed: number; newPacked: number; newCancelled: number; newReturned: number; shipNet: number; shipAfterRefund: number } & { stageMetrics: Record<RankStage, Partial<Summary> & { orders: number; net: number }> };
+const NEW_FIELDS = { createdNewPhones: 0, newConfirmed: 0, cskhConfirmed: 0, newPacked: 0, newCancelled: 0, newReturned: 0, newCancelledNet: 0, newReturnedNet: 0, shipNet: 0, shipAfterRefund: 0 };
+type Ranking = Omit<RankRow, 'rankName' | 'stageMetrics'> & { everConfirmed: number; everPacked: number; packedCancelled: number; packedReturned: number; createdNewPhones: number; newConfirmed: number; cskhConfirmed: number; newPacked: number; newCancelled: number; newReturned: number; newCancelledNet?: number; newReturnedNet?: number; shipNet: number; shipAfterRefund: number } & { stageMetrics: Record<RankStage, Partial<Summary> & { orders: number; net: number }> };
 type Marketer = Summary & Ranking & { marketerId: string; marketerName: string; marketingTeamName: string };
 type MarketingTeamSummary = Summary & Ranking & { marketingTeamId: string; marketingTeamName: string; marketerCount: number };
 type Product = { productKey: string; productName: string; orders: number; phones: number; quantity: number; lineTotal: number };
 type RecentOrder = { id: string; orderId: string; posId?: string; posName: string; phone: string | null; createdAt: string; confirmedAt: string | null; status: string; marketer: string | null; seller: string | null; care: string | null; net: number; source: string | null; note: string | null };
 type Report = {
   period: { start: string; end: string }; basis: Basis; stage: Stage; summary: Summary;
-  byMarketer: Marketer[]; byTeam: MarketingTeamSummary[]; stageSummary: Record<RankStage, Partial<Summary> & { orders: number; net: number }>; afterPackSummary?: { everConfirmed: number; everPacked: number; packedCancelled: number; packedReturned: number }; byProduct: Product[]; recentOrders: RecentOrder[];
+  byMarketer: Marketer[]; byTeam: MarketingTeamSummary[]; stageSummary: Record<RankStage, Partial<Summary> & { orders: number; net: number }>; afterPackSummary?: { everConfirmed: number; everPacked: number; packedCancelled: number; packedReturned: number; newCancelledNet?: number; newReturnedNet?: number }; byProduct: Product[]; recentOrders: RecentOrder[];
   marketerOptions: { id: string; name: string }[]; sellerOptions: { id: string; name: string }[]; careOptions: { id: string; name: string }[];
   sourceOptions: string[];
   productOptions: { key: string; name: string; orders: number }[];
@@ -286,8 +287,8 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
     <SortTh k="atPacked" label="Đơn đi" hint="Đơn New đã vào Đang đóng hàng trở đi (đóng hàng, chờ lấy, đã gửi, đã nhận, hoàn, hủy sau đóng hàng). Rê chuột: Đã cho ĐVVC." sort={sort} />
     <SortTh k="shipNet" label="DT chuyển" hint="Tiền các đơn ở cột Đơn đi (đã đóng hàng trở đi), kể cả đơn hủy / hoàn sau đó; luôn ≤ DT chốt. Dòng nhỏ đã trừ hoàn hủy." sort={sort} />
     <SortTh k="goRate" label="Tỉ lệ đi" hint="Đơn đi ÷ Đơn New." sort={sort} />
-    <SortTh k="cancelRate" label="Tỉ lệ hủy" hint="Đơn New đã chốt rồi hủy khi chưa giao ĐVVC (trước hoặc sau đóng hàng) ÷ Đơn New. Từ 5% tô đỏ." sort={sort} />
-    <SortTh k="returnRate" label="Tỉ lệ hoàn" hint="(Đơn New đang hoàn / đã hoàn + hủy sau khi đã giao ĐVVC) ÷ Đơn New. Từ 7% tô đỏ." sort={sort} />
+    <SortTh k="cancelRate" label="Hủy" hint="Số lớn: tiền đơn New đã chốt rồi hủy khi chưa giao ĐVVC. Dòng nhỏ: tỉ lệ hủy = số đơn đó ÷ Đơn New, từ 5% tô đỏ. Sắp xếp theo tỉ lệ." sort={sort} />
+    <SortTh k="returnRate" label="Hoàn" hint="Số lớn: tiền đơn New đang hoàn / đã hoàn + hủy sau khi đã giao ĐVVC. Dòng nhỏ: tỉ lệ hoàn = số đơn đó ÷ Đơn New, từ 7% tô đỏ. Sắp xếp theo tỉ lệ." sort={sort} />
     <SortTh k="delivered" label="Đã nhận" hint="Đơn đã nhận / đã thu tiền theo mốc. Rê chuột: % giao thành công." sort={sort} />
   </>;
   const dash = (n: number, why?: string) => Array.from({ length: n }, (_, i) => <td key={i} className="n text-ink-3" title={why}>—</td>);
@@ -322,8 +323,9 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
       <td className="n"><NumDetail spec={packedDetail(x, ctx)}>{vi.format(x.newPacked)}</NumDetail></td>
       <td className="n">{money(x.shipNet)}{sub(`sau hoàn hủy ${shortMoney(x.shipAfterRefund)}`, `${vi.format(x.newPacked)} đơn đi · sau hoàn hủy ${money(x.shipAfterRefund)}`)}</td>
       <td className="n" title={`${vi.format(x.newPacked)} đơn đi / ${vi.format(x.newConfirmed)} đơn New`}>{r.go === null ? '—' : pct(r.go)}</td>
-      <td className={`n ${cancelRateClass(r.cancel)}`}><NumDetail spec={cancelReturnDetail('cancel', x, ctx)}>{r.cancel === null ? '—' : pct(r.cancel)}</NumDetail></td>
-      <td className={`n ${returnRateClass(r.ret)}`}><NumDetail spec={cancelReturnDetail('return', x, ctx)}>{r.ret === null ? '—' : pct(r.ret)}</NumDetail></td>
+      {/* Ô hủy / hoàn: tiền ở trên, % ở dưới (anh Vũ 25/11/2026: "muốn thấy cả 2 nma k muốn thêm cột"). % vẫn tô đỏ theo ngưỡng cũ. */}
+      <td className="n"><NumDetail spec={cancelReturnDetail('cancel', x, ctx)}>{money(x.newCancelledNet ?? 0)}</NumDetail><span className={`block text-[11px] font-semibold ${cancelRateClass(r.cancel) || 'text-ink-3'}`} title={`${vi.format(x.newCancelled)} đơn hủy / ${vi.format(x.newConfirmed)} đơn New`}>{r.cancel === null ? '—' : pct(r.cancel)}</span></td>
+      <td className="n"><NumDetail spec={cancelReturnDetail('return', x, ctx)}>{money(x.newReturnedNet ?? 0)}</NumDetail><span className={`block text-[11px] font-semibold ${returnRateClass(r.ret) || 'text-ink-3'}`} title={`${vi.format(x.newReturned)} đơn hoàn / ${vi.format(x.newConfirmed)} đơn New`}>{r.ret === null ? '—' : pct(r.ret)}</span></td>
       <td className="n"><NumDetail spec={deliveredDetail(x, ctx)}>{vi.format(x.deliveredOrders)}</NumDetail></td>
     </>;
   };
@@ -334,7 +336,7 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
   const os = outside.reduce((a, r) => ({ created: a.created + r.createdOrders, phones: a.phones + r.createdPhones, everConfirmed: a.everConfirmed + r.everConfirmed, everPacked: a.everPacked + r.everPacked,
     packedCancelled: a.packedCancelled + r.packedCancelled, packedReturned: a.packedReturned + r.packedReturned, orders: a.orders + r.orders, net: a.net + r.net, newNet: a.newNet + r.newNet, cskhNet: a.cskhNet + r.cskhNet,
     newOrders: a.newOrders + r.newOrders, cskhOrders: a.cskhOrders + r.cskhOrders, newAfterRefund: a.newAfterRefund + r.newAfterRefund, cskhAfterRefund: a.cskhAfterRefund + r.cskhAfterRefund,
-    createdNewPhones: a.createdNewPhones + r.createdNewPhones, createdNewClosedPhones: a.createdNewClosedPhones + (r.createdNewClosedPhones ?? 0), newConfirmed: a.newConfirmed + r.newConfirmed, cskhConfirmed: a.cskhConfirmed + r.cskhConfirmed, newPacked: a.newPacked + r.newPacked, newCancelled: a.newCancelled + r.newCancelled, newReturned: a.newReturned + r.newReturned, shipNet: a.shipNet + r.shipNet, shipAfterRefund: a.shipAfterRefund + r.shipAfterRefund,
+    createdNewPhones: a.createdNewPhones + r.createdNewPhones, createdNewClosedPhones: a.createdNewClosedPhones + (r.createdNewClosedPhones ?? 0), newConfirmed: a.newConfirmed + r.newConfirmed, cskhConfirmed: a.cskhConfirmed + r.cskhConfirmed, newPacked: a.newPacked + r.newPacked, newCancelled: a.newCancelled + r.newCancelled, newReturned: a.newReturned + r.newReturned, newCancelledNet: a.newCancelledNet + (r.newCancelledNet ?? 0), newReturnedNet: a.newReturnedNet + (r.newReturnedNet ?? 0), shipNet: a.shipNet + r.shipNet, shipAfterRefund: a.shipAfterRefund + r.shipAfterRefund,
     refundNet: a.refundNet + r.refundNet, after: a.after + r.netAfterRefund, shipped: a.shipped + r.shippedOrders, delivered: a.delivered + r.deliveredOrders, returned: a.returned + r.returnedOrders, cancelled: a.cancelled + r.cancelledOrders }),
     { created: 0, phones: 0, everConfirmed: 0, everPacked: 0, packedCancelled: 0, packedReturned: 0, orders: 0, net: 0, newNet: 0, cskhNet: 0, newOrders: 0, cskhOrders: 0, newAfterRefund: 0, cskhAfterRefund: 0, ...NEW_FIELDS, createdNewClosedPhones: 0, refundNet: 0, after: 0, shipped: 0, delivered: 0, returned: 0, cancelled: 0 });
   const outsideNums: Nums = { ...os, createdOrders: os.created, shippedOrders: os.shipped, deliveredOrders: os.delivered, deliveryRate: os.shipped ? os.delivered / os.shipped * 100 : null,

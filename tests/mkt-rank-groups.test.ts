@@ -5,7 +5,7 @@ import { test } from 'node:test';
 const row = {
   createdOrders: 140, createdNewPhones: 118, createdNewClosedPhones: 61,
   newConfirmed: 47, newNet: 41_200_000, newAfterRefund: 37_900_000, newOrders: 47,
-  newPacked: 40, newCancelled: 3, newReturned: 4, shipNet: 35_000_000, shipAfterRefund: 32_100_000,
+  newPacked: 40, newCancelled: 3, newReturned: 4, newCancelledNet: 2_100_000, newReturnedNet: 2_900_000, shipNet: 35_000_000, shipAfterRefund: 32_100_000,
   shippedOrders: 52, deliveredOrders: 39, deliveryRate: 39 / 52 * 100,
   revenuePerPhone: 52_300_000 / 118, averageOrder: 52_300_000 / 59,
 };
@@ -35,7 +35,9 @@ void test('bảng gộp: mọi khung cộng / chia ra đúng số đang hiện; 
   assert.equal(specs.net.parts.find((p) => p.strong)?.value, row.newNet);
   assert.ok(g.extraLabels(specs.net).some((l) => l.startsWith('AOV')) && g.extraLabels(specs.net).some((l) => l.startsWith('DT / SĐT')));
   assert.ok(g.extraLabels(specs.packed).some((l) => l.startsWith('Đã cho ĐVVC')));
-  assert.deepEqual(g.extraLabels(specs.cancel), ['Đơn hủy', 'Đơn hoàn']);
+  assert.deepEqual(g.extraLabels(specs.cancel), ['Tiền đơn hủy', 'Tiền đơn hoàn', 'Đơn hủy', 'Đơn hoàn']);
+  assert.deepEqual(specs.cancel.extra?.slice(0, 2).map((p) => p.value), [2_100_000, 2_900_000], 'tiền hủy / hoàn trong khung = số lớn của ô');
+  assert.equal(g.cancelReturnDetail('cancel', { ...row, newCancelledNet: undefined }, ctx).extra?.[0].value, 0, 'số lưu cũ chưa có tiền: 0');
   assert.equal(specs.delivered.parts.find((p) => p.strong)?.label, '% giao thành công');
   // Tỉ lệ hủy, hoàn chia trên mọi đơn New đã chốt; tô đỏ từ 5% / 7%.
   assert.equal(specs.cancel.parts[2].value, 3 / 47 * 100);
@@ -58,13 +60,21 @@ void test('báo cáo Marketing: Số đã chốt không vượt số về, tổn
   await loginAs(raw, 'owner');
   const { GET } = await import('../app/api/reports/marketing/route');
   const params = new URLSearchParams({ start: '2026-10-16', end: '2026-10-16', posIds: POS[0].id, basis: 'confirmed', stage: 'confirmed', team: 'all' });
-  type R = { createdNewPhones: number; createdNewClosedPhones: number };
+  type R = { createdNewPhones: number; createdNewClosedPhones: number; newCancelled: number; newReturned: number; newCancelledNet: number; newReturnedNet: number };
   const r = await (await GET(new Request(`http://local/api/reports/marketing?${params}`))).json() as { summary: R; byMarketer: R[]; byTeam: R[] };
   assert.ok(r.byMarketer.length);
   for (const x of [r.summary, ...r.byMarketer, ...r.byTeam]) {
     assert.equal(typeof x.createdNewClosedPhones, 'number');
     assert.ok(x.createdNewClosedPhones >= 0 && x.createdNewClosedPhones <= x.createdNewPhones, 'đã chốt ≤ số về');
   }
+  // Tiền hủy / hoàn New: không âm, không có đơn thì không có tiền; cộng từng marketer = tổng.
+  const after = (await (await GET(new Request(`http://local/api/reports/marketing?${params}`))).json() as { afterPackSummary: R; byMarketer: R[] });
+  for (const x of after.byMarketer) {
+    assert.ok(x.newCancelledNet >= 0 && x.newReturnedNet >= 0);
+    if (!x.newCancelled) assert.equal(x.newCancelledNet, 0);
+    if (!x.newReturned) assert.equal(x.newReturnedNet, 0);
+  }
+  for (const k of ['newCancelledNet', 'newReturnedNet'] as const) assert.equal(after.byMarketer.reduce((a, x) => a + x[k], 0), after.afterPackSummary[k], `${k}: cộng marketer = tổng`);
   assert.ok(r.summary.createdNewClosedPhones > 0, 'demo có số đã chốt');
   assert.ok(r.byMarketer.reduce((a, x) => a + x.createdNewClosedPhones, 0) >= r.summary.createdNewClosedPhones, 'tổng đếm duy nhất ≤ cộng từng người');
 });
