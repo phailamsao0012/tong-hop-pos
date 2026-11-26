@@ -836,7 +836,8 @@ function Surface({
 installApiFetch();
 
 /** uiMoi: cờ THP_UI_MOI (máy chủ đọc, app/page.tsx truyền xuống). Tắt thì giao diện y như cũ. */
-export default function Dashboard({ user, initialView, demo = false, uiMoi = false }: { user: SessionUser; initialView?: string; demo?: boolean; uiMoi?: boolean }) {
+/** snapshotAt: giờ chụp số liệu của bản chỉ xem (THP_SNAPSHOT_AT, app/page.tsx); không có thì không hiện dòng giờ chụp. */
+export default function Dashboard({ user, initialView, demo = false, uiMoi = false, snapshotAt = null }: { user: SessionUser; initialView?: string; demo?: boolean; uiMoi?: boolean; snapshotAt?: string | null }) {
   const [workBoss, setWorkBoss] = useState(false);
   useEffect(() => { let live = true; fetch('/api/giao-viec/me', { cache: 'no-store' }).then(r => r.json() as Promise<{ boss?: boolean }>).then(d => { if (live) setWorkBoss(d.boss === true); }).catch(() => {}); return () => { live = false; }; }, []);
   // KPI team: chủ hệ thống đặt; leader / mentor / giám đốc xem KPI team mình cầm (05/11/2026). Các tab Giao việc khác theo người được giao việc.
@@ -1543,7 +1544,7 @@ export default function Dashboard({ user, initialView, demo = false, uiMoi = fal
             onOpen={canView(user, 'config') ? () => openSettings('data') : undefined} />
         </SidebarFooter>
       </Sidebar>}
-      <SidebarInset className="min-w-0 bg-canvas">
+      <SidebarInset className={`min-w-0 bg-canvas ${uiMoi ? 'ui-moi' : ''}`}>
         {uiMoi && !presenting && <ShellMoiNav home={canView(user, 'overview-moi') ? navigation.find((n) => n.id === 'overview-moi')! : null} groups={navGroups} view={view} activeDept={activeDept}
           onSelect={(id, deptKey) => goTo(id as View, deptKey)} counts={navCounts} />}
         <Spotlight />
@@ -1610,6 +1611,7 @@ export default function Dashboard({ user, initialView, demo = false, uiMoi = fal
         <div className="refresh-bar" hidden={!refresh.busy} aria-hidden="true"><i /></div>
         <RefreshStick busy={refresh.busy} />
         <main className={`${refreshClass} ${presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1360px] px-4 pt-4 pb-[calc(88px+env(safe-area-inset-bottom,0px))] sm:pt-6 md:px-6 md:pb-12'}`} style={presenting ? { zoom: 1.15 } : undefined}>
+          {snapshotAt && <p className="snapshot-line mb-3" role="note">Số liệu chụp lúc {dateTimeText(snapshotAt)} · bản chỉ xem, không cập nhật thêm</p>}
           {team !== 'all' && !hrUnit && !['config', 'audit'].includes(view) && (
             <div className="notice warn mb-4 items-center justify-between" role="status">
               <AlertTriangle size={15} className="shrink-0" aria-hidden="true" />

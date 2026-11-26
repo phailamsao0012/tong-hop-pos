@@ -41,6 +41,8 @@ declare namespace Cloudflare {
     THP_LOGIN_NOTICE?: string;
     /** "1" = giao diện mới (menu ngang, Tổng quan kiểu mới). Chỉ bản demo bật (plan 2026-11-26-tong-quan-kieu-moi). */
     THP_UI_MOI?: string;
+    /** Giờ chụp số liệu (ISO) của bản chỉ xem chạy trên bản chép DB; hiện một dòng nhỏ đầu trang. Chỉ bản thử đặt. */
+    THP_SNAPSHOT_AT?: string;
     /** OAuth client ID (loại Web) trên Google Cloud cho nút Đăng nhập bằng Google; trống thì ẩn nút. Không phải bí mật. */
     GOOGLE_CLIENT_ID?: string;
     /** Kho R2 riêng tư cho sao lưu đêm (lib/backup.ts). Hiện chỉ bản demo có; web thật chưa gắn thì sao lưu ghi "chưa cấu hình". */

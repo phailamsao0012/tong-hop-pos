@@ -934,3 +934,58 @@ table th { white-space: nowrap; font-weight: 600; font-size: 11.5px; letter-spac
   }
   @media (prefers-reduced-motion: reduce) { .om-page *, .nav-moi * { transition: none !important; } }
 }
+
+/* Đợt 2 giao diện mới (plan 2026-11-26-tong-quan-kieu-moi, mẫu bo-giao-dien-mau.html "Bộ linh kiện"): mọi mục dùng chung một bộ khối.
+   Chỉ áp dưới .ui-moi (SidebarInset khi cờ THP_UI_MOI bật); cờ tắt thì không phần tử nào mang class này nên web thật y như cũ.
+   Không đổi số, chữ, quyền: chỉ màu, bo góc, khoảng cách. Xanh --primary là màu nhấn duy nhất; nút chính đen; đỏ chỉ ở số vượt mốc đang có. */
+@layer components {
+  .ui-moi { --radius-card: 20px; background: color-mix(in srgb, var(--ink) 4%, var(--bg)); overflow-x: clip; }
+  .ui-moi main { overflow-x: clip; }
+  .snapshot-line { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 500; color: var(--warn); background: var(--warn-bg); }
+
+  /* Tiêu đề trang */
+  .ui-moi .ph-title { font-size: 23px; font-weight: 700; letter-spacing: -.01em; }
+
+  /* Thẻ: bo 20px, viền nhạt, bóng rất nhẹ */
+  .ui-moi .card { border-radius: 20px; border-color: var(--line); box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+  .ui-moi .toolbar { border-radius: 20px; border-color: var(--line); box-shadow: 0 1px 3px rgba(0,0,0,.04); padding: 10px 12px; }
+
+  /* Ô số: nền xám nhạt, không viền, nhãn thường (không viết hoa), số to; ô biểu tượng không màu riêng */
+  .ui-moi .kpi { border-radius: 16px; border-color: transparent; background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.04); padding: 16px 18px; }
+  .ui-moi .kpi .lbl { text-transform: none; letter-spacing: 0; font-size: 12.5px; font-weight: 500; color: var(--ink-2); }
+  .ui-moi .kpi .tile { background: var(--surface-2) !important; color: var(--ink-3) !important; }
+  .ui-moi .kpi .val { letter-spacing: -.01em; font-weight: 700; }
+  .ui-moi .kpi .note { font-size: 11.5px; }
+
+  /* Chọn kỳ và các nút chọn dạng viên thuốc */
+  .ui-moi .seg { border-radius: 999px; border-color: transparent; background: var(--surface-2); padding: 3px; }
+  .ui-moi .seg-thumb { top: 3px; left: 3px; height: calc(100% - 6px); border-radius: 999px; background: var(--surface); box-shadow: 0 1px 2px rgba(0,0,0,.1); }
+  .ui-moi .seg-btn { border-radius: 999px; padding: 5px 12px; color: var(--ink-3); font-weight: 500; }
+  .ui-moi .seg-btn.is-active { color: var(--ink); font-weight: 600; }
+
+  /* Hàng POS: một dòng, cuộn ngang trong hàng (không tràn trang), POS đang chọn là viên đen */
+  .ui-moi .posrow { flex-wrap: nowrap; overflow-x: auto; }
+  .ui-moi .poschip { border-radius: 999px; }
+  .ui-moi .poschip:not(.is-off) { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+
+  /* Nút: viên thuốc; nút chính đen */
+  .ui-moi .btn { border-radius: 999px; border-color: var(--line); font-weight: 600; }
+  .ui-moi .btn.primary { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+  .ui-moi .btn.primary:hover { background: color-mix(in srgb, var(--ink) 85%, var(--surface)); }
+
+  /* Bảng: tiêu đề nhỏ màu xám, dòng thoáng, rê chuột nền xám nhạt */
+  .ui-moi table.tbl th { font-size: 11.5px; font-weight: 600; color: var(--ink-3); background: transparent; border-bottom: 1px solid var(--line); }
+  .ui-moi table.tbl td { border-bottom-color: var(--line); }
+  .ui-moi table.tbl tbody tr:hover > td { background: var(--surface-2); }
+  .ui-moi .tbl-wrap { border-radius: 12px; }
+
+  /* Dải cần xem / cảnh báo: bo tròn như mẫu */
+  .ui-moi .notice { border-radius: 16px; }
+
+  /* Điện thoại: không thanh kéo ngang cả trang, bảng tự cuộn trong khung */
+  @media (max-width: 760px) {
+    .ui-moi .ph-title { font-size: 20px; }
+    .ui-moi .card, .ui-moi .toolbar { border-radius: 16px; }
+    .ui-moi .toolbar { flex-wrap: wrap; }
+  }
+}
