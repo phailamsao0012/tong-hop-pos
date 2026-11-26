@@ -847,6 +847,8 @@ export default function Dashboard({ user, initialView, demo = false, uiMoi = fal
   // Trang mở thẳng bằng ?view= chỉ biết ở trình duyệt: phần phụ thuộc trang hiện tại ngoài Suspense (thanh tab bộ phận) vẽ sau khi gắn để khớp HTML máy chủ.
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
+  // Giao diện mới đợt 3: khung nổi (Dialog, Sheet, Popover, Select, Menu) portal ra <body>, nằm ngoài .ui-moi; gắn cờ ở <html> để globals.css phủ được. Cờ tắt thì không gắn.
+  useEffect(() => { if (!uiMoi) return; const root = document.documentElement; root.classList.add('ui-moi-root'); return () => root.classList.remove('ui-moi-root'); }, [uiMoi]);
   // App iOS mở thẳng một trang qua ?view=…; trang không có quyền sẽ về Điều khiển trung tâm như thường.
   const [view, setView] = useState<View>(() => {
     const v = typeof window === 'undefined' ? initialView : new URLSearchParams(window.location.search).get('view');
