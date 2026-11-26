@@ -85,3 +85,27 @@ void test('trả lời API: kỳ ngắn trả ngay; kỳ dài trả 202 rồi tr
   const other = await longOrNow(req(), 'u2', '2026-01-01', '2026-11-26', compute);
   assert.equal(other.status, 202, 'người khác: khoá riêng, không dùng kết quả của người kia');
 });
+
+void test('phản hồi "đang tính" không được nhớ vào cache báo cáo; gộp báo cáo báo cờ để trình duyệt gọi riêng', async () => {
+  const { isLongPending } = await import('../lib/ops/long-response');
+  assert.equal(isLongPending(new Response('{}', { status: 202 })), true);
+  assert.equal(isLongPending(new Response('{}', { status: 200, headers: { 'x-thp-long': '1' } })), true);
+  assert.equal(isLongPending(new Response('{}', { status: 200 })), false);
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../worker.ts', import.meta.url), 'utf8');
+  const cap = src.slice(src.indexOf('async function capture('), src.indexOf('async function capture(') + 400);
+  assert.match(cap, /if \(isLongPending\(response\)\) return null;/, 'capture bỏ qua 202 trước mọi tầng nhớ (reportCache, bản gần nhất, shared, stale)');
+  assert.match(src, /isLongPending\(res\) \? \{ long: true \}/, 'gộp báo cáo báo cờ long');
+  // Hai lần hỏi liên tiếp qua lớp trả lời: lần đầu 202, xong thì 200 (cache không giữ 202 nên lần hai tới được longJob).
+  const { resetLongJobs } = await import('../lib/ops/long-job');
+  const { longOrNow } = await import('../lib/ops/long-response');
+  resetLongJobs();
+  const req = () => new Request('http://x/api/reports/marketing?start=2026-01-01&end=2026-11-26');
+  const a = await longOrNow(req(), 'u', '2026-01-01', '2026-11-26', async () => ({ status: 200, body: { ok: 1 } }));
+  assert.equal(a.status, 202);
+  assert.equal(isLongPending(a), true);
+  await tick(); await tick();
+  const b = await longOrNow(req(), 'u', '2026-01-01', '2026-11-26', async () => ({ status: 200, body: { ok: 2 } }));
+  assert.equal(b.status, 200);
+  assert.equal(isLongPending(b), false, 'kết quả xong được nhớ bình thường');
+});

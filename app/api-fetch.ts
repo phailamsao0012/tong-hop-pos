@@ -80,10 +80,12 @@ export function installApiFetch() {
         if (!anyAlive()) continue;
         const res = await send('/api/reports/batch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ urls: chunk.map((p) => p.url) }), cache: 'no-store' }, null, true);
         if (!res.ok) throw new Error(`batch HTTP ${res.status}`);
-        const data = await res.json() as { results: { url: string; status: number; body: string }[] };
+        const data = await res.json() as { results: { url: string; status: number; body: string; long?: boolean }[] };
         for (const p of chunk) {
           const r = data.results.find((x) => x.url === p.url);
           if (!r) { p.reject(new Error('Thiếu kết quả gộp.')); continue; }
+          // Báo cáo kỳ dài đang tính: gọi riêng URL này để có vòng hỏi lại (send).
+          if (r.long || r.status === 202) { send(p.url, { cache: 'no-store' }, p.signal, true).then(p.resolve, p.reject); continue; }
           p.resolve(new Response(r.body, { status: r.status, headers: { 'Content-Type': 'application/json', 'x-thp-batched': '1' } }));
         }
       } catch {

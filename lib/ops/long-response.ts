@@ -3,6 +3,9 @@
 import { isLongRange, longJob } from '@/lib/ops/long-job';
 
 export type Computed = { status: number; body: unknown };
+/** Phản hồi "đang tính" của báo cáo kỳ dài: KHÔNG được nhớ vào cache báo cáo (worker.ts cachedReport) hay dùng làm bản cũ,
+ * không thì lần hỏi lại nhận mãi 202 và không tới được longJob (Đầu não thử số ảo 26/11/2026). */
+export const isLongPending = (r: { status: number; headers: Headers }) => r.status === 202 || r.headers.get('x-thp-long') === '1';
 const HEADERS = { 'Cache-Control': 'private, no-store' };
 
 /** key: người xem + đường dẫn đầy đủ (gồm mọi bộ lọc), để mỗi người chỉ thấy đúng kết quả theo quyền của mình. */
