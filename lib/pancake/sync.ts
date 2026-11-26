@@ -1,4 +1,5 @@
 import { ensureSlimSchema, setSlimWrite, slimStatements, slimWriteOn } from '@/lib/reports/mkt-slim';
+import { dropSlimReadyIfOff } from '@/lib/reports/mkt-slim-fill';
 import { observeD1 } from '@/lib/ops/d1-usage';
 import { marketerStatements } from '@/lib/teams/marketer-ids';
 import { markDataChanged, trackDataWrites } from '@/lib/ops/data-version';
@@ -611,6 +612,8 @@ export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs 
 
 async function syncAll(env: Cloudflare.Env, now: Date, budgetMs: number, budget: SyncBudget, onUsage?: (stage: string, meta: D1Meta) => void) {
   setSlimWrite(env.THP_MKT_SLIM_WRITE === '1');
+  // Tắt ghi kèm: bảng gọn cũ dần, bỏ mốc "đã điền đủ" (một lần mỗi tiến trình) để báo cáo không đọc bảng gọn cũ.
+  await dropSlimReadyIfOff(env.DB, env.THP_MKT_SLIM_WRITE === '1');
   const stages: Record<string, number> = { recent: 0, users: 0, products: 0, customers: 0, customers_backfill: 0, backfill: 0 };
   let stage = 'recent';
   let sizeBytes: number | null = null;

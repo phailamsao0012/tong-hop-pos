@@ -46,20 +46,23 @@ export async function ensureSlimSchema(db: D1Database) {
 
 /** Cờ lịch sử tính sẵn (thay việc mở status_history_json ở bước 3): từng vào Đang đóng hàng (8); từng giao ĐVVC trở đi (2,3,16,4,15,5).
  * Cùng biểu thức historyHas của lib/reports/van-don.ts mà AFTER_PACK_* và NEVER_SENT_CANCELLED_SQL dùng. */
-const WAS_PACKED = historyHas('o', '8');
-const WAS_SENT = historyHas('o', '2,3,16,4,15,5');
-const HAS_MARKETER = "NULLIF(TRIM(o.marketer_id),'') IS NOT NULL";
+export const WAS_PACKED = historyHas('o', '8');
+export const WAS_SENT = historyHas('o', '2,3,16,4,15,5');
+/** Điều kiện đơn có Marketer trên bảng gốc (bí danh o). */
+export const HAS_MARKETER = "NULLIF(TRIM(o.marketer_id),'') IS NOT NULL";
+/** Phần đầu câu chép đơn gốc (bí danh o) sang bảng gọn; nối thêm FROM/WHERE. */
+export const SLIM_ORDER_INSERT = `INSERT OR REPLACE INTO ${SLIM_ORDERS} (${SLIM_ORDER_COLUMNS.join(',')},was_packed,was_sent) SELECT ${SLIM_ORDER_COLUMNS.map((c) => `o.${c}`).join(',')},${WAS_PACKED},${WAS_SENT}`;
+/** Phần đầu câu chép món gốc (bí danh i) sang bảng gọn; nối thêm FROM/WHERE. */
+export const SLIM_ITEM_INSERT = `INSERT OR REPLACE INTO ${SLIM_ITEMS} (${SLIM_ITEM_COLUMNS.join(',')}) SELECT ${SLIM_ITEM_COLUMNS.map((c) => `i.${c}`).join(',')}`;
 
 /** Câu ghi bảng gọn cho một đơn (id bảng gốc), đặt NGAY SAU các câu ghi bảng gốc và món của đơn đó trong cùng lô. */
 export function slimStatements(db: D1Database, orderId: string): D1PreparedStatement[] {
-  const cols = SLIM_ORDER_COLUMNS.join(','), src = SLIM_ORDER_COLUMNS.map((c) => `o.${c}`).join(',');
-  const items = SLIM_ITEM_COLUMNS.join(','), itemSrc = SLIM_ITEM_COLUMNS.map((c) => `i.${c}`).join(',');
   return [
     // Đơn mất Marketer / không còn ở bảng gốc: xoá dòng gọn. Món luôn dựng lại theo bảng gốc.
     db.prepare(`DELETE FROM ${SLIM_ITEMS} WHERE order_id=?`).bind(orderId),
     db.prepare(`DELETE FROM ${SLIM_ORDERS} WHERE id=? AND NOT EXISTS (SELECT 1 FROM raw_pos_orders o WHERE o.id=${SLIM_ORDERS}.id AND ${HAS_MARKETER})`).bind(orderId),
-    db.prepare(`INSERT OR REPLACE INTO ${SLIM_ORDERS} (${cols},was_packed,was_sent) SELECT ${src},${WAS_PACKED},${WAS_SENT} FROM raw_pos_orders o WHERE o.id=? AND ${HAS_MARKETER}`).bind(orderId),
-    db.prepare(`INSERT INTO ${SLIM_ITEMS} (${items}) SELECT ${itemSrc} FROM raw_pos_order_items i WHERE i.order_id=? AND EXISTS (SELECT 1 FROM ${SLIM_ORDERS} s WHERE s.id=i.order_id)`).bind(orderId),
+    db.prepare(`${SLIM_ORDER_INSERT} FROM raw_pos_orders o WHERE o.id=? AND ${HAS_MARKETER}`).bind(orderId),
+    db.prepare(`${SLIM_ITEM_INSERT} FROM raw_pos_order_items i WHERE i.order_id=? AND EXISTS (SELECT 1 FROM ${SLIM_ORDERS} s WHERE s.id=i.order_id)`).bind(orderId),
   ];
 }
 
