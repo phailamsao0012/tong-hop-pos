@@ -65,9 +65,9 @@ export function pickPos(account: string[], pick: string[]) {
   return { posIds: sel.length ? sel : POS.map((p) => p.id), posSel: sel };
 }
 
-export async function staffProfile(db: D1Database, id: string, today: string, pick: string[] = []): Promise<StaffProfile> {
+/** Thông tin chung của một người cho hồ sơ: tên, bộ phận, POS có tài khoản, POS đang tính (dùng chung cho hồ sơ và số theo kỳ). */
+export async function profileBasics(db: D1Database, id: string, today: string, pick: string[] = []) {
   const since = monthStartOf(today, 23);
-  const month = today.slice(0, 7);
   const users = await db.prepare(`SELECT pos_id, MAX(name) AS name, MIN(source_created_at) AS created,
         (CASE WHEN user_id IN ${teamSubquery('sale', false)} THEN 'sale' WHEN user_id IN ${teamSubquery('cskh', false)} THEN 'cskh' END) AS dept
       FROM pos_users WHERE user_id=? GROUP BY pos_id`).bind(id).all();
@@ -82,6 +82,12 @@ export async function staffProfile(db: D1Database, id: string, today: string, pi
   const fl = firstLast.results[0] as { first: string | null; last: string | null } | undefined;
   const isMkt = Number((mktRows.results[0] as { n: number } | undefined)?.n ?? 0) > 0 || /\bmkt\b/i.test(name);
   const dept: ProfileDept = u.find((r) => r.dept)?.dept ?? (isMkt ? 'mkt' : null);
+  return { u, account, posIds, posSel, ph, fl, name, dept, since };
+}
+
+export async function staffProfile(db: D1Database, id: string, today: string, pick: string[] = []): Promise<StaffProfile> {
+  const month = today.slice(0, 7);
+  const { u, account, posIds, posSel, ph, fl, name, dept, since } = await profileBasics(db, id, today, pick);
 
   // Số theo tháng của người này và của cả bộ phận (để xếp hạng).
   let mine: Omit<MonthRow, 'rank' | 'of' | 'rate'>[] = [];

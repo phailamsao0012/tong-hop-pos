@@ -20,6 +20,7 @@ import { BadgeShelf } from './staff-badges';
 import { apiJson } from './api-fetch';
 import { usePosIds } from './pos-store';
 import { POS } from '@/lib/shared/report-model';
+import { ProfilePeriod } from './staff-profile-period';
 
 const DEPT: Record<string, string> = { sale: 'Sale', cskh: 'CSKH', mkt: 'Marketing' };
 const mLabel = (m: string) => `${m.slice(5)}/${m.slice(2, 4)}`;
@@ -134,6 +135,7 @@ export function StaffProfileBody({ data, today, onPick }: { data: StaffProfile; 
         {data.tenure && <span className="rounded-full bg-surface-2 px-2.5 py-1 num">T{data.tenure.t} · {worked !== null ? `${vi.format(worked)} ngày` : ''}</span>}
       </div>
       <PosPick data={data} onPick={onPick} />
+      <ProfilePeriod id={data.id} posSel={data.posSel} />
 
       <section aria-label="Các mốc" className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         <Fact icon={CalendarDays} label="Ngày vào làm" value={dmyFull(data.tenure?.joined)} note={data.tenure ? `theo ${JOIN_SOURCE_LABELS[data.tenure.source]}` : 'chưa có ngày vào'} />
