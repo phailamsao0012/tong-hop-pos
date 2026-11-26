@@ -11,7 +11,7 @@ const ERROR_TTL_MS = 60_000;
 /** Kỳ dài hơn 62 ngày (đếm cả hai đầu) thì chạy nền. */
 export const isLongRange = (start: string, end: string) => (Date.parse(end) - Date.parse(start)) / 86_400_000 + 1 > LONG_DAYS;
 
-type Entry = { state: 'queued' | 'running' | 'done' | 'error'; queuedAt: number; startedAt: number | null; finishedAt: number | null; value?: unknown; error?: string; run: () => Promise<unknown> };
+type Entry = { label: string; prio: number; state: 'queued' | 'running' | 'done' | 'error'; queuedAt: number; startedAt: number | null; finishedAt: number | null; value?: unknown; error?: string; run: () => Promise<unknown> };
 export type LongStatus =
   | { state: 'done'; value: unknown }
   | { state: 'error'; error: string }
@@ -36,21 +36,40 @@ function pump(clock: () => number) {
   if (!e) { pump(clock); return; }
   active = key;
   e.state = 'running'; e.startedAt = clock();
+  // Nhật ký lượt kỳ dài (26/11/2026, để đo): chỉ đường dẫn API và số giây, không ghi tham số (tên, mã nhân viên) hay số liệu.
+  console.log(`long job start ${e.label} (chờ ${Math.round((e.startedAt - e.queuedAt) / 1000)}s, còn ${waiting.length} lượt xếp sau)`);
   Promise.resolve().then(e.run).then(
     (v) => { e.state = 'done'; e.value = v; },
     (err: unknown) => { e.state = 'error'; e.error = err instanceof Error ? err.message : String(err); },
-  ).finally(() => { e.finishedAt = clock(); active = null; pump(clock); });
+  ).finally(() => {
+    e.finishedAt = clock();
+    const secs = Math.round((e.finishedAt - (e.startedAt ?? e.finishedAt)) / 1000);
+    if (e.state === 'error') console.error(`long job error ${e.label} sau ${secs}s`);
+    else console.log(`long job done ${e.label} ${secs}s`);
+    active = null; pump(clock);
+  });
 }
 
 /** Xin kết quả của một khoá: chưa có thì xếp hàng tính (một lượt cho mỗi khoá); đang tính thì báo trạng thái; xong thì trả kết quả đã nhớ. */
-export function longJob(key: string, run: () => Promise<unknown>, clock: () => number = Date.now): LongStatus {
+/** Thứ tự ưu tiên trong hàng chờ (số nhỏ chạy trước; cùng mức thì ai đến trước chạy trước): báo cáo Marketing chính trước,
+ * số chính / xu hướng sau, các khối phụ (cross, trend-cards, hồ sơ…) cuối (Đầu não 26/11/2026). */
+export function longPriority(pathname: string) {
+  if (pathname === '/api/reports/marketing') return 0;
+  if (pathname === '/api/marketing/analytics' || pathname === '/api/marketing/trend') return 1;
+  return 2;
+}
+
+/** label: đường dẫn API (không tham số) để ghi nhật ký. prio: longPriority. */
+export function longJob(key: string, run: () => Promise<unknown>, clock: () => number = Date.now, label = 'kỳ dài', prio = 2): LongStatus {
   const now = clock();
   prune(now);
   let e = jobs.get(key);
   if (!e) {
-    e = { state: 'queued', queuedAt: now, startedAt: null, finishedAt: null, run };
+    e = { label, prio, state: 'queued', queuedAt: now, startedAt: null, finishedAt: null, run };
     jobs.set(key, e);
-    waiting.push(key);
+    // Chen vào hàng chờ theo mức ưu tiên: đứng sau mọi lượt cùng mức hoặc ưu tiên hơn đang chờ.
+    const at = waiting.findIndex((k) => (jobs.get(k)?.prio ?? 2) > prio);
+    if (at < 0) waiting.push(key); else waiting.splice(at, 0, key);
     pump(clock);
   }
   if (e.state === 'done') return { state: 'done', value: e.value };
