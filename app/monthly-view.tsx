@@ -18,7 +18,7 @@ import { addDays, todayVn } from '@/lib/shared/report-time';
 import { GoalCell, PosChips, type OverviewReport } from './overview-view';
 import { Th,
   ChartCard, DeltaPill, ErrorBox, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SortTh, STATUS_VARS, StatusChip, TableWrap, Toolbar,
-  delta, dmy, dt, money, pct, posColor, posName, posVar, short, shortMoney, toast, useMotionOK, useSort, vi, type TipRows,
+  delta, dmy, dt, money, pct, posColor, posName, posVar, short, shortMoney, toast, useMotionOK, useSort, vi, type TipRows, barRadius,
 } from './ui-kit';
 
 // Nhãn trục X ngắn gọn cho biểu đồ cột ("Oxytetra - Megatech" → "Oxytetra"), tên đầy đủ vẫn hiện ở tooltip.
@@ -298,8 +298,8 @@ export function MonthlyView({ onNavigate }: { /** Mở trang khác (bấm cột 
                   <YAxis tickLine={false} axisLine={false} width={44} />
                   <ChartTooltip cursor={{ fill: 'var(--surface-2)' }} content={<ChartTooltipContent formatter={(value, name) => <span className="flex w-full justify-between gap-4"><span>{chartConfig[String(name) as keyof typeof chartConfig]?.label ?? name}</span><strong className="num">{vi.format(Number(value))} tr</strong></span>} />} />
                   <ChartLegend content={<ChartLegendContent />} />
-                  <Bar dataKey="closed" fill="var(--color-closed)" radius={[4, 4, 0, 0]} isAnimationActive={motionOn} />
-                  <Bar dataKey="delivered" radius={[4, 4, 0, 0]} isAnimationActive={motionOn}>
+                  <Bar dataKey="closed" fill="var(--color-closed)" radius={barRadius([4, 4, 0, 0])} isAnimationActive={motionOn} />
+                  <Bar dataKey="delivered" radius={barRadius([4, 4, 0, 0])} isAnimationActive={motionOn}>
                     {posChart.map((p) => <Cell key={p.id} fill={posVar(p.id)} />)}
                     <LabelList dataKey="delivered" position="top" formatter={(v) => vi.format(Math.round(Number(v)))} fontSize={11} fontWeight={700} fill="var(--ink-2)" className="num" />
                   </Bar>

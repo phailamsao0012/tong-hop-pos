@@ -19,7 +19,7 @@ import { POS } from '@/lib/shared/report-model';
 import { todayVn } from '@/lib/shared/report-time';
 import { PeriodToolbar, PosChips, type OverviewReport } from './overview-view';
 import { posName } from './ui-kit-pos';
-import { Th, Avatar, ChartCard, ContextLine, Definitions, DeltaPill, ErrorBox, EmptyState, HoverReveal, KpiCard, PageHeader, ProgressBar, SkeletonKpis, SortTh, Sparkline, StatusChip, TableWrap, Toolbar, Tooltip, delta, dmy, money, pct, posVar, short, toast, useMotionOK, useSort, vi } from './ui-kit';
+import { Th, Avatar, ChartCard, ContextLine, Definitions, DeltaPill, ErrorBox, EmptyState, HoverReveal, KpiCard, PageHeader, ProgressBar, SkeletonKpis, SortTh, Sparkline, StatusChip, TableWrap, Toolbar, Tooltip, delta, dmy, money, pct, posVar, short, toast, useMotionOK, useSort, vi, barRadius } from './ui-kit';
 import { daysInMonth, fetchTargets, type TargetItem } from './targets-panel';
 import { OrderOriginFilter, useOrderOrigin } from './order-origin-filter';
 import { useTeam } from './team-store';
@@ -310,7 +310,7 @@ export function CompareView() {
                     ) : null} />
                     {totals.median !== null && <ReferenceLine x={Number(totals.median.toFixed(1))} stroke="var(--ink-4)" strokeDasharray="4 4" />}
                     <ReferenceLine x={TARGET} stroke="var(--good)" strokeDasharray="4 4" />
-                    <Bar dataKey="rate" radius={[0, 4, 4, 0]} barSize={16} isAnimationActive={motionOn}>
+                    <Bar dataKey="rate" radius={barRadius([0, 4, 4, 0])} barSize={16} isAnimationActive={motionOn}>
                       {chartRows.map((r) => <Cell key={r.key} fill={r.rate >= TARGET ? 'var(--primary)' : r.rate >= (totals.median ?? 0) ? 'var(--ring)' : 'var(--t-orange)'} />)}
                       <LabelList dataKey="rate" position="right" formatter={(v) => pct(Number(v))} fontSize={11} fill="var(--ink-2)" className="num" />
                     </Bar>

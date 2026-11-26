@@ -12,7 +12,7 @@ import { CalendarDays } from 'lucide-react';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import type { OverviewReport } from './overview-view';
 import { setPeriodRange } from './period-store';
-import { Th, ChartCard, SegmentedControl, TableWrap, delta, dmy, money, shortMoney, useMotionOK, vi } from './ui-kit';
+import { Th, ChartCard, SegmentedControl, TableWrap, delta, dmy, money, shortMoney, useMotionOK, vi, barRadius } from './ui-kit';
 import { useApi } from './use-api';
 
 type MetricKey = 'deliveredNet' | 'closedNet' | 'deliveredOrders' | 'closedOrders';
@@ -128,8 +128,8 @@ export function MonthlyCompare({ month, end, posIds, team, onOpenRange }: {
               <ChartTooltip cursor={{ fill: 'var(--surface-2)' }} content={<ChartTooltipContent labelFormatter={(_l, p) => { const r = p?.[0]?.payload as Record<string, unknown> | undefined; return r ? `${String(r.label)} (ngày ${String(r.partial ?? r.range)})` : ''; }}
                 formatter={(value, name) => <span className="flex w-full justify-between gap-4"><span>{config[String(name) as keyof typeof config]?.label ?? name}</span><strong className="num">{tipValue(value)}</strong></span>} />} />
               <ChartLegend content={<ChartLegendContent />} />
-              {[...past].reverse().map((_, j) => { const k = past.length - 1 - j; return <Bar key={k} dataKey={`p${k}`} fill={PAST[k]} radius={[4, 4, 0, 0]} isAnimationActive={motionOn} />; })}
-              <Bar dataKey="cur" fill="var(--color-cur)" radius={[4, 4, 0, 0]} isAnimationActive={motionOn}>
+              {[...past].reverse().map((_, j) => { const k = past.length - 1 - j; return <Bar key={k} dataKey={`p${k}`} fill={PAST[k]} radius={barRadius([4, 4, 0, 0])} isAnimationActive={motionOn} />; })}
+              <Bar dataKey="cur" fill="var(--color-cur)" radius={barRadius([4, 4, 0, 0])} isAnimationActive={motionOn}>
                 <LabelList dataKey="vsPrevWeek" position="top" content={(p) => {
                   const { x, y, width, value } = p as { x: number; y: number; width: number; value: unknown };
                   if (typeof value !== 'number') return null;
@@ -164,7 +164,7 @@ export function MonthlyCompare({ month, end, posIds, team, onOpenRange }: {
             <YAxis tickLine={false} axisLine={false} width={56} tickFormatter={axis} />
             <ChartTooltip cursor={{ fill: 'var(--surface-2)' }} content={<ChartTooltipContent labelFormatter={(_l, p) => { const r = p?.[0]?.payload as (typeof monthRows)[number] | undefined; return r ? `${r.label}${r.partial ? ` (ngày ${r.partial})` : ''} · ${dmy(r.start)}–${dmy(r.end)}` : ''; }}
               formatter={(value) => <span className="flex w-full justify-between gap-4"><span>{metricLabel}</span><strong className="num">{tipValue(value)}</strong></span>} />} />
-            <Bar dataKey="value" radius={[4, 4, 0, 0]} isAnimationActive={motionOn}>
+            <Bar dataKey="value" radius={barRadius([4, 4, 0, 0])} isAnimationActive={motionOn}>
               {monthRows.map((r) => <Cell key={r.month} fill={r.month === month ? 'var(--primary)' : PAST[0]} />)}
               <LabelList dataKey="vsPrev" position="top" content={(p) => {
                 const { x, y, width, value } = p as { x: number; y: number; width: number; value: unknown };

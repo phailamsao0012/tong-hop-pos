@@ -25,7 +25,7 @@ import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import { Th,
   BackfillNotice, ChartCard, Definitions, ErrorBox, EmptyState, HoverReveal, KpiCard, PageHeader, ProgressBar, SkeletonKpis, SkeletonTable, SortTh, Sparkline, StatusChip, TableWrap,
-  dmy, dt, posVar, short, timeOnly, toast, useMotionOK, vi, type SortState,
+  dmy, dt, posVar, short, timeOnly, toast, useMotionOK, vi, type SortState, barRadius,
 } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
 
@@ -201,7 +201,7 @@ export function CallsView({ canExport = false }: { canExport?: boolean }) {
                   <XAxis dataKey="day" tickLine={false} axisLine={false} tickFormatter={(v: string) => dmy(v)} minTickGap={20} />
                   <YAxis tickLine={false} axisLine={false} width={40} allowDecimals={false} />
                   <ChartTooltip cursor={{ fill: 'var(--surface-2)' }} content={<ChartTooltipContent labelFormatter={(v) => dmy(String(v))} />} />
-                  <Bar dataKey="v" fill="var(--color-v)" radius={[4, 4, 0, 0]} isAnimationActive={motionOn} />
+                  <Bar dataKey="v" fill="var(--color-v)" radius={barRadius([4, 4, 0, 0])} isAnimationActive={motionOn} />
                 </BarChart>
               </ChartContainer>
             ) : <EmptyState text="Không có ngày nào trong kỳ." />}

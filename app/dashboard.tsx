@@ -93,7 +93,7 @@ import { BranchSwitch } from './branch-switch';
 import { useBranch } from './team-store';
 import { noteCritterPage } from './loading-critter/pick';
 import { CritterSettingPanel } from './loading-critter/setting';
-import { EmptyState, ErrorBox, PageHeader, SkeletonTable, SyncPill, TeamSwitch, ThemeSwitch, Toaster, Toolbar, motionOK, timeOnly, toast, useMotionOK } from './ui-kit';
+import { EmptyState, ErrorBox, PageHeader, SkeletonTable, SyncPill, TeamSwitch, ThemeSwitch, Toaster, Toolbar, motionOK, timeOnly, toast, useMotionOK, setUiMoiCharts } from './ui-kit';
 import { watchSystemTheme } from './ui/theme';
 
 import {
@@ -847,6 +847,8 @@ export default function Dashboard({ user, initialView, demo = false, uiMoi = fal
   // Trang mở thẳng bằng ?view= chỉ biết ở trình duyệt: phần phụ thuộc trang hiện tại ngoài Suspense (thanh tab bộ phận) vẽ sau khi gắn để khớp HTML máy chủ.
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
+  // Cờ bo góc biểu đồ (barRadius, ui-kit): đặt ngay khi vẽ để biểu đồ lần đầu đã đúng kiểu; cùng giá trị nên gọi lại không sao.
+  setUiMoiCharts(uiMoi);
   // Giao diện mới đợt 3: khung nổi (Dialog, Sheet, Popover, Select, Menu) portal ra <body>, nằm ngoài .ui-moi; gắn cờ ở <html> để globals.css phủ được. Cờ tắt thì không gắn.
   useEffect(() => { if (!uiMoi) return; const root = document.documentElement; root.classList.add('ui-moi-root'); return () => root.classList.remove('ui-moi-root'); }, [uiMoi]);
   // App iOS mở thẳng một trang qua ?view=…; trang không có quyền sẽ về Điều khiển trung tâm như thường.

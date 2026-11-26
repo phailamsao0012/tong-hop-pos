@@ -90,7 +90,7 @@ import { Th,
   posVar,
   shortMoney,
   useSort,
-  vi,
+  vi, barRadius,
 } from './ui-kit';
 
 type Team = 'sale' | 'cskh';
@@ -767,7 +767,7 @@ export function TeamOverviewView({
                     yAxisId="m"
                     dataKey="netM"
                     fill="var(--color-netM)"
-                    radius={[4, 4, 0, 0]}
+                    radius={barRadius([4, 4, 0, 0])}
                     maxBarSize={28}
                   />
                   <Line

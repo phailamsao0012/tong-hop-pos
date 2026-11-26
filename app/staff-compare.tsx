@@ -49,7 +49,7 @@ import {
   dmy,
   pct,
   shortMoney,
-  vi,
+  vi, barRadius,
 } from './ui-kit';
 
 export type CmpMetric = 'closed' | 'closedNet' | 'closeRate';
@@ -707,7 +707,7 @@ export function CompareStrip({
                     dataKey="up"
                     stackId="d"
                     fill="var(--good)"
-                    radius={[3, 3, 0, 0]}
+                    radius={barRadius([3, 3, 0, 0])}
                     maxBarSize={18}
                     isAnimationActive={false}
                   />
@@ -715,7 +715,7 @@ export function CompareStrip({
                     dataKey="down"
                     stackId="d"
                     fill="var(--bad)"
-                    radius={[0, 0, 3, 3]}
+                    radius={barRadius([0, 0, 3, 3])}
                     maxBarSize={18}
                     isAnimationActive={false}
                   />

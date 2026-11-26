@@ -15,7 +15,7 @@ import type { MonthRow, StaffProfile } from '@/lib/reports/staff-profile';
 import { STAFF_STATUSES } from '@/lib/teams/staff-status';
 import { ORDER_STATUS } from '@/lib/pancake/pancake';
 import { useStaffStatus, STATUS_CLASS } from './staff-name';
-import { SegmentedControl, money, pct, shortMoney, vi } from './ui-kit';
+import { SegmentedControl, money, pct, shortMoney, vi, barRadius } from './ui-kit';
 import { BadgeShelf } from './staff-badges';
 import { apiJson } from './api-fetch';
 import { usePosIds } from './pos-store';
@@ -83,8 +83,8 @@ function MonthCharts({ months, mkt }: { months: MonthRow[]; mkt: boolean }) {
             <CartesianGrid vertical={false} /><XAxis dataKey="key" tick={{ fontSize: 11 }} minTickGap={8} />
             <YAxis width={44} tick={{ fontSize: 11 }} tickFormatter={(n: number) => (n >= 1e9 ? `${+(n / 1e9).toFixed(1)}tỷ` : `${Math.round(n / 1e6)}tr`)} />
             <ChartTooltip content={<ChartTooltipContent formatter={(v) => money(typeof v === 'number' ? v : null)} />} />
-            <Bar dataKey="normal" name="Doanh số" stackId="n" fill="var(--primary)" radius={[4, 4, 0, 0]} isAnimationActive={false} />
-            <Bar dataKey="topNet" name="Doanh số (lọt top)" stackId="n" fill="var(--warn)" radius={[4, 4, 0, 0]} isAnimationActive={false} />
+            <Bar dataKey="normal" name="Doanh số" stackId="n" fill="var(--primary)" radius={barRadius([4, 4, 0, 0])} isAnimationActive={false} />
+            <Bar dataKey="topNet" name="Doanh số (lọt top)" stackId="n" fill="var(--warn)" radius={barRadius([4, 4, 0, 0])} isAnimationActive={false} />
           </BarChart>
         </ChartContainer>
       </section>
@@ -94,7 +94,7 @@ function MonthCharts({ months, mkt }: { months: MonthRow[]; mkt: boolean }) {
         <ChartContainer config={{ rate: { label: 'Tỷ lệ chốt', color: 'var(--primary)' }, orders: { label: 'Đơn', color: 'var(--primary)' } }} className="mt-2 aspect-auto h-52 w-full">
           {mkt ? (
             <BarChart data={data} margin={{ left: 0, right: 4 }}><CartesianGrid vertical={false} /><XAxis dataKey="key" tick={{ fontSize: 11 }} minTickGap={8} /><YAxis width={40} tick={{ fontSize: 11 }} />
-              <ChartTooltip content={<ChartTooltipContent />} /><Bar dataKey="orders" name="Đơn" fill="var(--primary)" radius={[4, 4, 0, 0]} isAnimationActive={false} /></BarChart>
+              <ChartTooltip content={<ChartTooltipContent />} /><Bar dataKey="orders" name="Đơn" fill="var(--primary)" radius={barRadius([4, 4, 0, 0])} isAnimationActive={false} /></BarChart>
           ) : (
             <LineChart data={data} margin={{ left: 0, right: 8 }}><CartesianGrid vertical={false} /><XAxis dataKey="key" tick={{ fontSize: 11 }} minTickGap={8} />
               <YAxis width={36} domain={[0, 100]} tick={{ fontSize: 11 }} tickFormatter={(n: number) => `${n}%`} />

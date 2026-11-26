@@ -41,6 +41,11 @@ export const delta = (a: number, b: number | null | undefined) => {
   return (a - b) / b * 100;
 };
 
+// Bo góc cột biểu đồ (giao diện mới đợt 3): app/dashboard.tsx đặt cờ theo THP_UI_MOI trước khi vẽ; bật thì bo gấp đôi (4 → 8), tắt thì giữ nguyên số cũ.
+let uiMoiCharts = false;
+export const setUiMoiCharts = (on: boolean) => { uiMoiCharts = on; };
+export const barRadius = (r: [number, number, number, number]): [number, number, number, number] => uiMoiCharts ? [r[0] * 2, r[1] * 2, r[2] * 2, r[3] * 2] : r;
+
 // Màu POS / trạng thái giữ mã hex (an toàn cho xuất pptx / canvas); trong DOM ưu tiên posVar() / STATUS_VARS để theo chủ đề sáng-tối.
 export const POS_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#4a3aa7'];
 export const posColor = (posId: string) => POS_COLORS[POS.findIndex((p) => p.id === posId)] ?? '#52514e';

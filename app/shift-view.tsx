@@ -20,7 +20,7 @@ import { useTeam } from './team-store';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import { ShiftStatesCard, type OrderStates } from './shift-states';
-import { Th, ChartCard, Definitions, ErrorBox, EmptyState, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, StatusChip, SyncPill, TableWrap, Toolbar, delta, dt, money, pct, posName, posVar, short, shortMoney, timeOnly, toast, useMotionOK, vi } from './ui-kit';
+import { Th, ChartCard, Definitions, ErrorBox, EmptyState, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, StatusChip, SyncPill, TableWrap, Toolbar, delta, dt, money, pct, posName, posVar, short, shortMoney, timeOnly, toast, useMotionOK, vi, barRadius } from './ui-kit';
 
 type Staff = { employeeId: string; name: string; department: string | null; received: number; closed: number; rate: number | null; hotOrders: number; hotValue: number; activityOrders: number; activityValue: number; pending: number; posIds: string[]; yesterday: { received: number; closed: number; rate: number | null } | null; assignedHidden?: boolean; shiftHours?: string | null };
 type Shift = {
@@ -183,10 +183,10 @@ export function ShiftView() {
                       <YAxis tickLine={false} axisLine={false} width={36} allowDecimals={false} tick={{ fontSize: 10.5, fill: 'var(--ink-3)' }} />
                       <ChartTooltip cursor={{ fill: 'var(--surface-2)' }} content={<ChartTooltipContent formatter={(value, name, item) => <span className="flex w-full justify-between gap-4"><span>{name === 'received' ? 'Số đã nhận' : 'Đơn đã chốt'}</span><strong className="num">{vi.format(Number(value))}{name === 'closed' ? ` · ${shortMoney(item.payload?.value ?? 0)}` : ''}</strong></span>} />} />
                       <ChartLegend content={<ChartLegendContent />} />
-                      <Bar dataKey="received" fill="var(--color-received)" radius={[4, 4, 0, 0]} isAnimationActive={motionOn}>
+                      <Bar dataKey="received" fill="var(--color-received)" radius={barRadius([4, 4, 0, 0])} isAnimationActive={motionOn}>
                         {showLabels && <LabelList dataKey="received" position="top" fontSize={10.5} fill="var(--ink-3)" className="num" formatter={(v) => Number(v) ? vi.format(Number(v)) : ''} />}
                       </Bar>
-                      <Bar dataKey="closed" fill="var(--color-closed)" radius={[4, 4, 0, 0]} isAnimationActive={motionOn}>
+                      <Bar dataKey="closed" fill="var(--color-closed)" radius={barRadius([4, 4, 0, 0])} isAnimationActive={motionOn}>
                         {showLabels && <LabelList dataKey="closed" position="top" fontSize={10.5} fill="var(--ink)" className="num" formatter={(v) => Number(v) ? vi.format(Number(v)) : ''} />}
                       </Bar>
                     </BarChart>

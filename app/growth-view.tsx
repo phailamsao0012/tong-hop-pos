@@ -12,7 +12,7 @@ import {
   GROWTH_DEPTS, GROWTH_DEPT_LABELS, JOIN_SOURCE_LABELS, MODES, cumulative, indexSeries, isSeries, peersFor, periodRows, summaries, tenureDays, workSpan,
   type Cmp, type GrowthData, type GrowthDept, type GrowthPerson, type Index, type Metric, type Mode,
 } from '@/lib/reports/growth-calc';
-import { Th, ChartCard, Definitions, EmptyState, ErrorBox, PageHeader, SegmentedControl, SkeletonTable, SortTh, StatusChip, TableWrap, ThinkingLine, pct, short, toast, useMotionOK, useSort, vi } from './ui-kit';
+import { Th, ChartCard, Definitions, EmptyState, ErrorBox, PageHeader, SegmentedControl, SkeletonTable, SortTh, StatusChip, TableWrap, ThinkingLine, pct, short, toast, useMotionOK, useSort, vi, barRadius } from './ui-kit';
 import { StaffPicker } from './staff-picker';
 import { useApi } from './use-api';
 import { usePosIds, usePosStaffFilter } from './pos-store';
@@ -218,8 +218,8 @@ function PeriodCard({ me, data, idx, metric, fmt, unitLabel }: { me: GrowthPerso
                 <YAxis tickLine={false} axisLine={false} width={58} tickFormatter={(v: number) => fmt(v)} />
                 <ChartTooltip cursor={{ fill: 'var(--tint-2)' }} content={<RowTip rows={rows} fmt={fmt} agg={agg} name={me.name} cmpName={cmpName} />} />
                 <ChartLegend verticalAlign="top" content={<ChartLegendContent />} />
-                <Bar dataKey="mine" fill="var(--color-mine)" radius={[4, 4, 0, 0]} maxBarSize={26} isAnimationActive={motionOn} />
-                <Bar dataKey="theirs" fill="var(--color-theirs)" radius={[4, 4, 0, 0]} maxBarSize={26} isAnimationActive={motionOn} />
+                <Bar dataKey="mine" fill="var(--color-mine)" radius={barRadius([4, 4, 0, 0])} maxBarSize={26} isAnimationActive={motionOn} />
+                <Bar dataKey="theirs" fill="var(--color-theirs)" radius={barRadius([4, 4, 0, 0])} maxBarSize={26} isAnimationActive={motionOn} />
               </BarChart>
             </ChartContainer>
             <TableWrap className="mt-3" maxHeight="22rem" sticky>

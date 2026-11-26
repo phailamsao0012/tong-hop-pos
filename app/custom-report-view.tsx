@@ -17,7 +17,7 @@ import { closeRateOf, returnRateOf, cancelRateOf, METRIC_DEFS } from '@/lib/repo
 import { PeriodToolbar, PosChips, type OverviewReport } from './overview-view';
 import { useTeam } from './team-store';
 import { useApi } from './use-api';
-import { Th, ChartCard, EmptyState, ErrorBox, PageHeader, SegmentedControl, SkeletonTable, SortTh, TableWrap, dmy, pct, posName, shortMoney, toast, useSort, vi } from './ui-kit';
+import { Th, ChartCard, EmptyState, ErrorBox, PageHeader, SegmentedControl, SkeletonTable, SortTh, TableWrap, dmy, pct, posName, shortMoney, toast, useSort, vi, barRadius } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
 
 type M = OverviewReport['current']['total'];
@@ -190,7 +190,7 @@ export function CustomReportView() {
                   <XAxis dataKey="label" tickLine={false} axisLine={false} interval={0} angle={chart.length > 8 ? -35 : 0} textAnchor={chart.length > 8 ? 'end' : 'middle'} height={chart.length > 8 ? 70 : 30} tick={{ fontSize: 11 }} />
                   <YAxis tickLine={false} axisLine={false} width={56} tickFormatter={(v: number) => Math.abs(v) >= 1e6 ? `${Math.round(v / 1e6)}tr` : vi.format(v)} />
                   <ChartTooltip content={<ChartTooltipContent />} /><ChartLegend content={<ChartLegendContent />} />
-                  {metrics.map((k) => <Bar key={k} dataKey={k} fill={`var(--color-${k})`} radius={[4, 4, 0, 0]} />)}
+                  {metrics.map((k) => <Bar key={k} dataKey={k} fill={`var(--color-${k})`} radius={barRadius([4, 4, 0, 0])} />)}
                 </BarChart>
               ) : (
                 <LineChart data={chart} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>

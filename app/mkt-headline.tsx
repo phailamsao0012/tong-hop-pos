@@ -14,7 +14,7 @@ import type { LucideIcon } from 'lucide-react';
 import { Area, Bar, BarChart, CartesianGrid, ComposedChart, LabelList, XAxis, YAxis } from 'recharts';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip } from '@/components/ui/chart';
 import { CountUp } from './ui/count-up';
-import { Th, DeltaPill, EmptyState, StatusChip, orderStatusTone, SegmentedControl, SortTh, TableWrap, delta, dmy, money, posName, short, shortMoney, useSort, vi } from './ui-kit';
+import { Th, DeltaPill, EmptyState, StatusChip, orderStatusTone, SegmentedControl, SortTh, TableWrap, delta, dmy, money, posName, short, shortMoney, useSort, vi, barRadius } from './ui-kit';
 import { useApi } from './use-api';
 import { closeRateClass, ratePctCapped } from '@/lib/shared/close-rate';
 import { NumDetail } from './num-detail';
@@ -145,8 +145,8 @@ function RankChart({ rows, onPick, motionOn, seg }: { rows: Row[]; onPick: (id: 
         <YAxis tickLine={false} axisLine={false} width={36} tickFormatter={(v: number) => vi.format(Math.round(v))} />
         <ChartTooltip cursor={{ fill: 'var(--tint-2)' }} content={<Tip rows={data} revLabel={REV_LABEL[seg]} />} />
         <ChartLegend verticalAlign="top" content={<ChartLegendContent />} />
-        <Bar dataKey="costM" fill="var(--color-costM)" radius={[4, 4, 0, 0]} maxBarSize={22} isAnimationActive={motionOn} onClick={pick} />
-        <Bar dataKey="netM" fill="var(--color-netM)" radius={[4, 4, 0, 0]} maxBarSize={22} isAnimationActive={motionOn} onClick={pick}>
+        <Bar dataKey="costM" fill="var(--color-costM)" radius={barRadius([4, 4, 0, 0])} maxBarSize={22} isAnimationActive={motionOn} onClick={pick} />
+        <Bar dataKey="netM" fill="var(--color-netM)" radius={barRadius([4, 4, 0, 0])} maxBarSize={22} isAnimationActive={motionOn} onClick={pick}>
           <LabelList dataKey="roas" position="top" className="fill-ink-2 text-[10.5px] font-semibold" formatter={(v: unknown) => typeof v === 'number' ? roasText(v) : ''} />
         </Bar>
       </BarChart>
@@ -437,7 +437,7 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
               <ChartTooltip cursor={{ fill: 'var(--tint-2)' }} content={<Tip rows={timeRows} revLabel={revLabel} title={(r) => data.bucket === 'day' ? `${r.label}/${r.key.slice(0, 4)}` : r.label} />} />
               <ChartLegend content={<ChartLegendContent />} />
               <Area type="monotone" dataKey="netM" stroke="var(--color-netM)" fill="var(--color-netM)" fillOpacity={0.12} strokeWidth={2} isAnimationActive={motionOn} activeDot={{ r: 4.5, stroke: 'var(--surface)', strokeWidth: 2 }} />
-              <Bar dataKey="costM" fill="var(--color-costM)" radius={[4, 4, 0, 0]} maxBarSize={22} isAnimationActive={motionOn} />
+              <Bar dataKey="costM" fill="var(--color-costM)" radius={barRadius([4, 4, 0, 0])} maxBarSize={22} isAnimationActive={motionOn} />
             </ComposedChart>
           </ChartContainer>
         </div>
