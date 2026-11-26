@@ -1020,3 +1020,11 @@ table th { white-space: nowrap; font-weight: 600; font-size: 11.5px; letter-spac
 .ui-moi-root [data-slot="sheet-content"][data-side="left"] { border-top-right-radius: 20px; border-bottom-right-radius: 20px; }
 .ui-moi-root [data-slot="sheet-content"][data-side="bottom"] { border-top-left-radius: 20px; border-top-right-radius: 20px; }
 .ui-moi-root :is([data-slot="dialog-overlay"], [data-slot="alert-dialog-overlay"], [data-slot="sheet-overlay"]) { background: color-mix(in srgb, var(--ink) 28%, transparent); }
+
+/* (3) Thanh tab bộ phận (.dept-tabs, dashboard.tsx): dạng viên thuốc như .seg — nền xám nhạt, tab đang chọn nền trắng; tên bộ phận màu chữ chính. */
+.ui-moi .dept-tabs { border-radius: 999px; border-color: transparent; background: var(--surface-2); box-shadow: none; padding: 3px; gap: 2px; }
+.ui-moi .dept-name { color: var(--ink); border-right-color: var(--line); }
+.ui-moi .dept-tab { border-radius: 999px; padding: 6px 14px; color: var(--ink-3); font-weight: 500; }
+.ui-moi .dept-tab:hover { background: color-mix(in srgb, var(--surface) 60%, transparent); color: var(--ink); }
+.ui-moi .dept-tab.is-active { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.1); }
+@media (max-width: 900px) { .ui-moi .dept-tabs { border-radius: 16px; } }
