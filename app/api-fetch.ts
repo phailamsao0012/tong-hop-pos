@@ -3,9 +3,15 @@
 // - GỘP các lời gọi báo cáo phát ra cùng lúc (trang Điều khiển bắn 8 API) thành một request POST /api/reports/batch:
 //   trên mạng chậm (mỗi vòng đi–về ~1 giây từ Việt Nam tới workers.dev) đây là khác biệt lớn nhất.
 import { segLensNow, withSeg } from './team-store';
+import { longWaitEnd, longWaitStart } from './long-wait';
 
 const TIMEOUT_MS = 45000;
 const RETRY_DELAY_MS = 1500;
+// Báo cáo kỳ dài chạy nền (lib/ops/long-job.ts): máy chủ trả 202 "đang tính", trình duyệt hỏi lại mỗi 20 giây, tối đa 10 phút.
+// Hỏi lại không tạo lượt tính mới (máy chủ dùng chung một lượt cho cùng khoá).
+const LONG_POLL_MS = 20000;
+const LONG_MAX_MS = 10 * 60000;
+let longSeq = 0;
 const BATCH_WINDOW_MS = 25;
 const BATCH_MAX = 12;
 // Tắt gộp mặc định: trên tên miền riêng HTTP/2 chạy song song đủ nhanh, còn gộp làm mọi khối phải chờ khối chậm nhất.
@@ -34,8 +40,20 @@ export function installApiFetch() {
       finally { clearTimeout(t); outer?.removeEventListener('abort', onAbort); }
     };
     try {
-      const res = await attempt();
-      if (retry && [502, 503, 504].includes(res.status) && !outer?.aborted) { await new Promise((r) => setTimeout(r, 1800)); return attempt(); }
+      let res = await attempt();
+      if (retry && [502, 503, 504].includes(res.status) && !outer?.aborted) { await new Promise((r) => setTimeout(r, 1800)); res = await attempt(); }
+      if (res.status === 202 && res.headers.get('x-thp-long') === '1') {
+        const id = `l${++longSeq}`, t0 = Date.now();
+        longWaitStart(id, t0);
+        try {
+          while (res.status === 202 && res.headers.get('x-thp-long') === '1' && Date.now() - t0 < LONG_MAX_MS && !outer?.aborted) {
+            await new Promise((r) => setTimeout(r, LONG_POLL_MS));
+            if (outer?.aborted) break;
+            try { res = await attempt(); } catch { /* rớt mạng giữa chừng: hỏi lại lượt sau */ }
+          }
+        } finally { longWaitEnd(id); }
+        if (res.status === 202) return new Response(JSON.stringify({ error: 'Kỳ dài vẫn đang tính, mở lại sau ít phút sẽ có số (máy chủ vẫn tính tiếp).' }), { status: 504, headers: { 'Content-Type': 'application/json' } });
+      }
       return res;
     } catch (error) {
       if (outer?.aborted || !retry) throw error;

@@ -1,11 +1,13 @@
 import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { longOrNow } from '@/lib/ops/long-response';
 import { mktAnalytics } from '@/lib/reports/mkt-analytics';
 import { POS } from '@/lib/shared/report-model';
 import { DATE_RE } from '@/lib/shared/report-time';
 import { parseTeam } from '@/lib/teams/team';
 
 export async function GET(request: Request) {
-  if (!(await getSessionUser())) return unauthorized();
+  const user = await getSessionUser();
+  if (!user) return unauthorized();
   const p = new URL(request.url).searchParams;
   const start = p.get('start') ?? '', end = p.get('end') ?? '';
   if (!DATE_RE.test(start) || !DATE_RE.test(end) || start > end) return Response.json({ error: 'Khoảng ngày không hợp lệ.' }, { status: 400 });
@@ -14,5 +16,5 @@ export async function GET(request: Request) {
   if (requested.some((id) => !valid.has(id))) return Response.json({ error: 'POS không hợp lệ.' }, { status: 400 });
   const text = (k: string, max: number) => { const v = p.get(k); return v === null ? null : v.trim().slice(0, max); };
   const marketerId = text('marketerId', 120) || null, teamId = text('teamId', 120) || null, product = text('product', 200), saleTeam = text('saleTeam', 2500) || null;
-  return Response.json(await mktAnalytics({ posIds: requested.length ? requested : [...valid], start, end, marketerId, teamId, product, team: parseTeam(p.get('team')), saleTeam }), { headers: { 'Cache-Control': 'private, no-store' } });
+  return longOrNow(request, user.userId, start, end, async () => ({ status: 200, body: await mktAnalytics({ posIds: requested.length ? requested : [...valid], start, end, marketerId, teamId, product, team: parseTeam(p.get('team')), saleTeam }) }));
 }
