@@ -1028,3 +1028,10 @@ table th { white-space: nowrap; font-weight: 600; font-size: 11.5px; letter-spac
 .ui-moi .dept-tab:hover { background: color-mix(in srgb, var(--surface) 60%, transparent); color: var(--ink); }
 .ui-moi .dept-tab.is-active { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.1); }
 @media (max-width: 900px) { .ui-moi .dept-tabs { border-radius: 16px; } }
+
+/* (4) Ô nhập trên thanh lọc: Input, SelectTrigger, ô chọn thô, .field — bo viên thuốc, viền nhạt; ô nhiều dòng bo 14px.
+   MultiFilter (dashboard.tsx) là Button + Popover nên đã ăn luật (1), (2). */
+:is(.ui-moi, .ui-moi-root) :is([data-slot="input"], [data-slot="select-trigger"], [data-slot="native-select"], select.field, input.field):not([data-slot="input-group"] *) { border-radius: 999px; border-color: var(--line); padding-left: 12px; }
+:is(.ui-moi, .ui-moi-root) :is([data-slot="textarea"], textarea.field) { border-radius: 14px; border-color: var(--line); }
+:is(.ui-moi, .ui-moi-root) [data-slot="input-group"] { border-radius: 999px; border-color: var(--line); }
+:is(.ui-moi, .ui-moi-root) :is([data-slot="input"], [data-slot="select-trigger"], .field):focus-visible { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent); }
