@@ -20,6 +20,10 @@ export type LongStatus =
 const jobs = new Map<string, Entry>();
 const waiting: string[] = [];
 let active: string | null = null;
+// Nhịp gom (Đầu não 26/11/2026, anh Vũ "khối này tính sau được nhé"): khi đang rảnh mà có lượt kỳ dài tới, chờ một nhịp ngắn để các API
+// cùng trang tới gần nhau được xếp theo ưu tiên (báo cáo Marketing chính trước, số chính / xu hướng sau) thay vì ai tới trước chạy trước.
+let gatherMs = 1500;
+let gatherTimer: ReturnType<typeof setTimeout> | null = null;
 
 function prune(now: number) {
   for (const [k, e] of jobs) {
@@ -70,12 +74,14 @@ export function longJob(key: string, run: () => Promise<unknown>, clock: () => n
     // Chen vào hàng chờ theo mức ưu tiên: đứng sau mọi lượt cùng mức hoặc ưu tiên hơn đang chờ.
     const at = waiting.findIndex((k) => (jobs.get(k)?.prio ?? 2) > prio);
     if (at < 0) waiting.push(key); else waiting.splice(at, 0, key);
-    pump(clock);
+    // Đang rảnh: chờ nhịp gom rồi mới chọn lượt; đang có lượt chạy thì cứ xếp hàng, lượt sau tự chạy khi lượt trước xong.
+    if (gatherMs > 0 && !active) { if (!gatherTimer) gatherTimer = setTimeout(() => { gatherTimer = null; pump(clock); }, gatherMs); }
+    else pump(clock);
   }
   if (e.state === 'done') return { state: 'done', value: e.value };
   if (e.state === 'error') return { state: 'error', error: e.error ?? 'Lỗi khi tính.' };
   return { state: e.state, waitedMs: now - e.queuedAt, ahead: e.state === 'queued' ? waiting.indexOf(key) + (active ? 1 : 0) : 0 };
 }
 
-/** Chỉ dùng trong test: xoá mọi lượt đã nhớ. */
-export function resetLongJobs() { jobs.clear(); waiting.length = 0; active = null; }
+/** Chỉ dùng trong test: xoá mọi lượt đã nhớ; gather = nhịp gom (mặc định 0 để test cũ chạy ngay như trước). */
+export function resetLongJobs(gather = 0) { jobs.clear(); waiting.length = 0; active = null; if (gatherTimer) clearTimeout(gatherTimer); gatherTimer = null; gatherMs = gather; }
