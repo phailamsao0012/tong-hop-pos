@@ -61,7 +61,7 @@ function OrdersOf({ p, start, end, posIds }: { p: Person; start: string; end: st
   if (error) return <p className="text-[12px] text-bad">{error}</p>;
   if (!data) return <SkeletonTable rows={3} cols={6} />;
   return (
-    <div className="max-h-[360px] overflow-auto rounded-lg border border-line">
+    <div data-ui="list" className="max-h-[360px] overflow-auto rounded-lg border border-line">
       <TableWrap><table className="tbl compact">
         <thead><tr><Th>Mã đơn</Th><Th>POS</Th><Th>Khách</Th><Th>{p.role === 'seller' ? 'Chốt lúc' : 'Xác nhận lúc'}</Th><Th>Trạng thái</Th><Th className="n">Tiền</Th></tr></thead>
         <tbody>{data.orders.map((o) => (
