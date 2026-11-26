@@ -483,7 +483,7 @@ export function CompareStrip({
     );
   };
   return (
-    <div className="rounded-xl border border-line p-3">
+    <div data-ui="round" className="rounded-xl border border-line p-3">
       <div className="flex flex-wrap items-center gap-2">
         <GitCompareArrows size={15} className="text-ink-3" aria-hidden="true" />
         <b className="text-xs text-ink-2">So cùng kỳ</b>
