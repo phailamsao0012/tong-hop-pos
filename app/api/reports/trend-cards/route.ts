@@ -8,6 +8,7 @@ import { parseTeam } from '@/lib/teams/team';
 import { resolveHrUnit } from '@/lib/teams/hr-unit';
 import { TREND_DEPTS, trendCards, trendOrderPage } from '@/lib/reports/trend-period';
 import { readTrendNotes } from '@/lib/ai/ai-trends';
+import { mktReadSource } from '@/lib/reports/mkt-source';
 
 const DEPT_VIEW = { sale: 'sale-overview', cskh: 'cskh-overview', mkt: 'marketing', vandon: 'van-don' } as const;
 
@@ -35,11 +36,12 @@ export async function GET(request: Request) {
     if (!dept) return forbidden('Không được xem bộ phận này.');
     const page = Number(p.get('page') ?? 0);
     if (!Number.isInteger(page) || page < 0) return Response.json({ error: 'Trang không hợp lệ.' }, { status: 400 });
-    const rows = await trendOrderPage(env.DB, opts, dept, p.get('staff'), page);
+    const rows = await trendOrderPage(env.DB, opts, dept, p.get('staff'), page, Date.now(), await mktReadSource(env.DB, env, start, end));
     return Response.json({ rows: rows.slice(0, 100), more: rows.length > 100 }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
   return longOrNow(request, user.userId, start, end, async () => {
-  const result = await trendCards(env.DB, opts, depts);
+  // Nhánh MKT kỳ dài đọc bảng gọn khi bật THP_MKT_SLIM và đã điền đủ (lib/reports/mkt-source.ts); bộ phận khác không đổi.
+  const result = await trendCards(env.DB, opts, depts, Date.now(), await mktReadSource(env.DB, env, start, end));
   // AI viết cho cả công ty: chỉ hiện đúng kỳ tuần và đúng phạm vi đó, sau 7h30.
   const local = new Date(Date.now() + 7 * 3600000);
   const allScope = unitScope.team === 'all' && !unitScope.unit && !p.get('mktTeam') && !p.get('branch') && POS.every((x) => posIds.includes(x.id));
