@@ -45,3 +45,21 @@ Mẫu đã chốt hướng nhìn: `mau-bam-thu.html` trong thư mục này (HTML
 - PC ít RAM: tiến trình demo thứ hai có thể làm web thật chậm. Kiểm RAM, dừng demo khi anh xem xong hoặc khi web thật chậm.
 - Demo công khai trên mạng: chỉ số ảo, không người thật, đăng nhập bằng tài khoản demo.
 - Lùi lại: dừng tiến trình demo, gỡ tên miền phụ. Web thật không liên quan.
+
+## Đợt 2 (26/11 13h39): đồng bộ mọi mục + demo chạy bằng bản sao số thật
+
+Anh Vũ 9h45: mọi mục bên trong phải đồng bộ giao diện. 13h39: "dùng số của web thật, áp vào web demo đi".
+
+### Bước 2a. Đồng bộ giao diện mọi mục (chỉ khi cờ `THP_UI_MOI` bật)
+- Mẫu chuẩn: `bo-giao-dien-mau.html` cùng thư mục (số ảo). Mở mục "Bộ linh kiện" để lấy màu, bo góc, nút, nhãn, ô số, bảng, bộ lọc.
+- Cách làm: CSS đặt dưới class gốc của vỏ mới, áp lên các khối chung (`app/ui-kit.tsx`: PageHeader, KpiCard, ChartCard, Toolbar, TableWrap, bảng `.tbl`). Không sửa từng trang trừ trang lệch rõ.
+- Quy ước: xanh #17684b là màu nhấn duy nhất; nút chính đen; đỏ chỉ cho số vượt mốc đang có (không thêm mốc mới); vàng cho dữ liệu trễ; thẻ bo 20px viền nhạt; bộ lọc kỳ dạng viên thuốc; hàng nút POS một dòng; không thanh kéo ngang ở cỡ điện thoại.
+- Không đổi cách tính số, tên số, quyền xem. Cờ tắt thì giao diện y như cũ.
+- Xong khi: typecheck, test, lint (không thêm lỗi), build đạt ở máy đám mây; chụp 9 mục ở cỡ PC và điện thoại không tràn ngang.
+
+### Bước 2b. Demo chạy bằng bản sao số thật
+- Dữ liệu: bản chụp CHỈ ĐỌC từ cơ sở dữ liệu web thật sang file riêng của demo. Không ghi gì vào cơ sở dữ liệu thật. Demo không đồng bộ tiếp, số đứng yên tại giờ chụp; ghi giờ chụp lên đầu trang.
+- Vì là số thật: tắt `DEMO_MODE` và nút đăng nhập demo; đăng nhập bằng tài khoản thật, quyền xem như web thật.
+- Demo không được gọi ra ngoài: tắt mọi cron, không Pancake, không Telegram, Zalo, email, không AI.
+- Không đụng tiến trình, thư mục, cổng của web thật. Không chạy quanh 12h, 17h, 22h. Mỗi lần một lệnh nặng. RAM thiếu thì dừng và báo.
+- Xong khi: từ ngoài mở địa chỉ demo phải đăng nhập mới xem được; số Tổng quan khớp web thật cùng kỳ tại giờ chụp; log demo không có lời gọi ra ngoài; web thật vẫn nhanh.
