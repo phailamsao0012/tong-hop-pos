@@ -7,12 +7,15 @@ import { env } from 'cloudflare:workers';
 import { vnRangeUtc } from '@/lib/shared/report-time';
 import { MKT_STAFF, teamSubquery } from '@/lib/teams/team';
 import { NET } from '@/lib/reports/stats';
-import { AFTER_PACK_CANCELLED_SQL, AFTER_PACK_RETURNED_SQL, PACKED_SQL } from '@/lib/reports/van-don';
+import { mktReadSource, type MktSource } from '@/lib/reports/mkt-source';
 import { CLOSER_SQL } from '@/lib/teams/sale-team-filter';
 
 export type CrossPair = { closerId: string; marketerId: string; phones: number; closed: number; saleClosed: number; net: number; packed: number; cancelled: number; returned: number };
 
-export async function mktCross(posIds: string[], start: string, end: string): Promise<{ pairs: CrossPair[]; names: Record<string, string> }> {
+/** source: nguồn đọc (mặc định chọn theo kỳ, lib/reports/mkt-source.ts); test truyền thẳng để so hai nguồn. */
+export async function mktCross(posIds: string[], start: string, end: string, source?: MktSource): Promise<{ pairs: CrossPair[]; names: Record<string, string> }> {
+  const src = source ?? await mktReadSource(env.DB, env, start, end);
+  const PACKED_SQL = src.packed, AFTER_PACK_CANCELLED_SQL = src.afterPackCancelled, AFTER_PACK_RETURNED_SQL = src.afterPackReturned;
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const ph = posIds.map(() => '?').join(',');
   const mk = "NULLIF(TRIM(o.marketer_id),'')";
@@ -20,12 +23,12 @@ export async function mktCross(posIds: string[], start: string, end: string): Pr
   const base = `o.pos_id IN (${ph}) AND ${mk} IS NOT NULL AND ${mk} IN ${MKT_STAFF}`;
   const [leads, closed, names] = await env.DB.batch([
     env.DB.prepare(`SELECT COALESCE(NULLIF(o.seller_id,''),'') AS sid, ${mk} AS mid, COUNT(DISTINCT NULLIF(TRIM(o.phone),'')) AS phones
-      FROM raw_pos_orders o WHERE ${base} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7 AND o.seller_id IN ${teamSubquery('sale')} GROUP BY 1,2`).bind(...posIds, startUtc, endUtc),
+      FROM ${src.orders} o WHERE ${base} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7 AND o.seller_id IN ${teamSubquery('sale')} GROUP BY 1,2`).bind(...posIds, startUtc, endUtc),
     env.DB.prepare(`SELECT COALESCE(${CLOSER_SQL},'') AS sid, ${mk} AS mid, COUNT(*) AS closed, SUM(CASE WHEN COALESCE(${CLOSER_SQL},'') IN ${teamSubquery('sale')} THEN 1 ELSE 0 END) AS sale_closed, COALESCE(SUM(${net}),0) AS net,
         SUM(CASE WHEN ${PACKED_SQL('o')} THEN 1 ELSE 0 END) AS packed,
         SUM(CASE WHEN ${AFTER_PACK_CANCELLED_SQL('o')} THEN 1 ELSE 0 END) AS cancelled,
         SUM(CASE WHEN ${PACKED_SQL('o')} AND ${AFTER_PACK_RETURNED_SQL('o')} THEN 1 ELSE 0 END) AS returned
-      FROM raw_pos_orders o WHERE ${base} AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,7) GROUP BY 1,2`).bind(...posIds, startUtc, endUtc),
+      FROM ${src.orders} o WHERE ${base} AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,7) GROUP BY 1,2`).bind(...posIds, startUtc, endUtc),
     env.DB.prepare("SELECT user_id, MAX(name) AS name FROM pos_users WHERE name<>'' GROUP BY user_id"),
   ]);
   const key = (s: string, m: string) => `${s}\u0000${m}`;

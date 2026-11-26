@@ -15,6 +15,7 @@ import { MKT_STAFF, type Team, leadSellerFilter, notSan, teamSubquery } from '@/
 import { MARKETING_TEAMS_KEY, UNASSIGNED_TEAM } from '@/lib/teams/marketing-teams';
 import { MAIN_GROUPS, mainGroupSql } from '@/lib/reports/product-groups';
 import { addDays, bucketExpr, comparePeriod, compareWindow, daysBetween, vnRangeUtc } from '@/lib/shared/report-time';
+import { RAW_SOURCE, mktReadSource, withItems, type MktSource } from '@/lib/reports/mkt-source';
 
 export const NO_PRODUCT = '';
 export type Bucket = 'day' | 'week' | 'month';
@@ -47,15 +48,15 @@ export function matchProduct(product: string, tags: string[], items: string[]) {
   };
 }
 
-function productSql(m: ReturnType<typeof matchProduct>) {
-  if (m.main) return mainGroupSql(m.main, 'both');
+function productSql(m: ReturnType<typeof matchProduct>, src: MktSource = RAW_SOURCE) {
+  if (m.main) { const g = mainGroupSql(m.main, 'both'); return { sql: withItems(g.sql, src), binds: g.binds }; }
   const parts: string[] = [], binds: string[] = [];
   if (m.tags.length) {
     parts.push("EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(o.tags_json) THEN o.tags_json ELSE '[]' END) mt WHERE TRIM(json_extract(mt.value,'$.name')) IN (SELECT value FROM json_each(?)))");
     binds.push(JSON.stringify(m.tags));
   }
   if (m.items.length) {
-    parts.push('EXISTS (SELECT 1 FROM raw_pos_order_items mi WHERE mi.order_id=o.id AND COALESCE(mi.is_bonus,0)=0 AND mi.quantity>0 AND TRIM(mi.name) IN (SELECT value FROM json_each(?)))');
+    parts.push(`EXISTS (SELECT 1 FROM ${src.items} mi WHERE mi.order_id=o.id AND COALESCE(mi.is_bonus,0)=0 AND mi.quantity>0 AND TRIM(mi.name) IN (SELECT value FROM json_each(?)))`);
     binds.push(JSON.stringify(m.items));
   }
   return parts.length ? { sql: `(${parts.join(' OR ')})`, binds } : { sql: '0', binds: [] };
@@ -72,9 +73,11 @@ function bucketKey(day: string, b: Bucket) {
   return day;
 }
 
-export async function mktAnalytics(opts: { posIds: string[]; start: string; end: string; marketerId?: string | null; teamId?: string | null; product?: string | null; team?: Team; db?: D1Database; saleTeam?: string | null; untilUtc?: string }) {
+/** source: nguồn đọc (mặc định chọn theo kỳ, lib/reports/mkt-source.ts); test truyền thẳng để so hai nguồn. */
+export async function mktAnalytics(opts: { posIds: string[]; start: string; end: string; marketerId?: string | null; teamId?: string | null; product?: string | null; team?: Team; db?: D1Database; saleTeam?: string | null; untilUtc?: string; source?: MktSource }) {
   await ensureAdCostSchema();
   const db = opts.db ?? env.DB;
+  const src = opts.source ?? await mktReadSource(db, env, opts.start, opts.end);
   const ph = opts.posIds.map(() => '?').join(',');
   const mk = "NULLIF(TRIM(o.marketer_id),'')";
   const label = "COALESCE(NULLIF(TRIM(campaign),''),'')";
@@ -90,8 +93,8 @@ export async function mktAnalytics(opts: { posIds: string[]; start: string; end:
 
   // Lượt 1: tên sản phẩm trên sheet, nhãn đơn + tên sản phẩm Pancake của đơn MKT trong cả hai kỳ, team MKT, tên nhân viên.
   // Hai nhánh theo đúng chỉ mục (pos_id, created_at) và (pos_id, first_confirmed_at); UNION bỏ trùng.
-  const tagSql = "SELECT DISTINCT TRIM(json_extract(t.value,'$.name')) AS v FROM raw_pos_orders o, json_each(CASE WHEN json_valid(o.tags_json) THEN o.tags_json ELSE '[]' END) t";
-  const itemSql = 'SELECT DISTINCT TRIM(i.name) AS v FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id';
+  const tagSql = `SELECT DISTINCT TRIM(json_extract(t.value,'$.name')) AS v FROM ${src.orders} o, json_each(CASE WHEN json_valid(o.tags_json) THEN o.tags_json ELSE '[]' END) t`;
+  const itemSql = `SELECT DISTINCT TRIM(i.name) AS v FROM ${src.orders} o JOIN ${src.items} i ON i.order_id=o.id`;
   const itemOk = 'AND COALESCE(i.is_bonus,0)=0 AND i.quantity>0';
   const scopeOf = (col: string) => `o.pos_id IN (${ph}) AND o.${col}>=? AND o.${col}<? AND ${mk} IS NOT NULL`;
   const scopeBinds = [...opts.posIds, win.startUtc, cur.endUtc];
@@ -106,7 +109,7 @@ export async function mktAnalytics(opts: { posIds: string[]; start: string; end:
   const items = (itemRows.results as { v: string | null }[]).map((r) => r.v ?? '').filter(Boolean);
   const products = (labels.results as { product: string }[]).map((r) => r.product);
   const matches = new Map(products.map((p) => [p, matchProduct(p, tags, items)]));
-  const pf = product === null ? null : product === NO_PRODUCT ? { sql: '0', binds: [] } : productSql(matches.get(product) ?? matchProduct(product, tags, items));
+  const pf = product === null ? null : product === NO_PRODUCT ? { sql: '0', binds: [] } : productSql(matches.get(product) ?? matchProduct(product, tags, items), src);
   const pfSql = pf ? ` AND ${pf.sql}` : '', pfBinds = pf?.binds ?? [];
   const costPf = product === null ? '' : ` AND ${label}=?`, costPfBinds = product === null ? [] : [product];
 
@@ -147,27 +150,27 @@ export async function mktAnalytics(opts: { posIds: string[]; start: string; end:
   const mainList = productList.filter((p) => matches.get(p)!.main);
   const hitsOf = (where: string) => `WITH tm AS (SELECT json_extract(value,'$[0]') AS name, json_extract(value,'$[1]') AS product FROM json_each(?)),
     im AS (SELECT json_extract(value,'$[0]') AS name, json_extract(value,'$[1]') AS product FROM json_each(?)),
-    base AS (SELECT o.id, ${mk} AS m, o.seller_id, o.phone, ${net} AS net, o.tags_json FROM raw_pos_orders o WHERE ${where}),
+    base AS (SELECT o.id, ${mk} AS m, o.seller_id, o.phone, ${net} AS net, o.tags_json FROM ${src.orders} o WHERE ${where}),
     hits AS (SELECT b.id, tm.product FROM base b, json_each(CASE WHEN json_valid(b.tags_json) THEN b.tags_json ELSE '[]' END) t JOIN tm ON tm.name=TRIM(json_extract(t.value,'$.name'))
-      UNION SELECT b.id, im.product FROM base b JOIN raw_pos_order_items i ON i.order_id=b.id JOIN im ON im.name=TRIM(i.name) WHERE COALESCE(i.is_bonus,0)=0 AND i.quantity>0)`;
+      UNION SELECT b.id, im.product FROM base b JOIN ${src.items} i ON i.order_id=b.id JOIN im ON im.name=TRIM(i.name) WHERE COALESCE(i.is_bonus,0)=0 AND i.quantity>0)`;
   const maps = [JSON.stringify(tagMap), JSON.stringify(itemMap)];
 
   const stmts = [
     /* 0 */ db.prepare(`SELECT marketer_id, day, SUM(amount) AS amount FROM ${costFrom} WHERE day>=? AND day<=?${notSan('marketer_id')}${costPf} GROUP BY 1,2`).bind(opts.start, opts.end, ...costPfBinds),
     /* 1 */ db.prepare(`SELECT marketer_id, day, SUM(amount) AS amount FROM ${costFrom} WHERE day>=? AND day<=?${notSan('marketer_id')}${costPf} GROUP BY 1,2`).bind(prev.start, prev.end, ...costPfBinds),
     /* 2 */ db.prepare(`SELECT ${label} AS product, marketer_id, SUM(amount) AS amount FROM ${costFrom} WHERE day>=? AND day<=?${notSan('marketer_id')} GROUP BY 1,2`).bind(opts.start, opts.end),
-    /* 3 */ db.prepare(`SELECT ${mk} AS m, ${bucketExpr('o.first_confirmed_at', bucket)} AS b, COUNT(*) AS closed, COALESCE(SUM(${net}),0) AS net, ${splitCols} FROM raw_pos_orders o WHERE ${cw}${pfSql} GROUP BY 1,2`).bind(...cb, ...pfBinds),
-    /* 4 */ db.prepare(`SELECT ${mk} AS m, COUNT(*) AS orders, COUNT(DISTINCT o.phone) AS phones FROM raw_pos_orders o WHERE ${lw}${pfSql} GROUP BY 1`).bind(...lb, ...pfBinds),
-    /* 5 */ db.prepare(`SELECT ${mk} AS m, ${bucketExpr('o.created_at', bucket)} AS b, COUNT(*) AS orders, COUNT(DISTINCT o.phone) AS phones FROM raw_pos_orders o WHERE ${lw}${pfSql} GROUP BY 1,2`).bind(...lb, ...pfBinds),
-    /* 6 */ db.prepare(`SELECT ${mk} AS m, COUNT(*) AS closed, COALESCE(SUM(${net}),0) AS net, ${splitCols} FROM raw_pos_orders o WHERE ${pcw}${pfSql} GROUP BY 1`).bind(...pcb, ...pfBinds),
-    /* 7 */ db.prepare(`SELECT ${mk} AS m, COUNT(*) AS orders, COUNT(DISTINCT o.phone) AS phones FROM raw_pos_orders o WHERE ${plw}${pfSql} GROUP BY 1`).bind(...plb, ...pfBinds),
+    /* 3 */ db.prepare(`SELECT ${mk} AS m, ${bucketExpr('o.first_confirmed_at', bucket)} AS b, COUNT(*) AS closed, COALESCE(SUM(${net}),0) AS net, ${splitCols} FROM ${src.orders} o WHERE ${cw}${pfSql} GROUP BY 1,2`).bind(...cb, ...pfBinds),
+    /* 4 */ db.prepare(`SELECT ${mk} AS m, COUNT(*) AS orders, COUNT(DISTINCT o.phone) AS phones FROM ${src.orders} o WHERE ${lw}${pfSql} GROUP BY 1`).bind(...lb, ...pfBinds),
+    /* 5 */ db.prepare(`SELECT ${mk} AS m, ${bucketExpr('o.created_at', bucket)} AS b, COUNT(*) AS orders, COUNT(DISTINCT o.phone) AS phones FROM ${src.orders} o WHERE ${lw}${pfSql} GROUP BY 1,2`).bind(...lb, ...pfBinds),
+    /* 6 */ db.prepare(`SELECT ${mk} AS m, COUNT(*) AS closed, COALESCE(SUM(${net}),0) AS net, ${splitCols} FROM ${src.orders} o WHERE ${pcw}${pfSql} GROUP BY 1`).bind(...pcb, ...pfBinds),
+    /* 7 */ db.prepare(`SELECT ${mk} AS m, COUNT(*) AS orders, COUNT(DISTINCT o.phone) AS phones FROM ${src.orders} o WHERE ${plw}${pfSql} GROUP BY 1`).bind(...plb, ...pfBinds),
     /* 8 */ db.prepare(`${hitsOf(cw)} SELECT h.product AS p, b.m, COUNT(*) AS closed, COALESCE(SUM(b.net),0) AS net, ${newSplitSql('b.seller_id', 'b.net')} FROM hits h JOIN base b ON b.id=h.id GROUP BY 1,2`).bind(...maps, ...cb),
     /* 9 */ db.prepare(`${hitsOf(lw)} SELECT h.product AS p, b.m, COUNT(*) AS orders, COUNT(DISTINCT b.phone) AS phones FROM hits h JOIN base b ON b.id=h.id GROUP BY 1,2`).bind(...maps, ...lb),
     ...mainList.flatMap((p) => {
-      const g = productSql(matches.get(p)!);
+      const g = productSql(matches.get(p)!, src);
       return [
-        db.prepare(`SELECT ? AS p, ${mk} AS m, COUNT(*) AS closed, COALESCE(SUM(${net}),0) AS net, ${newSplitSql('o.seller_id', net)} FROM raw_pos_orders o WHERE ${cw} AND ${g.sql} GROUP BY 2`).bind(p, ...cb, ...g.binds),
-        db.prepare(`SELECT ? AS p, ${mk} AS m, COUNT(*) AS orders, COUNT(DISTINCT o.phone) AS phones FROM raw_pos_orders o WHERE ${lw} AND ${g.sql} GROUP BY 2`).bind(p, ...lb, ...g.binds),
+        db.prepare(`SELECT ? AS p, ${mk} AS m, COUNT(*) AS closed, COALESCE(SUM(${net}),0) AS net, ${newSplitSql('o.seller_id', net)} FROM ${src.orders} o WHERE ${cw} AND ${g.sql} GROUP BY 2`).bind(p, ...cb, ...g.binds),
+        db.prepare(`SELECT ? AS p, ${mk} AS m, COUNT(*) AS orders, COUNT(DISTINCT o.phone) AS phones FROM ${src.orders} o WHERE ${lw} AND ${g.sql} GROUP BY 2`).bind(p, ...lb, ...g.binds),
       ];
     }),
   ];

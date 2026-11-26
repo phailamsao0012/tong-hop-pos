@@ -4,10 +4,11 @@ import { mktClosedSql } from '@/lib/reports/mkt-closed';
 export const STAGES = ['all', 'unconfirmed', 'confirmed', 'packed', 'confirmed_now', 'stock', 'packing', 'waiting', 'shipping', 'shipped', 'delivered', 'returned', 'cancelled', 'deleted'] as const;
 export type MarketingStage = typeof STAGES[number];
 
-export const stageSql = (stage: MarketingStage, alias = 'o'): string => {
+/** packed: biểu thức "đã vào Đang đóng hàng" theo nguồn đọc (lib/reports/mkt-source.ts), mặc định bảng gốc. */
+export const stageSql = (stage: MarketingStage, alias = 'o', packed: (a: string) => string = PACKED_SQL): string => {
   const status = `${alias}.status_code`;
   switch (stage) {
-    case 'packed': return `(${stageSql('confirmed', alias)}) AND ${PACKED_SQL(alias)}`;
+    case 'packed': return `(${stageSql('confirmed', alias, packed)}) AND ${packed(alias)}`;
     case 'unconfirmed': return `${status} IN (0,17)`;
     case 'confirmed': return mktClosedSql(alias);
     case 'confirmed_now': return `${status}=1`;
