@@ -1077,3 +1077,5 @@ table th { white-space: nowrap; font-weight: 600; font-size: 11.5px; letter-spac
 .ui-moi [data-ui="heat-tbl"] td { border-radius: 6px; }
 .ui-moi [data-ui="heat-tbl"] th { font-size: 11px; font-weight: 600; color: var(--ink-3); }
 .ui-moi [data-ui="tile-pick"][aria-pressed="true"] { border-color: transparent; }
+/* Ô phân khúc Sale (sale-segment-block): viền trên màu phân khúc là dữ liệu nhận diện, giữ; bo trên theo ô mới. */
+.ui-moi [data-ui="tile-in"][style*="border-top"] { border-top-left-radius: 16px; border-top-right-radius: 16px; }

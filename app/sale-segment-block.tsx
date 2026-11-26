@@ -58,7 +58,7 @@ export function SaleSegmentBlock({ q, periodLabel }: { q: string; periodLabel: s
         {segs.map((seg) => {
           const r = reports[seg], cur = r?.current.total, prev = r?.compare?.total;
           return (
-            <div key={seg} className="rounded-xl border border-line p-4" style={{ borderTop: `3px solid ${COLOR[seg]}` }}>
+            <div key={seg} data-ui="tile-in" className="rounded-xl border border-line p-4" style={{ borderTop: `3px solid ${COLOR[seg]}` }}>
               <div className="flex items-baseline justify-between gap-2"><strong className="text-ink">{LABEL[seg]}</strong>
                 {cur && prev && <DeltaPill value={delta(cur.closedNet, prev.closedNet)} label="so kỳ trước" />}</div>
               {!cur ? <div className="mt-3 h-14 animate-pulse rounded-lg bg-surface-2" /> : (

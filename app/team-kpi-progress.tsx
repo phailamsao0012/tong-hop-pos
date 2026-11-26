@@ -64,7 +64,7 @@ export function TeamKpiProgress({ team, focusId, onOpen }: { team: KpiTeam; focu
       {targets.error && !targets.data ? <ErrorBox error={targets.error} onRetry={targets.reload} />
         : loading ? <SkeletonTable rows={2} cols={4} />
         : !goal ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-line p-4">
+          <div data-ui="box" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-line p-4">
             <div><div className="text-sm font-semibold text-ink">Tháng {monthLabel} chưa đặt KPI {label}</div><div className="text-xs text-ink-3">Đã chốt {money(done)} · {vi.format(doneOrders)} đơn từ đầu tháng. Đặt KPI để theo dõi tiến độ ở đây.</div></div>
             <button type="button" className="btn sm" onClick={onOpen}>Đặt KPI<ArrowRight size={13} /></button>
           </div>
@@ -97,7 +97,7 @@ export function TeamKpiProgress({ team, focusId, onOpen }: { team: KpiTeam; focu
 
 function Stat({ label, value, note, tone: t }: { label: string; value: string; note: string; tone: string }) {
   return (
-    <div className="rounded-xl border border-line p-3">
+    <div data-ui="tile-in" className="rounded-xl border border-line p-3">
       <div className="text-xs font-semibold text-ink-2">{label}</div>
       <div className={`num mt-1 text-lg font-bold ${t}`}>{value}</div>
       <div className="text-[11px] text-ink-3">{note}</div>
