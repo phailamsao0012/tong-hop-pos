@@ -1,11 +1,10 @@
 // Bảng gọn đơn Marketing (plan docs/plans/2026-11-26-marketing-ky-dai-nhanh, bước 1; anh Vũ 26/11/2026 16h28
 // "ok plan marketing kỳ dài nhanh, sao lưu, điền bảng gọn ban đêm, build và lên web thật").
 // Mỗi đơn có Marketer một dòng, chỉ các cột báo cáo Marketing cần, để kỳ dài quét bảng nhỏ thay vì bảng đơn gốc rộng.
-// BƯỚC 1: chỉ GHI KÈM (cờ THP_MKT_SLIM_WRITE=1, hoặc bản demo); CHƯA báo cáo nào đọc bảng này.
+// BƯỚC 1: chỉ GHI KÈM (cờ THP_MKT_SLIM_WRITE=1); CHƯA báo cáo nào đọc bảng này.
 // Cách ghi: sau câu ghi bảng gốc của một đơn (cùng lô), chép lại đúng dòng đó TỪ BẢNG GỐC sang bảng gọn bằng SQL, nên bảng gọn luôn
 // giống bảng gốc kể cả các cột giữ giá trị cũ khi cập nhật (first_confirmed_at, first_closed_at…). Đơn mất Marketer hoặc không còn
 // trong bảng gốc thì xoá dòng gọn và món của nó. Đơn trạng thái Đã xóa (7) vẫn giữ như bảng gốc (báo cáo tự lọc, có mốc "Đã xóa").
-import { env } from 'cloudflare:workers';
 import { historyHas } from '@/lib/reports/van-don';
 
 export const SLIM_ORDERS = 'mkt_orders_slim';
@@ -30,8 +29,12 @@ const DDL = [
   `CREATE INDEX IF NOT EXISTS idx_${SLIM_ITEMS}_order ON ${SLIM_ITEMS} (order_id)`,
 ];
 
-/** Ghi kèm bật khi THP_MKT_SLIM_WRITE=1 (web thật, mặc định tắt) hoặc bản demo (DB ảo có bảng gọn để test và demo). */
-export const slimWriteOn = () => env.THP_MKT_SLIM_WRITE === '1' || env.DEMO_MODE === '1';
+/** Ghi kèm chỉ bật khi THP_MKT_SLIM_WRITE=1 (mặc định tắt, kể cả bản demo: Đầu não 26/11 giữ nguyên số câu ghi của các test K1–K3, Z4).
+ * Bản demo muốn có bảng gọn thì đặt cờ này; đơn ảo đi qua cùng orderStatements nên tự ghi kèm. */
+// Không import 'cloudflare:workers' (lib/pancake/sync.ts nạp được ở test chạy Node thuần): syncAll đặt cờ từ env mỗi lượt đồng bộ.
+let writeOn = false;
+export const setSlimWrite = (on: boolean) => { writeOn = on; };
+export const slimWriteOn = () => writeOn;
 
 const ready = new WeakSet<D1Database>();
 /** Tạo hai bảng gọn nếu chưa có (PC chạy bản chép DB không qua migration). Nhớ theo từng DB trong tiến trình. */

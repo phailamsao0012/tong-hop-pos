@@ -2,18 +2,18 @@
 // Dữ liệu ảo hoàn toàn: POS "p", đơn "o1"…, Marketer "m1"/"m2", số tiền tròn.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { env } from 'cloudflare:workers';
 import { emptyDb } from './support/d1-sqlite';
 import { orderStatements, loadStored } from '../lib/pancake/sync';
-import { clearSlimPos, ensureSlimSchema, slimStatements, SLIM_ITEM_COLUMNS, SLIM_ORDER_COLUMNS } from '../lib/reports/mkt-slim';
+import { clearSlimPos, ensureSlimSchema, setSlimWrite, slimStatements, SLIM_ITEM_COLUMNS, SLIM_ORDER_COLUMNS } from '../lib/reports/mkt-slim';
 import { historyHas } from '../lib/reports/van-don';
 import type { SourceOrder } from '../lib/pancake/pancake';
 
 const at = '2026-11-08T03:00:00Z';
 const later = '2026-11-08T05:00:00Z';
 
-function fixture(vars: Record<string, string> = { THP_MKT_SLIM_WRITE: '1' }) {
-  const f = emptyDb(vars);
+function fixture(on = true) {
+  setSlimWrite(on);
+  const f = emptyDb();
   f.raw.exec("INSERT INTO pos_shops(id,name,shop_id) VALUES ('p','POS ảo','1')");
   const save = async (o: SourceOrder) => {
     const s = orderStatements(f.db, 'p', '1', o, at, (await loadStored(f.db, 'p', [o])).get(`p:${o.id}`));
@@ -96,12 +96,11 @@ void test('bảng gọn khớp bảng gốc sau đơn mới, đổi trạng thá
 });
 
 void test('cờ tắt (mặc định): không có câu ghi bảng gọn nào', async () => {
-  const f = fixture({ THP_MKT_SLIM_WRITE: '0', DEMO_MODE: '0' });
+  const f = fixture(false);
   try {
     const s = orderStatements(f.db, 'p', '1', order('o1'), at);
     assert.ok(s.length > 0);
     await f.db.batch(s);
     assert.equal(f.raw.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE name='mkt_orders_slim'").get()?.n, 0, 'không tạo bảng khi tắt');
-    assert.equal((env as { THP_MKT_SLIM_WRITE?: string }).THP_MKT_SLIM_WRITE, '0');
   } finally { f.raw.close(); }
 });

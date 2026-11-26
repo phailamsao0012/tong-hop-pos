@@ -1,4 +1,4 @@
-import { ensureSlimSchema, slimStatements, slimWriteOn } from '@/lib/reports/mkt-slim';
+import { ensureSlimSchema, setSlimWrite, slimStatements, slimWriteOn } from '@/lib/reports/mkt-slim';
 import { observeD1 } from '@/lib/ops/d1-usage';
 import { marketerStatements } from '@/lib/teams/marketer-ids';
 import { markDataChanged, trackDataWrites } from '@/lib/ops/data-version';
@@ -182,7 +182,7 @@ export function orderStatements(db: D1Database, posId: string, shopId: string, o
     previous.delete(item.id);
   }
   for (const id of previous.keys()) statements.push(db.prepare('DELETE FROM raw_pos_order_items WHERE id=?').bind(id));
-  // Bảng gọn Marketing (lib/reports/mkt-slim.ts, cờ THP_MKT_SLIM_WRITE=1 hoặc demo): chỉ khi đơn hoặc món có ghi, ngay sau câu ghi gốc
+  // Bảng gọn Marketing (lib/reports/mkt-slim.ts, cờ THP_MKT_SLIM_WRITE=1): chỉ khi đơn hoặc món có ghi, ngay sau câu ghi gốc
   // trong cùng lô; chép từ dòng gốc vừa ghi nên khớp cả cột giữ giá trị cũ. Đơn không đổi thì không ghi thêm dòng nào.
   if (statements.length && slimWriteOn()) statements.push(...slimStatements(db, String(row.id)));
   if (includeNotes) statements.push(...noteStatements(db, posId, str(o.customer?.id) ?? str(o.customer?.customer_id), normalizePhone(str(o.bill_phone_number) ?? '') || null, o.customer?.notes ?? null, now, 'order'));
@@ -610,6 +610,7 @@ export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs 
 }
 
 async function syncAll(env: Cloudflare.Env, now: Date, budgetMs: number, budget: SyncBudget, onUsage?: (stage: string, meta: D1Meta) => void) {
+  setSlimWrite(env.THP_MKT_SLIM_WRITE === '1');
   const stages: Record<string, number> = { recent: 0, users: 0, products: 0, customers: 0, customers_backfill: 0, backfill: 0 };
   let stage = 'recent';
   let sizeBytes: number | null = null;
