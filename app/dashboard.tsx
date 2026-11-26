@@ -184,6 +184,8 @@ import { clearSnapshots, setSnapshotScope, useRefreshStatus } from './use-api';
 import { SkeletonKpis } from './ui-kit';
 import { RefreshStick } from './stickman/slot';
 import { AiBotGlyph } from './ai-bot';
+import { ShellMoiNav } from './shell-moi';
+import { OverviewMoiView } from './overview-moi-view';
 
 const MentorView = lazy(() => import('./mentor-view').then((m) => ({ default: m.MentorView })));
 
@@ -196,6 +198,7 @@ type View = 'giao-viec' | 'giao-viec-chat' | 'giao-viec-hop' | 'giao-viec-zalo' 
   | 'ho-so'
   | 'center'
   | 'overview'
+  | 'overview-moi'
   | 'dormant'
   | 'shift'
   | 'custom'
@@ -401,6 +404,8 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'ho-so', label: 'Hồ sơ nhân sự', icon: IdCard },
   { id: 'ai-ask', label: 'Hỏi AI', icon: AiBotGlyph as unknown as typeof Activity },
   { id: 'center', label: 'Điều hành', icon: LayoutDashboard },
+  // Tổng quan kiểu mới: chỉ có khi bật cờ THP_UI_MOI (bản demo giao diện, plan 2026-11-26-tong-quan-kieu-moi).
+  { id: 'overview-moi', label: 'Tổng quan', icon: LayoutDashboard },
   { id: 'overview', label: 'Tổng quan POS', icon: BarChart3 },
   { id: 'shift', label: 'Trong ngày · chốt nóng', icon: Activity },
   { id: 'custom', label: 'Báo cáo tùy chỉnh', icon: BarChart3 },
@@ -830,7 +835,8 @@ function Surface({
 }
 installApiFetch();
 
-export default function Dashboard({ user, initialView, demo = false }: { user: SessionUser; initialView?: string; demo?: boolean }) {
+/** uiMoi: cờ THP_UI_MOI (máy chủ đọc, app/page.tsx truyền xuống). Tắt thì giao diện y như cũ. */
+export default function Dashboard({ user, initialView, demo = false, uiMoi = false }: { user: SessionUser; initialView?: string; demo?: boolean; uiMoi?: boolean }) {
   const [workBoss, setWorkBoss] = useState(false);
   useEffect(() => { let live = true; fetch('/api/giao-viec/me', { cache: 'no-store' }).then(r => r.json() as Promise<{ boss?: boolean }>).then(d => { if (live) setWorkBoss(d.boss === true); }).catch(() => {}); return () => { live = false; }; }, []);
   // KPI team: chủ hệ thống đặt; leader / mentor / giám đốc xem KPI team mình cầm (05/11/2026). Các tab Giao việc khác theo người được giao việc.
@@ -843,6 +849,8 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   const [view, setView] = useState<View>(() => {
     const v = typeof window === 'undefined' ? initialView : new URLSearchParams(window.location.search).get('view');
     if (user.role === 'mentor' && !user.teamScope) return v === 'security' ? v : 'mentor';
+    if (v === 'overview-moi' && !uiMoi) return 'center';
+    if (!v && uiMoi && canView(user, 'overview-moi')) return 'overview-moi';
     return v && navigation.some((n) => n.id === v) && !(v in CRM_VIEWS) ? (v as View) : 'center';
   });
   setPageDept(PAGE_DEPT.get(view) ?? null);
@@ -863,12 +871,12 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   useEffect(() => {
     const readHash = () => {
       const id = window.location.hash.slice(1);
-      if (navigation.some((n) => n.id === id) && !(id in CRM_VIEWS) && canView(user, id)) setView(id as View);
+      if (navigation.some((n) => n.id === id) && !(id in CRM_VIEWS) && canView(user, id) && (id !== 'overview-moi' || uiMoi)) setView(id as View);
     };
     readHash();
     window.addEventListener('hashchange', readHash);
     return () => window.removeEventListener('hashchange', readHash);
-  }, [user]);
+  }, [user, uiMoi]);
   // Vai trò bắt buộc 2 lớp mà chưa bật: chỉ được vào trang Bảo mật cho tới khi bật xong.
   const gated = user.mfaRequired && !user.mfaEnabled && view !== 'security';
   // Báo trang vừa mở cho nhật ký hoạt động (một dòng mỗi lần đổi trang).
@@ -1352,7 +1360,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   const title = navigation.find((n) => n.id === view)?.label ?? '';
   const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
   const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  const SELF_HEADED: View[] = ['giao-viec', 'giao-viec-chat', 'giao-viec-hop', 'giao-viec-zalo', 'giao-viec-kpi', 'giao-viec-bao-cao', 'mentor', 'returns', 'growth', 'ho-so', 'tasks', 'custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'ai-ask', 'uncounted'];
+  const SELF_HEADED: View[] = ['giao-viec', 'giao-viec-chat', 'giao-viec-hop', 'giao-viec-zalo', 'giao-viec-kpi', 'giao-viec-bao-cao', 'mentor', 'returns', 'growth', 'ho-so', 'tasks', 'custom', 'center', 'overview', 'overview-moi', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'ai-ask', 'uncounted'];
   const changeFilters = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
   const setPeriodChoice = (choice: string) => {
@@ -1509,7 +1517,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
 
   return (
     <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen}>
-      <Sidebar collapsible="offcanvas" className="border-r-0">
+      {!uiMoi && <Sidebar collapsible="offcanvas" className="border-r-0">
         <SidebarHeader data-no-st className="px-4 pt-5 pb-4">
           <div className="flex items-center gap-2.5">
             <img src="/logo.svg" alt="MEGATECH" width={34} height={34} className="size-[34px] rounded-[9px] shadow-[0_2px_10px_rgba(0,0,0,.25)]" />
@@ -1534,15 +1542,17 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               : `Cập nhật ${dateText(data.updatedAt)}`}
             onOpen={canView(user, 'config') ? () => openSettings('data') : undefined} />
         </SidebarFooter>
-      </Sidebar>
+      </Sidebar>}
       <SidebarInset className="min-w-0 bg-canvas">
+        {uiMoi && !presenting && <ShellMoiNav home={canView(user, 'overview-moi') ? navigation.find((n) => n.id === 'overview-moi')! : null} groups={navGroups} view={view} activeDept={activeDept}
+          onSelect={(id, deptKey) => goTo(id as View, deptKey)} counts={navCounts} />}
         <Spotlight />
         <StatusPainter />
         <IdleLock paused={presenting} owner={user.role === 'owner'} onLogout={async () => { await clearSnapshots(); await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/login'; }} />
         {user.role !== 'owner' && <Watermark text={`${user.displayName} · ${user.email} · ${today()}`} />}
         {/* Màn 1280–1440 (có thanh bên): tên web chỉ hiện từ 1700px, chữ "Trình chiếu" từ 2xl, để thanh trên không tràn (QA 08/10). */}
         {!presenting && <header className="topbar">
-          <SidebarTrigger className="shrink-0 text-ink-2" aria-label="Mở / đóng menu" />
+          {!uiMoi && <SidebarTrigger className="shrink-0 text-ink-2" aria-label="Mở / đóng menu" />}
           <div className="hidden items-baseline gap-2 min-[1700px]:flex">
             <strong className="whitespace-nowrap text-[12.5px] font-bold tracking-[.08em] text-ink">TỔNG HỢP POS</strong>
             <span className="whitespace-nowrap text-[11px] text-ink-3">CSKH & Sale</span>
@@ -1596,7 +1606,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
             <button type="button" className="rounded-full p-1.5 transition-colors duration-[var(--dur)] hover:bg-bad-bg hover:text-bad" title="Thoát trình chiếu (Esc)" aria-label="Thoát trình chiếu" onClick={stopPresenting}><X size={16} /></button>
           </div>
         )}
-        {!presenting && <MobileTabBar view={view} onSelect={goTo} can={canNavigate} />}
+        {!presenting && !uiMoi && <MobileTabBar view={view} onSelect={goTo} can={canNavigate} />}
         <div className="refresh-bar" hidden={!refresh.busy} aria-hidden="true"><i /></div>
         <RefreshStick busy={refresh.busy} />
         <main className={`${refreshClass} ${presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1360px] px-4 pt-4 pb-[calc(88px+env(safe-area-inset-bottom,0px))] sm:pt-6 md:px-6 md:pb-12'}`} style={presenting ? { zoom: 1.15 } : undefined}>
@@ -1655,7 +1665,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               ) : undefined}
             />
           )}
-          {!['giao-viec', 'giao-viec-chat', 'giao-viec-hop', 'giao-viec-zalo', 'giao-viec-kpi', 'giao-viec-bao-cao', 'mentor', 'growth', 'ho-so', 'custom', 'config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'ai-ask', 'uncounted'].includes(view) && (
+          {!['giao-viec', 'giao-viec-chat', 'giao-viec-hop', 'giao-viec-zalo', 'giao-viec-kpi', 'giao-viec-bao-cao', 'mentor', 'growth', 'ho-so', 'custom', 'config', 'center', 'raw-orders', 'overview', 'overview-moi', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'ai-ask', 'uncounted'].includes(view) && (
             <Toolbar className="mb-5">
               <span className="px-1.5 text-[12.5px] font-semibold text-ink-2">
                 Bộ lọc
@@ -1727,6 +1737,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {!gated && canView(user, view) && view === 'returns' && <ReturnsView onOpen={() => { if (!canView(user, 'raw-orders')) { toast('Bạn không có quyền xem trang này.', { kind: 'error' }); return; } focusAfterNav('raw-list', { 'raw.group': 'returned' }); setView('raw-orders'); }} />}
           {!gated && view === 'center' && <CenterView canForecast={canViewForecast(user)} canRegenerateAi={isOwner(user)} onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
           {!gated && view === 'overview' && <OverviewView onNavigate={(v) => goTo(v as View)} canRewriteAi={isOwner(user)} />}
+          {!gated && uiMoi && view === 'overview-moi' && <OverviewMoiView onNavigate={(v) => goTo(v as View)} userName={user.displayName} />}
           {!gated && view === 'shift' && <ShiftView />}
           {!gated && view === 'custom' && <CustomReportView />}
           {!gated && view === 'compare' && <CompareView />}

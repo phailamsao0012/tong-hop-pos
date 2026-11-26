@@ -72,6 +72,8 @@ export const DIRECTOR_VIEWS = ['recruit', 'people', 'person', 'levels', 'org'];
 // Trang tự mở theo trang đã được cấp (khỏi phải cấp thêm quyền): Tự ups & từ MKT cho ai xem được Cuộc gọi / Khách theo nhân viên;
 // Tổng quan CSKH cho ai xem được một trang CSKH; Tổng quan Sale cho ai xem được So sánh nhân viên / Data được cấp / Tổng quan POS.
 const IMPLIED: Record<string, string[]> = {
+  // Tổng quan kiểu mới (cờ THP_UI_MOI): ai xem được Tổng quan POS thì xem được trang này.
+  'overview-moi': ['overview'],
   returns: ['van-don', 'pipeline', 'sale-overview'],
   origin: ['calls', 'care'],
   'cskh-overview': ['calls', 'care', 'origin', 'repurchase', 'dormant'],

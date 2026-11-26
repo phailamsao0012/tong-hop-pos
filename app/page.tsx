@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { env } from 'cloudflare:workers';
 import { getSessionUser, hasAnyUser } from '@/lib/auth/auth';
 import Dashboard from './dashboard';
 import { ensureDemoSeed, isDemo } from '@/lib/demo/mode';
@@ -20,7 +21,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
   if (demo && sp['xem-thu'] === 'nguoi-que' && isOwner(user)) return <><StickPreview /><div className="demo-ribbon" role="note">Bản demo · người và số liệu ảo</div></>;
   // Trang mở thẳng bằng ?view=: máy chủ vẽ đúng trang đó để HTML khớp với trình duyệt (menu, thanh tab bộ phận).
   const view = sp.view;
-  const dashboard = <Dashboard user={user} initialView={typeof view === 'string' ? view : undefined} demo={demo} />;
+  // Cờ giao diện mới (plan 2026-11-26-tong-quan-kieu-moi): chỉ bản demo bật THP_UI_MOI=1; web thật không đặt nên y như cũ.
+  const dashboard = <Dashboard user={user} initialView={typeof view === 'string' ? view : undefined} demo={demo} uiMoi={env.THP_UI_MOI === '1'} />;
   if (demo) return <>{dashboard}<div className="demo-ribbon" role="note">Bản demo · người và số liệu ảo</div></>;
   // Bản PC chạy song song (04/11/2026): nhãn nhỏ để không nhầm với web chính.
   return isReadOnly() ? <>{dashboard}<div className="demo-ribbon" role="note">Bản PC · chỉ xem, sửa ở tonghopposmegatech.io.vn</div></> : dashboard;
