@@ -81,7 +81,7 @@ export function SheetCostLink({ owner, onChanged }: { owner: boolean; onChanged?
                       <span className="text-ink-3"> · {Object.entries(l.columns).filter(([, h]) => h).map(([k, h]) => `${ROLE_LABEL[k] ?? k} = “${h}”`).join(' · ')}</span></>}
                 </summary>
                 <div className="mt-2 max-h-64 overflow-auto">
-                  <table className="text-[11px]"><tbody>{l.sample.map((r, i) => (
+                  <table data-ui="mini-tbl" className="text-[11px]"><tbody>{l.sample.map((r, i) => (
                     <tr key={i} className={i === l.headerRow ? 'font-semibold text-ink' : 'text-ink-2'}>
                       <td className="pr-2 text-right text-ink-4">{i + 1}</td>{r.map((c, j) => <td key={j} className="max-w-40 truncate border border-line/50 px-1.5 py-0.5">{c}</td>)}
                     </tr>
