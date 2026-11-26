@@ -146,7 +146,7 @@ function HourBoard({ days, definition, asOf }: { days: DayHours[]; definition: s
         <div className="max-w-full overflow-x-auto"><SegmentedControl size="sm" ariaLabel="Chỉ số" value={metric} onChange={setMetric} options={METRICS} /></div>
       </div>}>
       <div className="space-y-4">
-        <div className="rounded-xl border border-line bg-surface-2/50 p-3 sm:p-4">
+        <div data-ui="tile-in" className="rounded-xl border border-line bg-surface-2/50 p-3 sm:p-4">
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
             <div className="flex items-center gap-1">
               {multi && <button type="button" className="btn sm ghost px-1.5" disabled={!prev} onClick={() => prev && setPicked(prev.key)} aria-label="Trước" title={prev ? `Xem ${prev.title}` : undefined}><ChevronLeft size={16} /></button>}
@@ -188,7 +188,7 @@ function HourBoard({ days, definition, asOf }: { days: DayHours[]; definition: s
           </div>
         </div>
         <div className="max-h-[30rem] overflow-auto rounded-lg">
-          <table className="w-full border-separate border-spacing-[3px] text-[11px]" onMouseOver={onOver} onMouseLeave={onLeave} onClick={onPick}>
+          <table data-ui="heat-tbl" className="w-full border-separate border-spacing-[3px] text-[11px]" onMouseOver={onOver} onMouseLeave={onLeave} onClick={onPick}>
             <thead><tr>
               <Th className="sticky left-0 top-0 z-[3] bg-surface px-1.5 text-left text-[11px] font-medium text-ink-3" style={{ boxShadow: '0 0 0 3px var(--surface)' }}>{mode === 'week' && multi ? 'Thứ' : 'Ngày'}</Th>
               {HOURS.map((h) => <Th key={h} className="sticky top-0 z-[2] bg-surface px-0 text-center num text-[10.5px] font-normal normal-case tracking-normal text-ink-3" style={{ boxShadow: '0 0 0 3px var(--surface)' }}>{h}h</Th>)}
