@@ -75,7 +75,7 @@ export function Customer360View() {
             </div>
             <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
               {r.stages.map((s, i) => (
-                <div key={s.key} className="rounded-xl border border-line p-3">
+                <div data-ui="tile-in" key={s.key} className="rounded-xl border border-line p-3">
                   <p className="m-0 flex items-center gap-1.5 text-[12px] font-semibold text-ink-2"><i className="size-2.5 rounded-full" style={{ background: STAGE_COLORS[s.key] }} />{s.label}{i < 4 && <span className="ml-auto text-ink-4">→</span>}</p>
                   <p className="num m-0 mt-1 text-xl text-ink">{vi.format(s.n)}</p>
                   <p className="m-0 text-[11.5px] text-ink-3">{pct(r.total.unique ? s.n / r.total.unique * 100 : null, 0)} · {shortMoney(s.net)}</p>
