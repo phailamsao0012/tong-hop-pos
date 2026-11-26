@@ -313,14 +313,14 @@ export function MonthlyView({ onNavigate }: { /** Mở trang khác (bấm cột 
             <ChartCard icon={ClipboardCheck} title="Đối chiếu cuối kỳ" subtitle="Kiểm tra dữ liệu trước khi chốt số">
               <ul className="space-y-2 text-sm">
                 {report.pos.filter((p) => posIds.includes(p.id)).map((p) => (
-                  <li key={p.id} className={listItem}>
+                  <li key={p.id} data-ui="round" className={listItem}>
                     <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5"><PosBadge posId={p.id} size={16} className="shrink-0" />{p.name}<span className="text-xs text-ink-3">đồng bộ <span className="num">{dt(p.syncedAt, true)}</span></span></span>
                     {p.lastError ? <StatusChip tone="red"><XCircle size={11} />Lỗi đồng bộ</StatusChip> : !p.connected ? <StatusChip tone="gray">Chưa kết nối</StatusChip> : p.backfillDone ? <StatusChip tone="green"><CheckCircle2 size={11} />Đủ lịch sử</StatusChip> : <StatusChip tone="orange">Đang lấy lịch sử {p.backfillMonth ? `${p.backfillMonth.slice(5)}/${p.backfillMonth.slice(0, 4)}` : ''}</StatusChip>}
                   </li>
                 ))}
-                <li className={listItem}><span className="flex items-center gap-2"><Truck size={14} className="text-ink-3" aria-hidden="true" />Đơn đang chuyển hàng chưa có kết quả</span><strong className="num whitespace-nowrap">{vi.format(cur.groups.shipping.orders)} đơn · {shortMoney(cur.groups.shipping.net)}</strong></li>
-                <li className={listItem}><span className="flex items-center gap-2"><ClipboardCheck size={14} className="text-ink-3" aria-hidden="true" />Đơn mới chưa chốt</span><strong className="num whitespace-nowrap">{vi.format(cur.groups.new.orders)} đơn</strong></li>
-                <li className={listItem}><span className="flex items-center gap-2"><Undo2 size={14} className="text-ink-3" aria-hidden="true" />Giá trị đơn hoàn</span><strong className="num whitespace-nowrap">{money(cur.groups.returned.net)}</strong></li>
+                <li data-ui="round" className={listItem}><span className="flex items-center gap-2"><Truck size={14} className="text-ink-3" aria-hidden="true" />Đơn đang chuyển hàng chưa có kết quả</span><strong className="num whitespace-nowrap">{vi.format(cur.groups.shipping.orders)} đơn · {shortMoney(cur.groups.shipping.net)}</strong></li>
+                <li data-ui="round" className={listItem}><span className="flex items-center gap-2"><ClipboardCheck size={14} className="text-ink-3" aria-hidden="true" />Đơn mới chưa chốt</span><strong className="num whitespace-nowrap">{vi.format(cur.groups.new.orders)} đơn</strong></li>
+                <li data-ui="round" className={listItem}><span className="flex items-center gap-2"><Undo2 size={14} className="text-ink-3" aria-hidden="true" />Giá trị đơn hoàn</span><strong className="num whitespace-nowrap">{money(cur.groups.returned.net)}</strong></li>
               </ul>
               <p className="mt-3 text-xs text-ink-3">Số của tháng chỉ ổn định khi đơn đang giao đã có kết quả và các POS đã lấy đủ lịch sử.</p>
             </ChartCard>
