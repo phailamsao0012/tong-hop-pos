@@ -205,7 +205,7 @@ export function TeamSheetPanel() {
 
           <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(min(100%,20rem),1fr))]">
             {draft.map((t) => (
-              <div key={t.key} className={`space-y-2 rounded-xl border p-3 ${t.dept === 'skip' ? 'opacity-55' : ''}`}>
+              <div key={t.key} data-ui="round" className={`space-y-2 rounded-xl border p-3 ${t.dept === 'skip' ? 'opacity-55' : ''}`}>
                 <div className="flex items-center gap-2">
                   <input aria-label="Tên team" value={t.name} onChange={(e) => edit(t.key, { name: e.target.value })} className="min-w-0 flex-1 rounded-md border bg-surface px-2 py-1 text-sm font-semibold text-ink" />
                   <button type="button" aria-label={`Xoá team ${t.name}`} className="grid size-7 place-items-center rounded-md text-ink-3 hover:bg-surface-2 hover:text-bad" onClick={() => { setDraft((d) => d.filter((x) => x.key !== t.key)); setDirty(true); }}><Trash2 size={14} /></button>

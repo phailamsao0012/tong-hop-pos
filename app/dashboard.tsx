@@ -1801,7 +1801,7 @@ export default function Dashboard({ user, initialView, demo = false, uiMoi = fal
             description="Kiểm tra API trước, sau đó chọn đúng mã cửa hàng cho từng POS"
           >
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
-              <div className="rounded-xl border border-line bg-surface-2 p-4 text-sm md:col-span-2 2xl:col-span-3">
+              <div data-ui="tile-in" className="rounded-xl border border-line bg-surface-2 p-4 text-sm md:col-span-2 2xl:col-span-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <strong>Trạng thái API Pancake POS</strong>
                   <Button variant="outline" onClick={checkConnection} disabled={checkingConnection}>

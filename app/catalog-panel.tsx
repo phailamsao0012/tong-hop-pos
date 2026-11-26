@@ -59,7 +59,7 @@ export function CatalogPanel() {
         <Select value={posId} items={Object.fromEntries(POS.map((p) => [p.id, p.name]))} onValueChange={(v) => setPosId(String(v))}><SelectTrigger className="min-w-44" aria-label="POS"><SelectValue /></SelectTrigger><SelectContent>{POS.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select>
         <Button size="sm" onClick={() => void run()} disabled={loading}><Search size={14} className={loading ? 'animate-pulse' : ''} />{loading ? 'Đang gọi Pancake…' : 'Khảo sát'}</Button>
       </div>}>
-      <form className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-line-2 px-3 py-2" onSubmit={(e) => { e.preventDefault(); if (phone.trim() && !looking) void runLookup(); }}>
+      <form data-ui="round" className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-line-2 px-3 py-2" onSubmit={(e) => { e.preventDefault(); if (phone.trim() && !looking) void runLookup(); }}>
         <span className="text-xs font-semibold text-ink-2">Tra JSON gốc một khách</span>
         <Input className="num w-44" inputMode="tel" aria-label="Số điện thoại khách" placeholder="SĐT khách" value={phone} onChange={(e) => setPhone(e.target.value)} />
         <Button type="submit" size="sm" variant="outline" disabled={!phone.trim() || looking}>{looking ? 'Đang tra…' : 'Tra trên Pancake'}</Button>

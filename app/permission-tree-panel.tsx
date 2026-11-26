@@ -66,7 +66,7 @@ function Node({ a, team }: { a?: TreeAccount; team?: TreeTeam }) {
     : [officeLabel(team!.office) || ' '];
   return (
     <div
-      className={`w-44 rounded-xl border bg-surface px-3 py-2.5 text-center ${a ? '' : 'border-dashed'}`}
+      data-ui="round" className={`w-44 rounded-xl border bg-surface px-3 py-2.5 text-center ${a ? '' : 'border-dashed'}`}
       style={{ borderTop: `4px ${a ? 'solid' : 'dashed'} ${color}` }}
     >
       <span
@@ -186,7 +186,7 @@ export function PermissionTreeView({ tree }: { tree: PermissionTree }) {
             {tree.top.length ? (
               tree.top.map((a) => <Node key={a.id} a={a} />)
             ) : (
-              <div className="w-44 rounded-xl border border-dashed px-3 py-2.5 text-center text-[13px] text-ink-3">
+              <div data-ui="round" className="w-44 rounded-xl border border-dashed px-3 py-2.5 text-center text-[13px] text-ink-3">
                 Chủ hệ thống · xem hết
               </div>
             )}
@@ -301,7 +301,7 @@ function ZoomBox({ children }: { children: React.ReactNode }) {
       </div>
       <div
         ref={box}
-        className="relative touch-none cursor-grab overflow-hidden rounded-xl border bg-surface-2 active:cursor-grabbing"
+        data-ui="tile-in" className="relative touch-none cursor-grab overflow-hidden rounded-xl border bg-surface-2 active:cursor-grabbing"
         style={{ height: Math.max(160, size.h * scale + 56) }}
         onPointerDown={(e) => {
           if ((e.target as HTMLElement).closest('button')) return;

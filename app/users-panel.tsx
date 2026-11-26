@@ -162,7 +162,7 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
           <p className="text-xs text-ink-3">Bạn là <strong className="text-ink">{ROLE_LABELS[currentUser.role]}</strong>{currentUser.title ? ` · ${currentUser.title}` : ''}.</p>
         </form>
         {owner && (
-          <form id="user-form" className={`scroll-mt-20 space-y-3 rounded-xl border p-4 transition-[border-color,box-shadow] duration-[var(--dur)] ease-[var(--ease)] ${editing ? 'border-primary/40 shadow-[0_0_0_1px_var(--ring)]' : 'border-line'}`} onSubmit={(e) => { e.preventDefault(); void save(); }}>
+          <form id="user-form" data-ui="round" className={`scroll-mt-20 space-y-3 rounded-xl border p-4 transition-[border-color,box-shadow] duration-[var(--dur)] ease-[var(--ease)] ${editing ? 'border-primary/40 shadow-[0_0_0_1px_var(--ring)]' : 'border-line'}`} onSubmit={(e) => { e.preventDefault(); void save(); }}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="flex min-w-0 items-center gap-1.5 text-[13px] font-semibold text-ink">{editing ? <Pencil size={14} className="text-ink-3" /> : <UserPlus size={14} className="text-ink-3" />}<span className="truncate">{editing ? `Sửa tài khoản · ${draft.email}` : 'Thêm tài khoản'}</span></h3>
               {editing && <Button type="button" size="sm" variant="ghost" onClick={cancelEdit}><X size={13} />Hủy sửa</Button>}

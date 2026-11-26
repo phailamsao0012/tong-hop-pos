@@ -1087,3 +1087,5 @@ table th { white-space: nowrap; font-weight: 600; font-size: 11.5px; letter-spac
 /* Nhóm nút chọn ghép từ .btn (giao-viec-kpi, mkt-leads-kpi): bỏ viền từng nút trong nhóm viên thuốc. */
 .ui-moi [data-ui="pill-group"] > button { border-color: transparent; box-shadow: none; }
 .ui-moi [data-ui="pill-group"] { display: inline-flex; width: fit-content; }
+/* round = chỉ đổi bo góc (giữ viền / màu trạng thái riêng của chỗ đó, vd form đang sửa viền xanh, team đang chọn). */
+.ui-moi [data-ui="round"] { border-radius: 16px; }
