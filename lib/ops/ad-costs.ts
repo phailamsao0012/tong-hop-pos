@@ -59,8 +59,9 @@ export const emptyNewSplit = (): NewSplit => ({ newOrders: 0, newNet: 0, cskhOrd
 /** Đơn New = đơn MKT đã xác nhận do người bán thuộc Sale chốt. */
 /** Chi phí ghi theo tên trên sheet chưa ghép tài khoản POS ("sheet:<tên>") trong kỳ: không cộng vào số Marketing (anh Vũ 19/11/2026
  *  "bỏ hẳn đi"), chỉ để nhắc ghép ở bảng Marketer và trang Chi phí & ROAS. */
-export async function unmatchedSheetCosts(db: D1Database, posIds: string[], start: string, end: string) {
-  const r = await db.prepare(`SELECT substr(marketer_id,7) AS name, SUM(amount) AS cost FROM ${adCostSource(posIds, start, end)} WHERE day>=? AND day<=? AND marketer_id LIKE 'sheet:%' GROUP BY 1 HAVING SUM(amount)>0 ORDER BY 2 DESC`)
+/** orders: bảng đơn dùng chia chi phí theo POS (lib/ops/cost-allocation.ts). */
+export async function unmatchedSheetCosts(db: D1Database, posIds: string[], start: string, end: string, orders = 'raw_pos_orders') {
+  const r = await db.prepare(`SELECT substr(marketer_id,7) AS name, SUM(amount) AS cost FROM ${adCostSource(posIds, start, end, orders)} WHERE day>=? AND day<=? AND marketer_id LIKE 'sheet:%' GROUP BY 1 HAVING SUM(amount)>0 ORDER BY 2 DESC`)
     .bind(start, end).all<{ name: string; cost: number }>().catch(() => ({ results: [] as { name: string; cost: number }[] }));
   return r.results.map((x) => ({ name: x.name, cost: Number(x.cost) }));
 }

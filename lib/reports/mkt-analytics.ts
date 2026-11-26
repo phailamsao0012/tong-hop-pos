@@ -89,7 +89,7 @@ export async function mktAnalytics(opts: { posIds: string[]; start: string; end:
   const bucket = bucketOf(opts.start, opts.end);
   const product = opts.product ?? null;
   // Chi phí chia theo POS đang chọn (quy tắc POS mục A1, anh Vũ 12/11/2026); đủ mọi POS thì là bảng ad_costs gốc.
-  const costFrom = adCostSource(opts.posIds, prev.start < opts.start ? prev.start : opts.start, opts.end);
+  const costFrom = adCostSource(opts.posIds, prev.start < opts.start ? prev.start : opts.start, opts.end, src.orders);
 
   // Lượt 1: tên sản phẩm trên sheet, nhãn đơn + tên sản phẩm Pancake của đơn MKT trong cả hai kỳ, team MKT, tên nhân viên.
   // Hai nhánh theo đúng chỉ mục (pos_id, created_at) và (pos_id, first_confirmed_at); UNION bỏ trùng.
@@ -253,6 +253,6 @@ export async function mktAnalytics(opts: { posIds: string[]; start: string; end:
     filters: { marketerId: opts.marketerId ?? null, marketerName: opts.marketerId ? who(opts.marketerId) : null, teamId: opts.teamId ?? null, teamName: opts.teamId === UNASSIGNED_TEAM ? 'Chưa phân team' : teams.find((t) => t.id === opts.teamId)?.name ?? null, product },
     team, split: { current: splitOf(rowsOf(3)), prev: splitOf(rowsOf(6)) },
     current, prev: previous, timeline, people, teams: teamRows, products: productRows,
-    unmatchedSheet: await unmatchedSheetCosts(db, opts.posIds, opts.start, opts.end),
+    unmatchedSheet: await unmatchedSheetCosts(db, opts.posIds, opts.start, opts.end, src.orders),
   };
 }

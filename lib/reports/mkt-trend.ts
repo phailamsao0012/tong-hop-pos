@@ -75,7 +75,7 @@ export async function mktTrend(opts: { start: string; end: string; posIds: strin
   const fromStats = await mktStatsReady(db);
   const src = opts.source ?? await mktReadSource(db, env, opts.start, opts.end);
   const [costs, leads, closed, setting] = await db.batch([
-    db.prepare(`SELECT marketer_id AS m, day, SUM(amount) AS cost FROM ${adCostSource(opts.posIds, opts.start, opts.end)} WHERE day>=? AND day<=?${notSan('marketer_id')} GROUP BY 1,2`).bind(opts.start, opts.end),
+    db.prepare(`SELECT marketer_id AS m, day, SUM(amount) AS cost FROM ${adCostSource(opts.posIds, opts.start, opts.end, src.orders)} WHERE day>=? AND day<=?${notSan('marketer_id')} GROUP BY 1,2`).bind(opts.start, opts.end),
     ...trendQueries(opts.posIds, opts.start, opts.end, fromStats, opts.team === 'sale' || opts.team === 'cskh' ? opts.team : 'all', src).map(q => db.prepare(q.sql).bind(...q.binds)),
     db.prepare('SELECT value FROM app_settings WHERE key=?').bind(MARKETING_TEAMS_KEY),
   ]);

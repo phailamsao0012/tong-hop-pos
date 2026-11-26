@@ -13,6 +13,8 @@ import { mktTrend } from '../lib/reports/mkt-trend';
 import { mktTeams } from '../lib/teams/mkt-teams-source';
 import { itemKey } from '../lib/reports/marketing-report';
 import { UNASSIGNED_TEAM } from '../lib/teams/marketing-teams';
+import { ensureAdCostSchema } from '../lib/ops/ad-costs';
+import { lensDatabase, lensSql, resolveMktLens } from '../lib/shared/scope-filter';
 
 const DAYS = ['2026-08-05', '2026-08-28', '2026-09-14', '2026-10-02', '2026-10-16'];
 const START = '2026-08-01', END = '2026-10-31'; // 92 ngày: kỳ dài
@@ -23,6 +25,13 @@ let world: World | null = null;
 async function setup() {
   if (world) return world;
   world = await demoWorld(DAYS, NOW);
+  // Chi phí QC ảo (số tròn) cho các marketer có đơn, cả ngày có đơn lẫn ngày không có đơn (chia POS theo tỉ lệ cả khoảng), và một dòng sheet chưa ghép.
+  await ensureAdCostSchema();
+  const mkts = (world.raw.prepare("SELECT TRIM(marketer_id) AS m FROM raw_pos_orders WHERE TRIM(COALESCE(marketer_id,''))<>'' GROUP BY 1 ORDER BY COUNT(*) DESC LIMIT 8").all() as { m: string }[]).map((r) => r.m);
+  const ins = world.raw.prepare('INSERT INTO ad_costs (id,day,marketer_id,amount,campaign,created_at,updated_at) VALUES (?,?,?,?,?,?,?)');
+  let n = 0;
+  for (const [i, m] of mkts.entries()) for (const day of [...DAYS, '2026-09-30', '2026-10-20']) ins.run(`c${++n}`, day, m, 100000 * (i + 1), i % 2 ? 'Kháng sinh' : 'Combo', '2026-10-17T00:00:00Z', '2026-10-17T00:00:00Z');
+  ins.run('c-sheet', '2026-10-02', 'sheet:Tên ảo', 50000, 'Combo', '2026-10-17T00:00:00Z', '2026-10-17T00:00:00Z');
   const r = await runSlimFill(world.db, { now: new Date('2026-10-17T16:00:00Z') });
   assert.equal(r.ready, true, 'điền đủ bảng gọn');
   assert.equal(r.bad, 0);
@@ -108,6 +117,7 @@ void test('Số chính MKT: bảng gốc và bảng gọn cho JSON giống hệt
   for (const c of cases) {
     const out = await both(w.db, (source) => mktAnalytics({ ...c, db: w.db, source }), `analytics ${JSON.stringify(c)}`);
     if (!c.product && !c.marketerId && !c.teamId && c.team === 'all' && c.posIds === ALL_POS) assert.ok(out.current.closed > 0, 'analytics có số');
+    if (!c.product && !c.marketerId && !c.teamId && c.team === 'all' && c.posIds === ONE_POS) assert.ok(out.current.cost > 0, 'một POS có chi phí đã chia theo POS');
   }
 });
 
@@ -122,8 +132,9 @@ void test('Bảng chéo Sale × MKT và xu hướng: bảng gốc và bảng g�
     { team: 'all' }, { team: 'sale' }, { team: 'cskh' }, { marketerId: f.marketer }, { teamId: UNASSIGNED_TEAM },
     ...(f.mktTeam ? [{ teamId: f.mktTeam }] : []),
   ];
-  for (const c of cases) for (const bucket of ['day', 'week', 'month'] as const) {
-    await both(w.db, (source) => mktTrend({ start: START, end: END, posIds: ALL_POS, bucket, ...c, source }), `trend ${JSON.stringify(c)} ${bucket}`);
+  for (const c of cases) for (const bucket of ['day', 'week', 'month'] as const) for (const posIds of [ALL_POS, ONE_POS]) {
+    const out = await both(w.db, (source) => mktTrend({ start: START, end: END, posIds, bucket, ...c, source }), `trend ${JSON.stringify(c)} ${bucket} ${posIds.length}`);
+    if (posIds === ONE_POS && (c as { team?: string }).team === 'all' && bucket === 'month') assert.ok(out.total.cost > 0, 'trend một POS có chi phí đã chia');
   }
 });
 
@@ -154,4 +165,20 @@ void test('chọn nguồn: chỉ bảng gọn khi THP_MKT_SLIM=1, kỳ dài hơn
     try { await mktCross(ALL_POS, START, END); } finally { rec2.restore(); }
     assert.ok(rec2.seen.some((s) => /FROM mkt_orders_slim o/.test(s)), 'có mốc lại: đọc bảng gọn');
   } finally { e.THP_MKT_SLIM = before; }
+});
+
+void test('lọc team MKT (lensDatabase) áp cả bảng gọn: số chính MKT hai nguồn giống hệt dưới lens', async () => {
+  const w = await setup();
+  const f = await pick(w);
+  assert.match(lensSql('SELECT 1 FROM mkt_orders_slim o WHERE 1', { id: 'x', name: '', sql: ' AND 0' }), /FROM \(SELECT \* FROM mkt_orders_slim WHERE 1=1 AND 0\) AS o/);
+  if (!f.mktTeam) return;
+  // Lens tối đa 120 ngày: kỳ 92 ngày vẫn là kỳ dài.
+  const lens = await resolveMktLens(w.db, new URLSearchParams({ mktTeam: f.mktTeam, start: START, end: END }));
+  assert.ok(lens && !(lens instanceof Response));
+  for (const posIds of [ALL_POS, ONE_POS]) {
+    const db = lensDatabase(w.db, lens);
+    const raw = await mktAnalytics({ posIds, start: START, end: END, db, source: RAW_SOURCE });
+    const slim = await mktAnalytics({ posIds, start: START, end: END, db, source: SLIM_SOURCE });
+    assert.deepEqual(JSON.parse(JSON.stringify(slim)), JSON.parse(JSON.stringify(raw)), `lens ${posIds.length}`);
+  }
 });
