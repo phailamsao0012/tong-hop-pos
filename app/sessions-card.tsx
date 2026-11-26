@@ -52,7 +52,7 @@ export function SessionsCard({ owner }: { owner: boolean }) {
             <div key={list[0].userId}>
               {all && <p className="mb-1.5 text-xs font-semibold text-ink-2">{list[0].name} <span className="font-normal text-ink-3">· {list[0].email} · {list.length} máy</span>
                 {!list.some((s) => s.current) && <button type="button" className="link ml-2 text-bad" disabled={!!busy} onClick={() => void revoke(`userId=${encodeURIComponent(list[0].userId)}`, list[0].userId, `Đã đăng xuất mọi máy của ${list[0].name}.`)}>Đăng xuất tất cả</button>}</p>}
-              <ul className="divide-y rounded-xl border">
+              <ul data-ui="list" className="divide-y rounded-xl border">
                 {list.map((s) => {
                   const Icon = s.client === 'web' ? Laptop : Smartphone;
                   return (
