@@ -89,6 +89,7 @@ function monthWhere(a: string, month: string): [string, string[]] {
 
 /** Các (POS, tháng) có đơn có Marketer ở bảng gốc, cộng các tháng đang có dòng gọn (để dọn tháng đã hết đơn có Marketer). */
 export async function slimMonths(db: D1Database) {
+  await ensureSlimSchema(db); // lần đầu trên DB thật / bản chép: chưa có bảng gọn
   const rows = await db.prepare(`SELECT pos_id, month FROM (
       SELECT o.pos_id, COALESCE(substr(o.created_at,1,7),'${NO_MONTH}') AS month FROM raw_pos_orders o WHERE ${HAS_MARKETER} GROUP BY 1,2
       UNION SELECT pos_id, COALESCE(substr(created_at,1,7),'${NO_MONTH}') AS month FROM ${SLIM_ORDERS} GROUP BY 1,2
