@@ -250,7 +250,7 @@ export function OriginView() {
                 {pick && list && (list.length ? (
                   <ul className="m-0 max-h-[40rem] list-none space-y-2 overflow-y-auto p-0">
                     {list.map((o) => (
-                      <li key={o.id} className="rounded-xl border border-line bg-surface p-3">
+                      <li data-ui="round" key={o.id} className="rounded-xl border border-line bg-surface p-3">
                         <div className="flex items-center gap-2">
                           <span className="num font-semibold text-ink">#{o.orderId}</span>
                           <StatusChip tone={o.origin === 'self' ? 'green' : 'blue'}>{o.origin === 'self' ? 'Tự ups' : `MKT · ${o.marketerName ?? ''}`}</StatusChip>
