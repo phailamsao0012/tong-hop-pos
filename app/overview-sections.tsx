@@ -166,7 +166,7 @@ function RevenueSplit({ data, start, end, posIds, productSegment, onDrill }: {
     <section className="card p-4" aria-label="Doanh thu theo bộ phận">
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,3fr)]">
         <button type="button" onClick={toRef} title="Bấm để xem thẻ Số tham chiếu Pancake bên dưới (từng POS)"
-          className={`min-w-0 rounded-xl border border-line p-3 ${CLICK_CLS}`}>
+          data-ui="tile-in" className={`min-w-0 rounded-xl border border-line p-3 ${CLICK_CLS}`}>
           <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[.05em] text-ink-3"><Building2 size={13} aria-hidden="true" />Doanh thu công ty</span>
           <span className="num mt-1 block truncate text-[28px] font-semibold leading-tight tracking-[-.02em] text-ink">{company === null ? '—' : money(company)}</span>
           <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-3">{sourceText}{company !== null && before ? <DeltaPill value={(company - before) / before * 100} label="kỳ trước" /> : null}</span>

@@ -199,7 +199,7 @@ function HeatTable({ data, list, metric, dim }: { data: TrendReport; list: Trend
   const weekStart = (w: number) => data.days[data.fullIndex - (TREND_WEEKS - 1 - w) * 7 - 6];
   return (
     <div>
-      <TableWrap><table className="w-full min-w-[640px] border-separate border-spacing-0.5 text-[12px]">
+      <TableWrap><table data-ui="heat-tbl" className="w-full min-w-[640px] border-separate border-spacing-0.5 text-[12px]">
         <thead><tr><Th className="px-1 text-left font-medium text-ink-3">{TREND_DIMS[dim]}</Th>{Array.from({ length: TREND_WEEKS }, (_, w) => <Th key={w} className="px-1 text-center font-medium text-ink-3">{dmy(weekStart(w))}</Th>)}</tr></thead>
         <tbody>
           {rows.map(({ s, w }) => (
@@ -264,7 +264,7 @@ export function TrendPanel({ data, error, onRetry, legacy, legacySubtitle }: { d
         {style === 'big' && <BigTrendChart data={data} series={selected.dim === 'dept' ? selected : data.depts[0]} metric={metric} />}
         {style === 'heat' && (list.length ? <HeatTable data={data} list={list} metric={metric} dim={dim} /> : <EmptyState text="Chưa có số trong 10 tuần." />)}
         {style === 'tiles' && <>
-          <div className="rounded-xl border border-line p-3">
+          <div data-ui="box" className="rounded-xl border border-line p-3">
             <p className="mb-1 text-[12.5px] font-semibold text-ink">{selected.label}</p>
             <BigTrendChart data={data} series={selected} metric={metric} height={220} />
           </div>
@@ -577,7 +577,7 @@ function DeptTile({ d, card, note, onOpen, onDetail }: { d: NoteDept; card: Card
   const value = chartVal(card.actual, card.unit);
   const dir = card.compare === null ? 'flat' : card.compare > 0.05 ? 'up' : card.compare < -0.05 ? 'down' : 'flat';
   const top = Math.max(1, ...card.rows.map((r) => r.value));
-  return <div className="flex h-full min-w-0 flex-col gap-2.5 rounded-xl border border-line px-3.5 py-3">
+  return <div data-ui="tile-in" className="flex h-full min-w-0 flex-col gap-2.5 rounded-xl border border-line px-3.5 py-3">
     <div className="flex items-center justify-between gap-2">
       <p className="text-[14px] font-semibold text-ink">{onOpen ? <button type="button" title={`Bấm để mở trang ${DEPT_LABELS[d]}, nơi tính ra số này`} className="tap hover:text-primary hover:underline" onClick={onOpen}>{DEPT_LABELS[d]} →</button> : DEPT_LABELS[d]}</p>
       <span className="text-[11px] text-ink-3">{d === 'vandon' ? 'Đơn chuyển đi' : 'Doanh thu'}</span>
@@ -609,10 +609,10 @@ function DeptTile({ d, card, note, onOpen, onDetail }: { d: NoteDept; card: Card
 function TrendOrderList({ url, title, onClose }: { url: string; title: string; onClose: () => void }) {
   const [page, setPage] = useState(0);
   const { data, error } = useApi<{ rows: { id: string; code: string; posId: string; at: string; net: number }[]; more: boolean }>(`${url}&page=${page}`, { keep: false });
-  return <section className="mt-3 rounded-xl border border-line p-3" aria-label="Đơn tính ra số xu hướng">
+  return <section data-ui="box" className="mt-3 rounded-xl border border-line p-3" aria-label="Đơn tính ra số xu hướng">
     <header className="flex justify-between gap-2"><h3 className="font-semibold">{title} · Đơn trong kỳ và bộ lọc đang chọn</h3><button type="button" className="btn sm" onClick={onClose}>Đóng</button></header>
     {error ? <ErrorBox error={error} /> : !data ? <Skeleton className="h-20 w-full" /> : <>
-      <TableWrap><table className="w-full text-left text-[12px]"><thead><tr><Th>Mã đơn</Th><Th>POS</Th><Th>Thời điểm (giờ Việt Nam)</Th><Th>Giá trị đơn</Th></tr></thead><tbody>{data.rows.map((r) => <tr key={r.id}><td>{r.code}</td><td>{r.posId}</td><td>{dt(r.at, true)}</td><td className="num">{chartVal(r.net, 'money')}</td></tr>)}</tbody></table></TableWrap>
+      <TableWrap><table data-ui="mini-tbl" className="w-full text-left text-[12px]"><thead><tr><Th>Mã đơn</Th><Th>POS</Th><Th>Thời điểm (giờ Việt Nam)</Th><Th>Giá trị đơn</Th></tr></thead><tbody>{data.rows.map((r) => <tr key={r.id}><td>{r.code}</td><td>{r.posId}</td><td>{dt(r.at, true)}</td><td className="num">{chartVal(r.net, 'money')}</td></tr>)}</tbody></table></TableWrap>
       {!data.rows.length && <p className="text-[12px] text-ink-3">Không có đơn trong phạm vi này.</p>}
       <div className="mt-2 flex items-center gap-2"><button type="button" className="btn sm" disabled={page === 0} onClick={() => setPage(page - 1)}>Trước</button><span>Trang {page + 1}</span><button type="button" className="btn sm" disabled={!data.more} onClick={() => setPage(page + 1)}>Sau</button></div>
     </>}

@@ -34,7 +34,7 @@ function PosMini({ posId, rows, isMoney, groupBy, total, before, shared, onShare
   const fmt = (v: number) => isMoney ? `${short(v)} ₫` : vi.format(v);
   const color = posVar(posId);
   return (
-    <div className="min-w-0 rounded-xl border border-line px-3 pb-2 pt-2.5">
+    <div data-ui="tile-in" className="min-w-0 rounded-xl border border-line px-3 pb-2 pt-2.5">
       <p className="flex items-center gap-1.5 text-[12.5px] font-semibold text-ink"><PosBadge posId={posId} size={16} /><span className="truncate">{posName(posId)}</span></p>
       <p className="mt-1 flex flex-wrap items-baseline gap-x-2">
         <span className="num text-[17px] font-semibold text-ink"><CountUp value={hover ? vals[hover.i] : total} format={(v) => isMoney ? money(v) : vi.format(Math.round(v))} /></span>
