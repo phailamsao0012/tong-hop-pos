@@ -193,7 +193,7 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
         // Tài khoản có đơn trong kỳ mà chưa gắn hồ sơ nhân sự: số của họ không vào team nào, nhắc ngay đầu trang để gắn (10/10/2026).
         const unlinked = allRows?.find((r) => r.id === UNLINKED);
         return unlinked && curBranch === ALL ? (
-          <p className="rounded-lg border border-warn/25 bg-warn-bg px-3 py-2 text-[13px] text-ink-2">
+          <p data-ui="round" className="rounded-lg border border-warn/25 bg-warn-bg px-3 py-2 text-[13px] text-ink-2">
             <b className="font-semibold">{vi.format(unlinked.people.length)} tài khoản POS</b> có đơn trong kỳ nhưng chưa gắn hồ sơ bên web nhân sự
             ({shortMoney(unlinked.cur.revenue)} doanh thu chưa vào team nào). Gắn ở web nhân sự: Nhập dữ liệu → Từ POS.{' '}
             <a href={CRM_URL} target="_blank" rel="noreferrer" className="font-medium text-primary underline-offset-2 hover:underline">Mở web nhân sự</a>

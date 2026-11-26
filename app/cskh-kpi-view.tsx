@@ -237,7 +237,7 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
       <TeamKpiPanel team={team} />
 
       <ChartCard icon={Target} title={`KPI theo đầu người · ${monthLabel}`} subtitle={`Doanh thu đơn chốt (đơn đã xác nhận, như Pancake) của từng nhân viên ${label} · nhập số thường (3000000) hoặc 3tr, 1.5 tỷ`} loading={!loaded}
-        action={<div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-line bg-surface-2 px-2 py-1.5">
+        action={<div data-ui="pill-bar" className="flex flex-wrap items-center gap-1.5 rounded-xl border border-line bg-surface-2 px-2 py-1.5">
           <Wand2 size={14} className="text-primary" aria-hidden="true" /><span className="text-xs font-medium text-ink-2">Áp cho tất cả:</span>
           <Input id={`${team}-bulk-revenue`} inputMode="numeric" className={`${NUM_INPUT} tap h-7 w-24 text-xs`} placeholder="Doanh thu" aria-label="KPI doanh thu áp cho tất cả" value={bulk.revenue} onChange={(e) => setBulk((b) => ({ ...b, revenue: e.target.value }))} />
           {isSale && <Input id={`${team}-bulk-rate`} inputMode="decimal" className={`${NUM_INPUT} tap h-7 w-24 text-xs`} placeholder="Tỉ lệ chốt %" aria-label="KPI tỉ lệ chốt áp cho tất cả" value={bulk.rate} onChange={(e) => setBulk((b) => ({ ...b, rate: e.target.value }))} />}
