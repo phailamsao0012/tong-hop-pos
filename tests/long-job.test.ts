@@ -109,3 +109,52 @@ void test('phản hồi "đang tính" không được nhớ vào cache báo cáo
   assert.equal(b.status, 200);
   assert.equal(isLongPending(b), false, 'kết quả xong được nhớ bình thường');
 });
+
+void test('ghi nhật ký mỗi lượt kỳ dài: đường dẫn API và số giây, không tham số; 202 kèm số lượt xếp trước', async () => {
+  const { longJob, resetLongJobs } = await import('../lib/ops/long-job');
+  const { longOrNow } = await import('../lib/ops/long-response');
+  resetLongJobs();
+  const logs: string[] = [];
+  const orig = console.log;
+  console.log = (...a: unknown[]) => { logs.push(a.join(' ')); };
+  try {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    longJob('x', async () => { await gate; return 1; }, Date.now, '/api/reports/marketing');
+    const q = await longOrNow(new Request('http://x/api/marketing/cross?start=2026-01-01&end=2026-11-26&marketerId=NV999'), 'u', '2026-01-01', '2026-11-26', async () => ({ status: 200, body: {} }));
+    assert.equal(q.status, 202);
+    const body = await q.json() as { longJob: { state: string; ahead: number } };
+    assert.equal(body.longJob.state, 'queued');
+    assert.equal(body.longJob.ahead, 1, 'một lượt đang chạy phía trước');
+    release();
+    for (let i = 0; i < 6; i++) await tick();
+    const text = logs.join('\n');
+    assert.match(text, /long job start \/api\/reports\/marketing/);
+    assert.match(text, /long job done \/api\/reports\/marketing \d+s/);
+    assert.match(text, /long job start \/api\/marketing\/cross/);
+    assert.doesNotMatch(text, /NV999|marketerId|start=/, 'không ghi tham số');
+  } finally { console.log = orig; }
+});
+
+void test('hàng chờ ưu tiên: báo cáo Marketing chính chạy trước khối phụ dù đến sau', async () => {
+  const { longJob, longPriority, resetLongJobs } = await import('../lib/ops/long-job');
+  assert.equal(longPriority('/api/reports/marketing'), 0);
+  assert.equal(longPriority('/api/marketing/analytics'), 1);
+  assert.equal(longPriority('/api/marketing/trend'), 1);
+  assert.equal(longPriority('/api/marketing/cross'), 2);
+  assert.equal(longPriority('/api/reports/trend-cards'), 2);
+  resetLongJobs();
+  const order: string[] = [];
+  let r0!: () => void;
+  const g0 = new Promise<void>((r) => { r0 = r; });
+  const job = (name: string) => async () => { order.push(name); if (name === 'dau') await g0; return name; };
+  longJob('dau', job('dau'), Date.now, '/api/marketing/cross', 2);
+  longJob('cross', job('cross'), Date.now, '/api/marketing/cross', 2);
+  longJob('cards', job('cards'), Date.now, '/api/reports/trend-cards', 2);
+  longJob('trend', job('trend'), Date.now, '/api/marketing/trend', 1);
+  const main = longJob('main', job('main'), Date.now, '/api/reports/marketing', 0);
+  assert.equal(main.state === 'queued' && main.ahead, 1, 'chỉ còn lượt đang chạy phía trước');
+  r0();
+  for (let i = 0; i < 20; i++) await tick();
+  assert.deepEqual(order, ['dau', 'main', 'trend', 'cross', 'cards']);
+});

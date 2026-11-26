@@ -1,6 +1,6 @@
 // Trả lời API cho báo cáo có thể chạy nền (lib/ops/long-job.ts). Kỳ ngắn: tính và trả ngay như cũ.
 // Kỳ dài: một lượt nền cho mỗi khoá; đang tính thì 202 + "x-thp-long: 1" để trình duyệt hỏi lại (app/api-fetch.ts); xong thì trả kết quả đã nhớ.
-import { isLongRange, longJob } from '@/lib/ops/long-job';
+import { isLongRange, longJob, longPriority } from '@/lib/ops/long-job';
 
 export type Computed = { status: number; body: unknown };
 /** Phản hồi "đang tính" của báo cáo kỳ dài: KHÔNG được nhớ vào cache báo cáo (worker.ts cachedReport) hay dùng làm bản cũ,
@@ -15,7 +15,7 @@ export async function longOrNow(request: Request, userId: string, start: string,
     return Response.json(r.body, { status: r.status, headers: HEADERS });
   }
   const u = new URL(request.url);
-  const s = longJob(`${userId}|${u.pathname}?${[...u.searchParams].sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}=${v}`).join('&')}`, compute);
+  const s = longJob(`${userId}|${u.pathname}?${[...u.searchParams].sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}=${v}`).join('&')}`, compute, Date.now, u.pathname, longPriority(u.pathname));
   if (s.state === 'done') {
     const r = s.value as Computed;
     return Response.json(r.body, { status: r.status, headers: HEADERS });

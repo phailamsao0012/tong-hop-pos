@@ -3,19 +3,31 @@
 // app/api-fetch.ts ghi lúc bắt đầu chờ; dòng này đếm thời gian đã chờ. Hết chờ thì tự ẩn.
 import { useEffect, useState, useSyncExternalStore } from 'react';
 
-const waits = new Map<string, number>();
+const waits = new Map<string, { at: number; ahead: number }>();
 const listeners = new Set<() => void>();
-let snap: number | null = null;
-const emit = () => { snap = waits.size ? Math.min(...waits.values()) : null; for (const l of listeners) l(); };
+/** Lượt chờ lâu nhất đang còn, và số lượt xếp trước nhiều nhất trong các API đang chờ. */
+let snap: { since: number; ahead: number } | null = null;
+const emit = () => {
+  const all = [...waits.values()];
+  snap = all.length ? { since: Math.min(...all.map((w) => w.at)), ahead: Math.max(...all.map((w) => w.ahead)) } : null;
+  for (const l of listeners) l();
+};
 
-export function longWaitStart(id: string, at: number) { if (!waits.has(id)) { waits.set(id, at); emit(); } }
+/** Ghi / cập nhật một lượt chờ (ahead = số lượt kỳ dài đang xếp trước, máy chủ báo trong 202). */
+export function longWaitStart(id: string, at: number, ahead = 0) {
+  const cur = waits.get(id);
+  if (cur && cur.ahead === ahead) return;
+  waits.set(id, { at: cur?.at ?? at, ahead });
+  emit();
+}
 export function longWaitEnd(id: string) { if (waits.delete(id)) emit(); }
 
 const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l); }; };
 
 /** Đặt một lần trong khung trang. */
 export function LongWaitNote() {
-  const since = useSyncExternalStore(subscribe, () => snap, () => null);
+  const wait = useSyncExternalStore(subscribe, () => snap, () => null);
+  const since = wait?.since ?? null;
   const [now, setNow] = useState(0);
   useEffect(() => {
     if (since === null) return;
@@ -29,7 +41,7 @@ export function LongWaitNote() {
   return (
     <output aria-live="polite" className="long-wait">
       <span className="long-wait-dot" aria-hidden="true" />
-      Kỳ dài, đang tính, có thể mất vài phút · đã chờ {Math.floor(s / 60)}:{String(s % 60).padStart(2, '0')}
+      {wait && wait.ahead > 0 ? `Kỳ dài: đang chờ lượt trước, còn ${wait.ahead} lượt` : 'Kỳ dài, đang tính, có thể mất vài phút'} · đã chờ {Math.floor(s / 60)}:{String(s % 60).padStart(2, '0')}
     </output>
   );
 }
