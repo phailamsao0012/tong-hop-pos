@@ -27,9 +27,9 @@ export function LongWaitNote() {
   if (since === null) return null;
   const s = Math.max(0, Math.round(((now || since) - since) / 1000));
   return (
-    <div role="status" aria-live="polite" className="long-wait">
+    <output aria-live="polite" className="long-wait">
       <span className="long-wait-dot" aria-hidden="true" />
       Kỳ dài, đang tính, có thể mất vài phút · đã chờ {Math.floor(s / 60)}:{String(s % 60).padStart(2, '0')}
-    </div>
+    </output>
   );
 }
