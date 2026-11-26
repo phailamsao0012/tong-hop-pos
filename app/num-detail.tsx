@@ -28,7 +28,7 @@ export function NumDetailBody({ spec, more }: { spec: NumDetailSpec; more?: Reac
         {spec.scope && <p className="text-[11px] text-ink-3">{spec.scope}</p>}
       </div>
       {!!spec.parts.length && (
-        <table className="w-full tabular-nums">
+        <table data-ui="mini-tbl" className="w-full tabular-nums">
           <tbody>
             {spec.parts.map((p, i) => (
               <tr key={i} className={p.strong ? 'border-t border-line font-semibold' : ''}>
@@ -40,7 +40,7 @@ export function NumDetailBody({ spec, more }: { spec: NumDetailSpec; more?: Reac
         </table>
       )}
       {!!spec.extra?.length && (
-        <table className="w-full tabular-nums">
+        <table data-ui="mini-tbl" className="w-full tabular-nums">
           <tbody>
             {spec.extra.map((p, i) => (
               <tr key={i} className={`${i ? '' : 'border-t border-line'} ${p.strong ? 'font-semibold' : ''}`}>

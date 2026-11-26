@@ -420,7 +420,7 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
         <span className="px-1 text-[12.5px] font-semibold text-ink-2">Nguồn đơn</span>
         <FilterSelect label="nguồn đơn" value={source} onChange={setSource} options={(data?.sourceOptions ?? []).map((v) => ({ id: v, name: v }))} />
         <span className="text-xs text-ink-3">Page, bài viết và mã quảng cáo chưa có trường chuẩn cho toàn bộ lịch sử đơn.</span>
-        <button type="button" className="rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink-2 hover:bg-surface-2" onClick={() => {
+        <button type="button" data-ui="btn" className="rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink-2 hover:bg-surface-2" onClick={() => {
           setMarketingTeamId('__all'); setMarketerId('__all'); setSellerId('__all'); setCareId('__all'); setProductKey('__all');
           setSource('__all'); setStage('confirmed'); setBasis('confirmed'); setRankStage('confirmed'); setOtherStages(false);
         }}>Xóa bộ lọc</button>
@@ -445,7 +445,7 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
               ['Đã cho ĐVVC', s.shippedOrders, s.createdOrders ? s.shippedOrders / s.createdOrders * 100 : null, 'orange'],
               ['Đã nhận / thu tiền', s.deliveredOrders, s.createdOrders ? s.deliveredOrders / s.createdOrders * 100 : null, 'green'],
               ['Hoàn / hủy', s.returnedOrders + s.cancelledOrders, s.createdOrders ? (s.returnedOrders + s.cancelledOrders) / s.createdOrders * 100 : null, 'red'],
-            ].map(([label, value, rate, tone]) => <div key={String(label)} className="rounded-xl border border-line bg-surface-2 p-4">
+            ].map(([label, value, rate, tone]) => <div key={String(label)} data-ui="tile-in" className="rounded-xl border border-line bg-surface-2 p-4">
               <div className="text-xs font-medium text-ink-3">{label}</div><div className="num mt-1 text-2xl text-ink">{vi.format(Number(value))}</div>
               <div className="mt-2 flex items-center gap-2"><ProgressBar value={Number(rate ?? 0)} max={100} width={72} color={`var(--t-${tone})`} /><span className="num text-xs text-ink-3">{pct(Number(rate ?? 0))}</span></div>
             </div>)}
@@ -454,14 +454,14 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
 
         <ChartCard icon={BarChart3} title={rankingMode === 'team' ? 'Xếp hạng team Marketing' : 'Xếp hạng marketer'} subtitle={`Chỉ số theo mốc: ${STAGES[otherStages ? stage : rankStage]} · phễu theo đơn tạo trong kỳ`}
           action={<div className="flex flex-wrap items-center gap-2">
-            <fieldset className="flex flex-wrap rounded-lg border border-line p-0.5"><legend className="sr-only">Mốc xếp hạng</legend>
+            <fieldset data-ui="pill-group" className="flex flex-wrap rounded-lg border border-line p-0.5"><legend className="sr-only">Mốc xếp hạng</legend>
               {RANK_STAGES.map((key) => <button key={key} type="button" aria-pressed={!otherStages && rankStage === key} className={`rounded-md px-3 py-1.5 text-xs font-semibold tap ${!otherStages && rankStage === key ? 'bg-primary text-white' : 'text-ink-2 hover:bg-surface-2'}`} onClick={() => { setRankStage(key); setOtherStages(false); sort.setKey('rank'); }}>{({ confirmed: 'Chốt', packed: 'Đóng hàng', shipped: 'Đã gửi', delivered: 'Đã nhận' })[key]}</button>)}
             </fieldset>
             <Select value={stage} items={STAGES} onValueChange={(v) => { setStage(v as Stage); setOtherStages(true); }}>
               <SelectTrigger className="min-w-32" aria-label="Mốc khác"><span>Mốc khác</span></SelectTrigger>
               <SelectContent>{Object.entries(STAGES).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
             </Select>
-            <fieldset className="flex rounded-lg border border-line p-0.5"><legend className="sr-only">Cấp xếp hạng</legend>
+            <fieldset data-ui="pill-group" className="flex rounded-lg border border-line p-0.5"><legend className="sr-only">Cấp xếp hạng</legend>
               <button type="button" className={`rounded-md px-3 py-1.5 text-xs font-semibold tap ${rankingMode === 'team' ? 'bg-primary text-white' : 'text-ink-2 hover:bg-surface-2'}`} aria-pressed={rankingMode === 'team'} onClick={() => { setRankingMode('team'); if (sort.key === 'team') sort.setKey('newNet'); }}>Theo team</button>
               <button type="button" className={`rounded-md px-3 py-1.5 text-xs font-semibold tap ${rankingMode === 'marketer' ? 'bg-primary text-white' : 'text-ink-2 hover:bg-surface-2'}`} aria-pressed={rankingMode === 'marketer'} onClick={() => setRankingMode('marketer')}>Theo nhân viên</button>
             </fieldset>

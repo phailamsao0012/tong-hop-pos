@@ -1055,3 +1055,21 @@ table th { white-space: nowrap; font-weight: 600; font-size: 11.5px; letter-spac
 .ui-moi [data-ui="skeleton-table"] th { background: transparent; }
 .ui-moi [data-ui="skeleton-table"] tr { border-color: var(--line); }
 .ui-moi [data-ui="advisor"] { background: var(--surface); border-color: var(--line); border-radius: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+
+/* Móc dùng chung cho từng trang (data-ui, không đổi gì khi cờ tắt), dùng từ đợt 3 trở đi:
+   tile = ô số tự vẽ nằm trên nền trang; tile-in = ô số nằm trong thẻ; tile-pick = ô bấm chọn; box = khung phụ trong thẻ;
+   pill-group = nhóm nút chọn tự vẽ (fieldset / radiogroup) → như .seg; btn = nút thô → như .btn; mini-tbl = bảng nhỏ trong khung nổi. */
+.ui-moi [data-ui="tile"] { border-radius: 16px; border-color: transparent; background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+.ui-moi [data-ui="tile"]:hover { border-color: var(--line); box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+.ui-moi [data-ui="tile-in"] { border-radius: 16px; border-color: transparent; background: var(--surface-2); }
+.ui-moi [data-ui="tile-pick"] { border-radius: 14px; border-color: transparent; background: var(--surface-2); }
+.ui-moi [data-ui="tile-pick"][aria-pressed="true"] { background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--ink); }
+.ui-moi [data-ui="box"] { border-radius: 14px; border-color: var(--line); }
+.ui-moi [data-ui="pill-group"] { border-radius: 999px; border-color: transparent; background: var(--surface-2); padding: 3px; gap: 2px; }
+.ui-moi [data-ui="pill-group"] > button { border-radius: 999px; padding: 5px 12px; background: transparent; color: var(--ink-3); font-weight: 500; }
+.ui-moi [data-ui="pill-group"] > button:hover { color: var(--ink); }
+.ui-moi [data-ui="pill-group"] > button:is([aria-pressed="true"], [aria-checked="true"], [aria-selected="true"]) { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.1); }
+.ui-moi [data-ui="btn"] { border-radius: 999px; border-color: var(--line); font-weight: 600; }
+:is(.ui-moi, .ui-moi-root) [data-ui="mini-tbl"] th { font-size: 11px; font-weight: 600; color: var(--ink-3); }
+:is(.ui-moi, .ui-moi-root) [data-ui="mini-tbl"] :is(td, th) { padding-top: 4px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+:is(.ui-moi, .ui-moi-root) [data-ui="mini-tbl"] tr:last-child > :is(td, th) { border-bottom: 0; }

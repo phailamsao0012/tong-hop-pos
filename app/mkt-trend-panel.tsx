@@ -55,7 +55,7 @@ export function MktTrendPanel({ start, end, posIds, marketerId, teamId }: { star
       <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5 xl:grid-cols-9">{columns.map(([key, label, tip, fn]) => {
         const t = trendTile(data.rows, key);
         const good = t.change === null || key === 'cost' ? null : (t.change > 0) !== lowerBetter.has(key);
-        return <button type="button" key={key} onClick={() => setOpen(open === key ? null : key)} aria-pressed={open === key} title={`Cách tính: ${tip}`} className={`min-w-0 rounded-lg border p-2 text-left ${open === key ? 'border-primary bg-primary/5' : 'border-line hover:bg-muted/50'}`}>
+        return <button type="button" key={key} onClick={() => setOpen(open === key ? null : key)} aria-pressed={open === key} title={`Cách tính: ${tip}`} data-ui="tile-pick" className={`min-w-0 rounded-lg border p-2 text-left ${open === key ? 'border-primary bg-primary/5' : 'border-line hover:bg-muted/50'}`}>
           <div className="truncate text-[11px] text-ink-3">{label}</div>
           <div className="truncate text-sm font-semibold tabular-nums">{format(data.total[key], fn === money ? shortMoney : fn)}</div>
           <Spark values={t.spark} />
@@ -63,7 +63,7 @@ export function MktTrendPanel({ start, end, posIds, marketerId, teamId }: { star
         </button>;
       })}</div>
       <p className="mt-1 text-[11px] text-ink-3">Số đậm: tổng kỳ · đường nhỏ: 14 {word} đã đủ gần nhất · %: {word} đủ gần nhất so {word} trước đó (xanh tốt lên, đỏ xấu đi) · bấm ô xem biểu đồ to.</p>
-      {open && (() => { const [key, label, , fn] = columns.find(c => c[0] === open)!; return <div className="mt-3 rounded-xl border border-line p-3">
+      {open && (() => { const [key, label, , fn] = columns.find(c => c[0] === open)!; return <div data-ui="box" className="mt-3 rounded-xl border border-line p-3">
         <h3 className="text-sm font-semibold">{label}</h3>
         <ChartContainer config={{ [key]: { label, color: 'var(--primary)' } }} className="mt-2 h-56 w-full aspect-auto">
           <LineChart data={trendChartRows(data.rows, key)} margin={{ left: 0, right: 8 }}><CartesianGrid vertical={false} /><XAxis dataKey="key" minTickGap={28} tick={{ fontSize: 11 }} /><YAxis width={52} tick={{ fontSize: 11 }} tickFormatter={(n: number) => short(n)} /><ChartTooltip content={<ChartTooltipContent formatter={(v) => format(typeof v === 'number' ? v : null, fn)} />} /><Line name={label} dataKey="complete" stroke="var(--primary)" dot={false} isAnimationActive={false} /><Line name={`${label} · đang chạy`} dataKey="running" stroke="var(--primary)" strokeDasharray="5 4" dot={{ fill: "white", stroke: "var(--primary)", r: 3 }} isAnimationActive={false} /></LineChart>

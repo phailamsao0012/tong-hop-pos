@@ -46,7 +46,7 @@ export function ProductSplitHover({ url, marketerId, field, children }: { url: s
       <PopoverContent side="bottom" align="end" className="w-[27rem] max-w-[92vw] p-2.5 text-xs">
         <p className="font-semibold">Tách theo sản phẩm</p>
         {state.error ? <p className="text-bad">Chưa tải được, rê lại sau.</p> : !state.data ? <p className="text-ink-3">Đang tính…</p> : rows.length || cover?.open.phones ? (
-          <table className="w-full tabular-nums">
+          <table data-ui="mini-tbl" className="w-full tabular-nums">
             <thead><tr className="text-ink-3"><Th className="py-1 text-left font-normal">Sản phẩm</Th>{COLS.map((c) => <Th key={c.key} className={`py-1 text-right font-normal ${c.key === field ? 'text-ink font-semibold' : ''}`}>{c.label}</Th>)}</tr></thead>
             <tbody>{rows.map((k) => {
               const c = state.data![k]!;

@@ -47,7 +47,7 @@ const signed = (n: number, fmt: (n: number) => string) => `${n > 0 ? '+' : n < 0
 function Tile({ label, sheet, pos, posLabel, fmt, extra }: { label: string; sheet: number; pos: number; posLabel: string; fmt: (n: number) => string; extra?: ReactNode }) {
   const g = gapOf(sheet, pos), v = verdict(g.pct);
   return (
-    <div className="flex min-w-0 flex-col gap-2 rounded-xl border border-line bg-surface p-4">
+    <div data-ui="tile" className="flex min-w-0 flex-col gap-2 rounded-xl border border-line bg-surface p-4">
       <div className="flex items-center justify-between gap-2">
         <span className="text-[13px] font-semibold text-ink-2">{label}</span>
         <StatusChip tone={v.tone}>{v.text}</StatusChip>
@@ -150,7 +150,7 @@ export function MktSheetCheck({ start, end, posIds }: { start: string; end: stri
       </header>
 
       {!data.sheet.hasStats && (
-        <p className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-[12.5px] leading-snug text-ink-2">
+        <p data-ui="box" className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-[12.5px] leading-snug text-ink-2">
           {data.sheet.connected
             ? 'Sheet chưa có số SĐT / Đơn / DT trong khoảng ngày này. Web đọc các cột này từ lần gửi kế tiếp của sheet (script gửi mỗi giờ), không cần dán lại script.'
             : 'Chưa nối Google Sheet chi phí. Nối ở trang Chi phí & ROAS.'}

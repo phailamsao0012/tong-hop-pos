@@ -76,7 +76,7 @@ function Giant({ icon: Icon, label, value, raw, format, unit, d, invert, prevTex
   d: number | null; invert?: boolean; prevText: string; note?: string; tone: string; spark: SparkProps; onClick: () => void;
 }) {
   return (
-    <button type="button" onClick={onClick} title={note}
+    <button type="button" onClick={onClick} title={note} data-ui="tile"
       className="group relative flex min-w-0 flex-col items-start gap-1.5 overflow-hidden rounded-xl border border-line bg-surface p-4 text-left transition-[box-shadow,border-color] duration-200 hover:border-primary hover:shadow-card focus-visible:outline-2 focus-visible:outline-primary">
       <span className="flex items-center gap-1.5 text-[12.5px] font-semibold text-ink-2"><span className="grid size-6 place-items-center rounded-md" style={{ background: `color-mix(in oklab, ${tone} 14%, transparent)`, color: tone }}><Icon size={14} /></span>{label}</span>
       <span className="flex w-full flex-wrap items-baseline gap-x-2.5 gap-y-1">
@@ -93,7 +93,7 @@ function Giant({ icon: Icon, label, value, raw, format, unit, d, invert, prevTex
 
 function Stat({ icon: Icon, label, value, d, invert, prevText, spark, onClick }: { icon: LucideIcon; label: string; value: string; d: number | null; invert?: boolean; prevText: string; spark: SparkProps; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick}
+    <button type="button" onClick={onClick} data-ui="tile"
       className="flex min-w-0 flex-col items-start gap-1 rounded-xl border border-line bg-surface px-3.5 py-3 text-left transition-[border-color,box-shadow] duration-200 hover:border-primary hover:shadow-card focus-visible:outline-2 focus-visible:outline-primary">
       <span className="flex items-center gap-1.5 text-[12px] font-medium text-ink-3"><Icon size={14} />{label}</span>
       <span className="flex w-full flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -299,7 +299,7 @@ function SplitStrip({ cur, prev, total }: { cur: Split; prev: Split; total: numb
     { key: 'other' as const, label: 'Người bán khác', who: 'chưa có hậu tố SALE, CSKH', tone: 'var(--ink-4)' },
   ].filter((x) => x.key !== 'other' || cur.other.closed || cur.other.net);
   return (
-    <div className="flex min-w-0 flex-col gap-2 rounded-xl border border-line bg-surface-2/60 p-3">
+    <div data-ui="tile-in" className="flex min-w-0 flex-col gap-2 rounded-xl border border-line bg-surface-2/60 p-3">
       <div className="flex h-2.5 w-full gap-0.5 overflow-hidden rounded-full" aria-hidden="true">
         {parts.map((x) => <span key={x.key} style={{ width: `${total > 0 ? Math.max(0, cur[x.key].net) / total * 100 : 0}%`, background: x.tone }} className="h-full rounded-[3px]" />)}
       </div>
