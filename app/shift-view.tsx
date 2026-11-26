@@ -238,7 +238,7 @@ export function ShiftView() {
                 {data.feed.length ? (
                   <ul className="max-h-[22rem] space-y-1.5 overflow-auto overscroll-contain">
                     {data.feed.map((f) => (
-                      <li key={f.id} className="reveal-row flex items-start gap-2.5 rounded-lg border border-line bg-surface p-2.5 transition-[background-color,border-color] duration-[var(--dur)] ease-[var(--ease)] hover:border-line-3 hover:bg-surface-2">
+                      <li key={f.id} data-ui="round" className="reveal-row flex items-start gap-2.5 rounded-lg border border-line bg-surface p-2.5 transition-[background-color,border-color] duration-[var(--dur)] ease-[var(--ease)] hover:border-line-3 hover:bg-surface-2">
                         <span className="mt-1.5 inline-block size-2 shrink-0 rounded-full bg-good" aria-hidden="true" />
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-[13px]">Đơn <strong className="num">#{f.orderId}</strong> đã được xác nhận <span className="num text-xs text-ink-3">· {money(f.net)}</span></div>
@@ -254,7 +254,7 @@ export function ShiftView() {
                 {data.alerts.length ? (
                   <ul className="space-y-2">
                     {data.alerts.map((a, i) => (
-                      <li key={i} tabIndex={0} className={`rounded-xl border p-3 transition-[transform,box-shadow,border-color] duration-[var(--dur)] ease-[var(--ease)] hover:-translate-y-0.5 hover:shadow-raise focus-visible:-translate-y-0.5 focus-visible:shadow-raise ${a.level === 'high' ? 'border-bad/25 bg-bad-bg hover:border-bad/50' : 'border-warn/25 bg-warn-bg hover:border-warn/50'}`}>
+                      <li key={i} tabIndex={0} data-ui="round" className={`rounded-xl border p-3 transition-[transform,box-shadow,border-color] duration-[var(--dur)] ease-[var(--ease)] hover:-translate-y-0.5 hover:shadow-raise focus-visible:-translate-y-0.5 focus-visible:shadow-raise ${a.level === 'high' ? 'border-bad/25 bg-bad-bg hover:border-bad/50' : 'border-warn/25 bg-warn-bg hover:border-warn/50'}`}>
                         <div className="flex items-center justify-between gap-2"><span className={`flex items-center gap-1.5 text-[13px] font-semibold ${a.level === 'high' ? 'text-bad' : 'text-warn'}`}><AlertTriangle size={14} />{a.title}</span>{a.at && <span className="num text-xs text-ink-3">{timeOnly(a.at)}</span>}</div>
                         <p className="mt-1 text-xs leading-relaxed text-ink-2">{a.detail}</p>
                       </li>
