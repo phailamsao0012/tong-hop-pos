@@ -66,6 +66,8 @@ type SortKey = 'rank' | 'name' | 'team' | 'created' | 'phones' | 'confirmed' | '
 type CostRow = MktNumbers & { id: string };
 type CostData = { team?: string; current: MktNumbers; people: CostRow[]; teams: CostRow[]; unmatchedSheet?: { name: string; cost: number }[] };
 type Nums = RankNums & OutStats;
+/** Nhóm cột đang xem: ba nhóm của bảng gộp, hoặc "Tất cả" (cả ba cùng lúc). */
+type ViewGroup = ColGroup | 'tatca';
 // Bảng xếp hạng gộp chỉ còn ~8 cột: bảng rộng theo nội dung, không kéo giãn hết bề ngang thẻ (anh Vũ 25/11/2026: "khoảng cách các cột bớt ô trống lại").
 const RANK_TABLE_STYLE = { width: 'auto' } as const;
 const roasText = (n: number | null | undefined) => n === null || n === undefined ? '—' : `${n.toFixed(2).replace('.', ',')}×`;
@@ -119,7 +121,8 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
   const setMarketingTeamId = (id: string) => setMktTeam(id === '__all' ? null : { id, name: marketingTeams.find((t) => t.id === id)?.name ?? (id === '__unassigned' ? 'Không thuộc team MKT' : 'đã chọn') });
   const [rankingMode, setRankingMode] = useState<'marketer' | 'team'>('marketer');
   // Bảng xếp hạng gộp (25/11/2026): một bảng, nút chọn nhóm cột Chốt | Chi phí | Giao hàng.
-  const [colGroup, setColGroup] = useState<ColGroup>('chot');
+  // "Tất cả" (anh Vũ 26/11/2026: "t nhớ nó dài lắm mà"): hiện cả ba nhóm trên một bảng, cuộn ngang trong khung bảng.
+  const [colGroup, setColGroup] = useState<ViewGroup>('chot');
   const [sheet, setSheet] = useState<SheetCompare | null>(null);
   const [marketingTeams, setMarketingTeams] = useState<MarketingTeam[]>([]);
   const [sellerId, setSellerId] = useState('__all');
@@ -158,7 +161,7 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
   const productUrl = splitUrl(url);
   // Chi phí chỉ khi người xem được trang Chi phí & ROAS và không lọc team Sale (chi phí là của Marketing); chỉ tải khi mở nhóm Chi phí hoặc sắp theo chi phí.
   const noCost = !onOpenRoas || saleTeam !== '__all';
-  const costOn = !noCost && (colGroup === 'chiphi' || sort.key === 'cost' || sort.key === 'roas');
+  const costOn = !noCost && (colGroup === 'chiphi' || colGroup === 'tatca' || sort.key === 'cost' || sort.key === 'roas');
   const costUrl = useMemo(() => {
     if (!costOn) return null;
     const p = new URLSearchParams({ start, end, posIds: posIds.join(',') });
@@ -269,16 +272,17 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
   const detailScope = start === end ? dmy(start) : `${dmy(start)}–${dmy(end)}`;
   const sub = (text: string, title?: string) => <span className="block w-0 min-w-full whitespace-normal text-[11px] font-normal text-ink-3" title={title}>{text}</span>;
   const GROUP_COLS = 6;
-  const groupHeads = colGroup === 'chot' ? <>
+  /** all = đang xem "Tất cả": nhóm Chi phí bỏ cột DT chốt (đã có ở nhóm Chốt). */
+  const headsOf = (g: ColGroup, all: boolean) => g === 'chot' ? <>
     <SortTh k="closedPhones" label="Số đã chốt" hint="SĐT chia Sale có ít nhất 1 đơn đã chốt (kể cả hủy / hoàn sau đó). Rê chuột: tổng số về, số chưa chốt, đơn tạo." sort={sort} />
     <SortTh k="atConfirmed" label="Đơn New" hint="Đơn chốt do người bán Sale (New): xác nhận lần đầu trong kỳ, kể cả sau đó hủy / hoàn (đã chốt là chốt); trừ đơn xoá." sort={sort} />
     <SortTh k="rate" label="TL chốt" hint="Đơn New ÷ SĐT trên đơn chia cho Sale, tối đa 100% (đơn chốt trong kỳ có thể gồm đơn tạo từ kỳ trước). Dưới 40% tô đỏ." sort={sort} />
     <SortTh k="newNet" label="DT chốt" hint="Tiền mọi đơn New đã chốt trong kỳ, kể cả đơn hủy / hoàn sau đó (đã chốt là chốt). Dòng nhỏ: sau hoàn hủy. Rê chuột: tiền hoàn hủy, DT / SĐT, AOV." sort={sort} />
     <SortTh k="cskhConfirmed" label="Đơn CSKH" hint="Đơn chốt do người bán CSKH, cùng cách đếm. Không cộng vào Đơn New." sort={sort} />
     <SortTh k="cskhNet" label="DT CSKH" sort={sort} />
-  </> : colGroup === 'chiphi' ? <>
+  </> : g === 'chiphi' ? <>
     <SortTh k="cost" label="Chi phí" hint="Chi phí QC trên sheet CPQC (và nhập tay) theo ngày. Số như bảng Marketer cũ ở khối số chính." sort={sort} />
-    <Th className="n" hint="DT chốt theo ngày xác nhận lần đầu (đơn New khi xem Tất cả), cùng số dùng tính ROAS.">DT chốt</Th>
+    {!all && <Th className="n" hint="DT chốt theo ngày xác nhận lần đầu (đơn New khi xem Tất cả), cùng số dùng tính ROAS.">DT chốt</Th>}
     <Th className="n" hint="Chi phí ÷ đơn New của người có chi phí.">CP / đơn New</Th>
     <Th className="n" hint="Chi phí ÷ số của người có chi phí.">CP / số</Th>
     <Th className="n" hint="Chi phí ÷ DT chốt của người có chi phí.">% CP / DT chốt</Th>
@@ -291,12 +295,13 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
     <SortTh k="returnRate" label="Hoàn" hint="Số lớn: tiền đơn New đang hoàn / đã hoàn + hủy sau khi đã giao ĐVVC. Dòng nhỏ: tỉ lệ hoàn = số đơn đó ÷ Đơn New, từ 7% tô đỏ. Sắp xếp theo tỉ lệ." sort={sort} />
     <SortTh k="delivered" label="Đã nhận" hint="Đơn đã nhận / đã thu tiền theo mốc. Rê chuột: % giao thành công." sort={sort} />
   </>;
+  const groupHeads = colGroup === 'tatca' ? <>{headsOf('chot', true)}{!noCost && headsOf('chiphi', true)}{headsOf('giao', true)}</> : headsOf(colGroup, false);
   const dash = (n: number, why?: string) => Array.from({ length: n }, (_, i) => <td key={i} className="n text-ink-3" title={why}>—</td>);
   type SheetRow = SheetCompare['byMarketer'] extends Map<string, infer V> ? V : never;
   /** split: mã marketer / null (dòng tổng) cho khung tách sản phẩm; undefined = không có (team, người ngoài POS). */
-  const groupCells = (x: Nums, name: string, cost: CostRow | null | undefined, sh?: SheetRow, split?: string | null) => {
+  const cellsOf = (g: ColGroup, all: boolean, x: Nums, name: string, cost: CostRow | null | undefined, sh?: SheetRow, split?: string | null) => {
     const r = outRates(x), ctx = { name, scope: detailScope };
-    if (colGroup === 'chot') return <>
+    if (g === 'chot') return <>
       <td className="n font-semibold"><NumDetail spec={closedPhonesDetail(x, ctx)} more={split === undefined ? undefined : () => <ProductSplitHover url={productUrl} marketerId={split} field="phones"><span className="text-[11px] font-semibold text-primary">Tách theo sản phẩm ›</span></ProductSplitHover>}>{vi.format(x.createdNewClosedPhones ?? 0)}</NumDetail></td>
       <td className="n">{vi.format(x.newConfirmed)}</td>
       <td className={`n ${closeRateClass(r.close)}`} title={`${vi.format(x.newConfirmed)} đơn New / ${vi.format(x.createdNewPhones)} SĐT chia cho Sale`}>{r.close === null ? '—' : pct(r.close)}</td>
@@ -304,15 +309,16 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
       <td className="n">{vi.format(x.cskhConfirmed)}</td>
       <td className="n">{money(x.cskhNet)}{sub(`sau hoàn hủy ${shortMoney(x.cskhAfterRefund)}`, `${vi.format(x.cskhOrders)} đơn · sau hoàn hủy ${money(x.cskhAfterRefund)}`)}</td>
     </>;
-    if (colGroup === 'chiphi') {
-      if (noCost) return dash(GROUP_COLS, 'Không hiện chi phí khi lọc team Sale (chi phí là của Marketing).');
-      if (!cost) return dash(GROUP_COLS, costApi.loading ? 'Đang tải chi phí…' : 'Không có dòng chi phí');
+    if (g === 'chiphi') {
+      const cols = all ? GROUP_COLS - 1 : GROUP_COLS;
+      if (noCost) return dash(cols, 'Không hiện chi phí khi lọc team Sale (chi phí là của Marketing).');
+      if (!cost) return dash(cols, costApi.loading ? 'Đang tải chi phí…' : 'Không có dòng chi phí');
       const share = cost.costShare == null ? null : cost.costShare * 100;
       const cmp = !!sheet && !!sh, ok = !!sh && cmp && sh.counted && !sh.noSheet;
       return <>
         <td className="n"><NumDetail spec={mktCellDetail('cost', cost, ctx)}>{shortMoney(cost.cost)}</NumDetail>{sh && cmp && sub(`CP sheet ${shortMoney(sh.sheet.cost)}`, `Chi phí QC marketer ghi trên sheet: ${money(sh.sheet.cost)}`)}</td>
-        <td className="n"><NumDetail spec={mktCellDetail(costSeg === 'all' ? 'newNet' : 'net', cost, ctx)}>{shortMoney(costSeg === 'all' ? cost.newNet ?? 0 : cost.net)}</NumDetail>
-          {sh && cmp && (!sh.counted ? <span className="block text-[11px] font-normal text-warn">không so (chưa có hậu tố MKT)</span> : sh.noSheet ? <span className="block text-[11px] font-normal text-ink-3">sheet chưa ghi</span> : <SheetLine sheet={sh.sheet.revenue} pos={sh.posNet} fmt={shortMoney} />)}</td>
+        {!all && <td className="n"><NumDetail spec={mktCellDetail(costSeg === 'all' ? 'newNet' : 'net', cost, ctx)}>{shortMoney(costSeg === 'all' ? cost.newNet ?? 0 : cost.net)}</NumDetail>
+          {sh && cmp && (!sh.counted ? <span className="block text-[11px] font-normal text-warn">không so (chưa có hậu tố MKT)</span> : sh.noSheet ? <span className="block text-[11px] font-normal text-ink-3">sheet chưa ghi</span> : <SheetLine sheet={sh.sheet.revenue} pos={sh.posNet} fmt={shortMoney} />)}</td>}
         <td className="n"><NumDetail spec={mktCellDetail('cpc', cost, ctx)}>{cost.costPerClosed === null ? '—' : shortMoney(cost.costPerClosed)}</NumDetail>{sh && ok && <SheetLine label="đơn sheet" sheet={sh.sheet.orders} pos={sh.posClosed} fmt={(n) => vi.format(n)} />}</td>
         <td className="n"><NumDetail spec={mktCellDetail('cpl', cost, ctx)}>{cost.costPerLead === null ? '—' : shortMoney(cost.costPerLead)}</NumDetail>{sh && ok && <SheetLine label="số sheet" sheet={sh.sheet.phones} pos={sh.posPhones} fmt={(n) => vi.format(n)} />}</td>
         <td className="n"><NumDetail spec={mktCellDetail('share', cost, ctx)}>{share === null ? '—' : pct(share)}</NumDetail></td>
@@ -329,6 +335,9 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
       <td className="n"><NumDetail spec={deliveredDetail(x, ctx)}>{vi.format(x.deliveredOrders)}</NumDetail></td>
     </>;
   };
+  const groupCells = (x: Nums, name: string, cost: CostRow | null | undefined, sh?: SheetRow, split?: string | null) => colGroup === 'tatca'
+    ? <>{cellsOf('chot', true, x, name, cost, sh, split)}{!noCost && cellsOf('chiphi', true, x, name, cost, sh, split)}{cellsOf('giao', true, x, name, cost, sh, split)}</>
+    : cellsOf(colGroup, false, x, name, cost, sh, split);
   const outTotal: OutStats = { ...NEW_FIELDS, ...data?.afterPackSummary, createdNewPhones: s?.createdNewPhones ?? 0, newNet: rankingSummary.newNet ?? 0, newOrders: rankingSummary.newOrders ?? 0, newAfterRefund: rankingSummary.newAfterRefund ?? 0, cskhNet: rankingSummary.cskhNet ?? 0, cskhOrders: rankingSummary.cskhOrders ?? 0, cskhAfterRefund: rankingSummary.cskhAfterRefund ?? 0 };
 
   // Người ngoài POS này (mục F): marketer có đơn trên POS đang chọn nhưng không có tài khoản trên POS đó (bảng đã ẩn họ).
@@ -470,10 +479,10 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
           </div>}>
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <span className="text-[12.5px] font-semibold text-ink-2">Xem nhóm cột</span>
-            <SegmentedControl<ColGroup> size="sm" ariaLabel="Nhóm cột bảng xếp hạng" value={colGroup} onChange={setColGroup} options={COL_GROUPS.filter((g) => g.value !== 'chiphi' || !noCost)} />
-            {colGroup === 'chiphi' && <span className="text-[11.5px] text-ink-3">Chi phí, ROAS theo ngày xác nhận lần đầu, như khối số chính (không đổi theo mốc Đóng hàng / Đã gửi / Đã nhận).</span>}
+            <SegmentedControl<ViewGroup> size="sm" ariaLabel="Nhóm cột bảng xếp hạng" value={colGroup} onChange={setColGroup} options={[...COL_GROUPS.filter((g) => g.value !== 'chiphi' || !noCost), { value: 'tatca' as const, label: 'Tất cả' }]} />
+            {(colGroup === 'chiphi' || (colGroup === 'tatca' && !noCost)) && <span className="text-[11.5px] text-ink-3">Chi phí, ROAS theo ngày xác nhận lần đầu, như khối số chính (không đổi theo mốc Đóng hàng / Đã gửi / Đã nhận).</span>}
           </div>
-          {colGroup === 'chiphi' && rankingMode === 'marketer' && !noCost && <MktSheetBar start={start} end={end} posIds={posIds} unmatchedSheet={costApi.data?.unmatchedSheet} onSheet={setSheet} />}
+          {(colGroup === 'chiphi' || colGroup === 'tatca') && rankingMode === 'marketer' && !noCost && <MktSheetBar start={start} end={end} posIds={posIds} unmatchedSheet={costApi.data?.unmatchedSheet} onSheet={setSheet} />}
           {rankingMode === 'team' ? (teamRows.length ? <>
             <p className="mb-3 text-xs text-ink-3">Bấm tên team để xem thành viên. SĐT được đếm duy nhất trong từng team; hàng tổng đếm duy nhất trên toàn bộ phạm vi lọc.</p>
             <TableWrap><table className="tbl compact" style={RANK_TABLE_STYLE}><thead><tr><Th title="Cách tính: DT chốt tại mốc giảm dần, rồi số đơn New, rồi tên. Đơn CSKH không tính vào hạng.">Hạng</Th>{!otherStages && rankStage !== 'confirmed' && <Th className="n">Đổi hạng</Th>}<SortTh k="name" label="Team Marketing" sort={sort} align="left" /><Th className="n">Marketer</Th>{groupHeads}</tr></thead>
