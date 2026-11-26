@@ -61,7 +61,7 @@ const chartNumber = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDi
 export function BarList({ title, rows, format = chartNumber }: { title?: string; rows: ChartRow[]; format?: (n: number) => string }) {
   const pos = Math.max(0, ...rows.map(r => r.value)), neg = Math.max(0, ...rows.map(r => -r.value)), span = pos + neg || 1;
   const zero = neg / span * 100, diverging = neg > 0;
-  return <figure className="min-w-0 space-y-2 rounded-xl border border-line bg-surface-2/40 p-3">
+  return <figure data-ui="tile-in" className="min-w-0 space-y-2 rounded-xl border border-line bg-surface-2/40 p-3">
     {title && <figcaption className="text-xs font-semibold text-ink-2">{title}</figcaption>}
     <ul className="space-y-1.5">{rows.map((r, i) => {
       const width = Math.abs(r.value) / span * 100, left = r.value < 0 ? zero - width : zero;
