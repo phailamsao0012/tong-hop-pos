@@ -79,7 +79,7 @@ export function ProfilePeriod({ id, posSel }: { id: string; posSel: string[] }) 
                 <ChartContainer config={{ net: { label: 'Doanh thu', color: 'var(--primary)' } }} className="mt-2 aspect-auto h-44 w-full">
                   <BarChart data={days} margin={{ left: 0, right: 4 }}>
                     <CartesianGrid vertical={false} /><XAxis dataKey="key" tick={{ fontSize: 11 }} minTickGap={10} />
-                    <YAxis width={44} tick={{ fontSize: 11 }} tickFormatter={(n: number) => shortMoney(n).replace(' ₫', '')} />
+                    <YAxis width={58} tick={{ fontSize: 11 }} tickFormatter={(n: number) => shortMoney(n).replace(' ₫', '')} />
                     <ChartTooltip content={<ChartTooltipContent formatter={(v) => money(typeof v === 'number' ? v : null)} />} />
                     <Bar dataKey="net" name="Doanh thu" fill="var(--primary)" radius={[4, 4, 0, 0]} isAnimationActive={false} />
                   </BarChart>
