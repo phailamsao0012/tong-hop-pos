@@ -181,7 +181,7 @@ function ReturnBreakdown({ t, period, bySent, estimated = 0 }: { t: VdLine; peri
         {estimated > 0 && <p className="text-[12px] text-warn">{vi.format(estimated)} đơn tạo trong các tháng của kỳ thiếu lịch sử bước gửi trên Pancake: ngày gửi của các đơn này là ước tính (giờ xác nhận hoặc giờ đổi trạng thái gần nhất).</p>}
       </header>
       <div>
-        <div className="flex flex-col gap-3 rounded-xl border border-line p-3">
+        <div data-ui="tile-in" className="flex flex-col gap-3 rounded-xl border border-line p-3">
           <p className="text-[11px] font-semibold uppercase tracking-[.07em] text-ink-3">Theo số đơn</p>
           <p className="num text-[12px] text-ink-2"><b>{vi.format(t.sent)}</b> đơn chuyển đi: <b>{vi.format(t.delivered)}</b> đã nhận, <b>{vi.format(t.returned)}</b> hoàn, <b>{vi.format(Math.max(0, t.sent - t.delivered - t.returned))}</b> đang giao</p>
         </div>
