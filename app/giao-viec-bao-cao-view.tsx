@@ -35,7 +35,7 @@ function RepeatPicker({ id, value, onChange }: { id: string; value: Repeat; onCh
     <div className="space-y-2">
       <SegmentedControl<Repeat['mode']> size="sm" ariaLabel="Lặp lại" value={value.mode} options={REPEAT_MODES} onChange={(mode) => onChange(switchRepeat(mode, value))} />
       {value.mode === 'days' && (
-        <fieldset className="flex flex-wrap gap-1.5">
+        <fieldset data-ui="pill-group" className="flex flex-wrap gap-1.5">
           <legend className="sr-only">Các thứ gửi</legend>
           {WEEK_ORDER.map((d) => {
             const on = value.days.includes(d);
