@@ -21,6 +21,7 @@ import { demoBlocked, installDemo, isDemo } from '@/lib/demo/mode';
 import { isReadOnly, readOnlyBlocked } from '@/lib/ops/read-only';
 import { checkScheduler } from '@/lib/bot/watch';
 import { WARM_BUDGET_MS, WARM_PATHS, pickWarm, warmBody, type RecentReport } from '@/lib/reports/report-warm';
+import { isLongPending } from '@/lib/ops/long-response';
 import { readDataVersion } from '@/lib/ops/data-version';
 
 export { SyncScheduler };
@@ -95,6 +96,8 @@ function remember(key: string, staleKey: string, entry: CachedResponse) {
   staleCache.set(staleKey, entry);
 }
 async function capture(response: Response): Promise<CachedResponse | null> {
+  // Báo cáo kỳ dài đang tính nền (202, lib/ops/long-response.ts): không nhớ vào tầng nào, lần hỏi sau phải chạy lại route.
+  if (isLongPending(response)) return null;
   if (!response.ok || !(response.headers.get('content-type') ?? '').includes('application/json')) return null;
   const body = await response.clone().arrayBuffer();
   if (body.byteLength > REPORT_CACHE_MAX_BYTES) return null;
@@ -279,7 +282,7 @@ async function batchReports(request: Request, env: Cloudflare.Env, ctx: Executio
       // Lượt xuất / mở hồ sơ đi qua gộp báo cáo cũng phải vào nhật ký như gọi riêng.
       const kind = classifyApi('GET', subUrl.pathname, subUrl.searchParams);
       if (kind) ctx.waitUntil(audit({ ...kind, userId: user.userId, email: user.email, name: user.displayName, detail: scrubSearch(subUrl.search), status: res.status, request }));
-      return { url: u, status: res.status, body: await res.text() };
+      return { url: u, status: res.status, body: await res.text(), ...(isLongPending(res) ? { long: true } : {}) };
     } catch (error) {
       console.error('batch item failed', u, error);
       return { url: u, status: 500, body: JSON.stringify({ error: 'Lỗi máy chủ.' }) };

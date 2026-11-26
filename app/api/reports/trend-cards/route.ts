@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { longOrNow } from '@/lib/ops/long-response';
 import { canView, scopeApi } from '@/lib/auth/access';
 import { POS } from '@/lib/shared/report-model';
 import { DATE_RE, todayVn } from '@/lib/shared/report-time';
@@ -37,11 +38,13 @@ export async function GET(request: Request) {
     const rows = await trendOrderPage(env.DB, opts, dept, p.get('staff'), page);
     return Response.json({ rows: rows.slice(0, 100), more: rows.length > 100 }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
+  return longOrNow(request, user.userId, start, end, async () => {
   const result = await trendCards(env.DB, opts, depts);
   // AI viết cho cả công ty: chỉ hiện đúng kỳ tuần và đúng phạm vi đó, sau 7h30.
   const local = new Date(Date.now() + 7 * 3600000);
   const allScope = unitScope.team === 'all' && !unitScope.unit && !p.get('mktTeam') && !p.get('branch') && POS.every((x) => posIds.includes(x.id));
   const ai = result.period.open && result.period.selected === 'thisWeek' && allScope && local.getUTCHours() * 60 + local.getUTCMinutes() >= 450 ? await readTrendNotes(todayVn()) : null;
   const notes = ai?.source === 'ai' && ai.status === 'done' ? Object.fromEntries(depts.map((d) => [d, ai.notes?.[d]?.[0]])) : undefined;
-  return Response.json({ ...result, notes }, { headers: { 'Cache-Control': 'private, no-store' } });
+  return { status: 200, body: { ...result, notes } };
+  });
 }

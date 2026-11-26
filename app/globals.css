@@ -988,4 +988,11 @@ table th { white-space: nowrap; font-weight: 600; font-size: 11.5px; letter-spac
     .ui-moi .card, .ui-moi .toolbar { border-radius: 16px; }
     .ui-moi .toolbar { flex-wrap: wrap; }
   }
+/* Dòng "Kỳ dài, đang tính" (app/long-wait.tsx): góc dưới, không che số; chỉ hiện khi có báo cáo kỳ dài đang chạy nền. */
+@layer components {
+  .long-wait { position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 70; display: inline-flex; align-items: center; gap: 8px; max-width: calc(100vw - 32px); padding: 8px 14px; border-radius: 999px; font-size: 12.5px; font-weight: 600; color: var(--warn); background: var(--surface); border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent); box-shadow: var(--shadow); }
+  .long-wait-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); animation: long-wait-pulse 1.2s ease-in-out infinite; flex: none; }
+  @keyframes long-wait-pulse { 50% { opacity: .3; } }
+  @media (max-width: 767px) { .long-wait { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); } }
+  @media (prefers-reduced-motion: reduce) { .long-wait-dot { animation: none; } }
 }

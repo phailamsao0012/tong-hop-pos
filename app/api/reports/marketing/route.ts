@@ -1,6 +1,7 @@
 import { resolveMktLens } from '@/lib/shared/scope-filter';
 import { env } from 'cloudflare:workers';
 import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { longOrNow } from '@/lib/ops/long-response';
 import { POS } from '@/lib/shared/report-model';
 import { DATE_RE } from '@/lib/shared/report-time';
 import { marketingOverview } from '@/lib/reports/marketing-overview';
@@ -18,7 +19,9 @@ export async function GET(request: Request) {
   const posIds = requested.length ? requested : POS.map((x) => x.id);
   const checkedLens = await resolveMktLens(env.DB, p);
   if (checkedLens instanceof Response) return checkedLens;
-  const body = await marketingOverview(user, p, posIds, start, end, checkedLens);
-  if (!body) return Response.json({ error: 'Team Marketing không còn tồn tại.' }, { status: 400 });
-  return Response.json(body, { headers: { 'Cache-Control': 'private, no-store' } });
+  // Kỳ dài hơn 62 ngày: tính nền một lượt, nhớ 30 phút (lib/ops/long-job.ts); kỳ ngắn như cũ.
+  return longOrNow(request, user.userId, start, end, async () => {
+    const body = await marketingOverview(user, p, posIds, start, end, checkedLens);
+    return body ? { status: 200, body } : { status: 400, body: { error: 'Team Marketing không còn tồn tại.' } };
+  });
 }

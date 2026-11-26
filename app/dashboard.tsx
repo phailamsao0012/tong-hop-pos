@@ -186,6 +186,7 @@ import { RefreshStick } from './stickman/slot';
 import { AiBotGlyph } from './ai-bot';
 import { ShellMoiNav } from './shell-moi';
 import { OverviewMoiView } from './overview-moi-view';
+import { LongWaitNote } from './long-wait';
 
 const MentorView = lazy(() => import('./mentor-view').then((m) => ({ default: m.MentorView })));
 
@@ -1609,6 +1610,7 @@ export default function Dashboard({ user, initialView, demo = false, uiMoi = fal
         )}
         {!presenting && !uiMoi && <MobileTabBar view={view} onSelect={goTo} can={canNavigate} />}
         <div className="refresh-bar" hidden={!refresh.busy} aria-hidden="true"><i /></div>
+        <LongWaitNote />
         <RefreshStick busy={refresh.busy} />
         <main className={`${refreshClass} ${presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1360px] px-4 pt-4 pb-[calc(88px+env(safe-area-inset-bottom,0px))] sm:pt-6 md:px-6 md:pb-12'}`} style={presenting ? { zoom: 1.15 } : undefined}>
           {snapshotAt && <p className="snapshot-line mb-3" role="note">Số liệu chụp lúc {dateTimeText(snapshotAt)} · bản chỉ xem, không cập nhật thêm</p>}
