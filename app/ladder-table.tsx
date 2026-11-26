@@ -109,7 +109,7 @@ export function LadderMembers({ baseUrl, pick, onClose, title }: { baseUrl: stri
     toast(`Đã xuất ${vi.format(list.length)} khách`);
   };
   return (
-    <div className="mt-4 rounded-xl border border-line bg-surface-2 p-3">
+    <div data-ui="tile-in" className="mt-4 rounded-xl border border-line bg-surface-2 p-3">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="text-sm font-semibold text-ink">{api.data ? `${vi.format(api.data.total)} ` : ''}{what}{api.data && api.data.total > (list?.length ?? 0) ? <span className="block text-xs font-normal text-ink-3">Hiện {vi.format(list?.length ?? 0)} khách mua gần nhất; chọn một nhân viên hoặc kỳ ngắn hơn để xem đủ.</span> : null}</div>
         <div className="flex flex-wrap items-center gap-2">

@@ -295,7 +295,7 @@ export function CskhOriginBlock({
             {r.groups.map((g, i) => (
               <span
                 key={g.label}
-                className="flex items-center gap-2 rounded-xl border border-line bg-surface-2 px-3 py-2 text-sm"
+                data-ui="tile-in" className="flex items-center gap-2 rounded-xl border border-line bg-surface-2 px-3 py-2 text-sm"
               >
                 <i
                   className="size-2.5 rounded-full"
@@ -395,7 +395,7 @@ export function CskhOriginBlock({
                 )}
               </table>
             </TableWrap>
-            <div className="rounded-xl border border-line p-3">
+            <div data-ui="round" className="rounded-xl border border-line p-3">
               <p className="text-sm font-semibold text-ink">
                 {pick
                   ? `${pick.name || r?.allStaff?.find((x) => x.staffId === pick.staffId)?.name || ''} · ${pick.group ?? 'tất cả khách'}`
@@ -880,7 +880,7 @@ export function SaleGroupBlock({
               {r.groups.slice(0, dim === 'main' ? 6 : 8).map((g, i) => (
                 <div
                   key={g.label}
-                  className="rounded-xl border border-line p-3"
+                  data-ui="round" className="rounded-xl border border-line p-3"
                 >
                   <div className="flex items-center gap-2 text-xs font-semibold text-ink-2">
                     <i
@@ -1464,7 +1464,7 @@ export function SaleGroupBlock({
             </table>
           </TableWrap>
           {pick && (
-            <div className="rounded-xl border border-line p-3">
+            <div data-ui="round" className="rounded-xl border border-line p-3">
               <div className="flex flex-wrap items-baseline gap-2">
                 <p className="text-sm font-semibold text-ink">
                   {pick.name} ·{' '}
