@@ -2,7 +2,7 @@
 // Tổng quan kiểu mới (cờ THP_UI_MOI, bản demo giao diện; mẫu docs/plans/2026-11-26-tong-quan-kieu-moi/mau-bam-thu.html).
 // Chỉ hiển thị số từ /api/reports/overview-moi (gom lại các hàm báo cáo đang có); không tính số nào ở đây ngoài phần trăm để vẽ.
 // Mỗi con số ghi rõ là số gì; bấm việc cần xem mở trang chi tiết (bộ lọc kỳ / POS dùng chung nên giữ nguyên).
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, ArrowUpRight, ArrowDownRight, Clock, Megaphone, Percent, ShoppingCart, Sparkles, UsersRound } from 'lucide-react';
 import { usePeriod } from './period-store';
 import { usePosIds } from './pos-store';
@@ -18,6 +18,13 @@ const NEED_ICON = { cancel: AlertTriangle, return: AlertTriangle, close: Percent
 const p1 = (n: number | null | undefined) => n === null || n === undefined ? '—' : `${n.toFixed(1).replace('.', ',')}%`;
 const trieu = (n: number) => (n / 1e6).toLocaleString('vi-VN', { maximumFractionDigits: n >= 1e9 ? 0 : 1 });
 const delta = (cur: number, prev: number | null | undefined) => prev ? (cur - prev) / prev * 100 : null;
+/** Tên gọi trong lời chào: tên riêng từ "NV123 - Họ Tên BỘ PHẬN"; tên khác (tài khoản chung, demo) thì không gọi tên. */
+function firstName(name: string) {
+  const m = name.replace(/\(.*?\)/g, '').trim().match(/^NV\d+\s*-\s*(.+)$/i);
+  if (!m) return '';
+  const words = m[1].split(/\s+/).filter((w) => w && !/^(CSKH|SALE|MKT)$/i.test(w));
+  return words.pop() ?? '';
+}
 const WEEKDAY = ['Chủ nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
 
 function Delta({ v, label }: { v: number | null; label: string }) {
@@ -28,6 +35,8 @@ function Delta({ v, label }: { v: number | null; label: string }) {
 
 export function OverviewMoiView({ onNavigate, userName }: { onNavigate: (view: string) => void; userName: string }) {
   const { preset, start, end, setPreset } = usePeriod();
+  // Mở trang Tổng quan mới: kỳ mặc định 7 ngày (chọn kỳ khác thì giữ trong lúc ở trang).
+  useEffect(() => { setPreset('week'); }, [setPreset]);
   const [posIds] = usePosIds();
   const team = useTeam();
   const url = useMemo(() => `/api/reports/overview-moi?${new URLSearchParams({ start, end, posIds: posIds.join(','), team })}`, [start, end, posIds, team]);
@@ -35,21 +44,22 @@ export function OverviewMoiView({ onNavigate, userName }: { onNavigate: (view: s
   const [seen, setSeen] = useState<Record<string, boolean>>({});
   const [hourPick, setHourPick] = useState<number | null>(null);
   const [heatPick, setHeatPick] = useState<{ d: string; h: number; v: number } | null>(null);
-  const now = new Date(Date.now() + 7 * 3600e3);
-  const hourNow = now.getUTCHours();
+  // Giờ Việt Nam lấy từ máy chủ (data.now), không đọc đồng hồ trong lúc vẽ.
+  const now = data ? new Date(Date.parse(data.now) + 7 * 3600e3) : null;
+  const hourNow = now ? now.getUTCHours() : 12;
   const greet = hourNow < 11 ? 'Chào buổi sáng' : hourNow < 14 ? 'Chào buổi trưa' : hourNow < 18 ? 'Chào buổi chiều' : 'Chào buổi tối';
-  const first = userName.split(/\s+/).filter(Boolean).pop() ?? '';
+  const first = firstName(userName);
 
   const seg = (
-    <div className="om-seg" role="group" aria-label="Kỳ xem">
+    <fieldset className="om-seg"><legend className="sr-only">Kỳ xem</legend>
       {([['today', 'Hôm nay'], ['week', '7 ngày'], ['month', 'Tháng này']] as const).map(([k, l]) => (
         <button key={k} type="button" className={preset === k ? 'on' : ''} aria-pressed={preset === k} onClick={() => setPreset(k)}>{l}</button>
       ))}
-    </div>
+    </fieldset>
   );
   const head = (
     <>
-      <div className="om-eyebrow">{WEEKDAY[now.getUTCDay()]}, {now.getUTCDate()} tháng {now.getUTCMonth() + 1}</div>
+      <div className="om-eyebrow">{now ? `${WEEKDAY[now.getUTCDay()]}, ${now.getUTCDate()} tháng ${now.getUTCMonth() + 1}` : '\u00a0'}</div>
       <div className="om-h1"><span>{greet}{first ? `, ${first}` : ''}</span><span className="flex items-center gap-2">{seg}<StaleChip at={at} stale={stale} loading={loading} error={data ? error : null} onRetry={reload} /></span></div>
     </>
   );
@@ -61,7 +71,9 @@ export function OverviewMoiView({ onNavigate, userName }: { onNavigate: (view: s
   const maxBar = Math.max(1, ...data.hours.map((h) => Math.max(h.today, h.usual ?? 0)));
   const doneHours = data.hours.filter((h) => h.hour <= hourNow);
   const todaySoFar = doneHours.reduce((t, h) => t + h.today, 0), usualSoFar = doneHours.reduce((t, h) => t + (h.usual ?? 0), 0);
-  const heatMax = Math.max(1, ...data.heat.flatMap((w) => w.cells));
+  // Độ đậm theo thấp nhất..cao nhất của chính bảng: ô thấp nhất gần trắng (0,08), cao nhất đậm hẳn (1).
+  const heatVals = data.heat.flatMap((w) => w.cells), heatMin = Math.min(...heatVals), heatMax = Math.max(...heatVals);
+  const heatOpacity = (v: number) => heatMax > heatMin ? 0.08 + 0.92 * (v - heatMin) / (heatMax - heatMin) : 0.5;
   const open = Math.max(0, s.assigned - s.closedFromAssigned);
   const closedShare = s.assigned ? s.closedFromAssigned / s.assigned : 0;
   const C = 2 * Math.PI * 68;
@@ -125,7 +137,8 @@ export function OverviewMoiView({ onNavigate, userName }: { onNavigate: (view: s
                     aria-label={`${h.hour}h: hôm nay ${h.today} đơn, thường ngày ${h.usual ?? '—'} đơn`}>
                     <span className="om-tr">
                       {h.usual !== null && h.hour >= hourNow && <i className="e" style={{ height: `${h.usual / maxBar * 100}%` }} />}
-                      {h.today > 0 && <i className="f" style={{ height: `${h.today / maxBar * 100}%` }} />}
+                      {/* Giờ đã qua: chỉ hôm nay; giờ hiện tại: chồng hai màu; giờ chưa tới: chỉ thường ngày. */}
+                      {h.hour <= hourNow && h.today > 0 && <i className="f" style={{ height: `${h.today / maxBar * 100}%` }} />}
                     </span>
                     <span className="lb">{h.hour % 3 === 0 || h.hour === 20 ? `${h.hour}h` : ''}</span>
                   </button>
@@ -138,15 +151,14 @@ export function OverviewMoiView({ onNavigate, userName }: { onNavigate: (view: s
               <div className="om-mute mt-1">{vi.format(s.assigned)} số chia cho Sale trong kỳ</div>
               <div className="om-dwrap">
                 <svg width="160" height="160" viewBox="0 0 160 160" aria-hidden="true">
-                  <circle cx="80" cy="80" r="68" stroke="var(--surface-2)" />
+                  <circle cx="80" cy="80" r="68" stroke="var(--surface-3)" />
                   <circle cx="80" cy="80" r="68" stroke="var(--primary)" style={{ strokeDasharray: `${Math.max(0, closedShare * C - 2)} ${C}` }} />
-                  <circle cx="80" cy="80" r="68" stroke="var(--t-teal)" style={{ strokeDasharray: `${Math.max(0, (1 - closedShare) * C - 2)} ${C}`, strokeDashoffset: -closedShare * C }} />
                 </svg>
                 <div className="om-dmid"><span><b>{s.assigned ? Math.round(closedShare * 100) : 0}%</b><span className="om-mute">đã chốt</span></span></div>
               </div>
               <div className="om-li"><i style={{ background: 'var(--primary)' }} /><span>Đã chốt</span><b>{vi.format(s.closedFromAssigned)}</b><em>{p1(s.dataRate)}</em></div>
-              <div className="om-li"><i style={{ background: 'var(--t-teal)' }} /><span>Chưa chốt</span><b>{vi.format(open)}</b><em>{s.assigned ? p1(open / s.assigned * 100) : '—'}</em></div>
-              <div className="om-ins">Web chưa tách "đang chăm" và "không chốt" nên chỉ chia hai phần.</div>
+              <div className="om-li"><i style={{ background: 'var(--surface-3)' }} /><span>Chưa chốt</span><b>{vi.format(open)}</b><em>{s.assigned ? p1(open / s.assigned * 100) : '—'}</em></div>
+              <div className="om-ins">Web chưa tách “đang chăm” và “không chốt” nên chỉ chia hai phần.</div>
             </section>
           </div>
 
@@ -157,7 +169,7 @@ export function OverviewMoiView({ onNavigate, userName }: { onNavigate: (view: s
               {data.heat.map((w) => (
                 <div key={w.label} className="om-hr"><span>{w.label}</span>
                   {w.cells.map((v, i) => (
-                    <button key={i} type="button" style={{ opacity: 0.08 + 0.92 * v / heatMax }} className={heatPick?.d === w.label && heatPick.h === data.heatHours[i] ? 'on' : ''}
+                    <button key={i} type="button" style={{ opacity: heatOpacity(v) }} className={heatPick?.d === w.label && heatPick.h === data.heatHours[i] ? 'on' : ''}
                       onMouseEnter={() => setHeatPick({ d: w.label, h: data.heatHours[i], v })} onClick={() => setHeatPick({ d: w.label, h: data.heatHours[i], v })}
                       aria-label={`${w.label} ${data.heatHours[i]} giờ: ${v} số`} />
                   ))}

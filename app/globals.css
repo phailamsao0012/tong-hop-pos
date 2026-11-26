@@ -824,7 +824,7 @@ table th { white-space: nowrap; font-weight: 600; font-size: 11.5px; letter-spac
   .nav-moi-row::-webkit-scrollbar { display: none; }
   .nav-moi-sub { padding-top: 0; }
   .nav-moi-brand { display: flex; align-items: center; gap: 8px; margin-right: 10px; flex: none; font-weight: 700; font-size: 15px; letter-spacing: .03em; color: var(--ink); }
-  .nav-moi-brand img { width: 28px; height: 28px; border-radius: 8px; }
+  .nav-moi-logo { width: 28px; height: 28px; border-radius: 8px; background: url(/logo.svg) center / cover no-repeat; flex: none; }
   .nav-moi-pill { display: inline-flex; align-items: center; gap: 7px; flex: none; white-space: nowrap; padding: 7px 13px; border-radius: 999px; color: var(--ink-2); font-weight: 500; font-size: 13.5px; transition: background var(--dur), color var(--dur); }
   .nav-moi-pill:hover { background: var(--surface-2); }
   .nav-moi-pill.is-on { background: var(--surface-3); color: var(--ink); }
@@ -834,9 +834,11 @@ table th { white-space: nowrap; font-weight: 600; font-size: 11.5px; letter-spac
   .nav-moi-cnt.hot { background: var(--bad); color: #fff; }
 
   .om-page { font-variant-numeric: tabular-nums; }
+  /* Nhãn "Bản demo" ở giao diện mới: góc dưới trái, nhỏ, không đè khối số. */
+  .demo-ribbon.moi { left: 12px; right: auto; transform: none; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); font-size: 10.5px; padding: 3px 10px; }
   .om-eyebrow { color: var(--ink-3); font-size: 12px; letter-spacing: .05em; text-transform: uppercase; }
   .om-h1 { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin: 2px 0 16px; font-size: 25px; font-weight: 700; letter-spacing: -.01em; color: var(--ink); }
-  .om-seg { display: flex; padding: 3px; border-radius: 999px; background: var(--surface-2); font-size: 12.5px; }
+  .om-seg { display: flex; padding: 3px; border: 0; margin: 0; min-width: 0; border-radius: 999px; background: var(--surface-2); font-size: 12.5px; }
   .om-seg button { padding: 5px 12px; border-radius: 999px; color: var(--ink-3); font-weight: 500; }
   .om-seg button.on { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.1); }
   .om-body { display: grid; grid-template-columns: minmax(0,1fr) 320px; gap: 20px; }
@@ -884,11 +886,11 @@ table th { white-space: nowrap; font-weight: 600; font-size: 11.5px; letter-spac
   .om-ct { font-size: 16px; font-weight: 600; color: var(--ink); }
   .om-bars { display: flex; gap: clamp(4px,1.2vw,12px); height: 220px; margin-top: 16px; }
   .om-bc { flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 0; }
-  .om-tr { flex: 1; width: 100%; max-width: 23px; background: var(--surface-2); border-radius: 12px; position: relative; transition: background var(--dur); }
-  .om-bc:hover .om-tr, .om-bc.on .om-tr { background: var(--surface-3); }
+  .om-tr { flex: 1; width: 100%; max-width: 23px; background: color-mix(in srgb, var(--ink) 6%, transparent); border-radius: 12px; position: relative; transition: background var(--dur); }
+  .om-bc:hover .om-tr, .om-bc.on .om-tr { background: color-mix(in srgb, var(--ink) 11%, transparent); }
   .om-tr i { position: absolute; bottom: 0; left: 0; right: 0; border-radius: 12px; transition: height .8s cubic-bezier(.2,.8,.2,1); }
   .om-tr .f { background: var(--primary); }
-  .om-tr .e { background: var(--t-teal); opacity: .55; }
+  .om-tr .e { background: var(--t-teal); }
   .om-bc .lb { height: 22px; padding-top: 7px; font-size: 11px; color: var(--ink-3); white-space: nowrap; }
   .om-bc.now .lb { color: var(--ink); font-weight: 700; }
   .om-dwrap { position: relative; width: 160px; height: 160px; margin: 14px auto 16px; }

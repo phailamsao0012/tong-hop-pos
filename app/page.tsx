@@ -23,7 +23,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
   const view = sp.view;
   // Cờ giao diện mới (plan 2026-11-26-tong-quan-kieu-moi): chỉ bản demo bật THP_UI_MOI=1; web thật không đặt nên y như cũ.
   const dashboard = <Dashboard user={user} initialView={typeof view === 'string' ? view : undefined} demo={demo} uiMoi={env.THP_UI_MOI === '1'} />;
-  if (demo) return <>{dashboard}<div className="demo-ribbon" role="note">Bản demo · người và số liệu ảo</div></>;
+  if (demo) return <>{dashboard}<div className={`demo-ribbon${env.THP_UI_MOI === '1' ? ' moi' : ''}`} role="note">Bản demo · người và số liệu ảo</div></>;
   // Bản PC chạy song song (04/11/2026): nhãn nhỏ để không nhầm với web chính.
   return isReadOnly() ? <>{dashboard}<div className="demo-ribbon" role="note">Bản PC · chỉ xem, sửa ở tonghopposmegatech.io.vn</div></> : dashboard;
 }

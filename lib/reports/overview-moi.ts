@@ -55,6 +55,8 @@ export async function overviewMoi(o: OverviewMoiOpts) {
 
   return {
     period: { start: o.start, end: o.end, today: o.today },
+    /** Giờ máy chủ lúc tính: trang dùng cho lời chào, ngày, giờ hiện tại (không đọc đồng hồ khi vẽ). */
+    now: new Date().toISOString(),
     brief: briefSentence({ net: cur.closedNet, prevNet: prev ? prev.closedNet : null, needs: needs.length, closed: cur.closedOrders }),
     needs,
     revenue: {

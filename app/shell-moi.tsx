@@ -24,7 +24,7 @@ export function ShellMoiNav({ home, groups, view, activeDept, onSelect, counts }
   return (
     <div className="nav-moi" data-no-st>
       <nav className="nav-moi-row" aria-label="Menu chính">
-        <span className="nav-moi-brand"><img src="/logo.svg" alt="" width={28} height={28} />MEGATECH</span>
+        <span className="nav-moi-brand"><span className="nav-moi-logo" aria-hidden="true" />MEGATECH</span>
         {home && (
           <button type="button" className={`nav-moi-pill ${view === home.id ? 'is-on' : ''}`} aria-current={view === home.id ? 'page' : undefined} onClick={() => onSelect(home.id)}>
             <home.icon size={15} aria-hidden="true" />{home.label}
