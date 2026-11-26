@@ -1,3 +1,4 @@
+import { ensureSlimSchema, slimStatements, slimWriteOn } from '@/lib/reports/mkt-slim';
 import { observeD1 } from '@/lib/ops/d1-usage';
 import { marketerStatements } from '@/lib/teams/marketer-ids';
 import { markDataChanged, trackDataWrites } from '@/lib/ops/data-version';
@@ -181,6 +182,9 @@ export function orderStatements(db: D1Database, posId: string, shopId: string, o
     previous.delete(item.id);
   }
   for (const id of previous.keys()) statements.push(db.prepare('DELETE FROM raw_pos_order_items WHERE id=?').bind(id));
+  // Bảng gọn Marketing (lib/reports/mkt-slim.ts, cờ THP_MKT_SLIM_WRITE=1 hoặc demo): chỉ khi đơn hoặc món có ghi, ngay sau câu ghi gốc
+  // trong cùng lô; chép từ dòng gốc vừa ghi nên khớp cả cột giữ giá trị cũ. Đơn không đổi thì không ghi thêm dòng nào.
+  if (statements.length && slimWriteOn()) statements.push(...slimStatements(db, String(row.id)));
   if (includeNotes) statements.push(...noteStatements(db, posId, str(o.customer?.id) ?? str(o.customer?.customer_id), normalizePhone(str(o.bill_phone_number) ?? '') || null, o.customer?.notes ?? null, now, 'order'));
   statements.push(...marketerStatements(db, row.marketer_id, stored?.row.marketer_id, now));
   if (pending) {
@@ -279,6 +283,7 @@ export function parseRecentCursor(raw: string | null | undefined): RecentCursor 
  *  - Đọc hết trang: mốc = giờ chạy (độ trễ 0). last_sync_at vẫn là giờ chạy xong (Cập nhật lúc, cảnh báo, bộ nhớ đệm). */
 export async function syncRecent(db: D1Database, shop: ShopRow, apiKey: string, maxPages = 5, deadline = Number.POSITIVE_INFINITY) {
   const shopId = shop.shop_id!;
+  if (slimWriteOn()) await ensureSlimSchema(db);
   const runMs = Date.now();
   const now = new Date(runMs).toISOString();
   const endDateTime = String(Math.floor(runMs / 1000) + 3600);
@@ -425,6 +430,7 @@ export async function startBackfillCursor(shopId: string, apiKey: string): Promi
 /** Lấy lịch sử theo từng tháng; mỗi lần gọi xử lý tối đa `maxPages` trang và lưu tiến độ. */
 export async function syncBackfill(db: D1Database, shop: ShopRow, apiKey: string, cursor: BackfillCursor, maxPages = 4) {
   const shopId = shop.shop_id!;
+  if (slimWriteOn()) await ensureSlimSchema(db);
   const pageSize = cursor.pageSize ?? PAGE_SIZE;
   const now = new Date().toISOString();
   const params = {

@@ -1,6 +1,7 @@
 // Chế độ demo (04/10/2026, anh Vũ): cùng mã nguồn với web thật, chạy ở một Worker riêng (DEMO_MODE=1) với kho dữ liệu D1 riêng.
 // Pancake POS và web nhân sự được thay bằng bản giả (lib/demo/world.ts) nên đồng bộ, số liệu ngày, KPI, báo cáo chạy đúng công thức thật
 // trên người và số ảo. Không có đường nào từ bản demo chạm tới dữ liệu thật: khác Worker, khác D1, không có khóa Pancake, không nối web nhân sự.
+import { clearSlimPos } from '@/lib/reports/mkt-slim';
 import { env } from 'cloudflare:workers';
 import { hashPassword } from '@/lib/auth/auth';
 import { ALL_VIEWS } from '@/lib/auth/access';
@@ -117,6 +118,7 @@ async function resetWorldIfChanged() {
   if (cur?.value === WORLD_VERSION) return;
   // Xóa theo từng POS cho nhẹ (D1 dễ quá thời gian với một câu xóa lớn).
   for (const p of POS) {
+    await clearSlimPos(db, p.id);
     await db.prepare('DELETE FROM raw_pos_order_items WHERE pos_id=?').bind(p.id).run();
     await db.prepare('DELETE FROM raw_pos_orders WHERE pos_id=?').bind(p.id).run();
     await db.batch(['stats_daily', 'stats_daily_product', 'stats_daily_seller_product', 'stats_daily_mkt', 'customer_stats', 'customer_seller_stats'].map((t) => db.prepare(`DELETE FROM ${t} WHERE pos_id=?`).bind(p.id)));
