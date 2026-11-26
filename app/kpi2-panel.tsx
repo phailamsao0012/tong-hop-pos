@@ -173,7 +173,7 @@ export function Kpi2Panel({ seen, dept, teams, rows, period, end, editMonth, own
               const dirty = [teamKey, ...t.members.map((m) => `employee:${m.id}`)].some((k) => draft[k]);
               const anyEdit = canEdit(teamKey) || t.members.some((m) => canEdit(`employee:${m.id}`));
               return (
-                <details key={t.id} open={i === 0} className="rounded-xl border border-line bg-surface p-3">
+                <details key={t.id} open={i === 0} data-ui="tile" className="rounded-xl border border-line bg-surface p-3">
                   <summary className="flex cursor-pointer flex-wrap items-baseline justify-between gap-x-2 text-sm font-semibold">
                     <span>{t.name}</span>{t.leader && <span className="text-[11px] font-normal text-ink-3">Leader {t.leader}</span>}
                   </summary>

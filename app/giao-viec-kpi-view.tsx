@@ -81,7 +81,7 @@ function KpiLine({ label, value, goal, p, pace, onOpen }: { label: string; value
 
 function TeamCard({ team, actual, goal, sale, pace, onOpen, aovNote, aovHidden }: { team: Team; actual: TeamActual | null; goal: PeriodKpi; sale: boolean; pace: number; onOpen?: () => void; aovNote?: string; aovHidden?: boolean }) {
   return (
-    <article className="rounded-xl border border-line bg-surface p-3">
+    <article data-ui="tile" className="rounded-xl border border-line bg-surface p-3">
       <header className="mb-2 flex flex-wrap items-baseline justify-between gap-x-2">
         <h4 className="text-sm font-semibold text-ink">{team.name}</h4>
         {team.leader && <span className="text-[11px] text-ink-3">Leader {team.leader}</span>}
@@ -229,7 +229,7 @@ export function GiaoViecKpiView({ owner, onOpen }: { owner: boolean; onOpen?: (v
   return (
     <section className="min-w-0 space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <fieldset className="flex flex-wrap gap-1.5">
+        <fieldset data-ui="pill-group" className="flex flex-wrap gap-1.5">
           <legend className="sr-only">Kỳ KPI</legend>
           {QUICK_PERIODS.map((q) => (
             <button key={q.value} type="button" aria-pressed={quick === q.value} className={`btn sm tap ${quick === q.value ? 'primary' : ''}`}
@@ -306,7 +306,7 @@ export function GiaoViecKpiView({ owner, onOpen }: { owner: boolean; onOpen?: (v
         return (
           <ChartCard key={`edit-${d.dept}`} icon={Pencil} title={`Đặt KPI team ${label} tháng ${mmyyyy(editMonth)}`} subtitle="KPI cả team; leader tự chia cho từng người"
             action={months.length > 1 ? (
-              <fieldset className="flex flex-wrap gap-1.5">
+              <fieldset data-ui="pill-group" className="flex flex-wrap gap-1.5">
                 <legend className="sr-only">Tháng đặt KPI</legend>
                 {months.map((m) => <button key={m} type="button" aria-pressed={m === editMonth} className={`btn sm tap ${m === editMonth ? 'primary' : ''}`} onClick={() => setPickMonth(m)}>{mmyyyy(m)}</button>)}
               </fieldset>

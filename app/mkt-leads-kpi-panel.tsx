@@ -72,7 +72,7 @@ export function MktLeadsKpiPanel({ month, owner }: { month: string; owner: boole
     <ChartCard icon={Megaphone} title={`KPI số đưa về Marketing tháng ${mmyyyy(month)}`}
       subtitle={`Đặt theo ngày thì tự nhân ${days} ngày của tháng. Bộ phận để trống thì cộng các team; team để trống thì cộng từng người.`}
       action={(
-        <fieldset className="flex gap-1.5">
+        <fieldset data-ui="pill-group" className="flex gap-1.5">
           <legend className="sr-only">Nhập theo</legend>
           <button type="button" aria-pressed={perDay} className={`btn sm tap ${perDay ? 'primary' : ''}`} onClick={() => { setPerDay(true); setDraft({}); }}>Theo ngày</button>
           <button type="button" aria-pressed={!perDay} className={`btn sm tap ${!perDay ? 'primary' : ''}`} onClick={() => { setPerDay(false); setDraft({}); }}>Theo tháng</button>
@@ -84,7 +84,7 @@ export function MktLeadsKpiPanel({ month, owner }: { month: string; owner: boole
           <div className="space-y-3">
             {row('dept:mkt', 'Cả bộ phận Marketing', true)}
             {teams.teams.map((t) => (
-              <details key={t.id} className="rounded-xl border border-line bg-surface p-3">
+              <details key={t.id} data-ui="tile" className="rounded-xl border border-line bg-surface p-3">
                 <summary className="cursor-pointer text-sm font-semibold">{t.name} <span className="text-[11px] font-normal text-ink-3">· {t.memberIds.length} người</span></summary>
                 <div className="mt-2 space-y-1.5">
                   {row(`team:${t.id}`, `Cả team ${t.name}`, true)}
