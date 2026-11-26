@@ -31,7 +31,7 @@ export function PancakeAssignCard() {
       {data && data.shops.length > 0 && (
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {data.shops.map((s) => (
-            <div key={s.posId} className="rounded-xl border border-line p-3.5 text-sm">
+            <div key={s.posId} data-ui="round" className="rounded-xl border border-line p-3.5 text-sm">
               <div className="flex items-center justify-between gap-2">
                 <div className="truncate font-semibold">{posName(s.posId)}</div>
                 <StatusChip tone={s.shopStatus === 200 ? 'green' : 'red'}>{s.shopStatus === 200 ? 'Đọc được' : `Lỗi ${s.shopStatus || 'mạng'}`}</StatusChip>

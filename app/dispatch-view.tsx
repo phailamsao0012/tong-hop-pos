@@ -88,12 +88,12 @@ export function DispatchView() {
         {data && (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
             {data.pos.map((p) => (
-              <div key={p.id} className="rounded-xl border border-line p-3.5">
+              <div key={p.id} data-ui="round" className="rounded-xl border border-line p-3.5">
                 <div className="flex items-center justify-between gap-2">
                   <div className="truncate font-semibold">{p.name}</div>
                   <StatusChip tone={p.mode === 'live' ? 'green' : p.mode === 'dry' ? 'blue' : 'gray'}>{MODE_LABELS[p.mode]}</StatusChip>
                 </div>
-                <div className="mt-2.5 inline-flex rounded-lg border border-line p-0.5" role="radiogroup" aria-label={`Chế độ ${p.name}`}>
+                <div data-ui="round-pill" className="mt-2.5 inline-flex rounded-lg border border-line p-0.5" role="radiogroup" aria-label={`Chế độ ${p.name}`}>
                   {MODES.map((m) => (
                     <button key={m} type="button" role="radio" aria-checked={p.mode === m} disabled={!p.linked || busy === `pos:${p.id}`}
                       onClick={() => setMode(p, m)}
@@ -141,7 +141,7 @@ export function DispatchView() {
                 </div>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
                   {list.map((s) => (
-                    <div key={s.id} className={`flex items-center gap-3 rounded-lg border p-2.5 transition-colors duration-[var(--dur)] ${s.on ? 'border-green-500/60 bg-green-500/5' : 'border-line'}`}>
+                    <div key={s.id} data-ui="round" className={`flex items-center gap-3 rounded-lg border p-2.5 transition-colors duration-[var(--dur)] ${s.on ? 'border-green-500/60 bg-green-500/5' : 'border-line'}`}>
                       <Switch checked={s.on} disabled={busy === `staff:${s.id}`} aria-label={`Nhận số: ${s.name}`}
                         onCheckedChange={(on: boolean) => void act(`staff:${s.id}`, { action: 'staff', userId: s.id, on })} />
                       <div className="min-w-0 flex-1">
