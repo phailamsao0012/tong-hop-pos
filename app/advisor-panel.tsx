@@ -41,7 +41,7 @@ export function AdvisorPanel({ dept }: { dept?: TrendDept }) {
     {content}<p className="text-xs text-ink-3">{label(note)}</p>
     <details className="text-xs text-ink-3"><summary className="cursor-pointer text-primary">Cách tính</summary><div className="mt-2 space-y-1">{explanation}</div></details>
   </div>;
-  return <section ref={ref} className="rounded-2xl border border-line bg-white p-4 space-y-3">
+  return <section ref={ref} data-ui="advisor" className="rounded-2xl border border-line bg-white p-4 space-y-3">
     {/* Tiêu đề và kỳ chung một dòng (anh Vũ 21/10/2026). */}
     <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
       <h2 className="font-semibold text-ink">Dự đoán & khuyến nghị</h2>

@@ -823,7 +823,7 @@ function Surface({
     <section className={`card min-w-0 ${className}`}>
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-5 py-4 max-sm:px-4">
         <div className="min-w-0">
-          <h2 className="display text-xl font-semibold tracking-[-.02em] text-ink">{title}</h2>
+          <h2 data-ui="surface-title" className="display text-xl font-semibold tracking-[-.02em] text-ink">{title}</h2>
           {description && (
             <p className="mt-0.5 text-[12.5px] text-ink-3">{description}</p>
           )}

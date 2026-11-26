@@ -271,7 +271,7 @@ export function SectionTitle({ icon: Icon, children, tag, className = '' }: { ic
   return (
     <div className={`mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 ${className}`}>
       {Icon && <Icon size={16} className="text-ink-3" aria-hidden="true" />}
-      <h2 className="display text-xl font-semibold tracking-[-.02em] text-ink">{children}</h2>
+      <h2 data-ui="section-title" className="display text-xl font-semibold tracking-[-.02em] text-ink">{children}</h2>
       {tag && <span className="num rounded-[4px] border border-line-2 px-1.5 py-px text-[10.5px] font-semibold text-ink-3">{tag}</span>}
     </div>
   );
@@ -706,7 +706,7 @@ export function SkeletonKpis({ count = 4, className = '', thinking = true }: { c
 }
 export function SkeletonTable({ rows = 6, cols = 5, className = '' }: { rows?: number; cols?: number; className?: string }) {
   return (
-    <table className={`w-full text-sm ${className}`} aria-busy="true" aria-label="Đang tải bảng">
+    <table data-ui="skeleton-table" className={`w-full text-sm ${className}`} aria-busy="true" aria-label="Đang tải bảng">
       <thead><tr>{Array.from({ length: cols }, (_, i) => <th key={i} className="px-2 py-2"><Skeleton className="h-3 w-16" /></th>)}</tr></thead>
       <tbody>{Array.from({ length: rows }, (_, r) => <tr key={r} className="border-t border-line">{Array.from({ length: cols }, (_, c) => <td key={c} className="px-2 py-2.5"><Skeleton className="h-3.5" style={{ width: `${c === 0 ? 70 : 40 + ((r * 7 + c * 13) % 35)}%` }} /></td>)}</tr>)}</tbody>
     </table>

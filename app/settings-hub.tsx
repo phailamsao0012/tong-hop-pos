@@ -78,7 +78,7 @@ export function SettingsSectionHeader({ section, onBack, pill, actions }: { sect
         <button type="button" onClick={onBack} className="inline-flex items-center gap-0.5 rounded-lg py-1 pr-2 text-[13px] text-ink-2 hover:text-ink" aria-label="Về trang Cài đặt"><ChevronLeft size={18} />Cài đặt</button>
         <Badge icon={s.icon} tone={s.tone} big />
         <div className="min-w-0">
-          <h1 className="display text-xl font-semibold tracking-[-.02em] text-ink">{s.name}</h1>
+          <h1 data-ui="settings-title" className="display text-xl font-semibold tracking-[-.02em] text-ink">{s.name}</h1>
           {pill ? <StatusPill pill={pill} /> : <p className="text-[12.5px] text-ink-3">{s.sub}</p>}
         </div>
       </div>

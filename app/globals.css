@@ -1043,3 +1043,15 @@ table th { white-space: nowrap; font-weight: 600; font-size: 11.5px; letter-spac
 .ui-moi .recharts-cartesian-axis-line, .ui-moi .recharts-cartesian-axis-tick-line { stroke: var(--line); }
 .ui-moi .recharts-tooltip-wrapper > div, .ui-moi [data-slot="chart"] .recharts-tooltip-wrapper > * { border-radius: 12px; border-color: var(--line); box-shadow: 0 8px 24px rgba(0,0,0,.10); }
 .ui-moi .recharts-legend-item-text { color: var(--ink-2) !important; }
+
+/* (6) Khối nhỏ dùng chung (app/ui-kit.tsx, dashboard.tsx Surface, settings-hub, advisor-panel): móc bằng data-ui (không đổi gì khi cờ tắt).
+   StatusChip / DeltaPill vốn đã là viên thuốc (rounded-full) nên giữ nguyên. */
+.ui-moi .ministat { border-radius: 14px; background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+.ui-moi .ministat:hover, .ui-moi .ministat:focus-visible { background: var(--surface-2); }
+.ui-moi .ministat.is-static:hover { background: var(--surface); }
+.ui-moi .ministat > span:first-child { background: var(--surface-2) !important; color: var(--ink-3) !important; border-radius: 10px; }
+.ui-moi .ministat.is-active { box-shadow: inset 0 0 0 1.5px var(--ink); }
+.ui-moi [data-ui="section-title"], .ui-moi [data-ui="surface-title"], .ui-moi [data-ui="settings-title"] { font-size: 19px; font-weight: 700; letter-spacing: -.01em; }
+.ui-moi [data-ui="skeleton-table"] th { background: transparent; }
+.ui-moi [data-ui="skeleton-table"] tr { border-color: var(--line); }
+.ui-moi [data-ui="advisor"] { background: var(--surface); border-color: var(--line); border-radius: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
