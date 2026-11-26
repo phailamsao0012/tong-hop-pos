@@ -1079,3 +1079,8 @@ table th { white-space: nowrap; font-weight: 600; font-size: 11.5px; letter-spac
 .ui-moi [data-ui="tile-pick"][aria-pressed="true"] { border-color: transparent; }
 /* Ô phân khúc Sale (sale-segment-block): viền trên màu phân khúc là dữ liệu nhận diện, giữ; bo trên theo ô mới. */
 .ui-moi [data-ui="tile-in"][style*="border-top"] { border-top-left-radius: 16px; border-top-right-radius: 16px; }
+/* Hồ sơ nhân sự: tiêu đề trang như .ph-title, danh sách bo 16px, ô tìm viên thuốc, khối Theo kỳ là thẻ thường (bỏ viền xanh dày). */
+.ui-moi [data-ui="page-title"] { font-size: 23px; font-weight: 700; letter-spacing: -.01em; }
+.ui-moi [data-ui="list"] { border-radius: 16px; border-color: var(--line); background: var(--surface); overflow: hidden; }
+.ui-moi [data-ui="search"] { border-radius: 999px; border-color: var(--line); }
+.ui-moi [data-ui="period-card"] { border-width: 1px; border-color: var(--line); border-radius: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }

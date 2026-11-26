@@ -29,7 +29,7 @@ const daysSince = (d: string | null, today: string) => (d ? Math.round((Date.par
 
 function Fact({ icon: Icon, label, value, note }: { icon: typeof CalendarDays; label: string; value: string; note?: string }) {
   return (
-    <div className="min-w-0 rounded-xl border border-line bg-surface p-3">
+    <div data-ui="tile" className="min-w-0 rounded-xl border border-line bg-surface p-3">
       <p className="flex items-center gap-1.5 text-[11px] text-ink-3"><Icon size={13} aria-hidden="true" />{label}</p>
       <p className="num mt-1 text-[15px] font-semibold">{value}</p>
       {note && <p className="mt-0.5 text-[11px] text-ink-3">{note}</p>}
@@ -75,7 +75,7 @@ function MonthCharts({ months, mkt }: { months: MonthRow[]; mkt: boolean }) {
   const data = months.map((m) => ({ key: mLabel(m.month), net: m.net, normal: m.rank !== null && m.rank <= 3 ? 0 : m.net, topNet: m.rank !== null && m.rank <= 3 ? m.net : 0, orders: m.closedOrders, rate: m.rate === null ? null : Math.round(m.rate * 10) / 10, top: m.rank !== null && m.rank <= 3 }));
   return (
     <div className="grid gap-3 lg:grid-cols-2">
-      <section className="min-w-0 rounded-xl border border-line p-3">
+      <section data-ui="tile" className="min-w-0 rounded-xl border border-line p-3">
         <h4 className="text-[13px] font-semibold">Doanh số từng tháng</h4>
         <p className="text-[11px] text-ink-3">Cột cam = tháng lọt top 3 bộ phận</p>
         <ChartContainer config={{ net: { label: 'Doanh số', color: 'var(--primary)' } }} className="mt-2 aspect-auto h-52 w-full">
@@ -88,7 +88,7 @@ function MonthCharts({ months, mkt }: { months: MonthRow[]; mkt: boolean }) {
           </BarChart>
         </ChartContainer>
       </section>
-      <section className="min-w-0 rounded-xl border border-line p-3">
+      <section data-ui="tile" className="min-w-0 rounded-xl border border-line p-3">
         <h4 className="text-[13px] font-semibold">{mkt ? 'Đơn xác nhận từng tháng' : 'Tỷ lệ chốt từng tháng'}</h4>
         <p className="text-[11px] text-ink-3">{mkt ? 'Đơn do marketer mang về đã xác nhận' : 'Vạch ngang = mức xanh 42%'}</p>
         <ChartContainer config={{ rate: { label: 'Tỷ lệ chốt', color: 'var(--primary)' }, orders: { label: 'Đơn', color: 'var(--primary)' } }} className="mt-2 aspect-auto h-52 w-full">
@@ -151,7 +151,7 @@ export function StaffProfileBody({ data, today, onPick }: { data: StaffProfile; 
       </section>
 
       {notes.length > 0 && (
-        <section className="rounded-xl border border-line bg-surface p-3">
+        <section data-ui="tile" className="rounded-xl border border-line bg-surface p-3">
           <h4 className="mb-1.5 text-[13px] font-semibold">Phân tích nhanh</h4>
           <ul className="list-disc space-y-1 pl-5 text-[13px]">{notes.map((n) => <li key={n}>{n}</li>)}</ul>
         </section>
@@ -171,7 +171,7 @@ export function StaffProfileBody({ data, today, onPick }: { data: StaffProfile; 
       {data.months.length > 0 && (
         <section className="min-w-0">
           <h4 className="mb-2 text-[13px] font-semibold">Từng tháng</h4>
-          <ul className="divide-y divide-line rounded-xl border border-line">
+          <ul data-ui="list" className="divide-y divide-line rounded-xl border border-line">
             {[...data.months].reverse().map((m) => (
               <li key={m.month} className="grid grid-cols-[3.2rem_minmax(0,1fr)_auto] items-center gap-2 px-3 py-2 text-[13px]">
                 <span className="num font-semibold">{mLabel(m.month)}</span>
@@ -256,12 +256,12 @@ export function StaffProfilePage({ onBack }: { onBack?: () => void }) {
       <label className="relative block">
         <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-3" aria-hidden="true" />
         <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm tên…" aria-label="Tìm tên nhân sự"
-          className="h-9 w-full rounded-lg border border-line bg-surface pl-8 pr-2 text-[13.5px] outline-none focus-visible:border-primary" />
+          data-ui="search" className="h-9 w-full rounded-lg border border-line bg-surface pl-8 pr-2 text-[13.5px] outline-none focus-visible:border-primary" />
       </label>
       <SegmentedControl<ProfileDeptFilter> ariaLabel="Lọc bộ phận" size="sm" value={dept} onChange={setDept}
         options={[{ value: 'all', label: 'Tất cả' }, { value: 'sale', label: 'Sale' }, { value: 'cskh', label: 'CSKH' }, { value: 'mkt', label: 'MKT' }]} />
       {listError ? <p role="alert" className="text-[13px] text-bad">{listError}</p> : !people ? <p className="text-[13px] text-ink-3">Đang tải danh sách…</p> : (
-        <ul className="min-h-0 flex-1 overflow-y-auto rounded-xl border border-line">
+        <ul data-ui="list" className="min-h-0 flex-1 overflow-y-auto rounded-xl border border-line">
           {shown.length ? shown.map((p) => {
             const s = status[p.id];
             return (
@@ -284,13 +284,13 @@ export function StaffProfilePage({ onBack }: { onBack?: () => void }) {
     <div className="flex min-w-0 flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
         {onBack && <button type="button" onClick={onBack} className="tap inline-flex items-center gap-1 rounded-md px-2 py-1 text-[13px] text-ink-2 hover:bg-tint-2 hover:text-primary"><ArrowLeft size={15} />Quay lại</button>}
-        <h2 className="text-lg font-semibold text-ink">Hồ sơ nhân sự</h2>
+        <h2 data-ui="page-title" className="text-lg font-semibold text-ink">Hồ sơ nhân sự</h2>
         {id && !showList && <button type="button" onClick={() => setShowList(true)} className="tap ml-auto inline-flex items-center gap-1 rounded-md border border-line px-2.5 py-1 text-[13px] lg:hidden"><Users size={14} />Danh sách</button>}
       </div>
       <div className="grid min-w-0 gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
         {list}
         <section aria-label="Hồ sơ" aria-live="polite" className={`min-w-0 ${id && !showList ? '' : 'max-lg:hidden'}`}>
-          {!id ? <p className="rounded-xl border border-dashed border-line p-6 text-center text-[13.5px] text-ink-3">Chọn một người ở danh sách để xem hồ sơ.</p>
+          {!id ? <p data-ui="box" className="rounded-xl border border-dashed border-line p-6 text-center text-[13.5px] text-ink-3">Chọn một người ở danh sách để xem hồ sơ.</p>
             : <>
               <h3 className="mb-2 text-xl font-semibold text-ink">{name ?? 'Nhân sự'}</h3>
               {state?.id === id && state?.error ? <p role="alert" className="text-bad">{state.error}</p>

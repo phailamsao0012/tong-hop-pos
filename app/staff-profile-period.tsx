@@ -48,7 +48,7 @@ export function ProfilePeriod({ id, posSel }: { id: string; posSel: string[] }) 
   const days = data?.days.map((d) => ({ key: dm(d.day), net: d.net, orders: d.orders })) ?? [];
 
   return (
-    <section aria-label="Số theo kỳ" className="rounded-2xl border-2 border-primary/50 bg-surface p-3 sm:p-4">
+    <section aria-label="Số theo kỳ" data-ui="period-card" className="rounded-2xl border-2 border-primary/50 bg-surface p-3 sm:p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-[15px] font-semibold">Theo kỳ <span className="text-[12px] font-normal text-ink-3">{dm(range.start)}{range.end !== range.start ? `–${dm(range.end)}` : ''}{data ? ` · so ${dm(data.previous.start)}–${dm(data.previous.end)}` : ''}</span></h3>
         <div className="max-w-full overflow-x-auto"><SegmentedControl<Pick> size="sm" ariaLabel="Chọn kỳ" value={pick} onChange={setPick} options={PICKS} /></div>
@@ -73,7 +73,7 @@ export function ProfilePeriod({ id, posSel }: { id: string; posSel: string[] }) 
             ))}
           </div>
           <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-            <div className="min-w-0 rounded-xl border border-line p-3">
+            <div data-ui="tile-in" className="min-w-0 rounded-xl border border-line p-3">
               <h4 className="text-[13px] font-semibold">{data.dept === 'mkt' ? 'Doanh số MKT' : 'DT chốt'} từng ngày</h4>
               {days.some((d) => d.net) ? (
                 <ChartContainer config={{ net: { label: 'Doanh thu', color: 'var(--primary)' } }} className="mt-2 aspect-auto h-44 w-full">
@@ -86,7 +86,7 @@ export function ProfilePeriod({ id, posSel }: { id: string; posSel: string[] }) 
                 </ChartContainer>
               ) : <p className="mt-2 text-[12.5px] text-ink-3">Không có doanh thu trong kỳ.</p>}
             </div>
-            <div className="min-w-0 rounded-xl border border-line p-3">
+            <div data-ui="tile-in" className="min-w-0 rounded-xl border border-line p-3">
               <h4 className="text-[13px] font-semibold">Sản phẩm bán nhiều nhất</h4>
               {data.dept === 'mkt' ? <p className="mt-2 text-[12.5px] text-ink-3">Marketing không tính theo sản phẩm người bán.</p>
                 : data.products.length ? (
