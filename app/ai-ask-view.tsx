@@ -121,7 +121,7 @@ export function AiAskView({ onNavigate }: { onNavigate: (view: string) => void }
 
   return <div className="space-y-4">
     <header className="flex flex-wrap items-center justify-between gap-2">
-      <div className="flex min-w-0 items-center gap-2.5"><AiBot size={40} mood={busy ? 'thinking' : 'idle'} track label="Bot AI" /><div className="min-w-0"><h1 className="text-2xl font-semibold">Hỏi AI</h1><p className="text-xs text-ink-3">Code tính số · Claude giải thích · toàn công ty, mọi POS · MKT / CSKH / SALE</p></div></div>
+      <div className="flex min-w-0 items-center gap-2.5"><AiBot size={40} mood={busy ? 'thinking' : 'idle'} track label="Bot AI" /><div className="min-w-0"><h1 data-ui="page-title" className="text-2xl font-semibold">Hỏi AI</h1><p className="text-xs text-ink-3">Code tính số · Claude giải thích · toàn công ty, mọi POS · MKT / CSKH / SALE</p></div></div>
       {tab === 'chat' && <button type="button" className="btn" onClick={newThread} disabled={busy}><Plus size={16} aria-hidden="true" />Cuộc trò chuyện mới</button>}
     </header>
     <div className="flex gap-1 rounded-full bg-surface-2 p-1" role="tablist" aria-label="Hỏi AI">
