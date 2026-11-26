@@ -235,7 +235,7 @@ export function ForecastReview({ week, title = 'Hôm qua dự báo lệch bao nh
         <div className="min-w-0 rounded-xl bg-surface-2 p-2.5"><p className="text-[11px] text-ink-3">Lệch</p><p className={`num truncate text-base font-semibold ${tone}`}>{d.delta === null ? '—' : `${d.delta < 0 ? '▼' : d.delta > 0 ? '▲' : ''} ${ratio === null ? '' : pct(ratio)}`}</p><p className={`num truncate text-[11px] ${tone}`}>{d.delta === null ? 'chưa xác định' : signedShort(d.delta)}</p></div>
       </div>
       <div className="grid gap-5 lg:grid-cols-2"><Waterfall d={d} /><PeopleBars people={d.people ?? []} nameOf={nameOf} onOpen={() => onNavigate('compare')} /></div>
-      <div className="rounded-xl border border-line bg-tint-2 p-3"><p className="mb-1 text-xs font-semibold text-ink-2">Claude giải thích</p>
+      <div data-ui="round" className="rounded-xl border border-line bg-tint-2 p-3"><p className="mb-1 text-xs font-semibold text-ink-2">Claude giải thích</p>
         {r.status === 'batch' ? <p className="text-sm">Claude đang viết, có trước 7h sáng</p> : r.status === 'off' ? <p className="text-sm">Chưa gắn khoá Claude, biểu đồ số vẫn đúng{r.error ? ` · ${r.error}` : ''}</p> : r.status === 'error' ? <p role="alert" className="text-sm">{r.error || 'Không thể phân tích bằng Claude'}</p> : <AiMarkdown text={r.text ?? ''} />}</div>
       <details className="text-sm"><summary className="cursor-pointer text-xs text-ink-3">Xem bảng số</summary>
         <TableWrap className="mt-2"><table className="tbl w-full"><thead><tr><Th>Phần</Th><Th>Lệch</Th></tr></thead><tbody>{waterfallSteps(d).filter(s => s.kind === 'part').map(s => <tr key={s.label}><td>{s.label}</td><td data-label="Lệch">{signed(s.to - s.from)}</td></tr>)}</tbody></table></TableWrap>

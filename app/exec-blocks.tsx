@@ -139,7 +139,7 @@ export function Attention({ items, summary, onNavigate, ai, onRegenerate }: { it
       <div className="grid gap-3 lg:grid-cols-2">
         <div className="grid gap-3 self-start">
         {ai?.status === 'done' && ai.text && (
-          <div className="rounded-xl border border-[var(--ring)] bg-tint p-3 text-[12.5px] leading-relaxed text-ink">
+          <div data-ui="round" className="rounded-xl border border-[var(--ring)] bg-tint p-3 text-[12.5px] leading-relaxed text-ink">
             <p className="m-0 mb-1 flex items-center gap-1.5 font-semibold text-primary"><AiBot size={20} mood="happy" />AI tóm tắt sáng {ai.date.slice(8, 10)}/{ai.date.slice(5, 7)}
               {onRegenerate && <button type="button" className="ml-auto text-[11px] font-medium text-ink-3 hover:text-primary" onClick={onRegenerate}>Tạo lại</button>}</p>
             <div className="whitespace-pre-line">{ai.text}</div>
