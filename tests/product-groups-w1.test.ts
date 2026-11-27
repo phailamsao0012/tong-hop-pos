@@ -149,12 +149,15 @@ void test('W1: tổng chỉ cộng người có mã; các phép min/max cộng t
     ['a-closed', 'a', 1, inside, inside, 'warehouse', inside],
     ['a-later-1', 'a', 1, inside, later, 'warehouse', later],
     ['a-later-2', 'a', 1, inside, later, 'warehouse', later],
-    ['b-earlier-1', 'b', 17, earlier, inside, 'warehouse', inside],
-    ['b-earlier-2', 'b', 1, earlier, inside, 'b', inside],
-    ['b-back-self', 'b', 17, earlier, inside, 'b', inside],
-    ['b-back-unknown', 'b', 17, earlier, inside, null, inside],
-    ['b-pending', 'b', 17, earlier, inside, null, null],
-    ['b-unknown', 'b', 2, earlier, inside, null, null],
+    // Doanh thu theo ngày tạo đơn (27/11/2026): đơn chốt của kỳ = đơn TẠO trong kỳ đã chốt, nên các đơn kiểm phần kho XN của b
+    // nay tạo trong kỳ (giữ nguyên trạng thái / người XN); b-older tạo trước kỳ, chốt trong kỳ: không còn tính vào kỳ này.
+    ['b-earlier-1', 'b', 17, inside, inside, 'warehouse', inside],
+    ['b-earlier-2', 'b', 1, inside, inside, 'b', inside],
+    ['b-back-self', 'b', 17, inside, inside, 'b', inside],
+    ['b-back-unknown', 'b', 17, inside, inside, null, inside],
+    ['b-pending', 'b', 17, inside, inside, null, null],
+    ['b-unknown', 'b', 2, inside, inside, null, null],
+    ['b-older', 'b', 1, earlier, inside, 'warehouse', inside],
     ['b-open', 'b', 0, inside, null, null, null],
     ['no-id', null, 1, inside, inside, null, inside],
     ['empty-id', '', 17, inside, inside, null, null],
@@ -171,12 +174,14 @@ void test('W1: tổng chỉ cộng người có mã; các phép min/max cộng t
   for (const dim of ['tag', 'main', 'product']) {
     const r = await report({ dim });
     assert.equal(r.staffTotal.people, 2);
-    assert.equal(r.total.closed, 9);
-    assert.equal(r.staffTotal.closed, 7);
-    assert.equal(r.staffTotal.created, 4);
-    assert.equal(r.staffTotal.createdClosed, 3);
-    assert.equal(r.staffTotal.closedFromCreated, 1);
-    assert.equal(r.staffTotal.closedFromEarlier, 6);
+    // Ngày tạo: a 3 đơn chốt (a-later-* tạo trong kỳ nay tính), b 6 (b-older ngoài kỳ), không mã 2 → tổng 11, người có mã 9.
+    assert.equal(r.total.closed, 11);
+    assert.equal(r.staffTotal.closed, 9);
+    assert.equal(r.staffTotal.created, 10);
+    assert.equal(r.staffTotal.createdClosed, 9);
+    assert.equal(r.staffTotal.closedFromCreated, 9);
+    // Đơn chốt của kỳ nay luôn là đơn tạo trong kỳ, nên "chốt từ số chia trước kỳ" = 0 với lọc trạng thái mặc định.
+    assert.equal(r.staffTotal.closedFromEarlier, 0);
     assert.equal(r.staffTotal.createdOpen, 1);
     const b = r.staff.find((s) => s.sellerId === 'b')!;
     assert.equal(b.warehouseConfirmed, 1);
