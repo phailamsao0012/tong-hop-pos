@@ -13,7 +13,8 @@ import {
   DEFAULT_REPORT_SCHEDULE, MAX_SLOTS, REPORT_SECTIONS, SECTION_KEYS, TIME_OPTIONS, WEEKDAY_SHORT, previousTime, repeatLabel, timeLabel,
   type Repeat, type ReportSchedule, type ReportSection,
 } from '@/lib/zalo/report-schedule';
-import { ChartCard, Definitions, ErrorBox, SegmentedControl, SkeletonTable, StatusChip, toast } from './ui-kit';
+import { ChartCard, FoldBlock, Definitions, ErrorBox, SegmentedControl, SkeletonTable, StatusChip, toast } from './ui-kit';
+import { PageHeadMoi } from './trang-moi';
 import { workApi } from './giao-viec-view';
 
 type Data = { schedule: ReportSchedule; customized: boolean; morningBrief: boolean; slotReports: boolean; remindBeforeMeetingMin: number; owner: boolean };
@@ -72,7 +73,7 @@ function Sections({ part, value, onChange }: { part: Part; value: ReportSection[
   );
 }
 
-export function GiaoViecBaoCaoView() {
+export function GiaoViecBaoCaoView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới, tắt thì y như cũ. */ uiMoi?: boolean } = {}) {
   const [data, setData] = useState<Data | null>(null), [error, setError] = useState('');
   const [schedule, setSchedule] = useState<ReportSchedule>(DEFAULT_REPORT_SCHEDULE);
   const [on, setOn] = useState({ morning: true, slots: true }), [busy, setBusy] = useState(false);
@@ -99,8 +100,9 @@ export function GiaoViecBaoCaoView() {
   const sortedSlots = [...s.times].sort();
   const windows = sortedSlots.map((t) => { const p = previousTime(schedule, t); return `${p ? timeLabel(p) : '0h'}–${timeLabel(t)}`; });
 
-  return (
-    <section className="min-w-0 space-y-4">
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  // fold: chỉ bố cục mới truyền (thu gọn thẻ); bố cục cũ không truyền nên thẻ y như trước.
+  const overviewCard = (data: Data) => (
       <ChartCard icon={CalendarClock} title="Tổng quan lịch gửi" subtitle={data.customized ? 'Theo cài đặt đã lưu' : 'Chưa chỉnh: đang dùng lịch mặc định'}>
         <dl className="grid gap-2 text-[13px] sm:grid-cols-2">
           <div className="rounded-lg bg-surface-2 p-3">
@@ -117,7 +119,8 @@ export function GiaoViecBaoCaoView() {
           </div>
         </dl>
       </ChartCard>
-
+  );
+  const formsGrid = () => (
       <div className="grid gap-4 lg:grid-cols-2">
         <ChartCard title="Báo cáo sáng" subtitle="Số của hôm qua, gửi leader từng team">
           <div className="space-y-4">
@@ -169,8 +172,9 @@ export function GiaoViecBaoCaoView() {
           </div>
         </ChartCard>
       </div>
-
-      <ChartCard title="Báo cáo gộp cho sếp và nhắc nhở" subtitle="Sếp nhận một bản gộp các team ở mỗi giờ ca">
+  );
+  const bossCard = (fold?: { storageKey: string; summary?: string }) => (
+      <ChartCard collapse={fold} title="Báo cáo gộp cho sếp và nhắc nhở" subtitle="Sếp nhận một bản gộp các team ở mỗi giờ ca">
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-3">
             <label htmlFor="bc-boss-on" className="tap flex cursor-pointer items-center justify-between gap-3 text-sm text-ink">
@@ -198,12 +202,14 @@ export function GiaoViecBaoCaoView() {
           </div>
         </div>
       </ChartCard>
-
+  );
+  const saveRow = () => (
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" className="btn primary" disabled={busy} onClick={() => void save()}><Save size={14} />{busy ? 'Đang lưu…' : 'Lưu cài đặt'}</button>
         <button type="button" className="btn" disabled={busy} onClick={() => { setSchedule(DEFAULT_REPORT_SCHEDULE); setOn({ morning: true, slots: true }); setRemind(DEFAULT_REMIND); }}>Về lịch mặc định</button>
       </div>
-
+  );
+  const defsEl = () => (
       <Definitions items={[
         'Mặc định (chưa chỉnh): báo cáo sáng 08:00, báo cáo ca 12:00, 17:00, 22:00, hằng ngày, đủ mọi mục; sếp nhận bản gộp có luỹ kế; nhắc việc quá hạn 08:00; nhắc họp trước 60 phút — đúng như trước khi có trang này.',
         'Máy chủ xét lịch mỗi phút và gửi đúng phút đã chọn; mỗi báo cáo gửi tối đa một lần mỗi ngày. Đổi giờ có hiệu lực từ lượt gửi kế tiếp.',
@@ -213,6 +219,38 @@ export function GiaoViecBaoCaoView() {
         'Công tắc bật / tắt và số phút nhắc họp dùng chung với "Cài đặt thông báo" ở Danh bạ Zalo: sửa một nơi, nơi kia đổi theo. Nhắc việc quá hạn gửi người nhận việc và người giao việc. Báo thiếu số giữ như cũ.',
         'Lưu cài đặt không gửi tin nào. Bản demo không gửi Zalo thật, chỉ ghi vào hộp thư demo.',
       ]} />
+  );
+  // [hết khối chung]
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trang cài đặt: đầu trang PageHeadMoi → Tổng quan lịch gửi → khối chính Báo cáo sáng + Báo cáo theo ca → khối phụ thu gọn:
+  // Báo cáo gộp cho sếp và nhắc nhở, Cách tính → nút Lưu / Về mặc định cuối trang như cũ.
+  if (uiMoi) {
+    return (
+      <section className="min-w-0 space-y-4">
+        <PageHeadMoi title="Cài đặt báo cáo" scope={`Lịch gửi báo cáo Zalo cho leader và sếp · ${data.customized ? 'theo cài đặt đã lưu' : 'đang dùng lịch mặc định'} · lưu không gửi tin nào`} />
+        {overviewCard(data)}
+        {formsGrid()}
+        <div className="grid min-w-0 gap-3">
+          {bossCard({ storageKey: 'ui-moi:giao-viec-bao-cao:boss', summary: b.send ? 'Gộp: đang bật' : 'Gộp: đang tắt' })}
+          <FoldBlock icon={CalendarClock} title="Cách tính và lịch mặc định" storageKey="ui-moi:giao-viec-bao-cao:defs">{defsEl()}</FoldBlock>
+        </div>
+        {saveRow()}
+      </section>
+    );
+  }
+
+  return (
+    <section className="min-w-0 space-y-4">
+      {overviewCard(data)}
+
+      {formsGrid()}
+
+      {bossCard()}
+
+      {saveRow()}
+
+      {defsEl()}
     </section>
   );
 }
