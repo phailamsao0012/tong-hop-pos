@@ -123,7 +123,9 @@ async function resetWorldIfChanged() {
     await db.prepare('DELETE FROM raw_pos_orders WHERE pos_id=?').bind(p.id).run();
     await db.batch(['stats_daily', 'stats_daily_product', 'stats_daily_seller_product', 'stats_daily_mkt', 'customer_stats', 'customer_seller_stats'].map((t) => db.prepare(`DELETE FROM ${t} WHERE pos_id=?`).bind(p.id)));
   }
-  await db.prepare('UPDATE pos_shops SET cursor=NULL').run();
+  // Kéo lại từ đầu (Đầu não 27/11/2026: đổi WORLD_VERSION mà file trạng thái hẹn giờ cũ còn mốc nước / con trỏ thì demo không kéo lại đơn):
+  // xoá con trỏ lịch sử, mốc nước đơn vừa sửa, giờ đồng bộ; bộ hẹn giờ thấy demo_world đổi thì liệt kê lại việc dựng số liệu (lib/ops/scheduler.ts).
+  await db.prepare('UPDATE pos_shops SET cursor=NULL, recent_watermark=NULL, recent_cursor=NULL, last_sync_at=NULL, products_synced_at=NULL').run();
   await db.prepare("INSERT INTO app_settings (key,value,updated_at) VALUES ('demo_world',?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at")
     .bind(WORLD_VERSION, new Date().toISOString()).run();
 }

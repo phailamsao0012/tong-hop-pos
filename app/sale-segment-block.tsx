@@ -8,10 +8,8 @@
 // Mỗi đơn chỉ thuộc một nhóm (lib/order-segments.ts), nên cột Tổng là doanh số thật.
 import { ProfileLink } from './staff-profile-link';
 import { Pill } from 'lucide-react';
-import { closeRateOf, rateTextClass } from '@/lib/reports/metrics';
 import { PRODUCT_SEGMENTS, SEGMENT_KEYS, segmentsFor } from '@/lib/pancake/order-segments';
 import type { OverviewReport } from './overview-view';
-import { useMetricSettings } from './metric-settings';
 import { ChartCard, DeltaPill, EmptyState, SkeletonTable, SortTh, TableWrap, delta, pct, shortMoney, useSort, vi } from './ui-kit';
 import { useApi } from './use-api';
 import { useState } from 'react';
@@ -33,9 +31,9 @@ function otherProducts(r: OverviewReport | null) {
 
 /** q: cùng bộ lọc kỳ / POS / team với các ô khác của trang (không kèm groupBy, compare). */
 export function SaleSegmentBlock({ q, periodLabel }: { q: string; periodLabel: string }) {
-  const ms = useMetricSettings();
   // POS Oxytetra chỉ bán Combo Oxytetra + Bổ đậm đặc (anh Vũ 04/11/2026): chỉ hiện nhóm có trong các POS đang chọn.
-  const segs = segmentsFor((new URLSearchParams(q).get('posIds') ?? '').split(',').filter(Boolean));
+  const posList = (new URLSearchParams(q).get('posIds') ?? '').split(',').filter(Boolean);
+  const segs = segmentsFor(posList);
   // Mỗi thẻ một lượt gọi overview (thẻ không có ở POS đang chọn thì không gọi). SEGMENT_KEYS cố định nên số hook không đổi.
   const reports: Record<Seg, OverviewReport | null> = {
     gentadox: useApi<OverviewReport>(url(q, 'gentadox', segs)).data,
@@ -48,6 +46,8 @@ export function SaleSegmentBlock({ q, periodLabel }: { q: string; periodLabel: s
   // Bấm một thẻ: mở khung chi tiết thẻ đó (27/11/2026).
   const [open, setOpen] = useState<Seg | null>(null);
   const allNet = segs.reduce((n, k) => n + (reports[k]?.current.total.closedNet ?? 0), 0);
+  // Phần đơn chốt của kỳ (Đầu não 27/11/2026): thay "tỷ lệ chốt" theo thẻ (đơn của thẻ ÷ toàn bộ số chia, tô đỏ dễ hiểu nhầm là chốt kém).
+  const allOrders = segs.reduce((n, k) => n + (reports[k]?.current.total.closedOrders ?? 0), 0);
   const people = new Map<string, { id: string; name: string } & Record<Seg | `${Seg}N`, number>>();
   for (const seg of segs) for (const r of reports[seg]?.current.byEmployee ?? []) {
     if (!r.sellerId) continue;
@@ -73,7 +73,7 @@ export function SaleSegmentBlock({ q, periodLabel }: { q: string; periodLabel: s
                 <>
                   <div className="mt-2 flex items-baseline gap-2"><strong className="num text-3xl text-ink">{shortMoney(cur.closedNet)}</strong></div>
                   <p className="m-0 mt-1 text-[12.5px] text-ink-2">
-                    <b className="num text-ink">{vi.format(cur.closedOrders)}</b> đơn chốt · tỷ lệ chốt <b className={`num ${rateTextClass(closeRateOf(cur, ms.rateBase)) || 'text-ink'}`}>{pct(closeRateOf(cur, ms.rateBase))}</b> · AOV {shortMoney(cur.averageOrder)}
+                    <b className="num text-ink">{vi.format(cur.closedOrders)}</b> đơn chốt · <b className="num text-ink">{allOrders ? pct(cur.closedOrders / allOrders * 100, 0) : '—'}</b> đơn chốt của kỳ · AOV {shortMoney(cur.averageOrder)}
                   </p>
                   {prev && <p className="m-0 mt-0.5 text-[12px] text-ink-3">Kỳ trước {shortMoney(prev.closedNet)} · {vi.format(prev.closedOrders)} đơn</p>}
                 </>
@@ -88,6 +88,7 @@ export function SaleSegmentBlock({ q, periodLabel }: { q: string; periodLabel: s
           <span className="font-medium" style={{ color: COLOR.khac }}>Khác gồm:</span>
           {others.slice(0, 10).map(([name, v]) => <span key={name} className="text-ink-2">{name} <b className="num text-ink">{shortMoney(v)}</b></span>)}
           {others.length > 10 && <span className="text-ink-3">và {others.length - 10} sản phẩm nữa</span>}
+          {posList.length !== 1 && <span className="text-[11.5px] text-ink-3">· tính theo POS: sản phẩm không thuộc thẻ riêng của POS bán ra (vd Gentadox bán ở POS ngoài Siêu Vô Gạo) xếp vào Khác</span>}
         </p>
       )}
       <div className="mt-4">
@@ -119,7 +120,7 @@ export function SaleSegmentBlock({ q, periodLabel }: { q: string; periodLabel: s
           </TableWrap>
         )}
       </div>
-      <SegmentDetail seg={open} label={open ? LABEL[open] : ''} color={open ? COLOR[open] : 'var(--primary)'} report={open ? reports[open] : null} allNet={allNet} q={q} onClose={() => setOpen(null)} />
+      <SegmentDetail seg={open} label={open ? LABEL[open] : ''} color={open ? COLOR[open] : 'var(--primary)'} report={open ? reports[open] : null} allNet={allNet} allOrders={allOrders} q={q} onClose={() => setOpen(null)} />
     </ChartCard>
   );
 }
