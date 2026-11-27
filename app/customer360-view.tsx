@@ -91,7 +91,7 @@ export function Customer360View({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật 
               ) : <EmptyState text="Chưa có khách mua từ 2 lần." />}
             </ChartCard>
   );
-  const dueCard = () => (
+  const dueCard = (r: Customer360) => (
             <ChartCard icon={PhoneCall} title={`Tới hạn gọi lại · ${vi.format(due.length)} khách`} subtitle="Đã tới lúc khách thường mua lại mà chưa mua · xếp theo tiền đã mua · tối đa 300 khách" info={r.definitions.due}>
               {due.length ? (
                 <TableWrap minWidth={860} maxHeight="30rem" stickyFirst>
@@ -150,7 +150,7 @@ export function Customer360View({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật 
                 onClick={() => setWhy({ title: 'Mua lại sau (trung vị)', value: r.medianGap === null ? '—' : `${r.medianGap.toFixed(1).replace('.', ',')} ngày`, scope, rows: r.gaps.map((g) => ({ label: g.label, value: vi.format(g.n) })), definition: r.definitions.gap })} />
             </div>
             {stagesCard(r)}
-            {dueCard()}
+            {dueCard(r)}
             <div className="grid min-w-0 gap-3">
               {gapsCard(r, { storageKey: k('gaps') })}
               <FoldBlock icon={CalendarClock} title="Cách tính" storageKey={k('defs')}><Definitions items={r.definitions} /></FoldBlock>
@@ -187,7 +187,7 @@ export function Customer360View({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật 
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
             {gapsCard(r)}
-            {dueCard()}
+            {dueCard(r)}
           </div>
           <Definitions items={r.definitions} />
         </>
