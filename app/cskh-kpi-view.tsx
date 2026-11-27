@@ -14,9 +14,11 @@ import type { Team } from '@/lib/teams/team';
 import { todayVn } from '@/lib/shared/report-time';
 import { kpiPace, parseRate, signedShort } from '@/lib/kpi/kpi-pace';
 import { kpiNeedPerDay, kpiNeedTotal } from '@/lib/kpi/kpi-need';
-import { closeRateOf, closeRateOfMany } from '@/lib/reports/metrics';
+import { closeRateOf, closeRateOfMany, METRIC_DEFS } from '@/lib/reports/metrics';
+import { BOSS_CLOSE_RED } from '@/lib/zalo/boss-report';
+import { CanXemStrip, KPI_RED, KPI_TIGHT, PageHeadMoi, WhySheet, overClose, tileGrid, type CanXemItem, type WhySpec } from './trang-moi';
 import { useMetricSettings } from './metric-settings';
-import { Th, ChartCard, ErrorBox, InfoTip, KpiCard, PageHeader, ProgressBar, SkeletonTable, TableWrap, Tooltip, money, pct, short, toast, vi } from './ui-kit';
+import { Th, ChartCard, ErrorBox, FoldBlock, InfoTip, KpiCard, posName, PageHeader, ProgressBar, SkeletonTable, TableWrap, Tooltip, money, pct, short, toast, vi } from './ui-kit';
 import { daysInMonth, parseMoney, type TargetItem } from './targets-panel';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
@@ -43,10 +45,13 @@ const TEAM_LABEL: Record<KpiTeam, string> = { cskh: 'CSKH', sale: 'Sale' };
 // Anh Vũ 02/11/2026: Sale đặt KPI doanh số + tỉ lệ chốt; CSKH chỉ KPI doanh số (bỏ ô KPI đơn ở cả hai).
 const rateTone = (actual: number | null, goal: number | null | undefined) => actual === null || !goal ? '' : actual >= goal ? 'text-good' : actual >= goal * 0.9 ? 'text-warn' : 'text-bad';
 
-export function CskhKpiView() { return <TeamKpiView team="cskh" />; }
-export function SaleKpiView() { return <TeamKpiView team="sale" />; }
+/** uiMoi: cờ THP_UI_MOI (dashboard truyền xuống); bật thì bố cục kiểu mới, tắt thì y như cũ. */
+export function CskhKpiView({ uiMoi = false }: { uiMoi?: boolean } = {}) { return <TeamKpiView team="cskh" uiMoi={uiMoi} />; }
+export function SaleKpiView({ uiMoi = false }: { uiMoi?: boolean } = {}) { return <TeamKpiView team="sale" uiMoi={uiMoi} />; }
 
-function TeamKpiView({ team }: { team: KpiTeam }) {
+function TeamKpiView({ team, uiMoi = false }: { team: KpiTeam; uiMoi?: boolean }) {
+  // Giao diện mới: khung "Vì sao ra số này" đang mở (null = đóng).
+  const [why, setWhy] = useState<WhySpec | null>(null);
   const label = TEAM_LABEL[team];
   const today = todayVn();
   const { orderOrigin, marketerId } = useOrderOrigin(team);
@@ -229,14 +234,9 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
       onBlur={(e) => { set(id, 'revenue', parseMoney(e.target.value)); setDraft((d) => { const n = { ...d }; delete n[id]; return n; }); }} />;
   };
 
-  return (
-    <div className="space-y-5">
-      {team === 'cskh' && <CskhFocusBar />}
-      <PosChips posIds={posIds} onChange={setPosIds} />
-      <OrderOriginFilter team={team} marketers={report?.origins} />
-      <PageHeader eyebrow={`${label} · chỉ chủ hệ thống`} title={`KPI ${label}`} subtitle={`Mục tiêu tháng theo đầu người cho bộ phận ${label} · KPI ngày = mục tiêu ÷ số ngày của tháng${share.note ? ` · tiến độ dùng ${share.note}` : ''}`}
-        badge={!futureMonth ? <StaleChip stale={progress.stale} at={progress.at} loading={progress.loading} error={report ? progress.error : null} onRetry={progress.reload} /> : null}
-        actions={
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  // fold: chỉ bố cục mới truyền (thu gọn thẻ); bố cục cũ không truyền nên thẻ y như trước.
+  const monthBar = () => (
 <div className="flex flex-wrap items-center gap-2">
           <Input id={`${team}-kpi-month`} type="month" className="w-auto" aria-label="Tháng KPI" value={month} onChange={(e) => requestMonth(e.target.value)} />
           <Tooltip content={previous?.items.length ? `Chép KPI của tháng ${mmyyyy(previous.month)} sang tháng này` : 'Tháng trước chưa có KPI'}>
@@ -244,23 +244,12 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
           </Tooltip>
           {dirty && <Button variant="ghost" size="sm" onClick={discard} disabled={saving}><RotateCcw size={14} />Hủy thay đổi</Button>}
           <Button size="sm" onClick={save} disabled={!dirty || saving}>{saving ? <RotateCw size={14} className="animate-spin" /> : <Save size={14} />}{saving ? 'Đang lưu…' : 'Lưu KPI'}</Button>
-        </div>} />
-      {error && <ErrorBox error={error} onRetry={() => void load()} />}
-      {message && <p className="notice info" role="status">{message}<button type="button" className="x" aria-label="Đóng" onClick={() => setMessage(null)}><X size={14} /></button></p>}
-
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-        <KpiCard icon={Users} tone="green" label={`Nhân viên ${label}`} value={vi.format(staff.length)} countUp rawValue={staff.length} format={(n) => vi.format(Math.round(n))} note={`${withGoal.length} người đã có KPI`}
-          tooltip={{ period: monthLabel, current: `${vi.format(staff.length)} người`, definition: `Nhân viên bộ phận ${label} trên Pancake (đang làm việc, hoặc đã nghỉ nhưng còn KPI tháng này).` }} />
-        <KpiCard icon={ICON.kpi} tone="purple" label="Tổng KPI tháng" value={hiddenKpi ? '–' : short(totalGoal)} unit={hiddenKpi ? undefined : '₫'} countUp={!hiddenKpi} rawValue={totalGoal} format={short} note={hiddenKpi ? `Không xem được KPI ${hiddenKpi} người nên không cộng tổng` : `Trung bình ${withGoal.length ? `${short(totalGoal / withGoal.length)} ₫` : '—'} / người`}
-          tooltip={{ period: monthLabel, current: money(totalGoal), definition: `Tổng KPI doanh thu của mọi nhân viên ${label} trong tháng; trung bình tính trên người đã có KPI.` }} />
-        <KpiCard icon={Wallet} tone="teal" label="Đã đạt (doanh thu chốt)" value={short(totalDone)} unit="₫" countUp rawValue={totalDone} format={short} note={totalGoal ? `${pct(totalDone / totalGoal * 100, 0)} KPI · ngày ${daysElapsed}/${dim}` : 'Chưa đặt KPI'} progress={totalGoal ? { value: totalDone, max: totalGoal } : undefined}
-          tooltip={{ period: monthLabel, current: money(totalDone), previous: totalGoal ? money(totalGoal) : undefined, previousLabel: 'KPI tháng', definition: `Doanh thu đơn chốt (đơn đã xác nhận, sau giảm giá) của nhân viên ${label} từ đầu tháng tới hôm nay${totalGoal ? `, đạt ${pct(totalDone / totalGoal * 100, 1)} KPI` : ''}.` }} />
-        <KpiCard icon={TrendingUp} tone={withGoal.length && onTrack / withGoal.length >= 0.5 ? 'green' : 'orange'} label="Đang đúng tiến độ" value={withGoal.length ? `${onTrack} / ${withGoal.length}` : '—'} note="Đạt ≥ phần KPI tương ứng số ngày đã qua"
-          tooltip={{ period: monthLabel, current: withGoal.length ? `${onTrack} / ${withGoal.length} người` : '—', definition: `Người đã đạt ít nhất ${daysElapsed}/${dim} KPI tháng (tỷ lệ số ngày đã qua). Thẻ xanh khi từ nửa đội trở lên đúng tiến độ.` }} />
-      </div>
-
-      <TeamKpiPanel team={team} />
-
+        </div>
+  );
+  const msgNote = (/*{}*/) => (
+      message && <p className="notice info" role="status">{message}<button type="button" className="x" aria-label="Đóng" onClick={() => setMessage(null)}><X size={14} /></button></p>
+  );
+  const kpiCard = () => (
       <ChartCard icon={Target} title={`KPI theo đầu người · ${monthLabel}`} subtitle={`Doanh thu đơn chốt (đơn đã xác nhận, như Pancake) của từng nhân viên ${label} · nhập số thường (3000000) hoặc 3tr, 1.5 tỷ`} loading={!loaded}
         action={<div data-ui="pill-bar" className="flex flex-wrap items-center gap-1.5 rounded-xl border border-line bg-surface-2 px-2 py-1.5">
           <Wand2 size={14} className="text-primary" aria-hidden="true" /><span className="text-xs font-medium text-ink-2">Áp cho tất cả:</span>
@@ -322,7 +311,8 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
         )}
         <p className="mt-3 text-[11.5px] leading-relaxed text-ink-3">{isCurrent && <span suppressHydrationWarning>Số tải lúc {refreshedAt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}, tự tải lại mỗi giờ. </span>}KPI đặt riêng cho từng người. Chọn POS thì bảng chỉ còn người có tài khoản trên POS đó; Đã đạt vẫn cộng mọi POS của người đó. Đã đạt = doanh thu đơn chốt của nhân viên trong tháng (đơn đã xác nhận, không tính hủy).{isSale ? ' Tỉ lệ chốt tính theo Cách tính đang chọn; dòng Tổng là tỉ lệ cả đội so với KPI trung bình.' : ''} Hôm nay = doanh thu chốt hôm nay ÷ KPI ngày; ngày 300% hay 0% đều bình thường, chấm theo % tháng.{isSale ? ' Ca làm việc dùng ở Trong ngày · chốt nóng (chọn "Ca cá nhân").' : ''}{isSale ? '' : ' Cần/ngày = KPI còn thiếu ÷ số ngày còn lại của tháng (tính cả hôm nay); dòng Tổng cộng phần thiếu của những người chưa đạt.'}</p>
       </ChartCard>
-
+  );
+  const leaveDialog = () => (
       <AlertDialog open={pendingMonth !== null} onOpenChange={(o) => { if (!o) setPendingMonth(null); }}>
         <AlertDialogContent size="sm">
           <AlertDialogHeader>
@@ -335,6 +325,82 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+  );
+  // [hết khối chung]
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trên xuống: đầu trang (PageHeadMoi: tháng KPI, sao chép, lưu; StaleChip; POS) → chọn riêng NV CSKH / lọc nguồn đơn → thông báo
+  // → "Cần xem" (Sale: tỷ lệ chốt cả đội dưới 40%) → một hàng ô số (CSKH 4, Sale thêm ô tỷ lệ chốt = 5; bấm mở "Vì sao ra số này")
+  // → bảng chính KPI theo đầu người → KPI tháng theo team thu gọn.
+  if (uiMoi) {
+    const scope = `${monthLabel} · bộ phận ${label} · ${posIds.length <= 3 ? posIds.map(posName).join(', ') : `${vi.format(posIds.length)} POS`} · KPI ngày = mục tiêu ÷ số ngày của tháng${share.note ? ` · tiến độ dùng ${share.note}` : ''} · chỉ chủ hệ thống`;
+    const need: CanXemItem[] = isSale && overClose(teamRate) ? [{ key: 'team-rate', team: true, text: `Đội Sale: chốt ${pct(teamRate)}`,
+      onClick: () => setWhy({ title: 'Tỷ lệ chốt cả đội Sale', value: pct(teamRate), tone: 'bad', scope, mark: `Đỏ khi dưới ${BOSS_CLOSE_RED}%`, rows: [{ label: 'KPI tỉ lệ chốt trung bình', value: pct(avgGoalRate) }], definition: `${METRIC_DEFS.rate(ms.rateBase).def} Cộng tử số / mẫu số của mọi người đang hiện, như Tổng quan Sale.` }) }] : [];
+    const topDone = [...staff].sort((a, b) => (done(b.id)?.closedNet ?? 0) - (done(a.id)?.closedNet ?? 0)).slice(0, 10).map((e) => ({ label: e.name, value: `${short(done(e.id)?.closedNet ?? 0)} ₫${goalOf(e.id) ? ` · ${pct((done(e.id)?.closedNet ?? 0) / goalOf(e.id) * 100, 0)} KPI` : ''}` }));
+    return (
+      <div className="min-w-0 space-y-4">
+        <PageHeadMoi title={`KPI ${label}`} scope={scope} hint={`Mục tiêu tháng theo đầu người cho bộ phận ${label}`} tools={monthBar()}
+          right={!futureMonth ? <StaleChip stale={progress.stale} at={progress.at} loading={progress.loading} error={report ? progress.error : null} onRetry={progress.reload} /> : undefined}
+          pos={<PosChips posIds={posIds} onChange={setPosIds} />} />
+        {team === 'cskh' && <CskhFocusBar />}
+        <OrderOriginFilter team={team} marketers={report?.origins} />
+        {error && <ErrorBox error={error} onRetry={() => void load()} />}
+        {msgNote()}
+        <CanXemStrip items={need} note={`Tỷ lệ chốt cả đội dưới ${BOSS_CLOSE_RED}%`} />
+        <div className={tileGrid(isSale ? 5 : 4)}>
+          <KpiCard icon={Users} tone="green" label={`Nhân viên ${label}`} className={KPI_TIGHT} value={vi.format(staff.length)} note={`${withGoal.length} người đã có KPI`}
+            onClick={() => setWhy({ title: `Nhân viên ${label}`, value: `${vi.format(staff.length)} người`, scope, rows: [{ label: 'Đã có KPI', value: vi.format(withGoal.length) }, { label: 'Chưa có KPI', value: vi.format(staff.length - withGoal.length) }],
+              definition: `Nhân viên bộ phận ${label} trên Pancake (đang làm việc, hoặc đã nghỉ nhưng còn KPI tháng này).` })} />
+          <KpiCard icon={ICON.kpi} tone="purple" label="Tổng KPI tháng" className={KPI_TIGHT} value={hiddenKpi ? '–' : short(totalGoal)} unit={hiddenKpi ? undefined : '₫'}
+            note={hiddenKpi ? `Không xem được KPI ${hiddenKpi} người nên không cộng tổng` : `${vi.format(withGoal.length)} người có KPI`}
+            onClick={() => setWhy({ title: 'Tổng KPI tháng', value: hiddenKpi ? '–' : money(totalGoal), scope, definition: `Tổng KPI doanh thu của mọi nhân viên ${label} trong tháng; trung bình tính trên người đã có KPI.` })} />
+          <KpiCard icon={Wallet} tone="teal" label="Đã đạt (doanh thu chốt)" className={KPI_TIGHT} value={short(totalDone)} unit="₫" note={totalGoal ? `${pct(totalDone / totalGoal * 100, 0)} KPI · ngày ${daysElapsed}/${dim}` : 'Chưa đặt KPI'}
+            progress={totalGoal ? { value: totalDone, max: totalGoal } : undefined}
+            onClick={() => setWhy({ title: 'Đã đạt (doanh thu chốt)', value: money(totalDone), scope, previous: undefined, rows: [{ label: 'KPI tháng', value: totalGoal ? money(totalGoal) : '—' }, { label: 'Ngày đã qua', value: `${daysElapsed}/${dim}` }, ...topDone],
+              definition: `Doanh thu đơn chốt (đơn đã xác nhận, sau giảm giá) của nhân viên ${label} từ đầu tháng tới hôm nay.` })} />
+          <KpiCard icon={TrendingUp} tone={withGoal.length && onTrack / withGoal.length >= 0.5 ? 'green' : 'orange'} label="Đang đúng tiến độ" className={KPI_TIGHT} value={withGoal.length ? `${onTrack} / ${withGoal.length}` : '—'} note="Đạt ≥ phần KPI tương ứng số ngày đã qua"
+            onClick={() => setWhy({ title: 'Đang đúng tiến độ', value: withGoal.length ? `${onTrack} / ${withGoal.length} người` : '—', scope,
+              definition: `Người đã đạt ít nhất ${daysElapsed}/${dim} KPI tháng (tỷ lệ số ngày đã qua). Thẻ xanh khi từ nửa đội trở lên đúng tiến độ.` })} />
+          {isSale && <KpiCard icon={ICON.rate} tone="blue" label="Tỷ lệ chốt cả đội Sale" className={`${KPI_TIGHT} ${overClose(teamRate) ? KPI_RED : ''}`} value={pct(teamRate)} note={`KPI trung bình ${pct(avgGoalRate)} · đỏ dưới ${BOSS_CLOSE_RED}%`}
+            onClick={() => setWhy({ title: 'Tỷ lệ chốt cả đội Sale', value: pct(teamRate), tone: overClose(teamRate) ? 'bad' : undefined, scope, mark: `Đỏ khi dưới ${BOSS_CLOSE_RED}%`, rows: [{ label: 'KPI tỉ lệ chốt trung bình', value: pct(avgGoalRate) }],
+              definition: `${METRIC_DEFS.rate(ms.rateBase).def} Cộng tử số / mẫu số của mọi người đang hiện, như Tổng quan Sale.` })} />}
+        </div>
+        {kpiCard()}
+        <FoldBlock icon={Target} title={`KPI tháng theo team ${label}`} storageKey={`ui-moi:${team}-kpi:team`}><TeamKpiPanel team={team} /></FoldBlock>
+        {leaveDialog()}
+        <WhySheet spec={why} onClose={() => setWhy(null)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      {team === 'cskh' && <CskhFocusBar />}
+      <PosChips posIds={posIds} onChange={setPosIds} />
+      <OrderOriginFilter team={team} marketers={report?.origins} />
+      <PageHeader eyebrow={`${label} · chỉ chủ hệ thống`} title={`KPI ${label}`} subtitle={`Mục tiêu tháng theo đầu người cho bộ phận ${label} · KPI ngày = mục tiêu ÷ số ngày của tháng${share.note ? ` · tiến độ dùng ${share.note}` : ''}`}
+        badge={!futureMonth ? <StaleChip stale={progress.stale} at={progress.at} loading={progress.loading} error={report ? progress.error : null} onRetry={progress.reload} /> : null}
+        actions={
+monthBar()} />
+      {error && <ErrorBox error={error} onRetry={() => void load()} />}
+      {msgNote()}
+
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+        <KpiCard icon={Users} tone="green" label={`Nhân viên ${label}`} value={vi.format(staff.length)} countUp rawValue={staff.length} format={(n) => vi.format(Math.round(n))} note={`${withGoal.length} người đã có KPI`}
+          tooltip={{ period: monthLabel, current: `${vi.format(staff.length)} người`, definition: `Nhân viên bộ phận ${label} trên Pancake (đang làm việc, hoặc đã nghỉ nhưng còn KPI tháng này).` }} />
+        <KpiCard icon={ICON.kpi} tone="purple" label="Tổng KPI tháng" value={hiddenKpi ? '–' : short(totalGoal)} unit={hiddenKpi ? undefined : '₫'} countUp={!hiddenKpi} rawValue={totalGoal} format={short} note={hiddenKpi ? `Không xem được KPI ${hiddenKpi} người nên không cộng tổng` : `Trung bình ${withGoal.length ? `${short(totalGoal / withGoal.length)} ₫` : '—'} / người`}
+          tooltip={{ period: monthLabel, current: money(totalGoal), definition: `Tổng KPI doanh thu của mọi nhân viên ${label} trong tháng; trung bình tính trên người đã có KPI.` }} />
+        <KpiCard icon={Wallet} tone="teal" label="Đã đạt (doanh thu chốt)" value={short(totalDone)} unit="₫" countUp rawValue={totalDone} format={short} note={totalGoal ? `${pct(totalDone / totalGoal * 100, 0)} KPI · ngày ${daysElapsed}/${dim}` : 'Chưa đặt KPI'} progress={totalGoal ? { value: totalDone, max: totalGoal } : undefined}
+          tooltip={{ period: monthLabel, current: money(totalDone), previous: totalGoal ? money(totalGoal) : undefined, previousLabel: 'KPI tháng', definition: `Doanh thu đơn chốt (đơn đã xác nhận, sau giảm giá) của nhân viên ${label} từ đầu tháng tới hôm nay${totalGoal ? `, đạt ${pct(totalDone / totalGoal * 100, 1)} KPI` : ''}.` }} />
+        <KpiCard icon={TrendingUp} tone={withGoal.length && onTrack / withGoal.length >= 0.5 ? 'green' : 'orange'} label="Đang đúng tiến độ" value={withGoal.length ? `${onTrack} / ${withGoal.length}` : '—'} note="Đạt ≥ phần KPI tương ứng số ngày đã qua"
+          tooltip={{ period: monthLabel, current: withGoal.length ? `${onTrack} / ${withGoal.length} người` : '—', definition: `Người đã đạt ít nhất ${daysElapsed}/${dim} KPI tháng (tỷ lệ số ngày đã qua). Thẻ xanh khi từ nửa đội trở lên đúng tiến độ.` }} />
+      </div>
+
+      <TeamKpiPanel team={team} />
+
+      {kpiCard()}
+
+      {leaveDialog()}
     </div>
   );
 }
