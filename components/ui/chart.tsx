@@ -81,6 +81,15 @@ function ChartContainer({
   );
 }
 
+// Bộ thiết kế 28/11/2026 (chỉ khi cờ THP_UI_MOI bật, nền sáng): kỳ này màu đen, kỳ trước màu xám. Luật chỉ khớp dưới html.ui-moi-root:not(.dark),
+// nên cờ tắt thì không luật nào ăn và biểu đồ y như cũ. Chỉ đổi đúng các màu cấu hình "chung" (nhấn xanh = kỳ này; ink-4 = kỳ trước; line-3 vốn đã là xám #cfd6d2 khi cờ bật);
+// màu POS, trạng thái đơn và màu riêng khác giữ nguyên. Token --chart-cur / --chart-prev ở app/globals.css.
+const UI_MOI_CHART: Record<string, string> = { 'var(--primary)': 'var(--chart-cur)', 'var(--ink-4)': 'var(--chart-prev)' };
+function uiMoiChartColors(id: string, colorConfig: [string, ChartConfig[string]][]) {
+  const lines = colorConfig.map(([key, c]) => c.color && UI_MOI_CHART[c.color] ? `  --color-${key}: ${UI_MOI_CHART[c.color]};` : null).filter(Boolean);
+  return lines.length ? `\nhtml.ui-moi-root:not(.dark) [data-chart=${id}] {\n${lines.join('\n')}\n}\n` : '';
+}
+
 const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
   const colorConfig = Object.entries(config).filter(
     ([, config]) => config.theme ?? config.color,
@@ -108,7 +117,7 @@ ${colorConfig
 }
 `,
           )
-          .join('\n'),
+          .join('\n') + uiMoiChartColors(id, colorConfig),
       }}
     />
   );

@@ -5,7 +5,7 @@ import { useSyncExternalStore } from 'react';
 import { AlertCircle, Check, Info, X } from 'lucide-react';
 
 export type ToastKind = 'ok' | 'error' | 'info';
-type ToastItem = { id: number; text: string; kind: ToastKind; time: string; in: boolean };
+type ToastItem = { id: number; text: string; kind: ToastKind; time: string; in: boolean; undo?: () => void };
 let items: ToastItem[] = [];
 const EMPTY: ToastItem[] = [];
 const listeners = new Set<() => void>();
@@ -14,11 +14,12 @@ const emit = () => { for (const l of listeners) l(); };
 const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l); }; };
 const timers = new Map<number, number>();
 
-/** Hiện toast; tự ẩn sau 3,2 s (lỗi: 6 s). Trả về id để dismissToast(id) sớm hơn. */
-export function toast(text: string, opts: { kind?: ToastKind; duration?: number } = {}) {
+/** Hiện toast; tự ẩn sau 3,2 s (lỗi: 6 s). Trả về id để dismissToast(id) sớm hơn.
+ *  `undo`: hiện nút "Hoàn tác" (bộ thiết kế 28/11/2026); bấm thì gọi undo rồi đóng toast. Không truyền thì toast y như cũ. */
+export function toast(text: string, opts: { kind?: ToastKind; duration?: number; undo?: () => void } = {}) {
   const id = ++seq;
   const time = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' });
-  items = [...items, { id, text, kind: opts.kind ?? 'ok', time, in: false }];
+  items = [...items, { id, text, kind: opts.kind ?? 'ok', time, in: false, undo: opts.undo }];
   emit();
   // Gắn rồi 2 khung hình sau mới thêm .in để transition chạy.
   requestAnimationFrame(() => requestAnimationFrame(() => { items = items.map((t) => t.id === id ? { ...t, in: true } : t); emit(); }));
@@ -48,6 +49,7 @@ export function Toaster() {
           <div key={t.id} className={`toast ${t.in ? 'in' : ''}`} role={t.kind === 'error' ? 'alert' : 'status'}>
             <span className={`ok ${t.kind}`}><Icon size={12} /></span>
             <span className="min-w-0">{t.text}</span>
+            {t.undo && <button type="button" className="u" onClick={() => { t.undo?.(); dismissToast(t.id); }}>Hoàn tác</button>}
             <span className="t">{t.time}</span>
             <button type="button" className="x" aria-label="Đóng" onClick={() => dismissToast(t.id)}><X size={12} /></button>
           </div>

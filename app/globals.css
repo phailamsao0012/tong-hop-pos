@@ -1143,7 +1143,7 @@ html.ui-moi-root:not(.dark) {
   --good: #17684b; --good-bg: #e6f2ec; --bad: #c8402d; --bad-bg: #fbeae7; --warn: #a96600; --warn-bg: #fdf2d9;
   --t-green: #17684b; --t-green-bg: #e6f2ec; --t-red: #c8402d; --t-red-bg: #fbeae7; --t-orange: #a96600; --t-orange-bg: #fdf2d9; --t-gray: #3c4743; --t-gray-bg: #f1f3f2;
   --chart-grid: #e5e9e6; --chart-fill: rgb(14 21 18 / .06); --chart-bar: #cfd6d2;
-  /* Biểu đồ: kỳ này đen, kỳ trước xám (components/ui/chart.tsx đổi màu cấu hình var(--primary) / var(--ink-4) / var(--line-3) sang hai token này khi cờ bật). */
+  /* Biểu đồ: kỳ này đen, kỳ trước xám (components/ui/chart.tsx đổi màu cấu hình var(--primary) / var(--ink-4) sang hai token này khi cờ bật). */
   --chart-cur: #0e1512; --chart-prev: #cfd6d2;
   --skel-1: #f1f3f2; --skel-2: #e7eae8;
   --shadow: none;
@@ -1170,14 +1170,14 @@ html.ui-moi-root body { font-size: 14px; line-height: 1.5; }
 .ui-moi-root .kpi .d { font-size: 12px; color: var(--ink-3); }
 .ui-moi-root .kpi .d > span:first-child { padding: 2px 8px; font-size: 11.5px; font-weight: 600; }
 /* Chỉ đổi màu khi có chuyện: sắp chạm mốc (vàng) / vượt mốc (đỏ). KPI_RED (trang-moi.tsx) gắn kpi-bad; KPI_WARN gắn kpi-warn. */
-.ui-moi-root .kpi.kpi-warn { border-color: #ecd9a8; background: #fffcf3; }
-.ui-moi-root .kpi.kpi-bad { border-color: #efc4bc; background: #fff8f6; }
+html.ui-moi-root:not(.dark) .kpi.kpi-warn { border-color: #ecd9a8; background: #fffcf3; }
+html.ui-moi-root:not(.dark) .kpi.kpi-bad { border-color: #efc4bc; background: #fff8f6; }
 .ui-moi-root .kpi.kpi-warn :is(.duo-spark path.cur, .kpi-spark polyline) { stroke: var(--warn); }
 .ui-moi-root .kpi.kpi-bad :is(.duo-spark path.cur, .kpi-spark polyline) { stroke: var(--bad); }
 /* Đang tải: bỏ viền đa sắc, ô xám nhạt như mẫu. */
 .ui-moi-root :is(.kpi.is-loading, .is-loading > .kpi) { border-color: var(--line); animation: none; }
 .ui-moi-root :is(.kpi.is-loading, .is-loading > .kpi)::before { display: none; }
-.ui-moi-root .skel { background: linear-gradient(90deg, var(--surface-2) 30%, #e7eae8 50%, var(--surface-2) 70%) 0 0 / 200% 100%; border-radius: 6px; }
+html.ui-moi-root:not(.dark) .skel { background: linear-gradient(90deg, var(--surface-2) 30%, #e7eae8 50%, var(--surface-2) 70%) 0 0 / 200% 100%; border-radius: 6px; }
 
 /* (D) Đầu trang (PageHeadMoi): thanh chọn kỳ nằm phẳng trên nền trang (không khung thẻ); hàng POS thành hàng nút như chọn kỳ:
    nền #f1f3f2, mục đang chọn nổi trắng. "Tất cả" đứng đầu và sáng khi chọn đủ POS (lúc đó các POS lẻ không sáng). */
@@ -1203,3 +1203,47 @@ html.ui-moi-root body { font-size: 14px; line-height: 1.5; }
 .ui-moi-root .pill.bad { background: var(--bad-bg); color: var(--bad); }
 .ui-moi-root .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
 .ui-moi-root .pill.nd::before { display: none; }
+
+/* (G) Bảng: tiêu đề cột 12px chữ phụ, số căn phải (td.n sẵn có), dòng đang chọn nền xanh nhạt #e6f2ec, avatar chữ cái 30px nền xám nhạt,
+   thanh tỷ lệ 70×6 màu đen (đỏ khi dưới mốc: ProgressBar low), ô hoàn / hủy (RateCells) thành nhãn có chấm thay cho chữ tô màu rời. */
+.ui-moi-root :is(table.tbl, [data-ui="tbl"]) th { font-size: 12px; }
+.ui-moi-root :is(table.tbl, [data-ui="tbl"]) tbody tr:is([aria-selected="true"], [data-state="selected"]) > td { background: var(--tint); }
+.ui-moi-root table.tbl tbody tr:is(:hover, :focus-within) td:first-child { box-shadow: none; }
+.ui-moi-root [data-ui="av"] { width: 30px; height: 30px; font-size: 11px; font-weight: 700; background: var(--surface-2); color: var(--ink-2); }
+.ui-moi-root [data-ui="av-sm"] { background: var(--surface-2); color: var(--ink-2); font-weight: 700; }
+.ui-moi-root .pbar { height: 6px !important; background: var(--surface-2); }
+.ui-moi-root .pbar > i[style*="var(--primary)"] { background: var(--ink) !important; }
+.ui-moi-root td > [data-ui="rate-pill"] { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 600; background: var(--surface-2); color: var(--ink-2); }
+.ui-moi-root td > [data-ui="rate-pill"]::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+.ui-moi-root td.text-good > [data-ui="rate-pill"] { background: var(--good-bg); color: var(--good); }
+.ui-moi-root td.text-warn > [data-ui="rate-pill"] { background: var(--warn-bg); color: var(--warn); }
+.ui-moi-root td.text-bad > [data-ui="rate-pill"] { background: var(--bad-bg); color: var(--bad); }
+
+/* (H) Biểu đồ: kỳ trước xám, kỳ này đen (màu cấu hình đổi ở components/ui/chart.tsx), mốc / ngưỡng là nét đứt xám, lưới mảnh. */
+.ui-moi-root .recharts-cartesian-grid line { stroke: var(--line); stroke-dasharray: 0; }
+.ui-moi-root .recharts-cartesian-grid-vertical line { stroke: transparent; }
+.ui-moi-root .recharts-reference-line-line { stroke: var(--line-3); stroke-dasharray: 4 4; stroke-width: 1; }
+.ui-moi-root .recharts-reference-line .recharts-label { fill: var(--ink-3); font-size: 11px; }
+.ui-moi-root .recharts-cartesian-axis-tick text { font-size: 11px; }
+
+/* (I) Khung giữa màn (Dialog / Sheet căn giữa của WhySheet): bo 18, bóng mềm; bảng tính (data-ui="calc") viền mảnh bo 12. */
+.ui-moi-root [data-ui="calc"] { border-radius: 12px; }
+
+/* (J) Toast tối: nền chữ chính, chấm xanh có dấu tích, nút "Hoàn tác" chữ xanh nhạt (toast({ undo })). */
+html.ui-moi-root:not(.dark) .toast { border-radius: 12px; background: var(--ink); color: #fff; font-size: 13.5px; padding: 10px 14px; }
+html.ui-moi-root:not(.dark) .toast .ok { width: 22px; height: 22px; background: #2fbf85; color: #06281c; }
+html.ui-moi-root:not(.dark) .toast .ok.error { background: var(--bad); color: #fff; }
+html.ui-moi-root:not(.dark) .toast .ok.info { background: #fff; color: var(--ink); }
+html.ui-moi-root:not(.dark) .toast .u { flex: none; margin-left: 4px; padding: 2px 4px; border: 0; border-radius: 6px; background: none; color: #9fe3c4; font: inherit; font-weight: 600; }
+html.ui-moi-root:not(.dark) .toast .u:hover { background: rgb(255 255 255 / .1); }
+
+/* (K) Dữ liệu trễ / cảnh báo: dải vàng nhạt không viền, chữ nâu đậm như mẫu; dòng "số chụp lúc…" cùng màu. */
+html.ui-moi-root:not(.dark) .notice.warn { border-color: transparent; background: var(--warn-bg); color: #6f4300; font-weight: 500; }
+.ui-moi-root .notice.error { border-color: transparent; }
+html.ui-moi-root:not(.dark) .snapshot-line { border-radius: 12px; color: #6f4300; }
+
+/* (L) Lúc trống: thẻ trắng viền mảnh, chữ phụ giữa ô (EmptyState). */
+.ui-moi-root .empty { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); padding: 22px 10px; font-size: 13.5px; color: var(--ink-3); }
+
+/* (M) Màn ≥ 85.375rem (1366px): hàng 6 ô số vừa một dòng — chữ ghi chú cắt 2 dòng, nhãn 1 dòng. */
+@media (min-width: 85.375rem) { .ui-moi-root .kpi .lbl { -webkit-line-clamp: 1; } }

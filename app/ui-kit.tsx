@@ -462,7 +462,7 @@ export function ProgressBar({ value, max, color = 'var(--primary)', size = 'md',
 
 export function Avatar({ name, size = 'md', className = '' }: { name: string; size?: 'sm' | 'md'; className?: string }) {
   const initials = name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  return <span className={`grid shrink-0 place-items-center rounded-full bg-primary font-semibold tracking-[.02em] text-primary-ink ${size === 'sm' ? 'size-[22px] text-[11px]' : 'size-[26px] text-[10.5px]'} ${className}`} aria-hidden="true">{initials}</span>;
+  return <span data-ui={size === 'sm' ? 'av-sm' : 'av'} className={`grid shrink-0 place-items-center rounded-full bg-primary font-semibold tracking-[.02em] text-primary-ink ${size === 'sm' ? 'size-[22px] text-[11px]' : 'size-[26px] text-[10.5px]'} ${className}`} aria-hidden="true">{initials}</span>;
 }
 
 export function EmptyState({ text, className = '' }: { text: string; className?: string }) {

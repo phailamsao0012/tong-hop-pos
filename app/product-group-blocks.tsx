@@ -540,10 +540,11 @@ export const useTagPref = (team: string) =>
 export const useMergedTagPref = (team: string) =>
   usePref<(typeof TAG_PREFS)[number]>(`thp_tags_bang_${team}`, 'hide', TAG_PREFS);
 
+/** Ô hoàn / hủy: số % nằm trong span data-ui="rate-pill" (không kiểu gì khi cờ tắt); giao diện mới vẽ thành nhãn có chấm theo màu ô (globals.css). */
 export function RateCells({ v }: { v?: { ret: number | null; returned: number; cancel: number | null; cancelled: number } }) {
   return <>
-    <td className={`n font-semibold ${toneCls(v?.ret ?? null)}`}>{v ? <>{pct(v.ret)}<span className="block text-[11px] font-normal text-ink-3">{vi.format(v.returned)} đơn hoàn</span></> : '—'}</td>
-    <td className={`n font-semibold ${toneCls(v?.cancel ?? null)}`}>{v ? <>{pct(v.cancel)}<span className="block text-[11px] font-normal text-ink-3">{vi.format(v.cancelled)} đơn hủy</span></> : '—'}</td>
+    <td className={`n font-semibold ${toneCls(v?.ret ?? null)}`}>{v ? <><span data-ui="rate-pill">{pct(v.ret)}</span><span className="block text-[11px] font-normal text-ink-3">{vi.format(v.returned)} đơn hoàn</span></> : '—'}</td>
+    <td className={`n font-semibold ${toneCls(v?.cancel ?? null)}`}>{v ? <><span data-ui="rate-pill">{pct(v.cancel)}</span><span className="block text-[11px] font-normal text-ink-3">{vi.format(v.cancelled)} đơn hủy</span></> : '—'}</td>
   </>;
 }
 /** Tỷ lệ hoàn / hủy từng người (từ báo cáo tổng quan, cùng cách tính ô Hoàn, Hủy đầu trang); khóa '' là dòng tổng. */
