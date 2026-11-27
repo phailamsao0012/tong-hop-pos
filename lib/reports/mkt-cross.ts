@@ -28,7 +28,7 @@ export async function mktCross(posIds: string[], start: string, end: string, sou
         SUM(CASE WHEN ${PACKED_SQL('o')} THEN 1 ELSE 0 END) AS packed,
         SUM(CASE WHEN ${AFTER_PACK_CANCELLED_SQL('o')} THEN 1 ELSE 0 END) AS cancelled,
         SUM(CASE WHEN ${PACKED_SQL('o')} AND ${AFTER_PACK_RETURNED_SQL('o')} THEN 1 ELSE 0 END) AS returned
-      FROM ${src.orders} o WHERE ${base} AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,7) GROUP BY 1,2`).bind(...posIds, startUtc, endUtc),
+      FROM ${src.orders} o WHERE ${base} AND o.created_at>=? AND o.created_at<? AND o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,7) GROUP BY 1,2`).bind(...posIds, startUtc, endUtc),
     env.DB.prepare("SELECT user_id, MAX(name) AS name FROM pos_users WHERE name<>'' GROUP BY user_id"),
   ]);
   const key = (s: string, m: string) => `${s}\u0000${m}`;

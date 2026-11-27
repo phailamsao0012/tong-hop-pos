@@ -3,7 +3,7 @@ import { MENTOR_SQL } from '@/lib/teams/hr-teams';
 import { maskPhone } from '@/lib/bot/bot-guard-core';
 import { maskPhonesIn } from '@/lib/ops/audit';
 import { DATE_RE, todayVn, vnRangeUtc } from '@/lib/shared/report-time';
-import { CLOSED } from '@/lib/reports/stats';
+import { CLOSED, revenueDate } from '@/lib/reports/stats';
 import { COUNTED_STAFF, WORKING, teamFilter, webTeamMembers } from '@/lib/teams/team';
 import { WEB_TEAM_ID } from '@/lib/teams/web-teams';
 import { POS } from '@/lib/shared/report-model';
@@ -52,15 +52,15 @@ export type MentorCustomer = { id: string; name: string; phone: string | null; p
 export type MentorOrder = { id: string; code: string; posId: string; at: string; net: number };
 export type MentorReport = { start: string; end: string; month: string; posOptions: { id: string; name: string }[]; staff: MentorStaff[]; customers: MentorCustomer[]; orderRows?: MentorOrder[]; page: number; hasMore: boolean; definitions: string };
 
-export const MENTOR_DEFINITION = 'Doanh thu và đơn chốt theo ngày chốt trong kỳ, cùng định nghĩa Sale/CSKH. AOV = doanh thu ÷ đơn chốt. Tỷ lệ chốt = đơn tạo trong kỳ đã chốt ÷ đơn tạo trong kỳ (bỏ đơn xóa). Tỷ lệ hoàn = đơn hoàn ÷ đơn chuyển đi của nhóm đơn tạo trong kỳ. KPI là doanh thu tháng hiện tại trong POS được cấp. Khách gồm người được team phân công hoặc có đơn chốt do team bán/chăm sóc trong kỳ; số tiền chỉ cộng các đơn trong phạm vi. SĐT được che.';
+export const MENTOR_DEFINITION = 'Doanh thu và đơn chốt theo ngày tạo đơn trong kỳ, cùng định nghĩa Sale/CSKH. AOV = doanh thu ÷ đơn chốt. Tỷ lệ chốt = đơn tạo trong kỳ đã chốt ÷ đơn tạo trong kỳ (bỏ đơn xóa). Tỷ lệ hoàn = đơn hoàn ÷ đơn chuyển đi của nhóm đơn tạo trong kỳ. KPI là doanh thu tháng hiện tại trong POS được cấp. Khách gồm người được team phân công hoặc có đơn chốt do team bán/chăm sóc trong kỳ; số tiền chỉ cộng các đơn trong phạm vi. SĐT được che.';
 
 /** Câu đọc đơn của riêng giao diện Mentor: không thay số hay hợp đồng API của vai trò cũ. */
 export function mentorOrdersQuery(posIds: string[], ids: string[], start: string, end: string) {
   const range = vnRangeUtc(start, end), filter = staffOrderFilter(ids);
   return {
     sql: `SELECT o.id,o.source_order_id,o.pos_id,o.customer_id,o.phone,o.customer_name,o.seller_id,o.care_id,o.first_closed_at,o.status_code,COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0)) AS net
-      FROM raw_pos_orders o INDEXED BY idx_raw_orders_pos_closed_status_money
-      WHERE o.pos_id IN (${ph(posIds)}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.${CLOSED} AND o.seller_id IN ${COUNTED_STAFF}${filter.sql}`,
+      FROM raw_pos_orders o
+      WHERE o.pos_id IN (${ph(posIds)}) AND ${revenueDate('o.')}>=? AND ${revenueDate('o.')}<? AND o.${CLOSED} AND o.seller_id IN ${COUNTED_STAFF}${filter.sql}`,
     binds: [...posIds, range.startUtc, range.endUtc, ...filter.binds],
   };
 }

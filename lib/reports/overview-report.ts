@@ -20,15 +20,18 @@ function toMetrics(row: Row | null, customers?: { all: number; closed: number })
     key, { orders: n(`${key}_orders`), net: n(`${key}_net`) },
   ])) as Record<GroupKey, { orders: number; net: number }>;
   const closedOrders = n('closed_orders');
-  // Tỷ lệ chốt không vượt 100% (29/09/2026): tử số là đơn của CHÍNH mẫu số đã chốt, không phải đơn chốt theo ngày chốt
-  // (có cả đơn chia / tạo từ trước). Đơn tạo trong kỳ đã chốt = đang ở trạng thái xác nhận trở đi (không mới, không hủy).
-  const createdClosedOrders = groups.confirmed.orders + groups.shipping.orders + groups.delivered.orders + groups.returned.orders;
+  // Tỷ lệ chốt không vượt 100% (29/09/2026): tử số là đơn của CHÍNH mẫu số đã chốt. Từ 27/11/2026 đơn chốt đã theo ngày tạo đơn
+  // nên tử số chính là đơn chốt (đơn tạo trong kỳ, nay ở Chờ xác nhận trở đi, không mới / hủy / xoá).
+  const createdClosedOrders = closedOrders;
+  // Doanh thu đã nhận: trong các đơn tính doanh thu, đơn đang ở Đã nhận / Đã thu tiền (luôn ≤ doanh thu).
+  const receivedNet = n('received_net');
   const assignedClosedOrders = n('assigned_closed_orders');
   return {
     orders: n('orders'), deletedOrders: n('deleted_orders'), gross: n('gross'), discount: n('discount'), net: n('net'),
     shippingFee: n('shipping_fee'), cod: n('cod'), customers: customers?.all ?? null,
     closedOrders, closedGross: n('closed_gross'), closedDiscount: n('closed_discount'), closedNet: n('closed_net'),
     closedShippingFee: n('closed_shipping_fee'), closedCustomers: customers?.closed ?? null, closedQuantity: n('closed_quantity'),
+    receivedOrders: n('received_orders'), receivedNet, receivedShare: n('closed_net') ? receivedNet / n('closed_net') * 100 : null,
     assignedOrders: n('assigned_orders'), assignedHidden: false, createdClosedOrders, assignedClosedOrders,
     closeRate: n('orders') ? createdClosedOrders / n('orders') * 100 : null,
     assignedCloseRate: n('assigned_orders') ? assignedClosedOrders / n('assigned_orders') * 100 : null,
@@ -62,19 +65,19 @@ async function periodReport(
   const { startUtc, endUtc } = cutoffUtc ? { startUtc: vnRangeUtc(start, end).startUtc, endUtc: cutoffUtc } : vnRangeUtc(start, end);
   const rawFilter = orderFilterSql(filters, team, 'raw_pos_orders');
   const narrowed = filters.productSegment !== 'all' || team === 'cskh' || !filters.status.isDefault;
-  // Chưa sẵn sàng: giữ đường cũ; khi lọc, chỉ ghép ngày đủ nếu bảng nhóm đã sẵn sàng.
+  // Bảng tính sẵn chỉ dùng khi đã dựng lại theo ngày tạo đơn (revenueStatsReady); chưa xong thì mọi số tính từ đơn gốc, không trộn hai cách.
   const segmentReady = await segmentStatsReady(db);
-  const base = cutoffUtc && filters.status.isDefault && (!narrowed || segmentReady) ? { start, lastDay: end, lastDayStartUtc: vnRangeUtc(end, end).startUtc } : null;
+  const base = cutoffUtc && filters.status.isDefault && segmentReady ? { start, lastDay: end, lastDayStartUtc: vnRangeUtc(end, end).startUtc } : null;
   const read = { start, end, ready: segmentReady };
   const virtual = segmentedStats(posIds, startUtc, endUtc, team, filters, employeeIds, base, unit, read);
   const totals = segmentedStats(posIds, startUtc, endUtc, team, filters, employeeIds, base, unit, { ...read, withProducts: false });
-  const filtered = narrowed || !!cutoffUtc;
+  const filtered = narrowed || !!cutoffUtc || !segmentReady;
   const sellerProductReady = !filtered && await sellerProductStatsReady(db);
   const stats = (sql: string) => {
     const useRaw = filtered;
     return { bind: (...args: (string | number)[]) => db.prepare((useRaw ? totals.sql : '') + sql).bind(...(useRaw ? totals.binds : []), ...args) };
   };
-  // Số khách: SĐT khác nhau của đơn tạo trong kỳ (all) và của đơn chốt trong kỳ theo ngày chốt (closed).
+  // Số khách: SĐT khác nhau của đơn tạo trong kỳ (all) và của đơn chốt tạo trong kỳ (closed).
   const customerWhere = `pos_id IN (${posPlaceholders}) AND phone IS NOT NULL AND phone<>'' AND status_code<>7${employeeFilter}${rawFilter.sql}`;
   const customerBinds = [...posIds, ...employeeIds, ...rawFilter.binds];
   const [total, byPos, series, byEmployee, byEmployeePos, byProduct, customers, closedCustomers, employeeSeries, recon] = await db.batch([
@@ -96,7 +99,7 @@ async function periodReport(
       .bind(...customerBinds, startUtc, endUtc),
     // Chuỗi theo nhân viên × ngày (cho sparkline so sánh nhân viên).
     stats(`SELECT seller_id, day, SUM(closed_orders) AS closed_orders, SUM(assigned_orders) AS assigned_orders, SUM(closed_net) AS closed_net FROM stats_daily WHERE ${where} GROUP BY seller_id, day`).bind(...binds),
-    // Đối chiếu: đếm lại đơn chốt, doanh số và doanh thu THẲNG từ đơn gốc (chỉ mục bao phủ idx_raw_orders_pos_confirmed_status_money),
+    // Đối chiếu: đếm lại đơn chốt, doanh số và doanh thu THẲNG từ đơn gốc theo ngày tạo đơn (chỉ mục idx_raw_orders_pos_created),
     // độc lập với bảng stats_daily; giao diện so hai kết quả và báo vàng nếu lệch.
     db.prepare(`SELECT COUNT(*) AS n, COALESCE(SUM(COALESCE(current_total,0)),0) AS gross, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders
       WHERE pos_id IN (${posPlaceholders}) AND ${closedDate(filters)}>=? AND ${closedDate(filters)}<? AND ${closedWhere(filters)}${employeeFilter}${rawFilter.sql}`).bind(...posIds, startUtc, endUtc, ...employeeIds, ...rawFilter.binds),
@@ -245,12 +248,13 @@ export async function overviewReport(options: OverviewOptions) {
     departments: [...new Set(names.results.map((r) => r.department).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), 'vi')),
     definitions: {
       basis: 'Giờ Việt Nam. Đơn tạo mới và các nhóm trạng thái tính theo ngày tạo đơn (trạng thái hiện tại lúc đồng bộ).',
-      closed: 'Đơn chốt, Doanh thu, SL bán thực, Số khách xếp theo ngày CHỐT đơn (lần đầu vào Chờ xác nhận hoặc sau đó): gồm mọi đơn từ Chờ xác nhận trở đi (đã xác nhận, đóng gói, chờ chuyển, đang giao, đã nhận, kể cả hoàn). Đơn mới, Hủy, Xóa không tính. Ô Đơn chốt trên Pancake không tính Chờ xác nhận nên có thể thấp hơn.',
+      closed: 'Đơn chốt, Doanh thu, SL bán thực, Số khách xếp theo NGÀY TẠO ĐƠN (từ 27/11/2026): gồm mọi đơn tạo trong kỳ nay ở Chờ xác nhận trở đi (đã xác nhận, đóng gói, chờ chuyển, đang giao, đã nhận, kể cả hoàn). Đơn mới, Hủy, Xóa không tính. Đơn tạo hôm trước, chốt hôm sau vẫn tính cho ngày tạo, nên số các ngày đã qua có thể đổi khi đơn được chốt hoặc hủy muộn.',
+      received: 'Doanh thu đã nhận = trong chính các đơn tính doanh thu (cùng kỳ theo ngày tạo, cùng bộ lọc), tổng tiền các đơn đang ở Đã nhận hoặc Đã thu tiền. Luôn không vượt doanh thu; % đã nhận = DT đã nhận ÷ doanh thu.',
       revenue: 'Doanh thu = tổng tiền đơn chốt sau khi trừ giảm giá / quà tặng (chưa gồm phí vận chuyển). GTTB = doanh thu ÷ đơn chốt.',
       quantity: 'SL bán thực = tổng số lượng sản phẩm trong đơn chốt. Số khách = số SĐT khác nhau có đơn chốt.',
       segments: 'Combo Oxytetra + Bổ đậm đặc: mọi đơn POS Oxytetra (POS này chỉ bán combo đó). Các POS khác: Kháng sinh: đơn có sản phẩm Gentadox hoặc Detox không phải quà tặng; riêng POS Siêu Vô Gạo tính thêm Oxy + Bổ huyết và Bio Nano Shield. SK GK: đơn có SK, GK hoặc Godkill (hay gắn nhãn SK + GK) mà không có kháng sinh. Khác: mọi đơn còn lại. Mỗi đơn chỉ thuộc một nhóm nên ba nhóm cộng lại bằng tổng. Doanh thu là toàn bộ đơn thuộc nhóm.',
       origin: 'Chỉ áp dụng CSKH: không có Marketer = tự ups; có Marketer = từ MKT. Lọc nguồn và người MKT áp dụng đồng thời cho mọi chỉ số, bảng, biểu đồ và kỳ so sánh trong báo cáo.',
-      overviewRate: 'Tỷ lệ chốt tổng quan = đơn chốt trong kỳ ÷ đơn tạo mới trong kỳ. Hai số dùng ngày chốt và ngày tạo tương ứng; có thể vượt 100% khi chốt đơn cũ. Không có đơn tạo mới thì tỷ lệ để trống.',
+      overviewRate: 'Tỷ lệ chốt tổng quan = đơn tạo trong kỳ đã chốt ÷ đơn tạo mới trong kỳ (cả hai theo ngày tạo đơn, không vượt 100%). Không có đơn tạo mới thì tỷ lệ để trống.',
       rate: 'Tỷ lệ chốt nhân viên = đơn chốt trong kỳ ÷ đơn chia trong kỳ (đơn được giao cho nhân viên đó theo thời điểm giao người bán).',
       groups: 'Mới: 0,17 · Đã xác nhận/đang xử lý: 1,8,9,11,12,13,20 · Đang giao: 2 · Giao thành công: 3,16 · Hoàn: 4,5,15 · Hủy: 6 · Xóa: 7.',
     },

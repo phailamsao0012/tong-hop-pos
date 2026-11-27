@@ -4,7 +4,7 @@ import { isOwner, type Role as UserRole } from '@/lib/auth/access';
 import { ORDER_STATUS } from '@/lib/pancake/pancake';
 import { POS } from '@/lib/shared/report-model';
 import { DATE_RE, vnRangeUtc } from '@/lib/shared/report-time';
-import { CLOSED } from '@/lib/reports/stats';
+import { CLOSED, revenueDate } from '@/lib/reports/stats';
 import { COUNTED, COUNTED_NAME, COUNTED_STAFF } from '@/lib/teams/team';
 import { mktClosedStatus } from '@/lib/reports/mkt-closed';
 
@@ -16,7 +16,7 @@ const NET = 'COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_d
 export const NOTES_KEY = 'uncounted_notes';
 export type Role = 'seller' | 'marketer';
 const ROLE_SQL: Record<Role, { col: string; date: string; where: string }> = {
-  seller: { col: 'o.seller_id', date: 'o.first_closed_at', where: `o.${CLOSED}` },
+  seller: { col: 'o.seller_id', date: revenueDate('o.'), where: `o.${CLOSED}` }, // theo ngày tạo đơn (27/11/2026)
   marketer: { col: 'o.marketer_id', date: 'o.first_confirmed_at', where: mktClosedStatus('o.status_code') },
 };
 export type Note = { text: string; by: string; at: string };
@@ -73,7 +73,7 @@ export async function uncountedReport(s: Scope, user: { role: UserRole }) {
     agg('seller'), agg('marketer'),
     env.DB.prepare(people),
     // Tổng đơn chốt cả kỳ (mọi người bán) để biết phần không tính chiếm bao nhiêu.
-    env.DB.prepare(`SELECT COUNT(*) AS orders, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.${CLOSED}`).bind(...posIds, startUtc, endUtc),
+    env.DB.prepare(`SELECT COUNT(*) AS orders, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND ${revenueDate('o.')}>=? AND ${revenueDate('o.')}<? AND o.${CLOSED}`).bind(...posIds, startUtc, endUtc),
     env.DB.prepare(`SELECT user_id AS id, MAX(name) AS name, MAX(department) AS department, GROUP_CONCAT(DISTINCT pos_id) AS pos_ids FROM pos_users
       WHERE pos_id IN (${ph}) AND ${COUNTED} AND NOT ${COUNTED_NAME} GROUP BY user_id ORDER BY name`).bind(...posIds),
     env.DB.prepare('SELECT pos_user_id AS id, team, status FROM hr_pos_team'),

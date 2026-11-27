@@ -1,7 +1,8 @@
 // Dựng bảng số liệu theo ngày (stats_daily, stats_daily_product) từ đơn nguồn.
 // Một dòng (POS, ngày, người bán) gộp ba cơ sở thời gian:
 //   - ngày TẠO đơn: orders, deleted_orders, gross/discount/net/..., nhóm trạng thái hiện tại;
-//   - ngày CHỐT (xác nhận lần đầu): closed_* — trùng cách Pancake tính "Đơn chốt / Doanh thu";
+//   - doanh thu / đơn chốt: closed_*, received_* — tập đơn "đã chốt trở đi" (CLOSED) nhưng xếp theo NGÀY TẠO đơn (revenueDate,
+//     anh Vũ 27/11/2026; trước đó theo ngày chốt first_closed_at);
 //   - ngày GIAO người bán: assigned_orders ("đơn chia").
 // Chỉ các (POS, ngày) có đơn thay đổi mới được tính lại; upsert bỏ qua dòng không đổi.
 import { segmentKeyExpr, marketerValue } from '@/lib/pancake/order-segments';
@@ -28,15 +29,21 @@ export const NET = 'COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_
 // Giảm giá hiển thị = doanh số − doanh thu (gồm cả voucher/khuyến mãi sàn).
 const DISCOUNT = '(COALESCE(current_total,0)-COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0)))';
 // "Đơn chốt" (anh Vũ 08/10/2026): từ Chờ xác nhận trở đi (chờ XN, đã XN, đóng gói, chờ chuyển, đang giao, đã nhận, đã thu tiền,
-// kể cả hoàn), xếp theo giờ chốt first_closed_at = lần đầu đơn vào Chờ xác nhận hoặc trạng thái sau đó. Mới, Hủy, Xóa không tính.
+// kể cả hoàn). Mới, Hủy, Xóa không tính. Từ 27/11/2026 doanh thu / đơn chốt xếp theo ngày tạo đơn (revenueDate); giờ chốt
+// first_closed_at (lần đầu vào Chờ xác nhận hoặc sau đó) chỉ còn cho chốt nóng, giờ chốt.
 // Trước 08/10 tính từ Đã xác nhận như ô "Đơn chốt" trên Pancake; báo cáo MKT vẫn tính chốt = đã xác nhận (first_confirmed_at).
 // SHIPPED giữ lại cho các chỗ cần "đã bàn giao ĐVVC".
 export const SHIPPED = [2, ...STATUS_GROUPS.delivered, ...STATUS_GROUPS.returned];
 export const NOT_CLOSED = [...STATUS_GROUPS.new, ...STATUS_GROUPS.cancelled];
 export const NOT_CLOSED_CODES: number[] = [...NOT_CLOSED];
 export const CLOSED = `status_code NOT IN (${inList(NOT_CLOSED)})`;
-/** Cột giờ chốt của đơn (xem trên). */
+/** Cột giờ chốt của đơn (xem trên). Chỉ dùng khi cần đúng nghĩa giờ chốt: chốt nóng, giờ chốt, lịch sử trạng thái. */
 export const CLOSED_AT = 'first_closed_at';
+/** Cột ngày xếp DOANH THU (anh Vũ 27/11/2026): đơn "đã chốt trở đi" tính vào ngày TẠO đơn, không theo ngày chốt.
+ *  Đơn tạo 26/11, chốt 27/11 tính cho 26/11; số ngày cũ có thể đổi khi đơn được chốt / hủy muộn. Một chỗ đổi duy nhất. */
+export const REVENUE_AT = 'created_at';
+/** alias có dấu chấm nếu cần ('o.'), như closedDate. */
+export const revenueDate = (alias = '') => `${alias}${REVENUE_AT}`;
 export const dayExpr = (column: string) => `date(datetime(${column},'+${VN_OFFSET_HOURS} hours'))`;
 export const DAY_EXPR = dayExpr('created_at');
 
@@ -44,20 +51,28 @@ export const CREATED_COLUMNS = [
   'orders', 'deleted_orders', 'gross', 'discount', 'net', 'shipping_fee', 'cod',
   ...(Object.keys(STATUS_GROUPS) as GroupKey[]).flatMap((k) => [`${k}_orders`, `${k}_net`]),
 ] as const;
+// received_*: "Doanh thu đã nhận" = trong chính các đơn tính doanh thu, đơn đang ở Đã nhận / Đã thu tiền (STATUS_GROUPS.delivered).
 export const CLOSED_COLUMNS = [
-  'closed_orders', 'closed_gross', 'closed_discount', 'closed_net', 'closed_shipping_fee', 'closed_quantity',
+  'closed_orders', 'closed_gross', 'closed_discount', 'closed_net', 'closed_shipping_fee', 'closed_quantity', 'received_orders', 'received_net',
 ] as const;
 // assigned_closed_orders: trong số đơn chia ngày đó, bao nhiêu đơn nay đã chốt (tỷ lệ chốt ÷ số chia không vượt 100%, 29/09/2026).
 export const STAT_COLUMNS = [...CREATED_COLUMNS, ...CLOSED_COLUMNS, 'assigned_orders', 'assigned_closed_orders'] as const;
 
-/** Thêm cột assigned_closed_orders vào stats_daily nếu chưa có (bảng cũ). Nhớ bằng cờ, không giữ Promise dùng chung giữa các yêu cầu. */
-let statsSchemaReady = false;
+/** Cột thêm sau (bảng cũ chưa có; migration 0031, 0054 cũng thêm). Lỗi "duplicate column" = đã có. */
+const LATE_COLUMNS = ['assigned_closed_orders', 'received_orders', 'received_net'] as const;
+async function addColumns(db: D1Database, table: string, columns: readonly string[]) {
+  for (const c of columns) {
+    try { await db.prepare(`ALTER TABLE ${table} ADD COLUMN ${c} INTEGER NOT NULL DEFAULT 0`).run(); }
+    catch (e) { if (!/duplicate column/i.test(String(e))) throw e; }
+  }
+}
+/** Thêm cột thiếu vào stats_daily (bảng cũ). Nhớ riêng từng DB, không giữ Promise dùng chung giữa các yêu cầu. */
+const statsSchemas = new WeakSet<D1Database>();
 export async function ensureStatsSchema(db: D1Database) {
   await ensureSegmentSchema(db);
-  if (statsSchemaReady) return;
-  try { await db.prepare('ALTER TABLE stats_daily ADD COLUMN assigned_closed_orders INTEGER NOT NULL DEFAULT 0').run(); }
-  catch (e) { if (!/duplicate column/i.test(String(e))) throw e; }
-  statsSchemaReady = true;
+  if (statsSchemas.has(db)) return;
+  await addColumns(db, 'stats_daily', LATE_COLUMNS);
+  statsSchemas.add(db);
 }
 export const PRODUCT_COLUMNS = [
   'orders', 'quantity', 'total', 'closed_quantity', 'closed_total', 'delivered_quantity', 'delivered_total', 'returned_quantity',
@@ -66,7 +81,7 @@ export const PRODUCT_COLUMNS = [
 // đúng điều kiện "Xu hướng theo dòng sản phẩm" (lib/trends-report.ts).
 export const SELLER_PRODUCT_COLUMNS = [...PRODUCT_COLUMNS, 'sale_quantity', 'sale_total'] as const;
 const SALE_ITEM = 'i.is_bonus=0 AND i.quantity>0';
-const sellerProductSql = `SELECT ${dayExpr('o.first_closed_at')} AS day, COALESCE(o.seller_id,'') AS seller_id, COALESCE(i.product_id,'') AS product_id,
+const sellerProductSql = `SELECT ${dayExpr(revenueDate('o.'))} AS day, COALESCE(o.seller_id,'') AS seller_id, COALESCE(i.product_id,'') AS product_id,
     COALESCE(i.name,'') AS name, COUNT(DISTINCT i.order_id) AS orders, SUM(i.quantity) AS quantity, SUM(i.line_total) AS total,
     SUM(CASE WHEN i.is_bonus=0 THEN i.quantity ELSE 0 END) AS closed_quantity,
     SUM(i.line_total) AS closed_total,
@@ -76,7 +91,7 @@ const sellerProductSql = `SELECT ${dayExpr('o.first_closed_at')} AS day, COALESC
     SUM(CASE WHEN ${SALE_ITEM} THEN i.quantity ELSE 0 END) AS sale_quantity,
     SUM(CASE WHEN ${SALE_ITEM} THEN i.line_total ELSE 0 END) AS sale_total
   FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
-  WHERE o.pos_id=? AND o.first_closed_at>=? AND o.first_closed_at<? AND o.${CLOSED} GROUP BY 1, 2, 3, 4`;
+  WHERE o.pos_id=? AND ${revenueDate('o.')}>=? AND ${revenueDate('o.')}<? AND o.${CLOSED} GROUP BY 1, 2, 3, 4`;
 const sellerProductExisting = `SELECT id, ${SELLER_PRODUCT_COLUMNS.join(',')} FROM stats_daily_seller_product WHERE pos_id=? AND day>=? AND day<=?`;
 
 /** Câu ghi cho stats_daily_seller_product của một khoảng ngày (chỉ ghi dòng mới / đổi, xóa dòng không còn). */
@@ -87,7 +102,7 @@ function sellerProductStatements(db: D1Database, posId: string, range: { start: 
 
 /** Khóa app_settings: tháng cũ của stats_daily_seller_product đã điền xong (bộ hẹn giờ ghi giá trị = SELLER_PRODUCT_EPOCH). */
 export const SELLER_PRODUCT_READY_KEY = 'stats_seller_product_ready';
-export const SELLER_PRODUCT_EPOCH = 1;
+export const SELLER_PRODUCT_EPOCH = 2; // 2: theo ngày tạo đơn (27/11/2026)
 let sellerProductReady = { value: false, at: 0 };
 /** Đọc báo cáo sản phẩm từ bảng tính sẵn khi đã điền đủ lịch sử; chưa đủ thì nơi gọi đọc đơn gốc như cũ. Nhớ 60 giây mỗi isolate. */
 export async function sellerProductStatsReady(db: D1Database) {
@@ -118,7 +133,9 @@ const closedSelect = `
   COALESCE(SUM(current_total),0) AS closed_gross,
   COALESCE(SUM(${DISCOUNT}),0) AS closed_discount,
   COALESCE(SUM(${NET}),0) AS closed_net,
-  COALESCE(SUM(shipping_fee),0) AS closed_shipping_fee
+  COALESCE(SUM(shipping_fee),0) AS closed_shipping_fee,
+  SUM(CASE WHEN status_code IN (${inList(STATUS_GROUPS.delivered)}) THEN 1 ELSE 0 END) AS received_orders,
+  COALESCE(SUM(CASE WHEN status_code IN (${inList(STATUS_GROUPS.delivered)}) THEN ${NET} ELSE 0 END),0) AS received_net
 `;
 
 type Row = Record<string, string | number | null>;
@@ -173,14 +190,15 @@ export async function rebuildStats(db: D1Database, dirty: DirtyBuckets) {
       const [createdRows, closedRows, closedQty, assignedRows, sellerProductRows, sellerProductOld, mktRows, mktOld, ...segmentResults] = await db.batch([
         db.prepare(`SELECT ${dayExpr('created_at')} AS day, COALESCE(seller_id,'') AS seller_id, ${createdSelect}
           FROM raw_pos_orders WHERE pos_id=? AND created_at>=? AND created_at<? GROUP BY 1, 2`).bind(posId, startUtc, endUtc),
-        db.prepare(`SELECT ${dayExpr('first_closed_at')} AS day, COALESCE(seller_id,'') AS seller_id, ${closedSelect}
-          FROM raw_pos_orders WHERE pos_id=? AND first_closed_at>=? AND first_closed_at<? AND ${CLOSED} GROUP BY 1, 2`).bind(posId, startUtc, endUtc),
-        db.prepare(`SELECT ${dayExpr('o.first_closed_at')} AS day, COALESCE(o.seller_id,'') AS seller_id, SUM(i.quantity) AS quantity
+        // Doanh thu / đơn chốt / SL bán theo ngày tạo đơn (revenueDate).
+        db.prepare(`SELECT ${dayExpr(revenueDate())} AS day, COALESCE(seller_id,'') AS seller_id, ${closedSelect}
+          FROM raw_pos_orders WHERE pos_id=? AND ${revenueDate()}>=? AND ${revenueDate()}<? AND ${CLOSED} GROUP BY 1, 2`).bind(posId, startUtc, endUtc),
+        db.prepare(`SELECT ${dayExpr(revenueDate('o.'))} AS day, COALESCE(o.seller_id,'') AS seller_id, SUM(i.quantity) AS quantity
           FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
-          WHERE o.pos_id=? AND o.first_closed_at>=? AND o.first_closed_at<? AND o.${CLOSED} AND i.is_bonus=0 GROUP BY 1, 2`).bind(posId, startUtc, endUtc),
+          WHERE o.pos_id=? AND ${revenueDate('o.')}>=? AND ${revenueDate('o.')}<? AND o.${CLOSED} AND i.is_bonus=0 GROUP BY 1, 2`).bind(posId, startUtc, endUtc),
         db.prepare(`SELECT ${dayExpr('seller_assigned_at')} AS day, COALESCE(seller_id,'') AS seller_id, COUNT(*) AS assigned_orders, SUM(CASE WHEN ${CLOSED} THEN 1 ELSE 0 END) AS assigned_closed_orders
           FROM raw_pos_orders WHERE pos_id=? AND seller_assigned_at>=? AND seller_assigned_at<? AND status_code<>7 GROUP BY 1, 2`).bind(posId, startUtc, endUtc),
-        // Sản phẩm theo ngày chốt của đơn (đơn chốt), giống "SL sản phẩm" trên Pancake; theo người bán + tên dòng hàng,
+        // Sản phẩm của đơn chốt theo ngày tạo đơn, như "SL sản phẩm" trên Pancake lọc theo ngày tạo; theo người bán + tên dòng hàng,
         // stats_daily_product cộng lại từ đây.
         db.prepare(sellerProductSql).bind(posId, startUtc, endUtc),
         db.prepare(sellerProductExisting).bind(posId, range.start, range.end),
@@ -368,7 +386,7 @@ const segmentSchemas = new WeakSet<D1Database>();
 export async function ensureSegmentSchema(db: D1Database) {
   if (segmentSchemas.has(db)) return;
   const exists = await db.prepare("SELECT 1 AS x FROM sqlite_master WHERE type='table' AND name='stats_daily_segment'").first();
-  if (exists) { segmentSchemas.add(db); return; }
+  if (exists) { await addColumns(db, 'stats_daily_segment', LATE_COLUMNS.slice(1)); segmentSchemas.add(db); return; }
   await db.prepare(`CREATE TABLE IF NOT EXISTS stats_daily_segment (
     id TEXT PRIMARY KEY NOT NULL, pos_id TEXT NOT NULL, day TEXT NOT NULL,
     seller_id TEXT NOT NULL DEFAULT '', segment TEXT NOT NULL, marketer_id TEXT NOT NULL DEFAULT '',
@@ -381,7 +399,11 @@ export async function ensureSegmentSchema(db: D1Database) {
 export const SEGMENT_READY_KEY = 'stats_segment_epoch';
 // 2 (27/11/2026): bộ thẻ mới theo thuốc chính, bỏ SK GK (lib/pancake/order-segments.ts). Đổi epoch thì bộ hẹn giờ điền lại cả bảng,
 // trong lúc đó báo cáo đọc đơn gốc (segmentStatsReady = false).
-export const SEGMENT_EPOCH = 2;
+// 3 (27/11/2026, gộp nhánh tối): bộ thẻ mới + doanh thu theo ngày tạo đơn + cột received_*, dựng lại một lần.
+export const SEGMENT_EPOCH = 3;
+/** Giá trị cờ ready của bảng nhóm = cũng là cờ "bảng tính sẵn đã theo ngày tạo đơn" (revenueStatsReady). Luôn suy từ SEGMENT_EPOCH, không
+ *  viết số: khi gộp nhánh khác cũng tăng SEGMENT_EPOCH thì chỉ cần tăng lên số kế tiếp, mọi nơi theo. */
+export const SEGMENT_READY_VALUE = String(SEGMENT_EPOCH);
 /** Chưa điền đủ lịch sử luôn đọc đường cũ; nhớ cờ 60 giây mỗi isolate. */
 let segmentReady = { value: false, at: 0 };
 export async function segmentStatsReady(db: D1Database) {
@@ -389,11 +411,17 @@ export async function segmentStatsReady(db: D1Database) {
   let value = false;
   try {
     const r = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(SEGMENT_READY_KEY).first<{ value: string }>();
-    value = r?.value === String(SEGMENT_EPOCH);
+    value = r?.value === SEGMENT_READY_VALUE;
   } catch { value = false; }
   segmentReady = { value, at: Date.now() };
   return value;
 }
+/**
+ * Bảng tính sẵn (stats_daily, stats_daily_segment) đã theo ngày tạo đơn chưa. Bộ hẹn giờ (lib/ops/scheduler.ts) chỉ điền bảng nhóm
+ * sau khi dựng lại xong stats_daily (STATS_EPOCH 8), nên cờ nhóm sản phẩm (SEGMENT_EPOCH 2) bật nghĩa là cả hai bảng đã cùng cách tính mới.
+ * Chưa bật: nơi đọc doanh thu tính từ đơn gốc, không trộn số cũ (ngày chốt) với số mới (ngày tạo).
+ */
+export const revenueStatsReady = (db: D1Database) => segmentStatsReady(db);
 /** Chỉ cho test: quên cờ đã nhớ. */
 export function resetSegmentReadyMemo() {
   segmentReady = { value: false, at: 0 };
@@ -406,10 +434,10 @@ function segmentReads(db: D1Database, posId: string, range: { start: string; end
     FROM raw_pos_orders o WHERE o.pos_id=? AND ${date}>=? AND ${date}<? ${where} GROUP BY 1,2,3,4`).bind(posId, start, end);
   return [
     event('o.created_at', createdSelect),
-    event('o.first_closed_at', closedSelect, `AND o.${CLOSED}`),
-    db.prepare(`SELECT ${dayExpr('o.first_closed_at')} AS day, ${dimensions}, SUM(i.quantity) AS closed_quantity
+    event(revenueDate('o.'), closedSelect, `AND o.${CLOSED}`),
+    db.prepare(`SELECT ${dayExpr(revenueDate('o.'))} AS day, ${dimensions}, SUM(i.quantity) AS closed_quantity
       FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
-      WHERE o.pos_id=? AND o.first_closed_at>=? AND o.first_closed_at<? AND o.${CLOSED} AND i.is_bonus=0 GROUP BY 1,2,3,4`).bind(posId, start, end),
+      WHERE o.pos_id=? AND ${revenueDate('o.')}>=? AND ${revenueDate('o.')}<? AND o.${CLOSED} AND i.is_bonus=0 GROUP BY 1,2,3,4`).bind(posId, start, end),
     event('o.seller_assigned_at', `COUNT(*) AS assigned_orders, SUM(CASE WHEN ${CLOSED} THEN 1 ELSE 0 END) AS assigned_closed_orders`, 'AND status_code<>7'),
     db.prepare(`SELECT id, ${STAT_COLUMNS.join(',')} FROM stats_daily_segment WHERE pos_id=? AND day>=? AND day<=?`).bind(posId, range.start, range.end),
   ];

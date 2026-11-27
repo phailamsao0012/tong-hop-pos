@@ -32,14 +32,18 @@ function metrics(db: DatabaseSync, filters: Partial<OrderFilters> = {}, team: Te
   const v = segmentedStats(['sieu-vo-gao'],'2026-09-21T17:00:00','2026-09-22T17:00:00',team,{ ...EMPTY_ORDER_FILTERS, ...filters });
   return db.prepare(v.sql + (table === 'stats_daily' ? 'SELECT SUM(orders) AS n, SUM(closed_orders) AS closed, SUM(closed_net) AS net, SUM(assigned_orders) AS assigned FROM stats_daily' : 'SELECT product_id,SUM(orders) AS n,SUM(closed_quantity) AS qty FROM stats_daily_product GROUP BY product_id ORDER BY product_id')).all(...v.binds);
 }
-void test('CSKH self + MKT partitions totals, old orders use confirmation date, cancellations excluded from closes', () => {
+// Từ 27/11/2026 đơn chốt / doanh thu theo ngày TẠO đơn: đơn 'old' (tạo 20/09, chốt 22/09) tính cho 20/09, không cho 22/09.
+void test('CSKH self + MKT partitions totals, old orders count on their creation day, cancellations excluded from closes', () => {
   const db = fixture();
   const all = metrics(db)[0], self = metrics(db,{orderOrigin:'self'})[0], mkt = metrics(db,{orderOrigin:'mkt'})[0];
-  assert.deepEqual({...all},{n:4,closed:3,net:2400,assigned:4});
+  assert.deepEqual({...all},{n:4,closed:2,net:1600,assigned:4});
   assert.deepEqual({...self},{n:2,closed:1,net:800,assigned:2});
-  assert.deepEqual({...mkt},{n:2,closed:2,net:1600,assigned:2});
+  assert.deepEqual({...mkt},{n:2,closed:1,net:800,assigned:2});
   assert.equal(Number(self.net)+Number(mkt.net),all.net);
-  assert.deepEqual({...metrics(db,{orderOrigin:'mkt',marketerId:'m2'})[0]},{n:0,closed:1,net:800,assigned:0});
+  assert.deepEqual({...metrics(db,{orderOrigin:'mkt',marketerId:'m2'})[0]},{n:null,closed:null,net:null,assigned:null});
+  // Ngày tạo 20/09: đơn 'old' có ở đó (đơn lên, đơn chốt, doanh thu cùng một ngày).
+  const v = segmentedStats(['sieu-vo-gao'],'2026-09-19T17:00:00','2026-09-20T17:00:00','cskh',{ ...EMPTY_ORDER_FILTERS, orderOrigin: 'mkt', marketerId: 'm2' });
+  assert.deepEqual({...db.prepare(v.sql + 'SELECT SUM(orders) AS n, SUM(closed_orders) AS closed, SUM(closed_net) AS net FROM stats_daily').get(...v.binds)},{n:1,closed:1,net:800});
   db.close();
 });
 void test('Thẻ theo thuốc chính từng POS (27/11/2026): bảng tên món ảo cho từng luật; món đi kèm không quyết định thẻ; bỏ SK GK', () => {

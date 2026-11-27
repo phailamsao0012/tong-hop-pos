@@ -101,7 +101,7 @@ export async function mktSummary(opts: { posIds: string[]; start: string; end: s
   const [costs, leads, closed] = await db.batch([
     db.prepare(`SELECT marketer_id, SUM(amount) AS amount FROM ${adCostSource(opts.posIds, opts.start, opts.end)} WHERE day>=? AND day<=?${notSan('marketer_id')} GROUP BY marketer_id`).bind(opts.start, opts.end),
     db.prepare(`SELECT ${mk} AS marketer_id, COUNT(*) AS orders, COUNT(DISTINCT phone) AS phones FROM raw_pos_orders WHERE pos_id IN (${ph}) AND created_at>=? AND created_at<? AND status_code<>7 AND ${mk} IS NOT NULL ${leadSellerFilter('seller_id', opts.team)}${notSan('marketer_id')} GROUP BY 1`).bind(...opts.posIds, startUtc, endUtc),
-    db.prepare(`SELECT ${mk} AS marketer_id, COUNT(*) AS closed, COALESCE(SUM(${NET}),0) AS net, ${newSplitSql()} FROM raw_pos_orders WHERE pos_id IN (${ph}) AND first_confirmed_at>=? AND first_confirmed_at<? AND ${mktClosedStatus('status_code')} AND ${mk} IS NOT NULL AND marketer_id IN ${MKT_STAFF}${notSan('marketer_id')} GROUP BY 1`).bind(...opts.posIds, startUtc, endUtc),
+    db.prepare(`SELECT ${mk} AS marketer_id, COUNT(*) AS closed, COALESCE(SUM(${NET}),0) AS net, ${newSplitSql()} FROM raw_pos_orders WHERE pos_id IN (${ph}) AND created_at>=? AND created_at<? AND first_confirmed_at IS NOT NULL AND ${mktClosedStatus('status_code')} AND ${mk} IS NOT NULL AND marketer_id IN ${MKT_STAFF}${notSan('marketer_id')} GROUP BY 1`).bind(...opts.posIds, startUtc, endUtc),
   ]);
   const m = new Map<string, MktRow>();
   const get = (id: string) => { let x = m.get(id); if (!x) { x = { cost: 0, orders: 0, phones: 0, closed: 0, net: 0, ...emptyNewSplit() }; m.set(id, x); } return x; };
@@ -111,7 +111,7 @@ export async function mktSummary(opts: { posIds: string[]; start: string; end: s
   return { ...mktTotal([...m.values()], opts.team), hasCost: (costs.results as unknown[]).length > 0 };
 }
 
-/** ROAS theo marketer: chi phí đã nhập × số (đơn tạo có marketer) và đơn chốt / doanh thu (theo ngày xác nhận lần đầu) cùng kỳ. */
+/** ROAS theo marketer: chi phí đã nhập × số (đơn tạo có marketer) và đơn chốt / doanh thu (đơn đã xác nhận, theo ngày tạo đơn từ 27/11/2026) cùng kỳ. */
 export async function roasReport(opts: { posIds: string[]; start: string; end: string; team?: Team }) {
   await ensureAdCostSchema();
   const db = env.DB;
@@ -122,7 +122,7 @@ export async function roasReport(opts: { posIds: string[]; start: string; end: s
     db.prepare(`SELECT marketer_id, SUM(amount) AS amount, COUNT(*) AS n FROM ${adCostSource(opts.posIds, opts.start, opts.end)} WHERE day>=? AND day<=?${notSan('marketer_id')} GROUP BY marketer_id`).bind(opts.start, opts.end),
     db.prepare('SELECT id, day, marketer_id, amount, campaign, note, created_at FROM ad_costs WHERE day>=? AND day<=? ORDER BY day DESC, created_at DESC LIMIT 500').bind(opts.start, opts.end),
     db.prepare(`SELECT ${mk} AS marketer_id, COUNT(*) AS orders, COUNT(DISTINCT phone) AS phones, SUM(${mktClosedStatus('status_code')}) AS closed_leads FROM raw_pos_orders WHERE pos_id IN (${ph}) AND created_at>=? AND created_at<? AND status_code<>7 AND ${mk} IS NOT NULL ${leadSellerFilter('seller_id', opts.team)}${notSan('marketer_id')} GROUP BY 1`).bind(...opts.posIds, startUtc, endUtc),
-    db.prepare(`SELECT ${mk} AS marketer_id, COUNT(*) AS closed, COALESCE(SUM(${NET}),0) AS net, ${newSplitSql()}, SUM(status_code IN (4,5,15)) AS returned FROM raw_pos_orders WHERE pos_id IN (${ph}) AND first_confirmed_at>=? AND first_confirmed_at<? AND ${mktClosedStatus('status_code')} AND ${mk} IS NOT NULL AND marketer_id IN ${MKT_STAFF}${notSan('marketer_id')} GROUP BY 1`).bind(...opts.posIds, startUtc, endUtc),
+    db.prepare(`SELECT ${mk} AS marketer_id, COUNT(*) AS closed, COALESCE(SUM(${NET}),0) AS net, ${newSplitSql()}, SUM(status_code IN (4,5,15)) AS returned FROM raw_pos_orders WHERE pos_id IN (${ph}) AND created_at>=? AND created_at<? AND first_confirmed_at IS NOT NULL AND ${mktClosedStatus('status_code')} AND ${mk} IS NOT NULL AND marketer_id IN ${MKT_STAFF}${notSan('marketer_id')} GROUP BY 1`).bind(...opts.posIds, startUtc, endUtc),
     db.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE name<>'' GROUP BY user_id"),
     db.prepare(`SELECT day, SUM(amount) AS amount FROM ${adCostSource(opts.posIds, opts.start, opts.end)} WHERE day>=? AND day<=?${notSan('marketer_id')} GROUP BY day ORDER BY day`).bind(opts.start, opts.end),
   ]);

@@ -34,10 +34,11 @@ export async function saleAnalytics(opts: { posIds: string[]; start: string; end
     db.prepare(`SELECT seller_id, seller_assigned_at AS at, first_closed_at AS closed_at, status_code FROM raw_pos_orders
       WHERE pos_id IN (${ph}) AND seller_assigned_at>=? AND seller_assigned_at<? AND seller_id IS NOT NULL${sale}`).bind(...binds),
     db.prepare(`SELECT seller_id, COUNT(*) AS closed, COALESCE(SUM(CASE WHEN status_code<>6 THEN ${NET} END),0) AS net, SUM(status_code IN (${RETURNED})) AS returned, SUM(status_code=6) AS cancelled
-      FROM raw_pos_orders WHERE pos_id IN (${ph}) AND first_closed_at>=? AND first_closed_at<? AND status_code NOT IN (0,7) AND seller_id IS NOT NULL${sale}
+      FROM raw_pos_orders WHERE pos_id IN (${ph}) AND created_at>=? AND created_at<? AND first_closed_at IS NOT NULL AND status_code NOT IN (0,7) AND seller_id IS NOT NULL${sale}
       GROUP BY seller_id`).bind(...binds),
     db.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE name<>'' GROUP BY user_id"),
-    // Đơn chốt và doanh thu theo ngày + giờ xác nhận lần đầu (giờ Việt Nam), cùng điều kiện với truy vấn đơn chốt ở trên.
+    // Đơn chốt theo GIỜ CHỐT (ngày + giờ vào Chờ xác nhận lần đầu, giờ Việt Nam): giữ giờ chốt đúng nghĩa (giờ nào chốt được nhiều),
+    // nên tổng biểu đồ này có thể khác ô Doanh thu (ô đó theo ngày tạo đơn từ 27/11/2026).
     db.prepare(`SELECT strftime('%Y-%m-%d %H', first_closed_at, '+7 hours') AS dh, COUNT(*) - SUM(status_code=6) AS closed, COALESCE(SUM(CASE WHEN status_code<>6 THEN ${NET} END),0) AS net
       FROM raw_pos_orders WHERE pos_id IN (${ph}) AND first_closed_at>=? AND first_closed_at<? AND status_code NOT IN (0,7) AND seller_id IS NOT NULL${sale}
       GROUP BY dh`).bind(...binds),

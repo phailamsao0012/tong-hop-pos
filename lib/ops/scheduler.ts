@@ -1,5 +1,5 @@
 import { maybeSlimFillNightly } from '@/lib/reports/mkt-slim-fill';
-import { SEGMENT_EPOCH, SEGMENT_READY_KEY, backfillSegmentMonth, segmentMonths, checkSegmentStatsNightly } from '@/lib/reports/stats';
+import { SEGMENT_EPOCH, SEGMENT_READY_KEY, SEGMENT_READY_VALUE, backfillSegmentMonth, segmentMonths, checkSegmentStatsNightly } from '@/lib/reports/stats';
 import { backfillMarketerIds } from '@/lib/teams/marketer-ids';
 import { backfillCallsCoverage } from '@/lib/reports/calls-coverage';
 import { addUsage, cycleSummary, observeD1, type UsageDay } from '@/lib/ops/d1-usage';
@@ -30,7 +30,9 @@ export const D1_DAILY_WRITE_LIMIT = 1_200_000;
 const BLOCK_EPOCH = 6;
 const WEBHOOK_ORIGIN = 'https://tonghopposmegatech.io.vn';
 // Tăng số này khi đổi cách tính stats_daily để dựng lại toàn bộ từ đơn đã lưu.
-const STATS_EPOCH = 7; // 7: đơn chốt tính từ Chờ xác nhận, theo first_closed_at (08/10/2026)
+// 8: doanh thu / đơn chốt theo ngày tạo đơn + cột received_* (27/11/2026). Đổi cùng SEGMENT_EPOCH / SELLER_PRODUCT_EPOCH (lib/reports/stats.ts):
+// cờ nhóm sản phẩm chỉ bật sau khi stats_daily dựng lại xong, nơi đọc dùng cờ đó (revenueStatsReady) để biết bảng đã theo cách mới.
+const STATS_EPOCH = 8;
 const CUSTOMER_EPOCH = 7; // 7: đơn chốt của khách tính cả Chờ xác nhận (08/10/2026)
 
 type State = {
@@ -254,7 +256,7 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
       }
       if (!s.segmentPending.length) {
         const r = await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at WHERE app_settings.value IS NOT excluded.value')
-          .bind(SEGMENT_READY_KEY, String(SEGMENT_EPOCH), new Date().toISOString()).run();
+          .bind(SEGMENT_READY_KEY, SEGMENT_READY_VALUE, new Date().toISOString()).run();
         writes += Number(r.meta?.rows_written ?? 0);
       }
     }

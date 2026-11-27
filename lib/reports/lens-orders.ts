@@ -20,15 +20,18 @@ function toMetrics(row: Row | null, customers?: { all: number; closed: number })
     key, { orders: n(`${key}_orders`), net: n(`${key}_net`) },
   ])) as Record<GroupKey, { orders: number; net: number }>;
   const closedOrders = n('closed_orders');
-  // Tỷ lệ chốt không vượt 100% (29/09/2026): tử số là đơn của CHÍNH mẫu số đã chốt, không phải đơn chốt theo ngày chốt
-  // (có cả đơn chia / tạo từ trước). Đơn tạo trong kỳ đã chốt = đang ở trạng thái xác nhận trở đi (không mới, không hủy).
-  const createdClosedOrders = groups.confirmed.orders + groups.shipping.orders + groups.delivered.orders + groups.returned.orders;
+  // Tỷ lệ chốt không vượt 100% (29/09/2026): tử số là đơn của CHÍNH mẫu số đã chốt. Từ 27/11/2026 đơn chốt đã theo ngày tạo đơn
+  // nên tử số chính là đơn chốt (đơn tạo trong kỳ, nay ở Chờ xác nhận trở đi, không mới / hủy / xoá).
+  const createdClosedOrders = closedOrders;
+  // Doanh thu đã nhận: trong các đơn tính doanh thu, đơn đang ở Đã nhận / Đã thu tiền (luôn ≤ doanh thu).
+  const receivedNet = n('received_net');
   const assignedClosedOrders = n('assigned_closed_orders');
   return {
     orders: n('orders'), deletedOrders: n('deleted_orders'), gross: n('gross'), discount: n('discount'), net: n('net'),
     shippingFee: n('shipping_fee'), cod: n('cod'), customers: customers?.all ?? null,
     closedOrders, closedGross: n('closed_gross'), closedDiscount: n('closed_discount'), closedNet: n('closed_net'),
     closedShippingFee: n('closed_shipping_fee'), closedCustomers: customers?.closed ?? null, closedQuantity: n('closed_quantity'),
+    receivedOrders: n('received_orders'), receivedNet, receivedShare: n('closed_net') ? receivedNet / n('closed_net') * 100 : null,
     assignedOrders: n('assigned_orders'), assignedHidden: false, createdClosedOrders, assignedClosedOrders,
     closeRate: n('orders') ? createdClosedOrders / n('orders') * 100 : null,
     assignedCloseRate: n('assigned_orders') ? assignedClosedOrders / n('assigned_orders') * 100 : null,
@@ -73,7 +76,7 @@ async function periodReport(
     const useRaw = filtered;
     return { bind: (...args: (string | number)[]) => db.prepare((useRaw ? totals.sql : '') + sql).bind(...(useRaw ? totals.binds : []), ...args) };
   };
-  // Số khách: SĐT khác nhau của đơn tạo trong kỳ (all) và của đơn chốt trong kỳ theo ngày chốt (closed).
+  // Số khách: SĐT khác nhau của đơn tạo trong kỳ (all) và của đơn chốt tạo trong kỳ (closed).
   const customerWhere = `pos_id IN (${posPlaceholders}) AND phone IS NOT NULL AND phone<>'' AND status_code<>7${employeeFilter}${rawFilter.sql}`;
   const customerBinds = [...posIds, ...employeeIds, ...rawFilter.binds];
   const [total, byPos, series, byEmployee, byEmployeePos, byProduct, customers, closedCustomers, employeeSeries, recon] = await db.batch([
@@ -244,12 +247,13 @@ async function buildLensReport(database: D1Database, options: OverviewOptions, l
     departments: [...new Set(names.results.map((r) => r.department).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), 'vi')),
     definitions: {
       basis: 'Giờ Việt Nam. Đơn tạo mới và các nhóm trạng thái tính theo ngày tạo đơn (trạng thái hiện tại lúc đồng bộ).',
-      closed: 'Đơn chốt, Doanh thu, SL bán thực, Số khách xếp theo ngày CHỐT đơn (lần đầu vào Chờ xác nhận hoặc sau đó): gồm mọi đơn từ Chờ xác nhận trở đi (đã xác nhận, đóng gói, chờ chuyển, đang giao, đã nhận, kể cả hoàn). Đơn mới, Hủy, Xóa không tính. Ô Đơn chốt trên Pancake không tính Chờ xác nhận nên có thể thấp hơn.',
+      closed: 'Đơn chốt, Doanh thu, SL bán thực, Số khách xếp theo NGÀY TẠO ĐƠN (từ 27/11/2026): gồm mọi đơn tạo trong kỳ nay ở Chờ xác nhận trở đi (đã xác nhận, đóng gói, chờ chuyển, đang giao, đã nhận, kể cả hoàn). Đơn mới, Hủy, Xóa không tính. Đơn tạo hôm trước, chốt hôm sau vẫn tính cho ngày tạo, nên số các ngày đã qua có thể đổi khi đơn được chốt hoặc hủy muộn.',
+      received: 'Doanh thu đã nhận = trong chính các đơn tính doanh thu (cùng kỳ theo ngày tạo, cùng bộ lọc), tổng tiền các đơn đang ở Đã nhận hoặc Đã thu tiền. Luôn không vượt doanh thu; % đã nhận = DT đã nhận ÷ doanh thu.',
       revenue: 'Doanh thu = tổng tiền đơn chốt sau khi trừ giảm giá / quà tặng (chưa gồm phí vận chuyển). GTTB = doanh thu ÷ đơn chốt.',
       quantity: 'SL bán thực = tổng số lượng sản phẩm trong đơn chốt. Số khách = số SĐT khác nhau có đơn chốt.',
       segments: 'Combo Oxytetra + Bổ đậm đặc: mọi đơn POS Oxytetra (POS này chỉ bán combo đó). Các POS khác: Kháng sinh: đơn có sản phẩm Gentadox hoặc Detox không phải quà tặng; riêng POS Siêu Vô Gạo tính thêm Oxy + Bổ huyết và Bio Nano Shield. SK GK: đơn có SK, GK hoặc Godkill (hay gắn nhãn SK + GK) mà không có kháng sinh. Khác: mọi đơn còn lại. Mỗi đơn chỉ thuộc một nhóm nên ba nhóm cộng lại bằng tổng. Doanh thu là toàn bộ đơn thuộc nhóm.',
       origin: 'Chỉ áp dụng CSKH: không có Marketer = tự ups; có Marketer = từ MKT. Lọc nguồn và người MKT áp dụng đồng thời cho mọi chỉ số, bảng, biểu đồ và kỳ so sánh trong báo cáo.',
-      overviewRate: 'Tỷ lệ chốt tổng quan = đơn chốt trong kỳ ÷ đơn tạo mới trong kỳ. Hai số dùng ngày chốt và ngày tạo tương ứng; có thể vượt 100% khi chốt đơn cũ. Không có đơn tạo mới thì tỷ lệ để trống.',
+      overviewRate: 'Tỷ lệ chốt tổng quan = đơn tạo trong kỳ đã chốt ÷ đơn tạo mới trong kỳ (cả hai theo ngày tạo đơn, không vượt 100%). Không có đơn tạo mới thì tỷ lệ để trống.',
       rate: 'Tỷ lệ chốt nhân viên = đơn chốt trong kỳ ÷ đơn chia trong kỳ (đơn được giao cho nhân viên đó theo thời điểm giao người bán).',
       groups: 'Mới: 0,17 · Đã xác nhận/đang xử lý: 1,8,9,11,12,13,20 · Đang giao: 2 · Giao thành công: 3,16 · Hoàn: 4,5,15 · Hủy: 6 · Xóa: 7.',
     },

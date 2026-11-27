@@ -88,19 +88,19 @@ void test('demo 7 ngày: Sale loại tự XN và không rõ khỏi số Vận đ
   const vd = (await response.json()) as {
     sellers: { key: string; confirmed: number; cancelledAfter: number }[];
   };
-  const expected = new Map(
-    vd.sellers.map((s) => [s.key, s.confirmed - s.cancelledAfter]),
-  );
+  // Vận đơn giữ ngày chốt (số riêng của bộ phận, không đổi); trang nhóm sản phẩm xếp đơn chốt theo ngày tạo đơn từ 27/11/2026,
+  // nên đối chiếu kho XN thẳng với đơn gốc theo ngày tạo, cùng điều kiện kho XN (người XN khác người bán, đã XN, không mới / hủy / xoá).
+  assert.ok(vd.sellers.length > 0);
+  const whOf = (id: string) => (raw.prepare(
+    `SELECT COUNT(*) AS n FROM raw_pos_orders WHERE seller_id=? AND created_at>=? AND created_at<? AND status_code NOT IN (0,6,7) AND (first_confirmed_at IS NOT NULL OR status_code NOT IN (17,6)) AND NULLIF(first_confirmed_by,'') IS NOT NULL AND first_confirmed_by<>seller_id`,
+  ).get(id, '2026-10-06T17:00:00.000Z', '2026-10-13T17:00:00.000Z') as { n: number }).n;
   const tagged = await report();
   assert.ok(tagged.staff.length > 0);
   for (const dim of ['tag', 'main', 'product']) {
     const r = await report({ dim });
     assert.deepEqual(r.total, tagged.total);
     for (const s of r.staff) {
-      assert.equal(
-        s.whConfirmed,
-        (expected.get(s.sellerId) ?? 0) - s.selfConfirmed - s.unknownConfirmer,
-      );
+      assert.equal(s.whConfirmed, whOf(s.sellerId));
       assert.equal(
         s.whConfirmed + s.selfConfirmed + s.unknownConfirmer + s.waitingUnconfirmed,
         s.closed,
@@ -121,11 +121,12 @@ void test('demo 7 ngày: Sale loại tự XN và không rõ khỏi số Vận đ
 });
 
 void test('demo: CSKH tính theo care_id; danh sách wh=1 giữ POS, ngày, team và thẻ', async () => {
+  // Đơn chốt của trang theo ngày tạo đơn từ 27/11/2026 (doanh thu theo ngày tạo).
   const r = await report({ by: 'care' });
   for (const s of r.staff) {
     const expected = raw
       .prepare(
-        `SELECT COUNT(*) AS n FROM raw_pos_orders WHERE COALESCE(NULLIF(care_id,''),seller_id)=? AND first_closed_at>=? AND first_closed_at<? AND status_code NOT IN (0,6,7) AND (first_confirmed_at IS NOT NULL OR status_code NOT IN (17,6)) AND NULLIF(first_confirmed_by,'') IS NOT NULL AND first_confirmed_by<>COALESCE(NULLIF(care_id,''),seller_id)`,
+        `SELECT COUNT(*) AS n FROM raw_pos_orders WHERE COALESCE(NULLIF(care_id,''),seller_id)=? AND created_at>=? AND created_at<? AND status_code NOT IN (0,6,7) AND (first_confirmed_at IS NOT NULL OR status_code NOT IN (17,6)) AND NULLIF(first_confirmed_by,'') IS NOT NULL AND first_confirmed_by<>COALESCE(NULLIF(care_id,''),seller_id)`,
       )
       .get(
         s.sellerId,

@@ -123,10 +123,10 @@ void test('stats_daily_mkt gives the same MKT numbers as the raw order queries',
       .map((r) => Object.values(r).map(String).join('|'))
       .sort();
 
-  // Xu hướng (trends-report): theo (ngày, marketer), chỉ người được tính.
+  // Xu hướng (trends-report): theo (ngày, marketer), chỉ người được tính. Từ 27/11/2026 đơn MKT xếp theo ngày tạo đơn.
   const trendRaw = raw
-    .prepare(`SELECT ${dayExpr('o.first_confirmed_at')} AS day, o.marketer_id, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net
-    FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,7)
+    .prepare(`SELECT ${dayExpr('o.created_at')} AS day, o.marketer_id, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net
+    FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.created_at>=? AND o.created_at<? AND o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,7)
       AND NULLIF(TRIM(o.marketer_id),'') IS NOT NULL AND o.marketer_id IN ${COUNTED_STAFF} GROUP BY 1, 2`)
     .all(...posIds, startUtc, endUtc);
   const trendPre = raw
@@ -146,22 +146,22 @@ void test('stats_daily_mkt gives the same MKT numbers as the raw order queries',
 
   // Đơn đổi trạng thái (xoá sau khi xác nhận; từ 24/11/2026 hủy vẫn là đơn chốt MKT nên dùng xoá): dựng lại ngày bẩn thì bảng theo kịp.
   const victim = raw
-    .prepare(`SELECT id, pos_id, first_confirmed_at FROM raw_pos_orders WHERE status_code NOT IN (0,17,7) AND first_confirmed_at IS NOT NULL
+    .prepare(`SELECT id, pos_id, first_confirmed_at, created_at FROM raw_pos_orders WHERE status_code NOT IN (0,17,7) AND first_confirmed_at IS NOT NULL
     AND NULLIF(TRIM(marketer_id),'') IS NOT NULL LIMIT 1`)
-    .get() as { id: string; pos_id: string; first_confirmed_at: string };
+    .get() as { id: string; pos_id: string; first_confirmed_at: string; created_at: string };
   raw
     .prepare('UPDATE raw_pos_orders SET status_code=7 WHERE id=?')
     .run(victim.id);
   const dirty: DirtyBuckets = new Map();
-  markDirty(dirty, victim.pos_id, victim.first_confirmed_at);
+  markDirty(dirty, victim.pos_id, victim.created_at); // bảng MKT theo ngày tạo đơn
   await rebuildStats(db, dirty);
   const again = raw
     .prepare(`SELECT day, marketer_id, SUM(orders) AS n, SUM(net) AS net FROM stats_daily_mkt
     WHERE pos_id IN (${ph}) AND day>=? AND day<=? AND marketer_id IN ${COUNTED_STAFF} GROUP BY 1, 2`)
     .all(...posIds, first, end);
   const rawAgain = raw
-    .prepare(`SELECT ${dayExpr('o.first_confirmed_at')} AS day, o.marketer_id, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net
-    FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,7)
+    .prepare(`SELECT ${dayExpr('o.created_at')} AS day, o.marketer_id, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net
+    FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.created_at>=? AND o.created_at<? AND o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,7)
       AND NULLIF(TRIM(o.marketer_id),'') IS NOT NULL AND o.marketer_id IN ${COUNTED_STAFF} GROUP BY 1, 2`)
     .all(...posIds, startUtc, endUtc);
   assert.deepEqual(rows(again), rows(rawAgain));

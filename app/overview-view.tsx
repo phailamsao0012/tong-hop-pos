@@ -46,6 +46,8 @@ type Metrics = {
   closedOrders: number; closedGross: number; closedDiscount: number; closedNet: number; closedShippingFee: number;
   closedCustomers: number | null; closedQuantity: number; closeRate: number | null; assignedOrders: number; assignedCloseRate: number | null;
   averageOrder: number | null; deliveredAverage: number | null;
+  /** DT đã nhận: trong các đơn tính doanh thu, đơn đang ở Đã nhận / Đã thu tiền (27/11/2026). Số lưu cũ chưa có thì undefined. */
+  receivedOrders?: number; receivedNet?: number; receivedShare?: number | null;
   groups: Record<'new' | 'confirmed' | 'shipping' | 'delivered' | 'returned' | 'cancelled', { orders: number; net: number }>;
 };
 type Period = {
@@ -236,7 +238,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
   type EmpSort = 'closeRate' | 'closedNet' | 'closedOrders' | 'assignedOrders' | 'averageOrder' | 'closedQuantity' | 'delivered' | 'returned';
   const [empSort, setEmpSort] = useState<EmpSort | null>(null);
   const [empDesc, setEmpDesc] = useState(true);
-  const EMP_SORT_LABELS: Record<EmpSort, string> = { closedNet: 'Doanh thu', closeRate: 'Tỷ lệ chốt', closedOrders: 'Đơn chốt', assignedOrders: 'Đơn chia', averageOrder: 'AOV', closedQuantity: 'SL bán', delivered: 'Giao TC', returned: 'Hoàn / hủy' };
+  const EMP_SORT_LABELS: Record<EmpSort, string> = { closedNet: 'Doanh thu', closeRate: 'Tỷ lệ chốt', closedOrders: 'Đơn chốt', assignedOrders: 'Đơn chia', averageOrder: 'AOV', closedQuantity: 'SL bán', delivered: 'DT đã nhận', returned: 'Hoàn / hủy' };
   const empSortKey: EmpSort = empSort ?? (team === 'cskh' ? 'averageOrder' : 'closeRate');
   const toggleEmpSort = (k: EmpSort) => { if (empSortKey === k) setEmpDesc((d) => !d); else { setEmpSort(k); setEmpDesc(true); } };
   // Trạng thái cho SortTh (tiêu đề cột có aria-sort, bấm được bằng bàn phím).
@@ -324,16 +326,16 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
     .filter((r) => department === 'all' || (department === '__none' ? !r.department : r.department === department))
     .filter((r) => r.assignedOrders || r.closedOrders || r.orders)
     .sort((a, b) => {
-      const v = (r: typeof a): number => empSortKey === 'closeRate' ? (closeRateOf(r, ms.rateBase) ?? -1) : empSortKey === 'averageOrder' ? (r.averageOrder ?? 0) : empSortKey === 'delivered' ? r.groups.delivered.orders : empSortKey === 'returned' ? r.groups.returned.orders + r.groups.cancelled.orders : r[empSortKey];
+      const v = (r: typeof a): number => empSortKey === 'closeRate' ? (closeRateOf(r, ms.rateBase) ?? -1) : empSortKey === 'averageOrder' ? (r.averageOrder ?? 0) : empSortKey === 'delivered' ? (r.receivedNet ?? r.groups.delivered.net) : empSortKey === 'returned' ? r.groups.returned.orders + r.groups.cancelled.orders : r[empSortKey];
       const posOrder = splitPos ? POS.findIndex((x) => x.id === a.posId) - POS.findIndex((x) => x.id === b.posId) : 0;
       return posOrder || (empDesc ? v(b) - v(a) : v(a) - v(b)) || b.closedNet - a.closedNet;
     });
   const empTotal = employees.reduce((acc, r) => ({
-    orders: acc.orders + r.orders, assignedOrders: acc.assignedOrders + r.assignedOrders, closedOrders: acc.closedOrders + r.closedOrders, closedNet: acc.closedNet + r.closedNet, closedQuantity: acc.closedQuantity + r.closedQuantity,
+    orders: acc.orders + r.orders, assignedOrders: acc.assignedOrders + r.assignedOrders, closedOrders: acc.closedOrders + r.closedOrders, closedNet: acc.closedNet + r.closedNet, closedQuantity: acc.closedQuantity + r.closedQuantity, receivedNet: acc.receivedNet + (r.receivedNet ?? r.groups.delivered.net),
     createdClosed: acc.createdClosed + closeRateTop(r, 'created'), assignedClosed: acc.assignedClosed + closeRateTop(r, 'assigned'),
     // Mẫu số tỷ lệ chốt: khi lọc nhóm đơn là đơn lên / số chia của mọi sản phẩm (xem rateOrders trong lib/metrics).
     rateOrders: acc.rateOrders + closeRateBase(r, 'created'), rateAssigned: acc.rateAssigned + closeRateBase(r, 'assigned'),
-  }), { orders: 0, assignedOrders: 0, closedOrders: 0, closedNet: 0, closedQuantity: 0, createdClosed: 0, assignedClosed: 0, rateOrders: 0, rateAssigned: 0 });
+  }), { orders: 0, assignedOrders: 0, closedOrders: 0, closedNet: 0, closedQuantity: 0, receivedNet: 0, createdClosed: 0, assignedClosed: 0, rateOrders: 0, rateAssigned: 0 });
 
   const exportExcel = async () => {
     if (!report) return;
@@ -400,13 +402,13 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
       title: 'Tổng quan POS', subtitle: `Kỳ ${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}${cmpShown ? ` · so với ${compareText(cmpShown)}` : ''}`,
       meta: [{ label: 'POS', value: posLabel }, { label: 'Đồng bộ lúc', value: dt(report.syncedAt, true) }, { label: 'Xuất lúc', value: new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) }, { label: 'Nhóm', value: team === 'all' ? 'Tất cả' : team === 'sale' ? 'Sale' : 'CSKH' }],
       slides: [
-        { title: 'Chỉ số chính', subtitle: 'Đơn chốt, doanh thu tính theo giờ chốt (như Pancake); đơn tạo và trạng thái theo ngày tạo', blocks: [
+        { title: 'Chỉ số chính', subtitle: 'Mọi số theo ngày tạo đơn: đơn chốt, doanh thu, DT đã nhận, đơn tạo và trạng thái', blocks: [
           { type: 'kpis', items: [
             { label: 'Đơn tạo mới', value: vnNum(cur.orders), delta: delta(cur.orders, prev?.orders), deltaLabel: cmpLabel, note: `${cur.customers === null ? '—' : vnNum(cur.customers)} khách`, tone: 'blue' },
             { label: 'Tỷ lệ chốt', value: pctText(closeRateOf(cur, ms.rateBase)), note: RATE_BASES[ms.rateBase].short, tone: 'green' },
             { label: 'Đơn chốt', value: vnNum(cur.closedOrders), delta: delta(cur.closedOrders, prev?.closedOrders), deltaLabel: cmpLabel, note: `SL bán thực ${vnNum(cur.closedQuantity)}`, tone: 'green' },
             { label: 'Doanh thu đơn chốt', value: vnMoney(cur.closedNet), delta: delta(cur.closedNet, prev?.closedNet), deltaLabel: cmpLabel, note: `GTTB ${cur.averageOrder ? vnMoney(cur.averageOrder) : '—'}`, tone: 'teal' },
-            { label: 'Giao thành công', value: vnMoney(cur.groups.delivered.net), delta: delta(cur.groups.delivered.net, prev?.groups.delivered.net), deltaLabel: cmpLabel, note: `${vnNum(cur.groups.delivered.orders)} đơn`, tone: 'orange' },
+            { label: 'DT đã nhận', value: vnMoney(cur.receivedNet ?? cur.groups.delivered.net), delta: delta(cur.receivedNet ?? cur.groups.delivered.net, prev ? prev.receivedNet ?? prev.groups.delivered.net : undefined), deltaLabel: cmpLabel, note: `${pctText(cur.receivedShare ?? null)} doanh thu · ${vnNum(cur.receivedOrders ?? cur.groups.delivered.orders)} đơn`, tone: 'orange' },
           ] },
           { type: 'kpis', columns: 6, items: (Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[]).map((k) => ({ label: STATUS_LABELS[k], value: `${vnNum(cur.groups[k].orders)} đơn`, delta: delta(cur.groups[k].orders, prev?.groups[k].orders), note: vnMoney(cur.groups[k].net), tone: k === 'delivered' ? 'green' : k === 'cancelled' ? 'red' : k === 'returned' ? 'purple' : k === 'shipping' ? 'orange' : k === 'confirmed' ? 'blue' : 'gray' })) },
         ] },
@@ -644,7 +646,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
                     <Th>Nhân viên{splitPos ? ' · POS' : ''}</Th>
                     {team === 'cskh' && <><SortTh k="closedOrders" label="Đơn chốt" sort={empSortState} /><SortTh k="closeRate" label="Tỷ lệ chốt" sort={empSortState} /></>}
                     {team !== 'cskh' && <><SortTh k="assignedOrders" label="Đơn chia" sort={empSortState} /><SortTh k="closedOrders" label="Đơn chốt" sort={empSortState} /><SortTh k="closeRate" label="Tỷ lệ chốt" sort={empSortState} /></>}
-                    <SortTh k="closedNet" label="Doanh thu" sort={empSortState} /><SortTh k="averageOrder" label="AOV" sort={empSortState} /><SortTh k="closedQuantity" label="SL bán" sort={empSortState} /><SortTh k="delivered" label="Giao TC" sort={empSortState} /><SortTh k="returned" label="Hoàn / Hủy" sort={empSortState} />
+                    <SortTh k="closedNet" label="Doanh thu" sort={empSortState} /><SortTh k="averageOrder" label="AOV" sort={empSortState} /><SortTh k="closedQuantity" label="SL bán" sort={empSortState} /><SortTh k="delivered" label="DT đã nhận" sort={empSortState} /><SortTh k="returned" label="Hoàn / Hủy" sort={empSortState} />
                   </tr>
                 </thead>
                 <tbody>
@@ -662,7 +664,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
                         <td className="n whitespace-nowrap">{money(r.closedNet)}<span className="mt-0.5 block"><DeltaPill value={delta(r.closedNet, p?.closedNet)} /></span></td>
                         <td className="n">{r.averageOrder ? money(r.averageOrder) : '—'}</td>
                         <td className="n">{vi.format(r.closedQuantity)}</td>
-                        <td className="n">{vi.format(r.groups.delivered.orders)}<span className="block text-[11px] text-ink-3">{short(r.groups.delivered.net)}</span></td>
+                        <td className="n">{short(r.receivedNet ?? r.groups.delivered.net)}<span className="block text-[11px] text-ink-3">{pct(r.receivedShare ?? null, 0)} · {vi.format(r.receivedOrders ?? r.groups.delivered.orders)} đơn</span></td>
                         <td className="n">{vi.format(r.groups.returned.orders)} / {vi.format(r.groups.cancelled.orders)}</td>
                       </tr>
                     );
@@ -677,7 +679,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
                     <td className="n">{empTotal.rateAssigned ? pct(empTotal.assignedClosed / empTotal.rateAssigned * 100, 1) : '—'}</td></>}
                     <td className="n">{money(empTotal.closedNet)}</td>
                     <td className="n">{empTotal.closedOrders ? money(empTotal.closedNet / empTotal.closedOrders) : '—'}</td>
-                    <td className="n">{vi.format(empTotal.closedQuantity)}</td><td /><td />
+                    <td className="n">{vi.format(empTotal.closedQuantity)}</td><td className="n">{short(empTotal.receivedNet)}<span className="block text-[11px] text-ink-3">{pct(empTotal.closedNet ? empTotal.receivedNet / empTotal.closedNet * 100 : null, 0)}</span></td><td />
                   </tr>
                 </tfoot>
               </table>

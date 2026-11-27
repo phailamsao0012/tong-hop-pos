@@ -8,6 +8,7 @@
 // Báo cáo sếp (boss-data.ts) và bot đặt KPI (kpi-bot.ts) cùng dùng loadPersonSplits nên số tách khớp nhau.
 import { prevMonthOf } from '@/lib/kpi/goal-share-calc';
 import { vnRangeUtc } from '@/lib/shared/report-time';
+import { revenueDate } from '@/lib/reports/stats';
 import { WEB_TEAMS_KEY, parseWebTeams } from '@/lib/teams/web-teams';
 
 export type PosW = Record<string, number>;
@@ -92,11 +93,13 @@ export async function loadPersonSplits(db: D1Database, month: string, posIds: st
   const prev = prevMonthOf(month), pr = vnRangeUtc(`${prev}-01`, lastDay(prev)), cr = vnRangeUtc(`${month}-01`, lastDay(month));
   const curEnd = untilUtc < cr.endUtc ? untilUtc : cr.endUtc;
   const net = 'COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0))';
-  const rows = (await db.prepare(`SELECT o.seller_id AS s, o.pos_id AS pos, COALESCE(SUM(CASE WHEN o.first_closed_at<? THEN ${net} END),0) AS prev,
-      COALESCE(SUM(CASE WHEN o.first_closed_at>=? THEN ${net} END),0) AS cur
-    FROM raw_pos_orders o WHERE o.pos_id IN (${posIds.map(() => '?').join(',')}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.status_code<>7
+  // Doanh thu theo ngày tạo đơn (revenueDate, 27/11/2026), đơn đã chốt lần đầu trước giờ cắt.
+  const at = revenueDate('o.');
+  const rows = (await db.prepare(`SELECT o.seller_id AS s, o.pos_id AS pos, COALESCE(SUM(CASE WHEN ${at}<? THEN ${net} END),0) AS prev,
+      COALESCE(SUM(CASE WHEN ${at}>=? THEN ${net} END),0) AS cur
+    FROM raw_pos_orders o WHERE o.pos_id IN (${posIds.map(() => '?').join(',')}) AND ${at}>=? AND ${at}<? AND o.first_closed_at IS NOT NULL AND o.first_closed_at<? AND o.status_code<>7
       AND o.seller_id IN (SELECT value FROM json_each(?)) GROUP BY 1,2`)
-    .bind(pr.endUtc, cr.startUtc, ...posIds, pr.startUtc, curEnd, JSON.stringify(ids)).all<{ s: string; pos: string; prev: number; cur: number }>()).results;
+    .bind(pr.endUtc, cr.startUtc, ...posIds, pr.startUtc, curEnd, curEnd, JSON.stringify(ids)).all<{ s: string; pos: string; prev: number; cur: number }>()).results;
   const byUser = new Map<string, { prev: PosW; cur: PosW }>();
   for (const r of rows) {
     const u = byUser.get(String(r.s)) ?? { prev: {}, cur: {} };

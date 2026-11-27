@@ -32,6 +32,9 @@ const TONE_CLS: Record<Tone, string> = { green: 'bg-t-green-bg text-t-green', te
 /** Chung ngưỡng tỷ lệ hoàn với trang Vận đơn. */
 const returnColor = (rate: number | null) => ({ red: 'var(--bad)', amber: 'var(--warn)', green: 'var(--good)', none: 'inherit' })[returnTone(rate)];
 const moneyOrDash = (v: number | null) => v === null ? '—' : money(v);
+/** Dòng nhỏ "đã nhận X · Y% doanh thu" (DT đã nhận, 27/11/2026); số lưu cũ chưa có thì bỏ. */
+const receivedNote = (m: { receivedNet?: number; receivedShare?: number | null }) => m.receivedNet === undefined ? null
+  : <> · đã nhận <b className="num">{shortMoney(m.receivedNet)}</b> ({pct(m.receivedShare ?? null, 0)})</>;
 /** Nơi một số được tính: trang có sẵn và khối trên trang đó (id DOM). */
 type Target = { view: string; label: string; id?: string; hint?: Record<string, string> };
 const SALE = 'Tổng quan Sale', CSKH = 'Tổng quan CSKH', MKT = 'Tổng quan Marketing', VD = 'Vận đơn';
@@ -154,12 +157,13 @@ function RevenueSplit({ data, start, end, posIds, productSegment, onDrill }: {
     : fromPancake ? `${fromPancake} POS lấy từ Pancake, ${total - fromPancake} POS web tự tính` : `web tự tính như Pancake (${total} POS)`;
   const toRef = () => document.getElementById('pancake-ref')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   // Hàm trả JSX (không phải component) để không tạo lại component mỗi lần vẽ.
-  const dept = ({ k, tone, icon: Icon, label, value, orders, note }: { k: TargetKey; tone: Tone; icon: LucideIcon; label: string; value: number; orders: string; note: string }) => (
+  const dept = ({ k, tone, icon: Icon, label, value, orders, note, received }: { k: TargetKey; tone: Tone; icon: LucideIcon; label: string; value: number; orders: string; note: string; received?: number }) => (
     <button key={k} type="button" onClick={onDrill ? () => onDrill(k) : undefined} disabled={!onDrill} title={onDrill ? hintOf(k) : undefined}
       className={`min-w-0 rounded-xl bg-surface-2 p-3 disabled:cursor-default ${onDrill ? CLICK_CLS : 'text-left'}`}>
       <span className="flex items-center gap-1.5 text-[12px] font-semibold text-ink-2"><span className={`grid size-6 place-items-center rounded-lg ${TONE_CLS[tone]}`}><Icon size={13} aria-hidden="true" /></span>{label}</span>
       <span className="num mt-1.5 block truncate text-xl font-semibold tracking-[-.02em] text-ink">{money(value)}</span>
       <span className="block truncate text-[11px] text-ink-3"><b className="num font-semibold text-ink-2">{orders}</b> · {note}</span>
+      {received !== undefined && <span className="block truncate text-[11px] text-ink-3">DT đã nhận <b className="num font-semibold text-ink-2">{shortMoney(received)}</b> · {pct(value ? received / value * 100 : null, 0)} doanh thu</span>}
     </button>
   );
   return (
@@ -172,8 +176,8 @@ function RevenueSplit({ data, start, end, posIds, productSegment, onDrill }: {
           <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-3">{sourceText}{company !== null && before ? <DeltaPill value={(company - before) / before * 100} label="kỳ trước" /> : null}</span>
         </button>
         <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-3">
-          {dept({ k: 'sale.revenue', tone: 'green', icon: ShoppingCart, label: 'Doanh thu Sale', value: sale.net, orders: `${vi.format(sale.orders)} đơn chốt`, note: `${pct(share(sale.net), 0)} doanh thu đơn chốt` })}
-          {dept({ k: 'cskh.revenue', tone: 'teal', icon: HeartHandshake, label: 'Doanh thu CSKH', value: cskh.net, orders: `${vi.format(cskh.orders)} đơn chốt`, note: `${pct(share(cskh.net), 0)} doanh thu đơn chốt` })}
+          {dept({ k: 'sale.revenue', tone: 'green', icon: ShoppingCart, label: 'Doanh thu Sale', value: sale.net, orders: `${vi.format(sale.orders)} đơn chốt`, note: `${pct(share(sale.net), 0)} doanh thu đơn chốt`, received: sale.receivedNet })}
+          {dept({ k: 'cskh.revenue', tone: 'teal', icon: HeartHandshake, label: 'Doanh thu CSKH', value: cskh.net, orders: `${vi.format(cskh.orders)} đơn chốt`, note: `${pct(share(cskh.net), 0)} doanh thu đơn chốt`, received: cskh.receivedNet })}
           {dept({ k: 'mkt.revenue', tone: 'blue', icon: Megaphone, label: 'Doanh thu MKT', value: mkt.net, orders: mkt.phones === null ? `${vi.format(mkt.orders)} đơn XN` : `${vi.format(mkt.phones)} số về`, note: `${vi.format(mkt.orders)} đơn đã xác nhận` })}
         </div>
       </div>
@@ -185,7 +189,7 @@ function RevenueSplit({ data, start, end, posIds, productSegment, onDrill }: {
       <p className="mt-2 text-[11.5px] leading-relaxed text-ink-3">
         Web cộng đơn chốt: Sale <b className="num text-ink-2">{shortMoney(sale.net)}</b> + CSKH <b className="num text-ink-2">{shortMoney(cskh.net)}</b>
         {' '}+ người ngoài Sale / CSKH <b className="num text-ink-2">{shortMoney(other.net)}</b> = <b className="num text-ink-2">{shortMoney(web)}</b>
-        {gap !== null && whole && <> · lệch ô Tổng cộng Pancake <b className="num text-ink-2">{gap >= 0 ? '+' : '−'}{shortMoney(Math.abs(gap))}</b> (web tính đơn chốt từ Chờ xác nhận theo ngày chốt, Pancake từ Đã xác nhận)</>}.
+        {gap !== null && whole && <> · lệch ô Tổng cộng Pancake <b className="num text-ink-2">{gap >= 0 ? '+' : '−'}{shortMoney(Math.abs(gap))}</b> (cả hai theo ngày tạo đơn; web tính đơn chốt từ Chờ xác nhận, Pancake từ Đã xác nhận)</>}.
         {' '}MKT là đơn do Marketer đưa về và đã xác nhận: các đơn này nằm sẵn trong Sale / CSKH, không cộng thêm vào doanh thu công ty.
         {!whole && ' Đang lọc nhóm đơn: doanh thu công ty vẫn là mọi đơn.'}
       </p>
@@ -220,7 +224,7 @@ export function SectionsGrid({ data, onDrill, packedParams, kpi }: { data: Secti
   return (
     <div className="stagger grid grid-cols-1 gap-3 lg:grid-cols-2">
       <Board tone="green" icon={ShoppingCart} title="Sale" caption="Bộ phận Sale · chốt từ Chờ xác nhận" info={d['Sale']}
-        heroLabel="Doanh thu" hero={money(sale.net)} heroNote={<><b className="num">{vi.format(sale.orders)}</b> đơn chốt</>} {...hero('sale.revenue')}>
+        heroLabel="Doanh thu" hero={money(sale.net)} heroNote={<><b className="num">{vi.format(sale.orders)}</b> đơn chốt{receivedNote(sale)}</>} {...hero('sale.revenue')}>
         <KpiDayStrip dept={kpi?.depts.sale} report={kpi} />
         <div className="grid grid-cols-3 gap-2">
           <Tile icon={CheckCircle2} label="Đơn chốt" value={vi.format(sale.orders)} note="chờ XN + đã XN trở đi" {...go('sale.closed')} />
@@ -232,7 +236,7 @@ export function SectionsGrid({ data, onDrill, packedParams, kpi }: { data: Secti
       </Board>
 
       <Board tone="teal" icon={HeartHandshake} title="CSKH" caption="Bộ phận CSKH · khách cũ và khách MKT đưa về" info={d['CSKH']}
-        heroLabel="Doanh thu" hero={money(cskh.net)} heroNote={<><b className="num">{vi.format(cskh.orders)}</b> đơn chốt</>} {...hero('cskh.revenue')}>
+        heroLabel="Doanh thu" hero={money(cskh.net)} heroNote={<><b className="num">{vi.format(cskh.orders)}</b> đơn chốt{receivedNote(cskh)}</>} {...hero('cskh.revenue')}>
         <KpiDayStrip dept={kpi?.depts.cskh} report={kpi} />
         <div className="grid grid-cols-3 gap-2">
           <Tile icon={Coins} label="AOV" value={moneyOrDash(cskh.aov)} note="doanh thu ÷ đơn chốt" {...go('cskh.aov')} />

@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import type { DatabaseSync } from 'node:sqlite';
 import { GET } from '../app/api/reports/product-groups/route';
@@ -8,6 +7,7 @@ import { dayData, toSourceOrder } from '../lib/demo/world';
 import { POS } from '../lib/shared/report-model';
 import { demoWorld, emptyDb } from './support/d1-sqlite';
 import { loginAs } from './support/session';
+import { hashSnapshots } from './support/snapshot-hash';
 
 const added = [
   'warehouseConfirmed', 'otherUnconfirmed', 'closedFromCreated',
@@ -88,10 +88,10 @@ const canonical = (v: unknown): unknown =>
 void test('W1: JSON demo bỏ trường mới khớp nguyên bản sau X1 ở mọi dim và bộ lọc', async () => {
   // Chụp trước khi sửa route W1, trên cùng dữ liệu demo có đơn quay lại Chờ xác nhận.
   // SHA-256 của toàn bộ JSON chuẩn hóa, gồm cả definitions cũ và các nhóm.
-  const snapshots = JSON.parse(readFileSync(
-    new URL('./fixtures/product-groups-after-x1.json', import.meta.url), 'utf8',
-  )) as { params: Record<string, string>; hash: string }[];
-  for (const { params, hash } of snapshots) {
+  // Băm chụp lại khi số đổi có chủ ý (27/11/2026: đơn chốt / doanh thu theo ngày tạo đơn): UPDATE_SNAPSHOTS=1, xem tests/support/snapshot-hash.ts.
+  const snap = hashSnapshots(new URL('./fixtures/product-groups-after-x1.json', import.meta.url));
+  for (const snapshot of snap.list) {
+    const { params } = snapshot;
     const r = await report(params);
     // R2 chỉ thêm trường; vẫn so toàn bộ các trường cũ với snapshot gốc.
     // 03/11 thêm khách đã nhận / tiền khách trả: cũng chỉ thêm trường.
@@ -108,10 +108,11 @@ void test('W1: JSON demo bỏ trường mới khớp nguyên bản sau X1 ở m�
     delete old.staffTotal;
     for (const s of old.staff) for (const key of added) delete s[key];
     for (const key of [...added, 'staffTotal']) delete old.definitions[key];
-    assert.equal(createHash('sha256').update(JSON.stringify(canonical(old))).digest('hex'), hash, JSON.stringify(params));
+    snap.check(snapshot, createHash('sha256').update(JSON.stringify(canonical(old))).digest('hex'));
     for (const s of r.staff) checkSplits(s);
     checkTotal(r);
   }
+  snap.save();
 });
 
 void test('W1: đơn demo trạng thái 17 đã XN kho không cộng hai lần ở mọi dim và cách tính người', async () => {
@@ -148,12 +149,15 @@ void test('W1: tổng chỉ cộng người có mã; các phép min/max cộng t
     ['a-closed', 'a', 1, inside, inside, 'warehouse', inside],
     ['a-later-1', 'a', 1, inside, later, 'warehouse', later],
     ['a-later-2', 'a', 1, inside, later, 'warehouse', later],
-    ['b-earlier-1', 'b', 17, earlier, inside, 'warehouse', inside],
-    ['b-earlier-2', 'b', 1, earlier, inside, 'b', inside],
-    ['b-back-self', 'b', 17, earlier, inside, 'b', inside],
-    ['b-back-unknown', 'b', 17, earlier, inside, null, inside],
-    ['b-pending', 'b', 17, earlier, inside, null, null],
-    ['b-unknown', 'b', 2, earlier, inside, null, null],
+    // Doanh thu theo ngày tạo đơn (27/11/2026): đơn chốt của kỳ = đơn TẠO trong kỳ đã chốt, nên các đơn kiểm phần kho XN của b
+    // nay tạo trong kỳ (giữ nguyên trạng thái / người XN); b-older tạo trước kỳ, chốt trong kỳ: không còn tính vào kỳ này.
+    ['b-earlier-1', 'b', 17, inside, inside, 'warehouse', inside],
+    ['b-earlier-2', 'b', 1, inside, inside, 'b', inside],
+    ['b-back-self', 'b', 17, inside, inside, 'b', inside],
+    ['b-back-unknown', 'b', 17, inside, inside, null, inside],
+    ['b-pending', 'b', 17, inside, inside, null, null],
+    ['b-unknown', 'b', 2, inside, inside, null, null],
+    ['b-older', 'b', 1, earlier, inside, 'warehouse', inside],
     ['b-open', 'b', 0, inside, null, null, null],
     ['no-id', null, 1, inside, inside, null, inside],
     ['empty-id', '', 17, inside, inside, null, null],
@@ -170,12 +174,14 @@ void test('W1: tổng chỉ cộng người có mã; các phép min/max cộng t
   for (const dim of ['tag', 'main', 'product']) {
     const r = await report({ dim });
     assert.equal(r.staffTotal.people, 2);
-    assert.equal(r.total.closed, 9);
-    assert.equal(r.staffTotal.closed, 7);
-    assert.equal(r.staffTotal.created, 4);
-    assert.equal(r.staffTotal.createdClosed, 3);
-    assert.equal(r.staffTotal.closedFromCreated, 1);
-    assert.equal(r.staffTotal.closedFromEarlier, 6);
+    // Ngày tạo: a 3 đơn chốt (a-later-* tạo trong kỳ nay tính), b 6 (b-older ngoài kỳ), không mã 2 → tổng 11, người có mã 9.
+    assert.equal(r.total.closed, 11);
+    assert.equal(r.staffTotal.closed, 9);
+    assert.equal(r.staffTotal.created, 10);
+    assert.equal(r.staffTotal.createdClosed, 9);
+    assert.equal(r.staffTotal.closedFromCreated, 9);
+    // Đơn chốt của kỳ nay luôn là đơn tạo trong kỳ, nên "chốt từ số chia trước kỳ" = 0 với lọc trạng thái mặc định.
+    assert.equal(r.staffTotal.closedFromEarlier, 0);
     assert.equal(r.staffTotal.createdOpen, 1);
     const b = r.staff.find((s) => s.sellerId === 'b')!;
     assert.equal(b.warehouseConfirmed, 1);

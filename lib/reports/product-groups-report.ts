@@ -17,7 +17,7 @@ import {
 } from '@/lib/reports/product-groups';
 import { POS } from '@/lib/shared/report-model';
 import { vnRangeUtc } from '@/lib/shared/report-time';
-import { CLOSED } from '@/lib/reports/stats';
+import { CLOSED, revenueDate } from '@/lib/reports/stats';
 import { teamFilter, type HrUnit, type Team } from '@/lib/teams/team';
 import { PACKED_SQL, WH_CONFIRMED_SQL } from '@/lib/reports/van-don';
 
@@ -56,9 +56,8 @@ export async function productGroupsBody(user: { role: Role }, p: URLSearchParams
   const status = parseStatus(p.get('status'));
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const ph = posIds.map(() => '?').join(',');
-  const cdate = status.isDefault
-    ? 'o.first_closed_at'
-    : 'COALESCE(o.first_closed_at,o.created_at)';
+  // Đơn chốt / doanh thu / DT đã nhận theo ngày tạo đơn (revenueDate, 27/11/2026), mọi trạng thái lọc.
+  const cdate = revenueDate('o.');
   const cwhere = status.isDefault
     ? `o.${CLOSED}`
     : statusSql(status, 'o.status_code');
@@ -494,9 +493,9 @@ export async function productGroupsBody(user: { role: Role }, p: URLSearchParams
           ? 'Theo nhãn đơn: đơn không gắn thẻ vẫn tính vào tổng nhưng không hiện ở thẻ nào, nên cộng các thẻ có thể nhỏ hơn tổng. '
           : '') +
         'Kháng sinh = BIO NANO SHIELD, GENTADOX, OXY + BỔ HUYẾT (kể cả thẻ BIO NANO); Combo = BIO NANO CLEAN, GODKILL, SK + GK (mua lẻ hay combo đều tính). Nhận diện theo nhãn đơn trên Pancake, theo tên sản phẩm trong đơn, hoặc cả hai. Một đơn có cả hai loại được tính ở cả hai nhóm, nên cộng các nhóm có thể lớn hơn tổng.',
-      rate: 'Số chia = đơn lên (tạo) trong kỳ của nhân viên, như ô Tất cả khi lọc NV xử lý trên Pancake. Tỷ lệ chốt = trong số chia, bao nhiêu đơn đã chốt (không vượt 100%). Tỷ lệ chốt của nhóm = số chia đã chốt thuộc nhóm đó ÷ TỔNG số chia (đơn mới chia chưa có sản phẩm nên không biết thuộc nhóm nào); cộng các nhóm ≈ tỷ lệ chốt chung. Cột Đơn chốt đếm theo ngày chốt nên có cả đơn chia từ trước.',
+      rate: 'Số chia = đơn lên (tạo) trong kỳ của nhân viên, như ô Tất cả khi lọc NV xử lý trên Pancake. Tỷ lệ chốt = trong số chia, bao nhiêu đơn đã chốt (không vượt 100%). Tỷ lệ chốt của nhóm = số chia đã chốt thuộc nhóm đó ÷ TỔNG số chia (đơn mới chia chưa có sản phẩm nên không biết thuộc nhóm nào); cộng các nhóm ≈ tỷ lệ chốt chung. Cột Đơn chốt đếm theo ngày tạo đơn.',
       closed: status.isDefault
-        ? 'Đơn chốt = từ Chờ xác nhận trở đi, theo ngày chốt (lần đầu vào Chờ xác nhận hoặc sau đó).'
+        ? 'Đơn chốt = từ Chờ xác nhận trở đi, theo ngày tạo đơn.'
         : `Đơn chốt theo bộ lọc trạng thái: ${status.label}.`,
       delivered: 'Đơn đã nhận = trong số Đơn chốt trong kỳ, đơn nay ở trạng thái Đã nhận hoặc Đã thu tiền. Tiền khách đã trả = tổng giá trị các đơn đó; dòng nhỏ Đã thu tiền là phần Pancake đã đối soát với hãng vận chuyển (trạng thái Đã thu tiền). Kỳ ngắn thì số còn thấp vì đơn chưa giao tới.',
       packed: 'Đang đóng hàng = trong số Đơn chốt ở cột bên cạnh, bao nhiêu đơn đã được kho chuyển sang Đang đóng hàng (kể cả đơn đã đi tiếp: chờ chuyển, đã gửi, đã nhận, hoàn). Tỷ lệ = Đang đóng hàng ÷ Đơn chốt. Dữ liệu Pancake không ghi riêng bước kho gọi khách, nên đây là bước kho đầu tiên đo được.',

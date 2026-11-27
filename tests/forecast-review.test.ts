@@ -5,6 +5,7 @@ import { accuracy, buildDayReview, buildWeekReview, createReview, maybeReviewTic
 import { readSpend } from '../lib/ai/claude';
 import { GET, POST } from '../app/api/ai/forecast/review/route';
 import { emptyDb } from './support/d1-sqlite';
+import { markRevenueReady } from './support/revenue-ready';
 import { loginAs } from './support/session';
 import { parseAccess, scopeApi } from '../lib/auth/access';
 import { POS } from '../lib/shared/report-model';
@@ -35,11 +36,13 @@ void test('withNames: thay tên phía máy chủ, mã lạ và thuộc tính pro
 });
 function seed(raw: ReturnType<typeof emptyDb>['raw'], date: string) {
   const pos = POS[0].id;
+  markRevenueReady(raw); // stats_daily ghi số giả: bảng coi như đã dựng lại theo ngày tạo đơn (27/11/2026)
   raw.prepare('INSERT INTO pos_users(id,pos_id,user_id,name,fetched_at) VALUES (?,?,?,?,?)').run('demo', pos, 'NV_DEMO', 'TEN_GIA_LAP SALE', date);
   for (let i = -56; i <= 0; i++) {
     const day = addDays(date, i);
     raw.prepare('INSERT INTO stats_daily(id,pos_id,day,seller_id,assigned_orders,closed_orders,closed_net,updated_at) VALUES (?,?,?,?,10,2,100,?)').run(day, pos, day, 'NV_DEMO', date);
-    raw.prepare(`INSERT INTO raw_pos_orders(id,pos_id,shop_id,source_order_id,seller_id,status_code,first_closed_at,net_total,fetched_at,raw_json) VALUES (?,?,?,?,?,1,?,100,?,?)`).run(day, pos, 'demo', day, 'NV_DEMO', `${day}T00:00:00`, date, JSON.stringify({ name: 'TEN_GIA_LAP', note: 'GHI_CHU_GIA_LAP' }));
+    // Đơn ảo tạo và chốt cùng lúc (doanh thu theo ngày tạo đơn, 27/11/2026).
+    raw.prepare(`INSERT INTO raw_pos_orders(id,pos_id,shop_id,source_order_id,seller_id,status_code,created_at,first_closed_at,net_total,fetched_at,raw_json) VALUES (?,?,?,?,?,1,?,?,100,?,?)`).run(day, pos, 'demo', day, 'NV_DEMO', `${day}T00:00:00`, `${day}T00:00:00`, date, JSON.stringify({ name: 'TEN_GIA_LAP', note: 'GHI_CHU_GIA_LAP' }));
   }
   raw.prepare('INSERT INTO app_settings(key,value,updated_at) VALUES (?,?,?)').run(`ai_forecast:${date}`, JSON.stringify({ date, morning: { total: 120, people: [{ id: 'NV_DEMO', assigned: 10, closed: 2, net: 120, name: 'TEN_GIA_LAP', note: 'GHI_CHU_GIA_LAP' }] }, points: [{ t: '11:30', actual: 60, today: 110, week: 700 }] }), date);
 }

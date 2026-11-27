@@ -1,9 +1,10 @@
 // Tách khỏi app/api/reports/exec/route.ts (cải tổ B4, 05/11/2026): chỉ dời chỗ, câu SQL và số liệu giữ nguyên.
 import { env } from 'cloudflare:workers';
 import { addDays, compareWindow, todayVn, vnRangeUtc } from '@/lib/shared/report-time';
-import { CLOSED, NET } from '@/lib/reports/stats';
+import { CLOSED, NET, revenueDate } from '@/lib/reports/stats';
 import { MKT_STAFF, countedFilter, teamFilter } from '@/lib/teams/team';
 import { mktClosedStatus } from '@/lib/reports/mkt-closed';
+import { statsDailySource } from '@/lib/pancake/order-segments';
 
 // Màn Điều hành (kế hoạch quản trị, giai đoạn 2b · 26/09/2026): tiến độ tháng và ba bộ phận.
 // - daily: doanh thu đơn chốt từng ngày từ đầu tháng tới hôm nay (để vẽ cộng dồn so mục tiêu và dự báo cuối tháng).
@@ -25,21 +26,24 @@ export async function execReport(posIds: string[], asked: string) {
   // Tháng trước lấy tới cùng giờ hiện tại của ngày tương ứng (yêu cầu 30/09/2026), nên kỳ trước đọc thẳng đơn gốc.
   const cur = vnRangeUtc(monthStart, today), prev = compareWindow(today, { start: prevStart, end: prevEnd });
   const ph = posIds.map(() => '?').join(',');
-  // Tổng, theo ngày và Sale đọc bảng tổng hợp theo ngày (stats_daily, closed_* theo ngày xác nhận lần đầu) — nhẹ, cùng nguồn với Tổng quan.
+  // Tổng, theo ngày và Sale đọc bảng tổng hợp theo ngày (stats_daily, closed_* theo ngày tạo đơn) — nhẹ, cùng nguồn với Tổng quan.
   // CSKH (NV chăm sóc) và số MKT (có Marketer) không có trong bảng tổng hợp nên vẫn đọc đơn gốc, chỉ 4 câu.
   // Chỉ người được tính doanh số (tên có hậu tố MKT / CSKH / SALE, lib/team.ts).
   const statsWhere = `pos_id IN (${ph}) AND day>=? AND day<=?${countedFilter('seller_id')}`;
+  // Bảng đang dựng lại theo ngày tạo đơn thì đọc bảng ảo từ đơn gốc (statsDailySource), không trộn hai cách tính.
+  const src = await statsDailySource(env.DB, posIds, monthStart, today);
   const stat = (extra: string, from: string, to: string) =>
-    env.DB.prepare(`SELECT COALESCE(SUM(closed_orders),0) AS n, COALESCE(SUM(closed_net),0) AS net FROM stats_daily WHERE ${statsWhere}${extra}`).bind(...posIds, from, to);
+    env.DB.prepare(`${src.sql}SELECT COALESCE(SUM(closed_orders),0) AS n, COALESCE(SUM(closed_net),0) AS net FROM stats_daily WHERE ${statsWhere}${extra}`).bind(...src.binds, ...posIds, from, to);
   // Tổng chỉ người bán được tính; Sale / CSKH đã lọc trong teamFilter, Số MKT lọc theo Marketer (không theo người bán) như các màn khác.
-  const base = `pos_id IN (${ph}) AND ${CLOSED} AND first_closed_at>=? AND first_closed_at<?`;
+  // Doanh thu theo ngày tạo đơn (revenueDate, 27/11/2026), cùng bảng stats_daily.
+  const base = `pos_id IN (${ph}) AND ${CLOSED} AND ${revenueDate()}>=? AND ${revenueDate()}<?`;
   const SELLER = countedFilter('seller_id');
   const raw = (extra: string, r: { startUtc: string; endUtc: string }) =>
     env.DB.prepare(`SELECT COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders WHERE ${base}${extra}`).bind(...posIds, r.startUtc, r.endUtc);
   const MKT = ` AND NULLIF(TRIM(marketer_id),'') IS NOT NULL AND marketer_id IN ${MKT_STAFF}`;
-  // Số MKT theo ngày xác nhận lần đầu, đơn đã xác nhận (không tính Chờ xác nhận), cùng cách Tổng quan POS / Marketing (anh Vũ 06/11/2026).
+  // Số MKT: đơn đã xác nhận (không tính Chờ xác nhận), theo ngày tạo đơn (27/11/2026), cùng cách Tổng quan POS / Marketing.
   const mkt = (r: { startUtc: string; endUtc: string }) =>
-    env.DB.prepare(`SELECT COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders WHERE pos_id IN (${ph}) AND first_confirmed_at>=? AND first_confirmed_at<? AND ${mktClosedStatus('status_code')}${MKT}`).bind(...posIds, r.startUtc, r.endUtc);
+    env.DB.prepare(`SELECT COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders WHERE pos_id IN (${ph}) AND created_at>=? AND created_at<? AND first_confirmed_at IS NOT NULL AND ${mktClosedStatus('status_code')}${MKT}`).bind(...posIds, r.startUtc, r.endUtc);
   const saleF = teamFilter('seller_id', 'sale');
   const parts = [
     { key: 'sale', label: 'Sale', cur: stat(saleF, monthStart, today), prev: raw(saleF, prev) },
@@ -47,7 +51,7 @@ export async function execReport(posIds: string[], asked: string) {
     { key: 'mkt', label: 'Số MKT đưa về', cur: mkt(cur), prev: mkt(prev) },
   ];
   const [daily, total, prevTotal, ...rest] = await env.DB.batch([
-    env.DB.prepare(`SELECT day, COALESCE(SUM(closed_orders),0) AS n, COALESCE(SUM(closed_net),0) AS net FROM stats_daily WHERE ${statsWhere} GROUP BY day ORDER BY day`).bind(...posIds, monthStart, today),
+    env.DB.prepare(`${src.sql}SELECT day, COALESCE(SUM(closed_orders),0) AS n, COALESCE(SUM(closed_net),0) AS net FROM stats_daily WHERE ${statsWhere} GROUP BY day ORDER BY day`).bind(...src.binds, ...posIds, monthStart, today),
     stat('', monthStart, today), raw(SELLER, prev),
     ...parts.flatMap((t) => [t.cur, t.prev]),
   ]);

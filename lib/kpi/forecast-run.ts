@@ -38,9 +38,10 @@ export async function runForecast(db: D1Database, now: Date) {
   totals.set(date, actual);
   const dates = [date, ...[7, 14, 21, 28].map((n) => addDays(date, -n))];
   const ranges = dates.map((d) => vnRangeUtc(d, d));
-  const hourly = await db.batch<{ dh: string; net: number }>(ranges.map(range => db.prepare(`SELECT strftime('%Y-%m-%d %H',first_closed_at,'+7 hours') AS dh,
+  const hourly = await db.batch<{ dh: string; net: number }>(ranges.map(range => // Đường giờ theo giờ TẠO đơn trong các đơn đã chốt (doanh thu theo ngày tạo, 27/11/2026), cùng cơ sở với ô Doanh thu hôm nay.
+    db.prepare(`SELECT strftime('%Y-%m-%d %H',created_at,'+7 hours') AS dh,
     COALESCE(SUM(CASE WHEN status_code<>6 THEN COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0)) END),0) AS net
-    FROM raw_pos_orders WHERE pos_id IN (${POS.map(() => '?').join(',')}) AND first_closed_at>=? AND first_closed_at<?
+    FROM raw_pos_orders WHERE pos_id IN (${POS.map(() => '?').join(',')}) AND created_at>=? AND created_at<? AND first_closed_at IS NOT NULL
     AND status_code NOT IN (0,7)${countedFilter('seller_id')} GROUP BY dh`)
     .bind(...POS.map(p => p.id), range.startUtc, range.endUtc)));
   const hours = new Map(dates.map((d) => [d, Array<number>(24).fill(0)]));

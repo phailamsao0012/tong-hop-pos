@@ -188,7 +188,7 @@ export function buildMorningReport(d: MorningData) {
     overdue: d.overdue,
     dueToday: d.dueToday,
     meetings: d.meetings ?? [],
-    footer: `Doanh số tính theo người có hậu tố ${d.dept === 'sale' ? 'SALE' : 'CSKH'} trong team · ngày chốt đơn`,
+    footer: `Doanh số tính theo người có hậu tố ${d.dept === 'sale' ? 'SALE' : 'CSKH'} trong team · theo ngày tạo đơn`,
   };
 }
 export type MorningReport = ReturnType<typeof buildMorningReport> & {
