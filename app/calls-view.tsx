@@ -314,6 +314,8 @@ export function CallsView({ canExport = false, uiMoi = false }: { canExport?: bo
           (report.coverage.pendingCustomers ?? 0) > 0 && <p className="text-xs text-muted-foreground">Số liệu ghi chú còn thiếu: {vi.format(report.coverage.pendingCustomers ?? 0)} khách đang chờ lấy đủ ghi chú trong các POS đã chọn (mọi ngày, mọi nhân viên). Hệ thống tự lấy bù ở nền.</p>
   );
   // [hết khối chung]
+  // Bảng nhân viên vẽ MỘT lần cho cả hai bố cục (bên trong có hàm đọc ref; gọi hai chỗ thì react-compiler báo thêm lỗi "refs during render").
+  const staffEl = report ? staffCard(report) : null;
 
   // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
   // Trên xuống: đầu trang (PageHeadMoi: chọn kỳ kèm bộ lọc của trang, StaleChip, Excel, POS) → chọn riêng một NV CSKH
@@ -351,7 +353,7 @@ export function CallsView({ canExport = false, uiMoi = false }: { canExport?: bo
             {emptyNote(report)}
             {unknownNote(report)}
             {dailyCard()}
-            {staffCard(report)}
+            {staffEl}
             {historyDialog()}
             <FoldBlock icon={PhoneCall} title="Cách tính" storageKey="ui-moi:calls:defs">{defsBlock(report)}{pendingNote(report)}</FoldBlock>
           </>
@@ -391,7 +393,7 @@ export function CallsView({ canExport = false, uiMoi = false }: { canExport?: bo
           {emptyNote(report)}
           {unknownNote(report)}
           {dailyCard()}
-          {staffCard(report)}
+          {staffEl}
           {/* Khung nổi giữa màn: rộng tối đa ~960px, cao tối đa 85vh, phần dưới tiêu đề cuộn bên trong; điện thoại gần kín màn. Đóng: nút X, Đóng, Esc, bấm ra ngoài. */}
           {historyDialog()}
           {defsBlock(report)}

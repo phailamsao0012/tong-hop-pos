@@ -262,6 +262,8 @@ export function OriginView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì 
               </ChartCard>
   );
   // [hết khối chung]
+  // Bảng nhân viên vẽ MỘT lần cho cả hai bố cục (bên trong có hàm đọc ref; gọi hai chỗ thì react-compiler báo thêm lỗi "refs during render").
+  const staffEl = report ? staffCard(report) : null;
 
   // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
   // Trên xuống: đầu trang (PageHeadMoi: chọn kỳ + trạng thái, ngày tính, NV trên đơn, chọn người, bộ phận; Excel; POS) → chọn riêng một NV CSKH
@@ -293,7 +295,7 @@ export function OriginView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì 
                   rows: [{ label: 'Đơn tự ups', value: vi.format(tot.self) }, { label: 'Tổng đơn (tự ups + từ MKT)', value: vi.format(all) }, { label: '= Tỷ lệ tự ups', value: pct(selfShare), strong: true }],
                   definition: 'Đơn tự ups ÷ tổng đơn (tự ups + từ MKT) của những người đang xem.' })} />
             </div>
-            {staffCard(report)}
+            {staffEl}
             <FoldBlock icon={ExternalLink} title="Cách tính" storageKey="ui-moi:origin:defs"><Definitions items={report.definitions} /></FoldBlock>
           </>
         )}
@@ -337,7 +339,7 @@ export function OriginView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì 
               tooltip={{ period: periodLabel, current: `${vi.format(tot.self)} / ${vi.format(all)} đơn`, definition: 'Đơn tự ups ÷ tổng đơn (tự ups + từ MKT) của nhóm đang lọc.' }} />
           </div>
           <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1fr)_28rem]">
-            {staffCard(report)}
+            {staffEl}
             <div id="origin-orders">
               {ordersCard()}
             </div>
