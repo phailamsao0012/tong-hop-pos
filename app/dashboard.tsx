@@ -1752,7 +1752,7 @@ export default function Dashboard({ user, initialView, demo = false, uiMoi = fal
           {!gated && view === 'custom' && <CustomReportView />}
           {!gated && view === 'compare' && <CompareView uiMoi={uiMoi} />}
           {!gated && canView(user, view) && view === 'growth' && <GrowthView key={activeDept} navDept={activeDept} uiMoi={uiMoi} />}
-          {!gated && canView(user, view) && view === 'ho-so' && <StaffProfilePage onBack={profileBack ? () => { setView(profileBack); setProfileBack(null); } : undefined} />}
+          {!gated && canView(user, view) && view === 'ho-so' && <StaffProfilePage uiMoi={uiMoi} onBack={profileBack ? () => { setView(profileBack); setProfileBack(null); } : undefined} />}
           {!gated && view === 'batches' && <BatchesView />}
           {!gated && view === 'raw-orders' && <RawOrdersView onSyncNow={() => { void syncRecentAll(true); }} syncing={autoSyncing} />}
           {!gated && view === 'customers' && <CustomersPage key={searchQuery} initialQ={searchQuery} canExport={canExport(user)} />}

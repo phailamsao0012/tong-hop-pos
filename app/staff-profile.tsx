@@ -15,7 +15,9 @@ import type { MonthRow, StaffProfile } from '@/lib/reports/staff-profile';
 import { STAFF_STATUSES } from '@/lib/teams/staff-status';
 import { ORDER_STATUS } from '@/lib/pancake/pancake';
 import { useStaffStatus, STATUS_CLASS } from './staff-name';
-import { SegmentedControl, money, pct, shortMoney, vi, barRadius } from './ui-kit';
+import { FoldBlock, KpiCard, SegmentedControl, money, pct, shortMoney, vi, barRadius } from './ui-kit';
+import { BOSS_CLOSE_RED } from '@/lib/zalo/boss-report';
+import { CanXemStrip, DuoSpark, KPI_RED, KPI_TIGHT, PageHeadMoi, WhySheet, overClose, tileGrid, type CanXemItem, type WhySpec } from './trang-moi';
 import { BadgeShelf } from './staff-badges';
 import { apiJson } from './api-fetch';
 import { usePosIds } from './pos-store';
@@ -124,19 +126,21 @@ function PosPick({ data, onPick }: { data: StaffProfile; onPick?: (pos: string[]
   );
 }
 
-export function StaffProfileBody({ data, today, onPick }: { data: StaffProfile; today: string; onPick?: (pos: string[]) => void }) {
+export function StaffProfileBody({ data, today, onPick, uiMoi = false }: { data: StaffProfile; today: string; onPick?: (pos: string[]) => void; /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới. */ uiMoi?: boolean }) {
+  // Giao diện mới: khung "Vì sao ra số này" đang mở (null = đóng).
+  const [why, setWhy] = useState<WhySpec | null>(null);
   const status = useStaffStatus()[data.id] ?? 'working';
   const mkt = data.dept === 'mkt', notes = insights(data, today), worked = daysSince(data.tenure?.joined ?? null, today);
-  return (
-    <div className="space-y-4">
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  // fold: chỉ bố cục mới truyền (thu gọn thẻ); bố cục cũ không truyền nên thẻ y như trước.
+  const statusRow = () => (
       <div className="flex flex-wrap items-center gap-2 text-[12px]">
         <span className={`rounded-full bg-surface-2 px-2.5 py-1 font-semibold ${STATUS_CLASS[status]}`}>{STAFF_STATUSES[status]}</span>
         {data.dept && <span className="rounded-full bg-surface-2 px-2.5 py-1">{DEPT[data.dept]}</span>}
         {data.tenure && <span className="rounded-full bg-surface-2 px-2.5 py-1 num">T{data.tenure.t} · {worked !== null ? `${vi.format(worked)} ngày` : ''}</span>}
       </div>
-      <PosPick data={data} onPick={onPick} />
-      <ProfilePeriod id={data.id} posSel={data.posSel} />
-
+  );
+  const factsSec = () => (
       <section aria-label="Các mốc" className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         <Fact icon={CalendarDays} label="Ngày vào làm" value={dmyFull(data.tenure?.joined)} note={data.tenure ? `theo ${JOIN_SOURCE_LABELS[data.tenure.source]}` : 'chưa có ngày vào'} />
         <Fact icon={UserRound} label="Có tài khoản POS" value={dmyFull(data.posCreated)} note={data.pos.length ? `${data.pos.length} POS` : undefined} />
@@ -144,19 +148,20 @@ export function StaffProfileBody({ data, today, onPick }: { data: StaffProfile; 
           note={data.firstOrder ? `đơn ${data.firstOrder.orderId} · ${shortMoney(data.firstOrder.net)} · ${ORDER_STATUS[data.firstOrder.status] ?? ''}` : undefined} />
         <Fact icon={TrendingUp} label="Có đơn gần nhất" value={dmyFull(data.lastOrderDay)} />
       </section>
-
+  );
+  const badgesSec = () => (
       <section>
         <h4 className="mb-2 text-[13px] font-semibold">Huy hiệu ({data.badges.length})</h4>
         <BadgeShelf badges={data.badges} />
       </section>
-
-      {notes.length > 0 && (
+  );
+  const notesSec = () => (
         <section data-ui="tile" className="rounded-xl border border-line bg-surface p-3">
           <h4 className="mb-1.5 text-[13px] font-semibold">Phân tích nhanh</h4>
           <ul className="list-disc space-y-1 pl-5 text-[13px]">{notes.map((n) => <li key={n}>{n}</li>)}</ul>
         </section>
-      )}
-
+  );
+  const bestSec = () => (
       <section>
         <h4 className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold"><Crown size={15} aria-hidden="true" />Thành tích tốt nhất</h4>
         <ul className="grid gap-2 sm:grid-cols-3">
@@ -165,10 +170,8 @@ export function StaffProfileBody({ data, today, onPick }: { data: StaffProfile; 
           {!mkt && <Achievement title="Tháng tỷ lệ chốt cao nhất" value={data.best.rateMonth ? pct(data.best.rateMonth.rate, 1) : '—'} note={data.best.rateMonth ? `tháng ${mLabel(data.best.rateMonth.month)} · ${vi.format(data.best.rateMonth.orders)} đơn lên` : 'cần tháng có từ 30 đơn lên'} />}
         </ul>
       </section>
-
-      {data.months.length > 0 && <MonthCharts months={data.months} mkt={mkt} />}
-
-      {data.months.length > 0 && (
+  );
+  const monthsSec = () => (
         <section className="min-w-0">
           <h4 className="mb-2 text-[13px] font-semibold">Từng tháng</h4>
           <ul data-ui="list" className="divide-y divide-line rounded-xl border border-line">
@@ -181,9 +184,8 @@ export function StaffProfileBody({ data, today, onPick }: { data: StaffProfile; 
             ))}
           </ul>
         </section>
-      )}
-
-      {data.products.length > 0 && (
+  );
+  const productsSec = () => (
         <section>
           <h4 className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold"><Package size={15} aria-hidden="true" />Sản phẩm bán nhiều nhất tháng {mLabel(data.productsMonth)}</h4>
           <ul className="space-y-1.5">
@@ -196,16 +198,90 @@ export function StaffProfileBody({ data, today, onPick }: { data: StaffProfile; 
             ))}
           </ul>
         </section>
+  );
+  const defsList = () => (
+      <ul className="list-disc space-y-0.5 pl-5 text-[11px] text-ink-3">{Object.values(data.definitions).map((d) => <li key={d}>{d}</li>)}</ul>
+  );
+  // [hết khối chung]
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trên xuống: trạng thái, chọn POS, kỳ → "Cần xem" (tháng gần nhất chốt dưới 40%, trừ MKT) → một hàng ô số thành tích + tháng gần nhất
+  // (bấm mở "Vì sao ra số này") → biểu đồ theo tháng → bảng chính Từng tháng → khối phụ thu gọn: Các mốc, Huy hiệu, Phân tích nhanh, Sản phẩm, Cách tính.
+  if (uiMoi) {
+    const last = data.months.at(-1) ?? null;
+    const scope = `${data.name}${data.dept ? ` · ${DEPT[data.dept]}` : ''} · ${data.posSel.length ? data.pos.filter((p) => data.posSel.includes(p.id)).map((p) => p.name).join(', ') : 'mọi POS có tài khoản'}`;
+    const monthWhy = (title: string, m: MonthRow): WhySpec => ({ title, value: shortMoney(m.net), scope: `${scope} · tháng ${mLabel(m.month)}`,
+      rows: [{ label: 'Đơn chốt', value: vi.format(m.closedOrders) }, { label: 'Đơn lên', value: vi.format(m.orders) }, ...(!mkt ? [{ label: 'Tỷ lệ chốt', value: pct(m.rate, 1), tone: overClose(m.rate) ? 'bad' as const : undefined }] : []),
+        { label: 'Hạng trong bộ phận', value: m.rank ? `${m.rank}/${m.of}` : '—' }],
+      definition: Object.values(data.definitions).join(' ') });
+    const need: CanXemItem[] = !mkt && last && overClose(last.rate) ? [{ key: 'last-rate', team: true, text: `Tháng ${mLabel(last.month)}: chốt ${pct(last.rate, 1)}`, onClick: () => setWhy(monthWhy(`Tháng ${mLabel(last.month)}`, last)) }] : [];
+    const k = (s: string) => `ui-moi:ho-so:${s}`;
+    return (
+      <div className="min-w-0 space-y-4">
+        {statusRow()}
+        <PosPick data={data} onPick={onPick} />
+        <ProfilePeriod id={data.id} posSel={data.posSel} />
+        <CanXemStrip items={need} note={`Tỷ lệ chốt tháng dưới ${BOSS_CLOSE_RED}%`} />
+        <div className={tileGrid(mkt ? 3 : 4)}>
+          <KpiCard icon={Crown} tone="orange" label="Tháng doanh số cao nhất" className={KPI_TIGHT} value={data.best.month ? shortMoney(data.best.month.net) : '—'} note={data.best.month ? `tháng ${mLabel(data.best.month.month)}` : 'Chưa có số'}
+            onClick={data.best.month ? () => setWhy(monthWhy('Tháng doanh số cao nhất', data.best.month!)) : undefined} />
+          <KpiCard icon={TrendingUp} tone="green" label="Ngày doanh số cao nhất" className={KPI_TIGHT} value={data.best.day ? shortMoney(data.best.day.net) : '—'} note={data.best.day ? `${dmyFull(data.best.day.day)} · ${vi.format(data.best.day.orders)} đơn` : 'Chưa có số'}
+            onClick={data.best.day ? () => setWhy({ title: 'Ngày doanh số cao nhất', value: shortMoney(data.best.day!.net), scope, rows: [{ label: 'Ngày', value: dmyFull(data.best.day!.day) }, { label: 'Đơn', value: vi.format(data.best.day!.orders) }], definition: Object.values(data.definitions).join(' ') }) : undefined} />
+          {!mkt && <KpiCard icon={Award} tone="blue" label="Tháng tỷ lệ chốt cao nhất" className={KPI_TIGHT} value={data.best.rateMonth ? pct(data.best.rateMonth.rate, 1) : '—'} note={data.best.rateMonth ? `tháng ${mLabel(data.best.rateMonth.month)}` : 'Chưa có số'}
+            onClick={data.best.rateMonth ? () => setWhy(monthWhy('Tháng tỷ lệ chốt cao nhất', data.best.rateMonth!)) : undefined} />}
+          <KpiCard icon={CalendarDays} tone="gray" label={last ? `Tháng gần nhất · ${mLabel(last.month)}` : 'Tháng gần nhất'} className={`${KPI_TIGHT} ${!mkt && last && overClose(last.rate) ? KPI_RED : ''}`}
+            value={last ? (mkt ? shortMoney(last.net) : pct(last.rate, 1)) : '—'} note={last ? (mkt ? `${vi.format(last.closedOrders)} đơn` : `${shortMoney(last.net)} · ${vi.format(last.closedOrders)} đơn · tỷ lệ chốt`) : 'Chưa có số'}
+            chart={data.months.length > 1 ? <DuoSpark cur={data.months.map((m) => mkt ? m.net : m.rate)} bad={mkt ? undefined : overClose} /> : undefined}
+            onClick={last ? () => setWhy(monthWhy(`Tháng ${mLabel(last.month)}`, last)) : undefined} />
+        </div>
+        {data.months.length > 0 && <MonthCharts months={data.months} mkt={mkt} />}
+        {data.months.length > 0 && monthsSec()}
+        <div className="grid min-w-0 gap-3">
+          <FoldBlock icon={CalendarDays} title="Các mốc" storageKey={k('facts')}>{factsSec()}</FoldBlock>
+          <FoldBlock icon={Award} title={`Huy hiệu · ${data.badges.length}`} storageKey={k('badges')}>{badgesSec()}</FoldBlock>
+          {notes.length > 0 && <FoldBlock icon={TrendingUp} title="Phân tích nhanh" storageKey={k('notes')}>{notesSec()}</FoldBlock>}
+          {data.products.length > 0 && <FoldBlock icon={Package} title={`Sản phẩm bán nhiều nhất tháng ${mLabel(data.productsMonth)}`} storageKey={k('products')}>{productsSec()}</FoldBlock>}
+          <FoldBlock icon={Flag} title="Cách tính" storageKey={k('defs')}>{defsList()}</FoldBlock>
+        </div>
+        <WhySheet spec={why} onClose={() => setWhy(null)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {statusRow()}
+      <PosPick data={data} onPick={onPick} />
+      <ProfilePeriod id={data.id} posSel={data.posSel} />
+
+      {factsSec()}
+
+      {badgesSec()}
+
+      {notes.length > 0 && (
+        notesSec()
       )}
 
-      <ul className="list-disc space-y-0.5 pl-5 text-[11px] text-ink-3">{Object.values(data.definitions).map((d) => <li key={d}>{d}</li>)}</ul>
+      {bestSec()}
+
+      {data.months.length > 0 && <MonthCharts months={data.months} mkt={mkt} />}
+
+      {data.months.length > 0 && (
+        monthsSec()
+      )}
+
+      {data.products.length > 0 && (
+        productsSec()
+      )}
+
+      {defsList()}
     </div>
   );
 }
 
 /** Trang Hồ sơ nhân sự (anh Vũ 09/11/2026: trang riêng, tách bạch, chỉ anh và anh Nghĩa xem). Trái: tìm tên + lọc bộ phận + danh sách;
  *  phải: hồ sơ người đang chọn. Điện thoại: một cột, chọn người thì hiện hồ sơ, nút "Danh sách" để quay lại. Mã người ghi lên địa chỉ (?id=) để F5 giữ nguyên. */
-export function StaffProfilePage({ onBack }: { onBack?: () => void }) {
+export function StaffProfilePage({ onBack, uiMoi = false }: { onBack?: () => void; /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới, tắt thì y như cũ. */ uiMoi?: boolean }) {
   const [today] = useState(() => todayVn());
   const target = useSyncExternalStore(subscribeStaffProfile, currentStaffProfile, () => null);
   const status = useStaffStatus();
@@ -280,24 +356,50 @@ export function StaffProfilePage({ onBack }: { onBack?: () => void }) {
     </aside>
   );
 
-  return (
-    <div className="flex min-w-0 flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        {onBack && <button type="button" onClick={onBack} className="tap inline-flex items-center gap-1 rounded-md px-2 py-1 text-[13px] text-ink-2 hover:bg-tint-2 hover:text-primary"><ArrowLeft size={15} />Quay lại</button>}
-        <h2 data-ui="page-title" className="text-lg font-semibold text-ink">Hồ sơ nhân sự</h2>
-        {id && !showList && <button type="button" onClick={() => setShowList(true)} className="tap ml-auto inline-flex items-center gap-1 rounded-md border border-line px-2.5 py-1 text-[13px] lg:hidden"><Users size={14} />Danh sách</button>}
-      </div>
-      <div className="grid min-w-0 gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
-        {list}
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  // fold: chỉ bố cục mới truyền (thu gọn thẻ); bố cục cũ không truyền nên thẻ y như trước.
+  const backBtn = (/*{}*/) => (
+        onBack && <button type="button" onClick={onBack} className="tap inline-flex items-center gap-1 rounded-md px-2 py-1 text-[13px] text-ink-2 hover:bg-tint-2 hover:text-primary"><ArrowLeft size={15} />Quay lại</button>
+  );
+  const listBtn = (/*{}*/) => (
+        id && !showList && <button type="button" onClick={() => setShowList(true)} className="tap ml-auto inline-flex items-center gap-1 rounded-md border border-line px-2.5 py-1 text-[13px] lg:hidden"><Users size={14} />Danh sách</button>
+  );
+  const profileSec = (moi?: boolean) => (
         <section aria-label="Hồ sơ" aria-live="polite" className={`min-w-0 ${id && !showList ? '' : 'max-lg:hidden'}`}>
           {!id ? <p data-ui="box" className="rounded-xl border border-dashed border-line p-6 text-center text-[13.5px] text-ink-3">Chọn một người ở danh sách để xem hồ sơ.</p>
             : <>
               <h3 className="mb-2 text-xl font-semibold text-ink">{name ?? 'Nhân sự'}</h3>
               {state?.id === id && state?.error ? <p role="alert" className="text-bad">{state.error}</p>
                 : state?.id !== id || !state?.data ? <p className="text-ink-3">Đang tải hồ sơ…</p>
-                : <div className={loading ? 'opacity-50 transition-opacity' : undefined}><StaffProfileBody data={state.data} today={today} onPick={(p) => setPick({ id, pos: p })} /></div>}
+                : <div className={loading ? 'opacity-50 transition-opacity' : undefined}><StaffProfileBody data={state.data} today={today} onPick={(p) => setPick({ id, pos: p })} uiMoi={moi} /></div>}
             </>}
         </section>
+  );
+  // [hết khối chung]
+
+  // Bố cục kiểu mới (cờ THP_UI_MOI): đầu trang PageHeadMoi (tên trang, người đang xem; nút quay lại / danh sách), danh sách + hồ sơ kiểu mới.
+  if (uiMoi) return (
+    <div className="flex min-w-0 flex-col gap-4">
+      <PageHeadMoi title="Hồ sơ nhân sự" hint="Trang riêng, chỉ người có quyền xem"
+        scope={id ? `${name ?? 'Nhân sự'} · số theo POS và kỳ chọn trong hồ sơ · chỉ người có quyền xem` : 'Chọn một người ở danh sách để xem hồ sơ · chỉ người có quyền xem'}
+        right={<>{backBtn()}{listBtn()}</>} />
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
+        {list}
+        {profileSec(true)}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="flex min-w-0 flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {backBtn()}
+        <h2 data-ui="page-title" className="text-lg font-semibold text-ink">Hồ sơ nhân sự</h2>
+        {listBtn()}
+      </div>
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
+        {list}
+        {profileSec()}
       </div>
     </div>
   );
