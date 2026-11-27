@@ -1942,7 +1942,8 @@ export default function Dashboard({ user, initialView, demo = false, uiMoi = fal
               </nav>
             );
           })()}
-          {!SELF_HEADED.includes(view) && (
+          {/* Cài đặt kiểu mới tự có đầu trang (PageHeadMoi) nên không vẽ thêm tiêu đề chung (tránh hai chữ "Cài đặt" chồng nhau). */}
+          {!SELF_HEADED.includes(view) && !(uiMoi && view === 'config') && (
             <PageHeader
               eyebrow={['overview', 'customers', 'repurchase', 'dormant', 'batches'].includes(view) ? 'Số liệu Pancake POS tại thời điểm đồng bộ'
                 : filters.start === filters.end

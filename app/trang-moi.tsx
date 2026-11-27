@@ -55,7 +55,9 @@ export const KPI_TIGHT = '[&>span.mt-1]:!min-h-0 [&_.note]:line-clamp-2';
  *  nút "i" nhỏ ở góc phải trên mở "Vì sao ra số này" mà không lọc. Nút i là nút riêng nằm cạnh ô (không lồng trong nút của ô). */
 export function WhyTile({ label, onWhy, children }: { label: string; onWhy: () => void; children: ReactNode }) {
   return (
-    <div className="relative min-w-0 [&>.kpi]:h-full">
+    // Ô bấm được là <button> (KpiCard), mặc định chỉ rộng theo nội dung, và .kpi có @container nên co hẳn còn dải hẹp: ép w-full h-full
+    // để ô chiếm trọn ô lưới như KPI_TIGHT các trang khác; chừa lề phải cho nút "i" ở góc.
+    <div className="relative h-full min-w-0 [&>.kpi]:block [&>.kpi]:h-full [&>.kpi]:w-full [&>.kpi]:pr-9">
       {children}
       <button type="button" onClick={onWhy} aria-label={`Vì sao ra số này: ${label}`} title="Vì sao ra số này"
         className="tap absolute right-2 top-2 z-[1] grid size-6 place-items-center rounded-full text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
