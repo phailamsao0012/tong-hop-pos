@@ -875,7 +875,7 @@ export function SaleGroupBlock({
           {/* Thẻ từng nhóm sản phẩm (Gentadox, SK + GK...): anh Vũ 21/10/2026 "trả lại cho t nhé". */}
           {r.groups.length > 0 && (
             <div
-              className={`grid gap-3 ${r.groups.length > 3 ? 'sm:grid-cols-2 xl:grid-cols-4' : 'sm:grid-cols-3'}`}
+              className={`grid gap-3 ${r.groups.length > 3 ? 'sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-6' : 'sm:grid-cols-3'}`}
             >
               {r.groups.slice(0, dim === 'main' ? 6 : 8).map((g, i) => (
                 <div

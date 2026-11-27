@@ -344,7 +344,7 @@ export function TeamOverviewView({
       )}
       {!cur && !api.error && (
         <>
-          <SkeletonKpis count={6} className="lg:grid-cols-3" />
+          <SkeletonKpis count={6} className="lg:grid-cols-3 2xl:grid-cols-6" />
           <ChartCard title="Theo ngày" subtitle="Đang tải…">
             <SkeletonTable rows={5} cols={5} />
           </ChartCard>
@@ -353,7 +353,7 @@ export function TeamOverviewView({
       {cur && report && (
         <>
           <div
-            className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 transition-opacity"
+            className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 2xl:grid-cols-6 transition-opacity"
             aria-busy={api.loading}
           >
             <KpiCard
@@ -790,7 +790,7 @@ export function TeamOverviewView({
             title="Theo POS"
             subtitle={`Số của riêng bộ phận này · ${periodLabel}`}
           >
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
               {[...report.current.byPos]
                 .sort((a, b) => b.closedNet - a.closedNet)
                 .map((p) => {
