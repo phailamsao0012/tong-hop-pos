@@ -154,8 +154,7 @@ export const PRODUCTS: Product[] = [
   { key: 'vogao', name: 'Siêu Vỏ Gạo men vi sinh 1kg', price: 240000, tag: 'SIÊU VỎ GẠO' },
   { key: 'vitc', name: 'Vitamin C tạt 1kg', price: 180000, tag: null },
   { key: 'men', name: 'Men tiêu hóa đường ruột 500g', price: 220000, tag: null },
-  // Thẻ mới 27/11/2026 (lib/pancake/order-segments.ts): thêm Doxytylo cho POS BIO NANO. Chỉ đổi sản phẩm của BIO NANO (đơn ảo sinh theo
-  // từng POS, từng ngày) để các bản lưu của test ở Siêu Vô Gạo / MGT (W1, W2, W5) không đổi; Siêu Vô Gạo vẫn có Gentadox như trước.
+  // Thẻ mới 27/11/2026 (lib/pancake/order-segments.ts): thêm Doxytylo cho POS BIO NANO, bán từ 01/11/2026 (MIX_FROM bên dưới).
   { key: 'doxytylo', name: 'Thuốc thú y Doxytylo 10g', price: 350000, tag: null },
   { key: 'gift', name: 'Quà tặng: găng tay cao su', price: 0, tag: null, bonus: true },
 ];
@@ -165,10 +164,15 @@ const POS_MIX: Record<string, [string, number][]> = {
   'sieu-vo-gao': [['vogao', 5], ['men', 3], ['vitc', 2], ['gentadox', 1]],
   'mgt-apex': [['apex', 5], ['gentadox', 2], ['vitc', 2], ['megaroot', 1]],
   'thuy-san': [['gentadox', 4], ['oxy', 3], ['skgk', 3], ['godkill', 2], ['clean', 1]],
-  'bio-nano': [['doxytylo', 5], ['shield', 2], ['clean', 1], ['men', 1]],
+  'bio-nano': [['shield', 4], ['clean', 3], ['skgk', 1], ['men', 1]],
   'megaroot': [['megaroot', 5], ['apex', 2], ['vogao', 1]],
   'oxytetra': [['oxy', 5], ['gentadox', 3], ['vitc', 1]],
 };
+/** Mix đổi theo ngày (27/11/2026): BIO NANO bán Doxytylo từ 01/11/2026. Đơn ảo trước đó giữ mix cũ nên các bản lưu của test (kỳ tháng 10) không đổi. */
+const MIX_FROM: Record<string, { from: string; mix: [string, number][] }> = {
+  'bio-nano': { from: '2026-11-01', mix: [['doxytylo', 5], ['shield', 2], ['clean', 1], ['men', 1]] },
+};
+const mixOf = (posId: string, day: string) => { const m = MIX_FROM[posId]; return m && day >= m.from ? m.mix : POS_MIX[posId]; };
 /** Số data (đơn mới từ quảng cáo) mỗi ngày của từng POS. */
 const POS_VOLUME: Record<string, number> = { 'sieu-vo-gao': 30, 'mgt-apex': 22, 'thuy-san': 40, 'bio-nano': 28, 'megaroot': 18, 'oxytetra': 20 };
 const variationId = (posId: string, key: string) => uuidOf(`variation:${posId}:${key}`);
@@ -213,8 +217,8 @@ function holderOf(customerId: string, branch: 'HN' | 'TN', day: string) {
   return all.length ? all[hash(customerId) % all.length] : null;
 }
 
-function itemsFor(r: R, posId: string, rich: boolean) {
-  const mix = POS_MIX[posId];
+function itemsFor(r: R, posId: string, rich: boolean, day: string) {
+  const mix = mixOf(posId, day);
   const lines = 1 + (r() < (rich ? 0.45 : 0.3) ? 1 : 0) + (r() < 0.08 ? 1 : 0);
   const keys = new Set<string>();
   while (keys.size < lines) keys.add(weighted(r, mix, ([, w]) => w)[0]);
@@ -333,7 +337,7 @@ function leadDay(posId: string, day: string): DemoOrder[] {
     const phone = phoneOf(lr);
     const customerId = uuidOf(`customer:${posId}:${phone}`);
     const events: Ev[] = [{ status: 0, at: t0, by: marketer.id }];
-    const items = itemsFor(lr, posId, false);
+    const items = itemsFor(lr, posId, false, day);
     const tags: string[] = [];
     const laterTags: { name: string; at: number }[] = [];
     // Người mới vào (dưới 45 ngày) chốt kém hơn; leader chốt tốt hơn.
@@ -391,7 +395,7 @@ export function dayData(posId: string, day: string): DayData {
     const fromMkt = cr() < 0.33;
     const marketer = fromMkt ? pick(cr, mkts.length ? mkts : STAFF.filter((s) => s.dept === 'mkt')) : null;
     const events: Ev[] = [{ status: 0, at: t0, by: fromMkt ? marketer!.id : holder.id }];
-    const items = itemsFor(cr, posId, true);
+    const items = itemsFor(cr, posId, true, day);
     const tags: string[] = [];
     const laterTags: { name: string; at: number }[] = [];
     if (cr() < (fromMkt ? 0.52 : 0.9) * (0.75 + holder.skill * 0.6)) laterTags.push(...lifecycle(cr, t0 + between(cr, fromMkt ? 10 : 2, fromMkt ? 300 : 40) * MIN, holder, events));
