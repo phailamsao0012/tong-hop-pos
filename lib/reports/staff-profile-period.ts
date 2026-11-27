@@ -1,6 +1,6 @@
 // Hồ sơ nhân sự: số của MỘT người trong một kỳ chọn (anh Vũ 26/11/2026 13h51: "phần hồ sơ này, xem theo khoảng thời gian từng người").
 // Cùng nguồn và cùng cách tính với phần theo tháng của hồ sơ (lib/reports/staff-profile.ts), chỉ đổi từ tháng sang kỳ chọn:
-// - Sale / CSKH: bảng stats_daily theo người bán: DT chốt = closed_net, đơn chốt = closed_orders theo ngày chốt;
+// - Sale / CSKH: bảng stats_daily theo người bán: DT chốt = closed_net, đơn chốt = closed_orders theo ngày tạo đơn (27/11/2026);
 //   TL chốt = đơn lên trong kỳ đã chốt ÷ đơn lên (như cột tỷ lệ từng tháng); TL hủy = cancelRateOf (lib/reports/metrics.ts, như Tổng quan).
 // - MKT: bảng stats_daily_mkt theo marketer (doanh số, đơn theo ngày xác nhận), như phần theo tháng.
 // - Sản phẩm: stats_daily_seller_product (số lượng trên đơn chốt, không tính quà tặng), như "Sản phẩm tháng này".

@@ -122,7 +122,7 @@ export async function cskhAnalytics(opts: { posIds: string[]; start: string; end
     allStaff: [...new Set(everyone.map((r) => r.staff ?? '').filter(Boolean))].map((id) => ({ staffId: id, name: nameMap.get(id)?.name ?? `NV ${id.slice(0, 8)}`, department: nameMap.get(id)?.department ?? null }))
       .sort((a, b) => a.name.localeCompare(b.name, 'vi')),
     definitions: {
-      scope: 'Đơn chốt trong kỳ (từ Chờ xác nhận trở đi, theo ngày chốt) của nhân viên CSKH; nhân viên = NV chăm sóc trên đơn, trống thì người bán.',
+      scope: 'Đơn chốt trong kỳ (từ Chờ xác nhận trở đi, theo ngày tạo đơn) của nhân viên CSKH; nhân viên = NV chăm sóc trên đơn, trống thì người bán.',
       seq: 'Lần mua thứ mấy = thứ tự của đơn trong mọi đơn đã xác nhận trở đi (không tính mới / chờ, hủy, xóa) của cùng SĐT trên cả 6 POS.',
       flows: 'Đường đi sản phẩm = nhóm sản phẩm của đơn liền trước → nhóm của đơn này (chỉ đơn mua lần 2 trở đi). Đơn có cả hai nhóm tính cả hai đường.',
       diversity: 'Độ đa dạng = số nhóm sản phẩm (Kháng sinh, Combo, Khác) khách đã từng mua tính tới hết kỳ.',

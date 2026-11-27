@@ -10,7 +10,7 @@ import { mktClosedStatus } from '@/lib/reports/mkt-closed';
 
 // Doanh thu của người KHÔNG được tính (anh Vũ 08/10/2026: chỉ tính người có hậu tố MKT / CSKH / SALE trong tên Pancake, ở mọi POS;
 // "những người còn lại nếu phát sinh doanh thu trên pos thì phải làm 1 bảng báo cáo riêng để tôi thống kê xem nguyên nhân do đâu").
-// Người bán: đơn chốt theo ngày chốt (cùng Tổng quan POS). Marketer: đơn đã xác nhận theo ngày xác nhận (cùng bảng MKT).
+// Người bán: đơn chốt theo ngày tạo đơn (cùng Tổng quan POS). Marketer: đơn đã xác nhận theo ngày tạo đơn (cùng bảng MKT; 27/11/2026).
 // Ghi chú nguyên nhân lưu ở app_settings (NOTES_KEY), ai xem được trang thì ghi được; "Vẫn tính" chỉ chủ hệ thống.
 const NET = 'COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0))';
 export const NOTES_KEY = 'uncounted_notes';

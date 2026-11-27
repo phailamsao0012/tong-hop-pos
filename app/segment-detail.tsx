@@ -53,7 +53,7 @@ export function SegmentDetail({ seg, label, color, report, allNet, allOrders = 0
       <SheetContent className="overflow-y-auto sm:max-w-[1100px]">
         <SheetHeader className="pr-12">
           <SheetTitle><span className="mr-2 inline-block size-2.5 rounded-full align-middle" style={{ background: color }} aria-hidden="true" />{label}</SheetTitle>
-          <SheetDescription>Đơn chốt theo ngày chốt, cùng kỳ, POS và bộ lọc đang xem · so với kỳ liền trước</SheetDescription>
+          <SheetDescription>Đơn chốt theo ngày tạo đơn, cùng kỳ, POS và bộ lọc đang xem · so với kỳ liền trước</SheetDescription>
         </SheetHeader>
         <div className="space-y-4 px-4 pb-6">
           {!cur ? <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">{[0, 1, 2, 3].map((i) => <div key={i} className="skel h-[76px] rounded-xl" />)}</div> : (

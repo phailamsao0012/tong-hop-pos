@@ -68,7 +68,7 @@ export async function deliveredProducts(opts: { posIds: string[]; start: string;
 }
 export type DeliveredProductsReport = Awaited<ReturnType<typeof deliveredProducts>>;
 
-// Giao trên chốt theo NGÀY CHỐT (anh Vũ 31/10/2026: "cho xem được số đơn giao trên số đơn chốt"; chọn tính theo ngày chốt):
+// Giao trên chốt (từ 27/11/2026 theo NGÀY TẠO đơn, trước theo ngày chốt; anh Vũ 31/10/2026: "cho xem được số đơn giao trên số đơn chốt"; chọn tính theo ngày chốt):
 // đơn chốt trong ngày (lần đầu vào Chờ xác nhận trở đi, như mọi số Đơn chốt), đến nay bao nhiêu đơn khách đã nhận (3, 16).
 export type ClosedRow = { day: string; name: string; closed: number; delivered: number };
 export type ClosedDay = { day: string; closed: number; delivered: number };

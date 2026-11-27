@@ -1,7 +1,7 @@
 'use client';
 
 // Đơn khách đã nhận theo sản phẩm, từng ngày (anh Vũ 31/10/2026). Logic ở lib/delivered-products.ts.
-// Hai cách xem: theo ngày khách nhận; giao trên chốt theo ngày chốt (anh 31/10: "cho xem được số đơn giao trên số đơn chốt nữa").
+// Hai cách xem: theo ngày khách nhận; giao trên chốt theo ngày tạo đơn (27/11/2026; trước theo ngày chốt, anh 31/10: "cho xem được số đơn giao trên số đơn chốt nữa").
 import { useMemo, useState } from 'react';
 import { PackageCheck } from 'lucide-react';
 import type { ClosedDeliveredReport, DeliveredProductsReport, Pair } from '@/lib/reports/delivered-products';

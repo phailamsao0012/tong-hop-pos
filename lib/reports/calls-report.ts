@@ -74,7 +74,7 @@ export async function callsReport({ posIds, start, end, team, unit }: CallsOpts)
     // Ghi chú theo người viết × ngày.
     env.DB.prepare(`SELECT n.author_id, MAX(n.author_name) AS author_name, ${VN_DAY('n.created_at')} AS day, COUNT(*) AS notes, COUNT(DISTINCT n.pos_id||':'||COALESCE(n.customer_id,n.phone)) AS customers
       FROM customer_notes n WHERE n.pos_id IN (${ph}) AND n.created_at>=? AND n.created_at<?${tf} GROUP BY 1,3`).bind(...posIds, startUtc, endUtc),
-    // Đơn chốt / doanh thu theo NGƯỜI BÁN trên đơn, ngày chốt (từ Chờ xác nhận) — cùng cách tính với Tổng quan POS.
+    // Đơn chốt / doanh thu theo NGƯỜI BÁN trên đơn, ngày tạo đơn (từ 27/11/2026; đơn từ Chờ xác nhận) — cùng cách tính với Tổng quan POS.
     env.DB.prepare(`SELECT o.seller_id AS author_id, ${VN_DAY(revenueDate('o.'))} AS day, COUNT(*) AS orders, SUM(${NET}) AS net
       FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND ${revenueDate('o.')}>=? AND ${revenueDate('o.')}<? AND o.${CLOSED} AND o.seller_id IS NOT NULL${teamFilter('o.seller_id', team, true, unit)}
       GROUP BY 1,2`).bind(...posIds, startUtc, endUtc),

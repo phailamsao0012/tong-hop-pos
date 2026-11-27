@@ -9,7 +9,7 @@ import { statsDailySource } from '@/lib/pancake/order-segments';
 // Màn Điều hành (kế hoạch quản trị, giai đoạn 2b · 26/09/2026): tiến độ tháng và ba bộ phận.
 // - daily: doanh thu đơn chốt từng ngày từ đầu tháng tới hôm nay (để vẽ cộng dồn so mục tiêu và dự báo cuối tháng).
 // - teams: doanh thu đơn chốt từ đầu tháng của Sale, CSKH (theo người bán thuộc bộ phận) và đơn có Marketer (số MKT đưa về),
-//   so với cùng số ngày đầu tháng trước. Đơn chốt = từ Chờ xác nhận trở đi, theo ngày chốt.
+//   so với cùng số ngày đầu tháng trước. Đơn chốt = từ Chờ xác nhận trở đi, theo ngày tạo đơn (27/11/2026).
 // `asked` = ?month=YYYY-MM của kỳ đang chọn.
 export async function execReport(posIds: string[], asked: string) {
   // ?month=YYYY-MM: theo tháng của kỳ đang chọn (anh Vũ 04/11/2026 "chọn tháng trước rồi mà xu hướng vẫn tháng 11").

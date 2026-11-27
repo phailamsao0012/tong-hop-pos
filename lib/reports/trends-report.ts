@@ -1,5 +1,5 @@
 // Đọc số cho xu hướng 10 tuần (lib/trends.ts) từ D1: dùng cho /api/reports/trends và nhận xét AI mỗi sáng.
-// Điều kiện giống 4 bảng Tổng quan POS (/api/reports/sections): Sale / CSKH theo ngày chốt, MKT theo ngày xác nhận, Vận đơn = đơn chốt đã gửi đi.
+// Điều kiện giống 4 bảng Tổng quan POS (/api/reports/sections): Sale / CSKH / MKT theo ngày tạo đơn (27/11/2026), Vận đơn = đơn chốt đã gửi đi.
 // Doanh thu chỉ của người được tính (tên có hậu tố MKT / CSKH / SALE, lib/team.ts); Vận đơn đếm mọi đơn gửi đi vì không phải doanh số.
 import { env } from 'cloudflare:workers';
 import { POS } from '@/lib/shared/report-model';
@@ -62,7 +62,7 @@ export async function trendsReport(opts: TrendsOpts) {
   // Đơn chốt / doanh thu theo ngày tạo đơn (revenueDate, 27/11/2026).
   const closedWhere = `o.pos_id IN (${ph}) AND ${revenueDate('o.')}>=? AND ${revenueDate('o.')}<? AND o.${CLOSED}${seg}`;
   const binds = [...opts.posIds, startUtc, endUtc];
-  // Dòng sản phẩm: không lọc nhóm hàng thì đọc bảng tính sẵn theo ngày chốt (dựng lại mỗi lượt đồng bộ, cùng điều kiện dòng bán);
+  // Dòng sản phẩm: không lọc nhóm hàng thì đọc bảng tính sẵn theo ngày tạo đơn (dựng lại mỗi lượt đồng bộ, cùng điều kiện dòng bán);
   // bảng chưa điền đủ lịch sử hoặc có lọc nhóm hàng thì nối đơn gốc với dòng sản phẩm như trước.
   const products = opts.productSegment === 'all' && await sellerProductStatsReady(env.DB)
     ? env.DB.prepare(`SELECT day, name, SUM(sale_quantity) AS qty, SUM(sale_total) AS net FROM stats_daily_seller_product

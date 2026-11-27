@@ -1,5 +1,5 @@
 // Combo thực tế của một thẻ nhóm đơn (plan docs/plans/2026-11-27-the-san-pham-moi, bước 2): tổ hợp món trong MỘT đơn chốt,
-// xếp theo số đơn. Chỉ đọc; cùng phạm vi với số chốt của Tổng quan (POS, kỳ theo ngày chốt, bộ phận / team, nhân viên, bộ lọc thẻ).
+// xếp theo số đơn. Chỉ đọc; cùng phạm vi với số chốt của Tổng quan (POS, kỳ theo ngày tạo đơn, bộ phận / team, nhân viên, bộ lọc thẻ).
 import { vnRangeUtc } from '@/lib/shared/report-time';
 import { CLOSED, NET } from '@/lib/reports/stats';
 import { countedFilter, teamFilter, type HrUnit, type Team } from '@/lib/teams/team';
