@@ -253,6 +253,27 @@ export function ChartCard({ icon: Icon, title, subtitle, action, info, children,
   );
 }
 
+/** Khối phụ thu gọn cho khối không phải ChartCard (giao diện mới, 27/11/2026): một dòng tiêu đề như ChartCard `collapse`, bấm mới xổ ra.
+ *  Khi đóng không dựng khối bên trong (khối không tải số); nhớ đóng / mở theo storageKey như ChartCard. */
+export function FoldBlock({ icon: Icon, title, summary, storageKey, children, className = '' }: {
+  icon?: LucideIcon; title: string; summary?: ReactNode; storageKey: string; children: ReactNode; className?: string;
+}) {
+  const fold = useCollapsed(storageKey);
+  return (
+    <section className={`min-w-0 ${className}`}>
+      <button type="button" onClick={fold.toggle} aria-expanded={fold.open} className="card tap flex w-full min-w-0 items-center gap-2 px-5 py-3 text-left max-sm:px-4">
+        <ChevronRight size={15} className={`shrink-0 text-ink-3 transition-transform ${fold.open ? 'rotate-90' : ''}`} aria-hidden="true" />
+        {Icon && <Icon size={15} className="shrink-0 text-ink-3" aria-hidden="true" />}
+        <span className="flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+          <span className="truncate text-[15px] font-semibold leading-[1.35] tracking-[-.01em] text-ink">{title}</span>
+          {summary && <span className="num text-[12px] font-medium text-ink-3">{summary}</span>}
+        </span>
+      </button>
+      {fold.open && <div className="mt-3 min-w-0">{children}</div>}
+    </section>
+  );
+}
+
 export function PageHeader({ eyebrow, title, subtitle, badge, actions, className = '' }: { eyebrow?: string; title: string; subtitle?: string; badge?: ReactNode; actions?: ReactNode; className?: string }) {
   // Gọn một dòng (anh Vũ 21/10/2026: khối tiêu đề + chữ giải thích "chiếm quá nhiều diện tích"): kỳ đứng cạnh tiêu đề, lời giải thích chỉ hiện khi rê/chạm vào tiêu đề.
   return (
