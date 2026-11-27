@@ -12,7 +12,9 @@ import { PosCombined, PosMultiples } from './pos-multiples';
 import { focusAfterNav, setNavHint } from './nav-focus';
 import { segmentDrillHint } from '@/lib/shared/drill-hint';
 import { UncountedStaff } from './uncounted-staff';
-import { RATE_BASES, closeRateBase, closeRateOf, closeRateTop, rateLevel, rateTextClass } from '@/lib/reports/metrics';
+import { RATE_BASES, closeRateBase, closeRateOf, closeRateTop, rateLevel, rateTextClass, cancelRateOf, returnRateOf, METRIC_DEFS } from '@/lib/reports/metrics';
+import { BOSS_CANCEL_RED, BOSS_CLOSE_RED, BOSS_RETURN_RED, COACH_MIN_BASE } from '@/lib/zalo/boss-report';
+import { CanXemStrip, PageHeadMoi, WhySheet, overCancel, overClose, overRet, tileGrid, type CanXemItem, type WhySpec } from './trang-moi';
 import { useMetricSettings } from './metric-settings';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
@@ -24,7 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { POS } from '@/lib/shared/report-model';
 import { addDays, comparePeriod, todayVn } from '@/lib/shared/report-time';
 import { Th,
-  ChartCard, Definitions, DeltaPill, Donut, ErrorBox, HoverReveal, KpiCard, MiniStat, PageHeader, ProgressBar, SegmentedControl, SortTh, Sparkline,
+  ChartCard, Definitions, DeltaPill, Donut, ErrorBox, FoldBlock, HoverReveal, KpiCard, MiniStat, PageHeader, ProgressBar, SegmentedControl, SortTh, Sparkline,
   STATUS_COLORS, STATUS_LABELS, STATUS_VARS, TableWrap, Toolbar, Tooltip,
   delta, dmy, dt, money, pct, posColor, posName, posVar, short, shortMoney, timeOnly, toast, useMotionOK, vi, type SortState,
 } from './ui-kit';
@@ -209,9 +211,12 @@ export function PosChips({ posIds, onChange, info }: { posIds: string[]; onChang
   );
 }
 
-export function OverviewView({ onNavigate, canRewriteAi = false }: {
+export function OverviewView({ onNavigate, canRewriteAi = false, uiMoi = false }: {
   /** Mở trang khác từ ngăn kéo chi tiết của 4 bảng. */ onNavigate?: (view: string) => void; /** Chủ hệ thống: nút Viết lại nhận xét AI. */ canRewriteAi?: boolean;
+  /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới, tắt thì y như cũ. */ uiMoi?: boolean;
 } = {}) {
+  // Giao diện mới: khung "Vì sao ra số này" đang mở (null = đóng).
+  const [why, setWhy] = useState<WhySpec | null>(null);
   const ms = useMetricSettings();
   const today = todayVn();
   const team = useTeam();
@@ -458,68 +463,60 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
   const rateColor = (rate: number | null) => `var(--${rateLevel(rate)})`;
   const revealOnPhone = 'max-sm:opacity-100 max-sm:transform-none';
 
-  return (
-    <div className="space-y-5">
-      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}${cmpShown ? ` · so với ${compareText(cmpShown)}` : ''}`} title="Tổng quan POS"
-        subtitle={`Số liệu Pancake${report?.syncedAt ? ` · đồng bộ ${timeOnly(report.syncedAt)} ${dt(report.syncedAt)}` : ''}`}
-        actions={<><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} /><Button variant="outline" onClick={exportSlides} disabled={!report}>Xuất slide</Button><Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button></>} />
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  // fold: chỉ bố cục mới truyền (thu gọn thẻ); bố cục cũ không truyền nên thẻ y như trước.
+  const headActions = () => (
+        <><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} /><Button variant="outline" onClick={exportSlides} disabled={!report}>Xuất slide</Button><Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button></>
+  );
+  const periodBar = () => (
       <PeriodToolbar preset={preset} start={start} end={end} groupBy={groupBy} compare={compare} cstart={cstart} cend={cend}
         onPreset={applyPreset} onStart={setStart} onEnd={setEnd}
         onGroupBy={setGroupBy} onCompare={setCompare} onCstart={setCstart} onCend={setCend} loading={loading} onReload={reload} />
-      <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
+  );
+  const segRow = () => (
       <div className="flex flex-wrap items-center gap-3"><span className="text-sm font-semibold text-ink-2">Nhóm đơn</span>
         <SegmentedControl<ProductSegment> ariaLabel="Nhóm sản phẩm / nhãn đơn" value={productSegment} onChange={setProductSegment} options={(['all', ...segmentsFor(posIds)] as ProductSegment[]).map((value) => ({ value, label: PRODUCT_SEGMENTS[value] }))} />
         <span className="text-xs text-ink-3">Kháng sinh: Gentadox, Detox (Siêu Vô Gạo thêm Oxy + Bổ huyết, Bio Nano Shield) · SK GK · Khác là loại còn lại · POS Oxytetra chỉ có Combo Oxytetra + Bổ đậm đặc</span>
       </div>
-      <OrderOriginFilter team={team} marketers={report?.origins} />
-      {report?.pos.some((p) => posIds.includes(p.id) && !p.backfillDone) && (
+  );
+  const backfillNote = (/*{}*/) => (
+      report?.pos.some((p) => posIds.includes(p.id) && !p.backfillDone) && (
         <p className="notice warn">Lịch sử cũ đang được lấy dần; số liệu các tháng trước có thể chưa đủ.</p>
-      )}
-      {error && !report && <ErrorBox error={error} onRetry={reload} />}
-      {!report && !error && (
-        <>
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]" aria-busy="true">
-            <ChartCard icon={BarChart3} title="Xu hướng" loading><div className="h-72" /></ChartCard>
-            <ChartCard icon={ClipboardList} title="Trạng thái đơn" loading><div className="h-72" /></ChartCard>
-          </div>
-        </>
-      )}
-
-      {/* Doanh thu công ty lên đầu, trên 4 ô bộ phận (anh Vũ 21/10/2026 "cho cái này lên trên đi"). */}
-      {!mktLens && <OverviewSections part="split" start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} />}
-      {!mktLens && <TrendNotes canRewrite={canRewriteAi} onOpen={onNavigate ? (d) => onNavigate(DEPT_VIEW[d]) : undefined} />}
-      {mktLens ? <LensSections start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} /> : <LazyBlock className="h-72"><OverviewSections part="grid" start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} /></LazyBlock>}
+      )
+  );
+  const deptGrid = (/*{}*/) => (
+      mktLens ? <LensSections start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} /> : <LazyBlock className="h-72"><OverviewSections part="grid" start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} /></LazyBlock>
+  );
+  const uncounted = () => (
       <LazyBlock className="h-24"><UncountedStaff start={start} end={end} posIds={posIds} onOpen={onNavigate ? () => onNavigate('uncounted') : undefined} /></LazyBlock>
-      <AdvisorPanel />
-
-      {report && cur && (
-        <>
-          <ReconcileLine totals={{ ...cur, reconcile: report.current.reconcile }} />
-          {/* Ô Doanh thu công ty ở đầu trang cuộn tới đây. */}
-          <div id="pancake-ref" className="scroll-mt-20"><LazyBlock><PancakeReference posIds={posIds} start={start} end={end} /></LazyBlock></div>
-          {team === 'sale' && !!report.productSegments?.length && <ChartCard title="Chốt Sale theo nhóm đơn" subtitle="Mỗi đơn chỉ thuộc một nhóm: đơn POS Oxytetra là Combo Oxytetra + Bổ đậm đặc; các POS khác có Gentadox / Detox là kháng sinh, có SK / GK là SK GK, còn lại là Khác.">
+  );
+  const segCard = (/*{}*/report: OverviewReport) => (
+          team === 'sale' && !!report.productSegments?.length && <ChartCard title="Chốt Sale theo nhóm đơn" subtitle="Mỗi đơn chỉ thuộc một nhóm: đơn POS Oxytetra là Combo Oxytetra + Bổ đậm đặc; các POS khác có Gentadox / Detox là kháng sinh, có SK / GK là SK GK, còn lại là Khác.">
             <div className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))]">{report.productSegments.map(r => <button key={r.key} data-ui="tile-pick" aria-pressed={productSegment === r.key} className={`rounded-xl border p-4 text-left transition-colors hover:bg-tint ${productSegment === r.key ? 'border-primary bg-tint' : 'border-line'}`} onClick={() => setProductSegment(r.key as ProductSegment)}>
               <div className="flex justify-between gap-3"><strong>{PRODUCT_SEGMENTS[r.key as ProductSegment]}</strong><span className="text-xs text-ink-3">Xem nhóm →</span></div>
               <div className="mt-3 flex items-baseline gap-3"><strong className="num text-3xl">{vi.format(r.closedOrders)}</strong><span className="text-ink-3">đơn chốt</span><strong className="num ml-auto text-xl text-primary">{pct(closeRateOf(r, ms.rateBase))}</strong></div>
               <p className="mt-2 text-xs text-ink-3">{vi.format(r.orders)} đơn tạo mới · Doanh thu cả đơn {money(r.closedNet)}</p>
             </button>)}</div>
-          </ChartCard>}
-          {team === 'cskh' && report.origins && <ChartCard title="Đơn CSKH theo nguồn" subtitle="Tổng theo kỳ và POS đang chọn, trước lọc nguồn. Bấm nguồn hoặc marketer để lọc toàn bộ báo cáo.">
+          </ChartCard>
+  );
+  const originCard = (/*{}*/report: OverviewReport) => (
+          team === 'cskh' && report.origins && <ChartCard title="Đơn CSKH theo nguồn" subtitle="Tổng theo kỳ và POS đang chọn, trước lọc nguồn. Bấm nguồn hoặc marketer để lọc toàn bộ báo cáo.">
             <div className="grid gap-3 sm:grid-cols-2">{(['self', 'mkt'] as const).map(source => {
               const rows = report.origins!.filter(r => source === 'self' ? !r.marketerId : !!r.marketerId);
               const n = rows.reduce((a, r) => a + r.closedOrders, 0), created = rows.reduce((a, r) => a + r.orders, 0), net = rows.reduce((a, r) => a + r.closedNet, 0);
               return <KpiCard key={source} icon={source === 'self' ? CheckCircle2 : BarChart3} tone={source === 'self' ? 'green' : 'blue'} label={ORDER_ORIGINS[source]} value={`${vi.format(n)} đơn chốt`} note={`${created} đơn tạo · tỷ lệ ${pct(created ? n / created * 100 : null)} · ${money(net)}`} active={orderOrigin === source} onClick={() => setOrderOrigin(source)} />;
             })}</div>
             <TableWrap><table className="tbl mt-3"><thead><tr><Th>Nguồn / Marketer</Th><Th className="n">Đơn tạo</Th><Th className="n">Đơn chốt</Th><Th className="n">Tỷ lệ chốt</Th><Th className="n">Doanh thu</Th></tr></thead><tbody>{report.origins.map(r => <tr key={r.marketerId || 'self'}><td><button className="text-primary underline" onClick={() => setOrderOrigin(r.marketerId ? 'mkt' : 'self', r.marketerId)}>{r.marketerName}</button></td><td className="n">{vi.format(r.orders)}</td><td className="n">{vi.format(r.closedOrders)}</td><td className="n">{pct(closeRateOf(r, ms.rateBase))}</td><td className="n">{money(r.closedNet)}</td></tr>)}</tbody></table></TableWrap>
-          </ChartCard>}
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-[repeat(auto-fit,minmax(228px,1fr))]">
-            {(Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[]).map((k) => (
+          </ChartCard>
+  );
+  const statusTiles = (/*{}*/cur: Metrics) => (
+            (Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[]).map((k) => (
               <MiniStat key={k} icon={groupIcon[k]} tone={groupTone[k]} label={STATUS_LABELS[k]} value={`${vi.format(cur.groups[k].orders)} đơn`}
                 delta={['delivered', 'returned', 'cancelled'].includes(k) ? delta(cur.groups[k].orders, prev?.groups[k].orders) : null} invert={k === 'returned' || k === 'cancelled'} note={money(cur.groups[k].net)}
                 onClick={k === 'delivered' ? () => setMetric('deliveredNet') : undefined} active={k === 'delivered' ? metric === 'deliveredNet' : undefined} />
-            ))}
-          </div>
-
+            ))
+  );
+  const chartsRow = (report: OverviewReport, cur: Metrics) => (
           <div className={`grid grid-cols-1 gap-4 ${statusStyle === 'days' || statusStyle === 'stream' ? '' : 'xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]'}`}>
             <TrendPanel data={mktLens ? null : trends.data} error={trends.error} onRetry={trends.reload}
               legacySubtitle={`Đơn tạo và đơn chốt trong kỳ ${groupBy === 'day' ? 'theo ngày' : groupBy === 'week' ? 'theo tuần' : 'theo tháng'}${report.compare ? ' · nét đứt: kỳ trước' : ''}`} legacy={
@@ -543,8 +540,9 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
               <Donut centerValue={vi.format(cur.orders)} centerRaw={cur.orders} centerLabel="đơn hàng" size={170}
                 slices={(Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[]).map((k) => ({ key: k, label: STATUS_LABELS[k], value: cur.groups[k].orders, color: STATUS_VARS[k] }))} />} />
           </div>
-
-          <ChartCard icon={BarChart3} title={`${METRIC_LABEL[metric]} theo ${groupBy === 'day' ? 'ngày' : groupBy === 'week' ? 'tuần' : 'tháng'} · từng POS`}
+  );
+  const posChart = (report: OverviewReport, fold?: { storageKey: string; summary?: string }) => (
+          <ChartCard collapse={fold} icon={BarChart3} title={`${METRIC_LABEL[metric]} theo ${groupBy === 'day' ? 'ngày' : groupBy === 'week' ? 'tuần' : 'tháng'} · từng POS`}
             subtitle={posView === 'split' ? `Mỗi POS một ô, thang riêng · % so với ${report.compare ? 'kỳ so sánh' : 'kỳ trước'}` : 'Chung một thang · rê vào tên POS để làm nổi đường đó'}
             action={<div className="flex flex-wrap items-center gap-2">
               <SegmentedControl<'split' | 'merge'> size="sm" ariaLabel="Kiểu biểu đồ POS" value={posView} onChange={setPosView} options={[{ value: 'split', label: 'Từng POS' }, { value: 'merge', label: 'Gộp' }]} />
@@ -556,7 +554,8 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
                   before={report.compare ? Object.fromEntries(report.compare.byPos.map((r) => [r.posId, metricOf(r, metric)])) : null} />
               : <PosCombined rows={series} posIds={posIds} isMoney={isMoney} groupBy={groupBy} config={chartConfig} animate={motionOn} />}
           </ChartCard>
-
+  );
+  const posTable = (cur: Metrics) => (
           <ChartCard icon={PackageCheck} title="Hiệu suất theo POS" subtitle="Trong kỳ, so với kỳ trước"
             action={
               <Select value={posSort} items={{ closedNet: 'Doanh thu đơn chốt', closedOrders: 'Đơn chốt', orders: 'Đơn tạo mới', closeRate: 'Tỷ lệ chốt' }} onValueChange={(v) => setPosSort(v as typeof posSort)}>
@@ -620,8 +619,9 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
               </table>
             </TableWrap>
           </ChartCard>
-
-          <ChartCard icon={CheckCircle2} title="Nhân viên" subtitle={team === 'cskh' ? 'CSKH: tỷ lệ chốt = trong số đơn tạo mới, bao nhiêu đơn đã chốt' : 'Tỷ lệ chốt = trong số đơn chia, bao nhiêu đơn đã chốt (không vượt 100%)'} info={team === 'cskh' ? 'CSKH: đơn tạo mới theo ngày tạo; đơn chốt theo giờ chốt; tỷ lệ = đơn tạo mới trong kỳ đã chốt ÷ đơn tạo mới (không vượt 100%). Bộ lọc tự ups / từ MKT / từng marketer áp dụng cho cả tử số và mẫu số.' : 'Đơn chia = đơn được giao cho nhân viên trong kỳ; Đơn chốt = đơn của nhân viên chốt trong kỳ (theo giờ chốt); Tỷ lệ = trong số đơn chia trong kỳ, bao nhiêu đơn nay đã chốt (không vượt 100%); cột Đơn chốt vẫn theo giờ chốt như Pancake nên có cả đơn chia từ trước.'}
+  );
+  const staffCard = (report: OverviewReport, fold?: { storageKey: string; summary?: string }) => (
+          <ChartCard collapse={fold} icon={CheckCircle2} title="Nhân viên" subtitle={team === 'cskh' ? 'CSKH: tỷ lệ chốt = trong số đơn tạo mới, bao nhiêu đơn đã chốt' : 'Tỷ lệ chốt = trong số đơn chia, bao nhiêu đơn đã chốt (không vượt 100%)'} info={team === 'cskh' ? 'CSKH: đơn tạo mới theo ngày tạo; đơn chốt theo giờ chốt; tỷ lệ = đơn tạo mới trong kỳ đã chốt ÷ đơn tạo mới (không vượt 100%). Bộ lọc tự ups / từ MKT / từng marketer áp dụng cho cả tử số và mẫu số.' : 'Đơn chia = đơn được giao cho nhân viên trong kỳ; Đơn chốt = đơn của nhân viên chốt trong kỳ (theo giờ chốt); Tỷ lệ = trong số đơn chia trong kỳ, bao nhiêu đơn nay đã chốt (không vượt 100%); cột Đơn chốt vẫn theo giờ chốt như Pancake nên có cả đơn chia từ trước.'}
             action={<div className="flex flex-wrap items-center gap-2">
               <Select value={department} items={{ all: 'Tất cả bộ phận', ...Object.fromEntries(report.departments.map((d) => [d, d])), __none: 'Chưa có bộ phận' }} onValueChange={(v) => { setDepartmentTouched(true); setDepartment(String(v)); }}>
                 <SelectTrigger className="min-w-40" aria-label="Bộ phận"><SelectValue /></SelectTrigger>
@@ -683,8 +683,9 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
               </table>
             </TableWrap>
           </ChartCard>
-
-          <ChartCard icon={ShoppingCart} title="Sản phẩm bán chạy" subtitle={mergePos ? 'Trên đơn chốt · gộp cùng tên ở mọi POS' : 'Trên đơn chốt · tách theo POS'} info="Thành tiền = giá bán × số lượng − giảm giá dòng, tính trên đơn chốt."
+  );
+  const productsCard = (report: OverviewReport, fold?: { storageKey: string; summary?: string }) => (
+          <ChartCard collapse={fold} icon={ShoppingCart} title="Sản phẩm bán chạy" subtitle={mergePos ? 'Trên đơn chốt · gộp cùng tên ở mọi POS' : 'Trên đơn chốt · tách theo POS'} info="Thành tiền = giá bán × số lượng − giảm giá dòng, tính trên đơn chốt."
             action={<Button size="sm" variant="outline" onClick={() => setMergePos(!mergePos)} aria-pressed={mergePos}>{mergePos ? 'Tách theo POS' : 'Gộp POS'}</Button>}>
             <TableWrap minWidth={760} maxHeight="24rem" stickyFirst>
               <table className="tbl">
@@ -718,6 +719,129 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
               </table>
             </TableWrap>
           </ChartCard>
+  );
+  // [hết khối chung]
+  // Nút đầu trang và thanh chọn kỳ dùng reload (đọc manualRef): dựng một lần, cả hai bố cục dùng chung (luật react-compiler).
+  const actionsEl = headActions();
+  const periodEl = periodBar();
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trang chủ kiểu mới là overview-moi; tab Tổng quan POS (view 'overview') vẫn mở được nên cũng dựng lại ở đây.
+  // Trên xuống: đầu trang (PageHeadMoi: chọn kỳ, nhóm theo, so sánh; StaleChip, slide, Excel; POS) → nhóm đơn, nguồn đơn, nhắc lịch sử
+  // → doanh thu công ty (OverviewSections split) → "Cần xem" (cả trang / từng POS: chốt dưới 40%, hoàn từ 7%, hủy từ 5%)
+  // → một hàng 6 ô trạng thái đơn → xu hướng + trạng thái → bảng chính Hiệu suất theo POS
+  // → khối phụ thu gọn: bốn bộ phận, biểu đồ từng POS, Nhân viên, Sản phẩm bán chạy, nhóm đơn / nguồn đơn, xu hướng, chưa tính, gợi ý, đối chiếu, Cách tính.
+  if (uiMoi) {
+    const scope = `${dmy(start)} – ${dmy(end)}${cmpShown ? ` · so với ${compareText(cmpShown)}` : ''} · ${posIds.length <= 3 ? posIds.map(posName).join(', ') : `${vi.format(posIds.length)} POS`}${report?.syncedAt ? ` · đồng bộ ${timeOnly(report.syncedAt)} ${dt(report.syncedAt)}` : ''}`;
+    const k = (s: string) => `ui-moi:overview:${s}`;
+    const need: CanXemItem[] = [];
+    if (report && cur) {
+      const why3 = (kind: 'close' | 'ret' | 'cancel', who: string, m: Metrics): WhySpec => {
+        const v = kind === 'close' ? closeRateOf(m, ms.rateBase) : kind === 'ret' ? returnRateOf(m, ms.returnBase) : cancelRateOf(m);
+        const over = kind === 'close' ? overClose(v) : kind === 'ret' ? overRet(v) : overCancel(v);
+        return {
+          title: `${kind === 'close' ? 'Tỷ lệ chốt' : kind === 'ret' ? 'Hoàn' : 'Hủy'} · ${who}`, value: pct(v), tone: over ? 'bad' : undefined, scope,
+          mark: kind === 'close' ? `Đỏ khi dưới ${BOSS_CLOSE_RED}%` : kind === 'ret' ? `Đỏ từ ${BOSS_RETURN_RED}%` : `Đỏ từ ${BOSS_CANCEL_RED}%`,
+          rows: kind === 'close'
+            ? [{ label: 'Đã chốt (tử số)', value: vi.format(closeRateTop(m, ms.rateBase)) }, { label: 'Mẫu số', value: vi.format(closeRateBase(m, ms.rateBase)) }, { label: '= Tỷ lệ chốt', value: pct(v), strong: true, tone: over ? 'bad' : undefined }]
+            : kind === 'ret'
+              ? [{ label: 'Đơn hoàn', value: vi.format(m.groups.returned.orders) }, { label: 'Giao thành công', value: vi.format(m.groups.delivered.orders) }, { label: 'Đơn chốt', value: vi.format(m.closedOrders) }, { label: '= Tỷ lệ hoàn', value: pct(v), strong: true, tone: over ? 'bad' : undefined }]
+              : [{ label: 'Đơn hủy', value: vi.format(m.groups.cancelled.orders) }, { label: 'Đơn lên', value: vi.format(m.orders) }, { label: '= Tỷ lệ hủy', value: pct(v), strong: true, tone: over ? 'bad' : undefined }],
+          definition: kind === 'close' ? METRIC_DEFS.rate(ms.rateBase).def : kind === 'ret' ? METRIC_DEFS.returned(ms.returnBase).def : METRIC_DEFS.cancelled.def,
+        };
+      };
+      const scan = (key: string, who: string, m: Metrics, team: boolean) => {
+        const c = closeRateOf(m, ms.rateBase), h = returnRateOf(m, ms.returnBase), x = cancelRateOf(m);
+        if (overClose(c) && (team || closeRateBase(m, ms.rateBase) >= COACH_MIN_BASE)) need.push({ key: `c-${key}`, team, text: `${who}: chốt ${pct(c)}`, gap: BOSS_CLOSE_RED - (c ?? 0), onClick: () => setWhy(why3('close', who, m)) });
+        if (overRet(h) && (team || m.closedOrders >= COACH_MIN_BASE)) need.push({ key: `r-${key}`, team, text: `${who}: hoàn ${pct(h)}`, gap: (h ?? 0) - BOSS_RETURN_RED, onClick: () => setWhy(why3('ret', who, m)) });
+        if (overCancel(x) && (team || m.orders >= COACH_MIN_BASE)) need.push({ key: `x-${key}`, team, text: `${who}: hủy ${pct(x)}`, gap: (x ?? 0) - BOSS_CANCEL_RED, onClick: () => setWhy(why3('cancel', who, m)) });
+      };
+      scan('all', 'Cả trang', cur, true);
+      if (report.current.byPos.length > 1) for (const p of report.current.byPos) scan(p.posId, posName(p.posId), p, false);
+    }
+    return (
+      <div className="min-w-0 space-y-4">
+        <PageHeadMoi title="Tổng quan POS" scope={scope} tools={periodEl} right={actionsEl} pos={<PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />} />
+        {segRow()}
+        <OrderOriginFilter team={team} marketers={report?.origins} />
+        {backfillNote()}
+        {error && !report && <ErrorBox error={error} onRetry={refetch} />}
+        {!mktLens && <OverviewSections part="split" start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} />}
+        {report && cur && (
+          <>
+            <CanXemStrip items={need} note={`Mốc: chốt dưới ${BOSS_CLOSE_RED}%, hoàn từ ${BOSS_RETURN_RED}%, hủy từ ${BOSS_CANCEL_RED}% · POS từ ${COACH_MIN_BASE} đơn`} />
+            <div className={tileGrid(6)}>{statusTiles(cur)}</div>
+            {chartsRow(report, cur)}
+            {posTable(cur)}
+            <div className="grid min-w-0 gap-3">
+              <FoldBlock icon={BarChart3} title={mktLens ? 'Theo team Marketing đang chọn' : 'Bốn bộ phận · Sale, CSKH, Marketing, Vận đơn'} storageKey={k('depts')}>{deptGrid()}</FoldBlock>
+              {posChart(report, { storageKey: k('pos-chart') })}
+              {staffCard(report, { storageKey: k('staff') })}
+              {productsCard(report, { storageKey: k('products') })}
+              {team === 'sale' && !!report.productSegments?.length && <FoldBlock icon={ClipboardList} title="Chốt Sale theo nhóm đơn" storageKey={k('segments')}>{segCard(report)}</FoldBlock>}
+              {team === 'cskh' && report.origins && <FoldBlock icon={ClipboardList} title="Đơn CSKH theo nguồn" storageKey={k('origins')}>{originCard(report)}</FoldBlock>}
+              {!mktLens && <FoldBlock icon={BarChart3} title="Xu hướng" storageKey={k('trend')}><TrendNotes canRewrite={canRewriteAi} onOpen={onNavigate ? (d) => onNavigate(DEPT_VIEW[d]) : undefined} /></FoldBlock>}
+              <FoldBlock icon={ClipboardList} title="Nhân viên chưa tính vào bộ phận" storageKey={k('uncounted')}>{uncounted()}</FoldBlock>
+              <FoldBlock icon={CheckCircle2} title="Gợi ý" storageKey={k('advisor')}><AdvisorPanel /></FoldBlock>
+              <FoldBlock icon={PackageCheck} title="Đối chiếu số · tham chiếu Pancake" storageKey={k('reconcile')}>
+                <div className="grid min-w-0 gap-3"><ReconcileLine totals={{ ...cur, reconcile: report.current.reconcile }} /><div id="pancake-ref" className="scroll-mt-20"><LazyBlock><PancakeReference posIds={posIds} start={start} end={end} /></LazyBlock></div></div>
+              </FoldBlock>
+              <FoldBlock icon={ClipboardList} title="Cách tính" storageKey={k('defs')}><Definitions items={report.definitions} /></FoldBlock>
+            </div>
+          </>
+        )}
+        <WhySheet spec={why} onClose={() => setWhy(null)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}${cmpShown ? ` · so với ${compareText(cmpShown)}` : ''}`} title="Tổng quan POS"
+        subtitle={`Số liệu Pancake${report?.syncedAt ? ` · đồng bộ ${timeOnly(report.syncedAt)} ${dt(report.syncedAt)}` : ''}`}
+        actions={actionsEl} />
+      {periodEl}
+      <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
+      {segRow()}
+      <OrderOriginFilter team={team} marketers={report?.origins} />
+      {backfillNote()}
+      {error && !report && <ErrorBox error={error} onRetry={reload} />}
+      {!report && !error && (
+        <>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]" aria-busy="true">
+            <ChartCard icon={BarChart3} title="Xu hướng" loading><div className="h-72" /></ChartCard>
+            <ChartCard icon={ClipboardList} title="Trạng thái đơn" loading><div className="h-72" /></ChartCard>
+          </div>
+        </>
+      )}
+
+      {/* Doanh thu công ty lên đầu, trên 4 ô bộ phận (anh Vũ 21/10/2026 "cho cái này lên trên đi"). */}
+      {!mktLens && <OverviewSections part="split" start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} />}
+      {!mktLens && <TrendNotes canRewrite={canRewriteAi} onOpen={onNavigate ? (d) => onNavigate(DEPT_VIEW[d]) : undefined} />}
+      {deptGrid()}
+      {uncounted()}
+      <AdvisorPanel />
+
+      {report && cur && (
+        <>
+          <ReconcileLine totals={{ ...cur, reconcile: report.current.reconcile }} />
+          {/* Ô Doanh thu công ty ở đầu trang cuộn tới đây. */}
+          <div id="pancake-ref" className="scroll-mt-20"><LazyBlock><PancakeReference posIds={posIds} start={start} end={end} /></LazyBlock></div>
+          {segCard(report)}
+          {originCard(report)}
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-[repeat(auto-fit,minmax(228px,1fr))]">
+            {statusTiles(cur)}
+          </div>
+
+          {chartsRow(report, cur)}
+
+          {posChart(report)}
+
+          {posTable(cur)}
+
+          {staffCard(report)}
+
+          {productsCard(report)}
           <Definitions items={report.definitions} />
         </>
       )}

@@ -1746,7 +1746,7 @@ export default function Dashboard({ user, initialView, demo = false, uiMoi = fal
           <Suspense fallback={<div className="space-y-4" aria-busy="true"><SkeletonKpis count={4} /><div className="skel h-64 w-full rounded-2xl" /></div>}>
           {!gated && canView(user, view) && view === 'returns' && <ReturnsView uiMoi={uiMoi} onOpen={() => { if (!canView(user, 'raw-orders')) { toast('Bạn không có quyền xem trang này.', { kind: 'error' }); return; } focusAfterNav('raw-list', { 'raw.group': 'returned' }); setView('raw-orders'); }} />}
           {!gated && view === 'center' && <CenterView canForecast={canViewForecast(user)} canRegenerateAi={isOwner(user)} onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
-          {!gated && view === 'overview' && <OverviewView onNavigate={(v) => goTo(v as View)} canRewriteAi={isOwner(user)} />}
+          {!gated && view === 'overview' && <OverviewView onNavigate={(v) => goTo(v as View)} canRewriteAi={isOwner(user)} uiMoi={uiMoi} />}
           {!gated && uiMoi && view === 'overview-moi' && <OverviewMoiView onNavigate={(v) => goTo(v as View)} userName={user.displayName} />}
           {!gated && view === 'shift' && <ShiftView uiMoi={uiMoi} />}
           {!gated && view === 'custom' && <CustomReportView />}
