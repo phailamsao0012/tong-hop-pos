@@ -9,6 +9,8 @@ import { AiPackButton } from './ai-pack';
 import { useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Clock, Flame, Trophy } from 'lucide-react';
 import { RATE_THRESHOLDS, rateLevel } from '@/lib/reports/metrics';
+import { BOSS_CANCEL_RED, BOSS_CLOSE_RED, BOSS_RETURN_RED, COACH_MIN_BASE } from '@/lib/zalo/boss-report';
+import { CanXemStrip, DuoSpark, KPI_RED, KPI_TIGHT, PageHeadMoi, WhySheet, overCancel, overClose, overRet, tileGrid, type CanXemItem, type WhySpec } from './trang-moi';
 import type { SaleAnalytics } from '@/lib/reports/sale-analytics';
 import { STATUS_NAMES } from '@/lib/pancake/order-status';
 import { todayVn } from '@/lib/shared/report-time';
@@ -16,7 +18,7 @@ import { WEEKDAYS, byWeekday, dayTotal, sumRows, vnDayHour, weekdayOf, type DayH
 import { ICON } from './icons';
 import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';
-import { Th, ChartCard, CountUp, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, ThinkingLine, TipContent, dmy, pct, shortMoney, useSort, useTip, vi } from './ui-kit';
+import { Th, ChartCard, CountUp, Definitions, EmptyState, ErrorBox, FoldBlock, KpiCard, posName, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, ThinkingLine, TipContent, dmy, pct, shortMoney, useSort, useTip, vi } from './ui-kit';
 
 const WEEKDAY_FULL = ['Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy', 'Chủ nhật'];
 export const duration = (m: number | null | undefined) => m === null || m === undefined ? '—'
@@ -216,7 +218,9 @@ function HourBoard({ days, definition, asOf }: { days: DayHours[]; definition: s
   );
 }
 
-export function SaleAnalyticsView() {
+export function SaleAnalyticsView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới, tắt thì y như cũ. */ uiMoi?: boolean } = {}) {
+  // Giao diện mới: khung "Vì sao ra số này" đang mở (null = đóng).
+  const [why, setWhy] = useState<WhySpec | null>(null);
   const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
   const url = useMemo(() => `/api/reports/sale-analytics?${new URLSearchParams({ start, end, posIds: posIds.join(',') })}`, [start, end, posIds]);
@@ -230,10 +234,10 @@ export function SaleAnalyticsView() {
   const staff = useMemo(() => sort.apply(r?.staff ?? [], (s, k) => s[k]), [r, sort]);
   const bucketMax = Math.max(1, ...(r?.buckets ?? []).map((b) => b.n));
   const periodLabel = `${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`;
-  return (
-    <div className="space-y-5">
-      <PageHeader eyebrow={periodLabel} title="Phân tích Sale" subtitle="Chốt nhanh, chốt đúng: tỷ lệ chốt data, thời gian chốt, giờ vàng, hoàn và hủy theo người chốt"
-        actions={<AiPackButton disabled={!r} pack={() => r && ({
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  // fold: chỉ bố cục mới truyền (thu gọn thẻ); bố cục cũ không truyền nên thẻ y như trước.
+  const aiPack = () => (
+        <AiPackButton disabled={!r} pack={() => r && ({
           page: 'Phân tích Sale', period: periodLabel,
           facts: [['Số được chia', r.total.assigned], ['Chốt từ số được chia', r.total.closedFromAssigned], ['Tỷ lệ chốt data', pct(r.total.dataRate)], ['Thời gian chốt trung vị', duration(r.total.medianMinutes)],
             ['Đơn chốt', r.total.closed], ['Doanh thu', Math.round(r.total.net)], ['GTTB', r.total.aov === null ? null : Math.round(r.total.aov)], ['Tỷ lệ hoàn', pct(r.total.returnRate)], ['Hủy sau chốt', pct(r.total.cancelAfterClose)]],
@@ -245,25 +249,13 @@ export function SaleAnalyticsView() {
           ],
           definitions: r.definitions,
           questions: ['Ai chốt tốt nhất và vì sao (tỷ lệ, tốc độ, GTTB)? Ai cần hỗ trợ?', 'Giờ nào nên dồn người trực nhận số? Ngày nào khung giờ nào số nhảy bất thường?', 'Chốt nhanh có đi kèm hoàn / hủy cao không?', 'Nên đặt mục tiêu tỷ lệ chốt data bao nhiêu cho tháng tới?'],
-        })} />} />
-      <PeriodToolbar preset={preset} start={start} end={end} loading={loading} onReload={reload}
-        onPreset={setPreset}
-        onStart={setStart} onEnd={setEnd} />
-      <PosChips posIds={posIds} onChange={setPosIds} />
-      {error && !r && <ErrorBox error={error} onRetry={reload} />}
-      {!r && !error && <><SkeletonKpis count={4} className="xl:grid-cols-4" /><ChartCard title="Giờ vàng" subtitle="Đang tải…"><ThinkingLine /><SkeletonTable rows={5} cols={6} /></ChartCard></>}
-      {r && (
-        <>
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-            <KpiCard icon={ICON.rate} tone="green" label="Tỷ lệ chốt data" value={pct(r.total.dataRate)} note={`${vi.format(r.total.closedFromAssigned)} chốt / ${vi.format(r.total.assigned)} số được chia`}
-              progress={r.total.dataRate === null ? undefined : { value: r.total.dataRate, max: 100 }} tooltip={{ period: periodLabel, current: pct(r.total.dataRate), definition: r.definitions.dataRate }} />
-            <KpiCard icon={Clock} tone="blue" label="Thời gian chốt (trung vị)" value={duration(r.total.medianMinutes)} note="Từ lúc nhận số tới lúc xác nhận" tooltip={{ period: periodLabel, current: duration(r.total.medianMinutes), definition: r.definitions.time }} />
-            <KpiCard icon={ICON.aov} tone="teal" label="GTTB đơn chốt" value={shortMoney(r.total.aov)} note={`${vi.format(r.total.closed)} đơn · ${shortMoney(r.total.net)}`} tooltip={{ period: periodLabel, current: shortMoney(r.total.aov), definition: 'Doanh thu ÷ đơn chốt của người bán thuộc Sale.' }} />
-            <KpiCard icon={ICON.returned} tone="orange" invert label="Hoàn · hủy sau chốt" value={`${pct(r.total.returnRate, 1)}`} note={`Hủy sau chốt ${pct(r.total.cancelAfterClose, 1)}`} tooltip={{ period: periodLabel, current: `Hoàn ${pct(r.total.returnRate)} · hủy sau chốt ${pct(r.total.cancelAfterClose)}`, definition: r.definitions.quality }} />
-          </div>
-          {days ? <HourBoard days={days} definition={r.definitions.heat} asOf={at} /> : <ChartCard icon={Flame} title="Giờ vàng · 24 khung giờ mỗi ngày" subtitle="Đang tải…"><ThinkingLine /><SkeletonTable rows={5} cols={8} /></ChartCard>}
-          <div className="grid grid-cols-1 gap-4">
-            <ChartCard icon={Clock} title="Chốt sau bao lâu" subtitle="Số đơn chốt theo thời gian từ lúc nhận số" info={r.definitions.time}>
+        })} />
+  );
+  const hourBoard = (/*{}*/r: SaleAnalytics) => (
+          days ? <HourBoard days={days} definition={r.definitions.heat} asOf={at} /> : <ChartCard icon={Flame} title="Giờ vàng · 24 khung giờ mỗi ngày" subtitle="Đang tải…"><ThinkingLine /><SkeletonTable rows={5} cols={8} /></ChartCard>
+  );
+  const bucketsCard = (r: SaleAnalytics, fold?: { storageKey: string; summary?: string }) => (
+            <ChartCard collapse={fold} icon={Clock} title="Chốt sau bao lâu" subtitle="Số đơn chốt theo thời gian từ lúc nhận số" info={r.definitions.time}>
               <ul className="m-0 list-none space-y-2.5 p-0">
                 {r.buckets.map((b, i) => (
                   <li key={b.key} className="grid grid-cols-[6.5rem_minmax(0,1fr)_4.5rem] items-center gap-2 text-[12.5px]">
@@ -274,7 +266,8 @@ export function SaleAnalyticsView() {
                 ))}
               </ul>
             </ChartCard>
-          </div>
+  );
+  const rankCard = () => (
           <ChartCard icon={Trophy} title={`Xếp hạng · ${staff.length} người`} subtitle={`Màu tỷ lệ chốt data: xanh từ ${RATE_THRESHOLDS.good}%, dưới là đỏ · bấm tiêu đề cột để sắp xếp`} info={r.definitions.scope}>
             {staff.length ? (
               <TableWrap minWidth={960} maxHeight="34rem" stickyFirst>
@@ -313,6 +306,99 @@ export function SaleAnalyticsView() {
               </TableWrap>
             ) : <EmptyState text="Chưa có số được chia hay đơn chốt của Sale trong kỳ." />}
           </ChartCard>
+  );
+  // [hết khối chung]
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trên xuống: đầu trang (PageHeadMoi) → "Cần xem" (chốt data dưới 40%, hoàn từ 7%, hủy sau chốt từ 5%; cả đội rồi từng người từ 20 đơn)
+  // → một hàng 5 ô số (bấm mở "Vì sao ra số này") → Giờ vàng → bảng chính Xếp hạng → khối phụ thu gọn: Chốt sau bao lâu, Cách tính.
+  if (uiMoi) {
+    const scope = `${periodLabel} · ${posIds.length <= 3 ? posIds.map(posName).join(', ') : `${vi.format(posIds.length)} POS`} · chỉ bộ phận Sale (người bán trên đơn) · chốt data = số chia đã chốt ÷ số chia`;
+    const head = <PageHeadMoi title="Phân tích Sale" hint="Chốt nhanh, chốt đúng: tỷ lệ chốt data, thời gian chốt, giờ vàng, hoàn và hủy theo người chốt" scope={scope}
+      tools={<PeriodToolbar preset={preset} start={start} end={end} loading={loading} onReload={reload} onPreset={setPreset} onStart={setStart} onEnd={setEnd} />}
+      right={aiPack()} pos={<PosChips posIds={posIds} onChange={setPosIds} />} />;
+    if (!r) return <div className="min-w-0 space-y-4">{head}{error ? <ErrorBox error={error} onRetry={reload} /> : <SkeletonKpis count={5} className="lg:grid-cols-5" />}</div>;
+    const t = r.total;
+    type S = SaleAnalytics['staff'][number];
+    const whyOf = (who: string, kind: 'data' | 'ret' | 'cancel', m: { dataRate: number | null; assigned: number; closedFromAssigned: number; returnRate: number | null; cancelAfterClose: number | null; closed: number }): WhySpec => {
+      const v = kind === 'data' ? m.dataRate : kind === 'ret' ? m.returnRate : m.cancelAfterClose;
+      const over = kind === 'data' ? overClose(v) : kind === 'ret' ? overRet(v) : overCancel(v);
+      return {
+        title: `${kind === 'data' ? 'Tỷ lệ chốt data' : kind === 'ret' ? 'Hoàn' : 'Hủy sau chốt'} · ${who}`, value: pct(v), tone: over ? 'bad' : undefined, scope,
+        mark: kind === 'data' ? `Đỏ khi dưới ${BOSS_CLOSE_RED}%` : kind === 'ret' ? `Đỏ từ ${BOSS_RETURN_RED}%` : `Đỏ từ ${BOSS_CANCEL_RED}%`,
+        rows: kind === 'data'
+          ? [{ label: 'Chốt từ số được chia', value: vi.format(m.closedFromAssigned) }, { label: 'Số được chia', value: vi.format(m.assigned) }, { label: '= Tỷ lệ chốt data', value: pct(v), strong: true, tone: over ? 'bad' : undefined }]
+          : [{ label: 'Đơn chốt (người bán trên đơn)', value: vi.format(m.closed) }, { label: kind === 'ret' ? '= Tỷ lệ hoàn' : '= Hủy sau chốt', value: pct(v), strong: true, tone: over ? 'bad' : undefined }],
+        definition: kind === 'data' ? r.definitions.dataRate : r.definitions.quality,
+      };
+    };
+    const need: CanXemItem[] = [];
+    if (overClose(t.dataRate)) need.push({ key: 'all-data', team: true, text: `Đội Sale: chốt data ${pct(t.dataRate)}`, onClick: () => setWhy(whyOf('Đội Sale', 'data', t)) });
+    if (overRet(t.returnRate)) need.push({ key: 'all-ret', team: true, text: `Đội Sale: hoàn ${pct(t.returnRate)}`, onClick: () => setWhy(whyOf('Đội Sale', 'ret', t)) });
+    if (overCancel(t.cancelAfterClose)) need.push({ key: 'all-cancel', team: true, text: `Đội Sale: hủy sau chốt ${pct(t.cancelAfterClose)}`, onClick: () => setWhy(whyOf('Đội Sale', 'cancel', t)) });
+    for (const s of r.staff as S[]) {
+      if (overClose(s.dataRate) && s.assigned >= COACH_MIN_BASE) need.push({ key: `d-${s.staffId}`, text: `${s.name}: chốt data ${pct(s.dataRate)}`, gap: BOSS_CLOSE_RED - (s.dataRate ?? 0), onClick: () => setWhy(whyOf(s.name, 'data', s)) });
+      if (overRet(s.returnRate) && s.closed >= COACH_MIN_BASE) need.push({ key: `r-${s.staffId}`, text: `${s.name}: hoàn ${pct(s.returnRate)}`, gap: (s.returnRate ?? 0) - BOSS_RETURN_RED, onClick: () => setWhy(whyOf(s.name, 'ret', s)) });
+      if (overCancel(s.cancelAfterClose) && s.closed >= COACH_MIN_BASE) need.push({ key: `c-${s.staffId}`, text: `${s.name}: hủy sau chốt ${pct(s.cancelAfterClose)}`, gap: (s.cancelAfterClose ?? 0) - BOSS_CANCEL_RED, onClick: () => setWhy(whyOf(s.name, 'cancel', s)) });
+    }
+    // Đường nhỏ theo ngày từ chính bảng Giờ vàng đã tải (cộng 24 khung giờ của từng ngày).
+    const dayRate = (days ?? []).map((d) => { const a = dayTotal(d, 'a'); return a ? dayTotal(d, 'c') / a * 100 : null; });
+    const dayAov = (days ?? []).map((d) => { const o = dayTotal(d, 'o'); return o ? dayTotal(d, 'net') / o : null; });
+    const k = (s: string) => `ui-moi:sale-analytics:${s}`;
+    return (
+      <div className="min-w-0 space-y-4">
+        {head}
+        <CanXemStrip items={need} note={`Người từ ${COACH_MIN_BASE} số / đơn · chốt data dưới ${BOSS_CLOSE_RED}%, hoàn từ ${BOSS_RETURN_RED}%, hủy sau chốt từ ${BOSS_CANCEL_RED}%`} />
+        <div className={tileGrid(5)}>
+          <KpiCard icon={ICON.rate} tone="green" label="Tỷ lệ chốt data · đội Sale" className={`${KPI_TIGHT} ${overClose(t.dataRate) ? KPI_RED : ''}`} value={pct(t.dataRate)}
+            note={`${vi.format(t.closedFromAssigned)} chốt / ${vi.format(t.assigned)} số được chia`} chart={<DuoSpark cur={dayRate} bad={overClose} />}
+            progress={t.dataRate === null ? undefined : { value: t.dataRate, max: 100 }} onClick={() => setWhy(whyOf('Đội Sale', 'data', t))} />
+          <KpiCard icon={Clock} tone="blue" label="Thời gian chốt (trung vị)" className={KPI_TIGHT} value={duration(t.medianMinutes)} note="Từ lúc nhận số tới lúc xác nhận"
+            onClick={() => setWhy({ title: 'Thời gian chốt (trung vị)', value: duration(t.medianMinutes), scope,
+              rows: r.buckets.map((b) => ({ label: b.label, value: `${vi.format(b.n)} đơn` })), definition: r.definitions.time })} />
+          <KpiCard icon={ICON.aov} tone="teal" label="GTTB đơn chốt" className={KPI_TIGHT} value={shortMoney(t.aov)} note={`${vi.format(t.closed)} đơn · ${shortMoney(t.net)}`} chart={<DuoSpark cur={dayAov} />}
+            onClick={() => setWhy({ title: 'GTTB đơn chốt', value: shortMoney(t.aov), scope,
+              rows: [{ label: 'Doanh thu', value: shortMoney(t.net) }, { label: 'Đơn chốt', value: vi.format(t.closed) }, { label: '= GTTB', value: shortMoney(t.aov), strong: true }], definition: 'Doanh thu ÷ đơn chốt (không tính đơn hủy sau chốt).' })} />
+          <KpiCard icon={ICON.returned} tone="orange" invert label="Hoàn · đội Sale" className={`${KPI_TIGHT} ${overRet(t.returnRate) ? KPI_RED : ''}`} value={pct(t.returnRate, 1)} note={`÷ đơn chốt trong kỳ · đỏ từ ${BOSS_RETURN_RED}%`}
+            onClick={() => setWhy(whyOf('Đội Sale', 'ret', t))} />
+          <KpiCard icon={ICON.cancelled} tone="red" invert label="Hủy sau chốt · đội Sale" className={`${KPI_TIGHT} ${overCancel(t.cancelAfterClose) ? KPI_RED : ''}`} value={pct(t.cancelAfterClose, 1)} note={`÷ mọi đơn đã xác nhận · đỏ từ ${BOSS_CANCEL_RED}%`}
+            onClick={() => setWhy(whyOf('Đội Sale', 'cancel', t))} />
+        </div>
+        {hourBoard(r)}
+        {rankCard()}
+        <div className="grid min-w-0 gap-3">
+          {bucketsCard(r, { storageKey: k('buckets'), summary: `trung vị ${duration(t.medianMinutes)}` })}
+          <FoldBlock icon={Trophy} title="Cách tính" storageKey={k('defs')}><Definitions items={r.definitions} /></FoldBlock>
+        </div>
+        <WhySheet spec={why} onClose={() => setWhy(null)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <PageHeader eyebrow={periodLabel} title="Phân tích Sale" subtitle="Chốt nhanh, chốt đúng: tỷ lệ chốt data, thời gian chốt, giờ vàng, hoàn và hủy theo người chốt"
+        actions={aiPack()} />
+      <PeriodToolbar preset={preset} start={start} end={end} loading={loading} onReload={reload}
+        onPreset={setPreset}
+        onStart={setStart} onEnd={setEnd} />
+      <PosChips posIds={posIds} onChange={setPosIds} />
+      {error && !r && <ErrorBox error={error} onRetry={reload} />}
+      {!r && !error && <><SkeletonKpis count={4} className="xl:grid-cols-4" /><ChartCard title="Giờ vàng" subtitle="Đang tải…"><ThinkingLine /><SkeletonTable rows={5} cols={6} /></ChartCard></>}
+      {r && (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+            <KpiCard icon={ICON.rate} tone="green" label="Tỷ lệ chốt data" value={pct(r.total.dataRate)} note={`${vi.format(r.total.closedFromAssigned)} chốt / ${vi.format(r.total.assigned)} số được chia`}
+              progress={r.total.dataRate === null ? undefined : { value: r.total.dataRate, max: 100 }} tooltip={{ period: periodLabel, current: pct(r.total.dataRate), definition: r.definitions.dataRate }} />
+            <KpiCard icon={Clock} tone="blue" label="Thời gian chốt (trung vị)" value={duration(r.total.medianMinutes)} note="Từ lúc nhận số tới lúc xác nhận" tooltip={{ period: periodLabel, current: duration(r.total.medianMinutes), definition: r.definitions.time }} />
+            <KpiCard icon={ICON.aov} tone="teal" label="GTTB đơn chốt" value={shortMoney(r.total.aov)} note={`${vi.format(r.total.closed)} đơn · ${shortMoney(r.total.net)}`} tooltip={{ period: periodLabel, current: shortMoney(r.total.aov), definition: 'Doanh thu ÷ đơn chốt của người bán thuộc Sale.' }} />
+            <KpiCard icon={ICON.returned} tone="orange" invert label="Hoàn · hủy sau chốt" value={`${pct(r.total.returnRate, 1)}`} note={`Hủy sau chốt ${pct(r.total.cancelAfterClose, 1)}`} tooltip={{ period: periodLabel, current: `Hoàn ${pct(r.total.returnRate)} · hủy sau chốt ${pct(r.total.cancelAfterClose)}`, definition: r.definitions.quality }} />
+          </div>
+          {hourBoard(r)}
+          <div className="grid grid-cols-1 gap-4">
+            {bucketsCard(r)}
+          </div>
+          {rankCard()}
           <Definitions items={r.definitions} />
         </>
       )}
