@@ -20,10 +20,12 @@ import { useTeam } from './team-store';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import { Th,
-  Avatar, ChartCard, Definitions, ErrorBox, EmptyState, HoverReveal, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, Toolbar,
-  dt, money, pct, posVar, scrollToEl, short, shortMoney, toast, vi, type SortState, type Tone,
+  Avatar, ChartCard, Definitions, ErrorBox, EmptyState, FoldBlock, HoverReveal, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, Toolbar,
+  dt, money, pct, posName, posVar, scrollToEl, short, shortMoney, toast, vi, type SortState, type Tone,
 } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { KPI_TIGHT, PageHeadMoi, WhySheet, tileGrid, type WhySpec } from './trang-moi';
 
 type Customer = {
   phoneRef?: string;
@@ -107,7 +109,10 @@ const MAX_ROWS = 20000;
 const PAGE_SIZES = { '20': '20 / trang', '50': '50 / trang', '100': '100 / trang', '1000': '1.000 / trang', all: 'Tất cả' };
 type PageSize = keyof typeof PAGE_SIZES;
 
-export function CustomersPage({ initialQ = '', canExport = false }: { initialQ?: string; canExport?: boolean }) {
+export function CustomersPage({ initialQ = '', canExport = false, uiMoi = false }: { initialQ?: string; canExport?: boolean; /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới, tắt thì y như cũ. */ uiMoi?: boolean }) {
+  // Giao diện mới: khung "Vì sao ra số này" đang mở (null = đóng) và khung hồ sơ khách giữa màn (bấm dòng mới mở).
+  const [why, setWhy] = useState<WhySpec | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
   // Xuất Excel và "Tất cả" (tới 20.000 khách) chỉ chủ hệ thống; máy chủ cũng chặn (app/api/reports/customers, app/api/activity).
   const pageSizes = canExport ? PAGE_SIZES : Object.fromEntries(Object.entries(PAGE_SIZES).filter(([k]) => k !== 'all'));
   const today = todayVn();
@@ -160,8 +165,10 @@ export function CustomersPage({ initialQ = '', canExport = false }: { initialQ?:
     const ac = new AbortController(); detailCtrl.current = ac;
     const same = !!selected && customerKeyOf(selected) === customerKeyOf(c);
     setSelected(c); if (!same) setTab('overview');
+    // Kiểu mới: bấm dòng (không phải tự mở khách đầu) thì mở khung hồ sơ giữa màn, không cuộn trang.
+    if (uiMoi && opts.scroll !== false) setDetailOpen(true);
     setDetail(null); setDetailError(null); setDetailState('loading');
-    if (opts.scroll !== false && window.innerWidth < 1280) setTimeout(() => scrollToEl(document.getElementById('customer-detail')), 50);
+    if (!uiMoi && opts.scroll !== false && window.innerWidth < 1280) setTimeout(() => scrollToEl(document.getElementById('customer-detail')), 50);
     try {
       const r = await fetch(`/api/reports/customers/detail?${customerDetailQuery(c)}`, { cache: 'no-store', signal: ac.signal });
       const body = await r.json().catch(() => ({})) as Detail & { error?: string };
@@ -207,11 +214,12 @@ export function CustomersPage({ initialQ = '', canExport = false }: { initialQ?:
     try { await navigator.clipboard?.writeText(phone); toast(`Đã sao chép ${phone}`); } catch { toast('Không sao chép được', { kind: 'error' }); }
   };
 
-  return (
-    <div className="space-y-5">
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  const timelineEl = () => (
       <CustomerDetail key={timelineCustomer ? timelineCustomer.phone + timelineCustomer.posIds.join() : "closed"} customer={timelineCustomer} onClose={() => setTimelineCustomer(null)} />
-      <PageHeader eyebrow="Số liệu Pancake POS tại thời điểm đồng bộ" title="Hồ sơ khách hàng" subtitle="Mỗi khách = một SĐT trong một POS"
-        actions={<><StaleChip stale={stale} at={at} loading={loading} error={data ? error : null} onRetry={reload} />{canExport && <Button variant="outline" disabled={!data || exporting} onClick={async () => {
+  );
+  const headActions = () => (
+        <><StaleChip stale={stale} at={at} loading={loading} error={data ? error : null} onRetry={reload} />{canExport && <Button variant="outline" disabled={!data || exporting} onClick={async () => {
           if (!data) return;
           setExporting(true);
           try {
@@ -225,22 +233,9 @@ export function CustomersPage({ initialQ = '', canExport = false }: { initialQ?:
           ]), 'Khách hàng');
           saveXlsx(XLSX, wb, `khach-hang_${segment || 'tat-ca'}_${viewAll ? 'tat-ca-dong' : `trang-${page}-${pageSize}-dong`}.xlsx`);
           } finally { setExporting(false); }
-        }} title="Xuất đúng những khách đang mở trong danh sách bên dưới">{exporting ? 'Đang xuất…' : `Xuất Excel ${vi.format(data?.customers.length ?? 0)} khách đang mở`}</Button>}</>} />
-      {!data && !error && <SkeletonKpis count={5} className="xl:grid-cols-5" />}
-      {seg && (
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
-          <KpiCard icon={Users} tone="green" label="Tổng khách hàng" value={vi.format(data!.groups?.total ?? 0)} countUp rawValue={data!.groups?.total ?? 0} note={`${vi.format(seg.buyers)} đã mua thành công`} onClick={() => { reset(); setPeriodKey('all'); setSegment(''); }} active={!periodMode && !segment}
-            tooltip={tip('Tổng khách hàng', [['Tổng khách', `${vi.format(data!.groups?.total ?? 0)} khách`], ['Đã mua thành công', `${vi.format(seg.buyers)} khách`], ['Chưa từng mua', `${vi.format(seg.never)} khách`]], `${data!.definitions.identity} Bấm để xem tất cả phân khúc.`)} />
-          <KpiCard icon={UserCheck} tone="teal" label="Khách đang hoạt động" value={vi.format(seg.active)} countUp rawValue={seg.active} note="Mua trong 30 ngày qua" onClick={() => { reset(); setPeriodKey('all'); setSegment('active'); }} active={!periodMode && segment === 'active'}
-            tooltip={tip('Khách đang hoạt động', [['Số khách', `${vi.format(seg.active)} khách`], ['Tỷ lệ trên khách đã mua', pct(seg.buyers ? seg.active / seg.buyers * 100 : null)]], 'Khách có đơn mua thành công trong 30 ngày qua. Bấm để lọc.')} />
-          <KpiCard icon={Star} tone="lime" label="Khách thân thiết" value={vi.format(seg.loyal)} countUp rawValue={seg.loyal} note="≥ 3 lần mua, quay lại trong 90 ngày" onClick={() => { reset(); setPeriodKey('all'); setSegment('loyal'); }} active={!periodMode && segment === 'loyal'}
-            tooltip={tip('Khách thân thiết', [['Số khách', `${vi.format(seg.loyal)} khách`], ['Tỷ lệ trên khách đã mua', pct(seg.buyers ? seg.loyal / seg.buyers * 100 : null)]], 'Mua thành công từ 3 lần và lần gần nhất trong 90 ngày. Bấm để lọc.')} />
-          <KpiCard icon={AlertTriangle} tone="red" label="Có nguy cơ rời bỏ" value={vi.format(seg.risk)} countUp rawValue={seg.risk} note="≥ 2 lần mua, > 60 ngày chưa quay lại" onClick={() => { reset(); setPeriodKey('all'); setSegment('risk'); }} active={!periodMode && segment === 'risk'}
-            tooltip={tip('Có nguy cơ rời bỏ', [['Số khách', `${vi.format(seg.risk)} khách`], ['Tỷ lệ trên khách đã mua', pct(seg.buyers ? seg.risk / seg.buyers * 100 : null)]], 'Từng mua từ 2 lần nhưng đã hơn 60 ngày chưa quay lại. Bấm để lọc và gọi chăm sóc.')} />
-          <KpiCard icon={Wallet} tone="orange" label="Giá trị vòng đời trung bình" value={shortMoney(seg.buyers ? seg.ltvTotal / seg.buyers : null)} note={`${vi.format(seg.vip)} khách VIP (≥ 5 triệu)`} onClick={() => { reset(); setPeriodKey('all'); setSegment('vip'); }} active={!periodMode && segment === 'vip'}
-            tooltip={tip('Giá trị vòng đời trung bình', [['LTV trung bình', money(seg.buyers ? seg.ltvTotal / seg.buyers : null)], ['Tổng LTV', money(seg.ltvTotal)], ['Khách VIP', `${vi.format(seg.vip)} khách`]], 'Tổng doanh thu đơn thành công ÷ số khách đã mua. Bấm để xem khách VIP.')} />
-        </div>
-      )}
+        }} title="Xuất đúng những khách đang mở trong danh sách bên dưới">{exporting ? 'Đang xuất…' : `Xuất Excel ${vi.format(data?.customers.length ?? 0)} khách đang mở`}</Button>}</>
+  );
+  const filterBar = () => (
       <Toolbar>
         <Select value={periodKey} items={PERIODS} onValueChange={(v) => { reset(); setPeriodKey(String(v)); if (v !== 'all') setSegment(''); }}>
           <SelectTrigger className="min-w-40" aria-label="Kỳ"><SelectValue /></SelectTrigger>
@@ -258,6 +253,8 @@ export function CustomersPage({ initialQ = '', canExport = false }: { initialQ?:
           <SelectContent>{Object.entries(SORTS).filter(([k]) => !periodMode || ['spend', 'orders', 'recent'].includes(k)).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
         </Select>
       </Toolbar>
+  );
+  const searchEl = () => (
       <SearchBar onGroupChange={setGroupBy} pageKey="customers" placeholder="Tìm theo SĐT hoặc tên khách" value={{ text: q, filters: { sellerId, segment, posIds: posIds.join(',') }, groupBy }}
         groups={[{ value: 'seller', label: 'Người phụ trách' }, { value: 'pos', label: 'POS' }]}
         filters={[
@@ -266,8 +263,8 @@ export function CustomersPage({ initialQ = '', canExport = false }: { initialQ?:
           { key: 'posIds', label: 'POS', multiple: true, options: POS.map(p => ({ value: p.id, label: p.name })) },
         ]}
         onChange={v => { reset(); setQ(v.text); setSellerId(v.filters.sellerId || ''); if ((v.filters.segment || '') !== segment) { setPeriodKey('all'); setSegment(v.filters.segment || ''); } if ((v.filters.posIds || '') !== posIds.join(',')) setPosIds((v.filters.posIds || '').split(',').filter(Boolean)); setGroupBy(v.groupBy); }} />
-      {error && !data && <ErrorBox error={error} onRetry={reload} />}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+  );
+  const listCard = () => (
         <ChartCard icon={Users} title={`Danh sách khách hàng (${vi.format(data?.total ?? 0)})`} subtitle={periodMode && data?.period ? `Top khách trong kỳ ${data.period.start} → ${data.period.end}: ${vi.format(data.period.orders)} đơn thành công · ${money(data.period.net)}` : segment ? `${SEGMENTS[segment].label} · ${SEGMENTS[segment].hint}` : data?.definitions.success}
           bodyClassName="transition-opacity duration-[var(--dur)]"
           action={<div className="flex items-center gap-2 text-sm">{!viewAll && <><Button size="sm" variant="outline" aria-label="Trang trước" disabled={page <= 1 || loading} onClick={() => setPage(page - 1)}><ChevronLeft size={14} /></Button><span className="num text-xs text-ink-2">Trang {page}</span><Button size="sm" variant="outline" aria-label="Trang sau" disabled={!data?.hasMore || loading} onClick={() => setPage(page + 1)}><ChevronRight size={14} /></Button></>}<Select value={pageSize} onValueChange={(v) => { setPageSize(v as PageSize); setPage(1); }} items={pageSizes}>
@@ -301,10 +298,8 @@ export function CustomersPage({ initialQ = '', canExport = false }: { initialQ?:
             </TableWrap>
           )}
         </ChartCard>
-
-        <div className="space-y-4 scroll-mt-16" id="customer-detail">
-          {!selected && <ChartCard icon={User} title="Chi tiết khách hàng"><EmptyState text="Chọn một khách trong danh sách để xem hồ sơ." /></ChartCard>}
-          {selected && (
+  );
+  const detailEl = (selected: Customer) => (
             <>
               <section className="card p-4 max-sm:rounded-xl">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -428,7 +423,92 @@ export function CustomersPage({ initialQ = '', canExport = false }: { initialQ?:
                 )}
               </ChartCard>
             </>
-          )}
+  );
+  const defsEl = () => (
+      <Definitions items={[data?.definitions.success, data?.definitions.dormant, data?.definitions.identity, SCORE_NOTE].filter((s): s is string => !!s)} />
+  );
+  // [hết khối chung]
+  // Đầu trang, danh sách và hồ sơ vẽ MỘT lần cho cả hai bố cục (bên trong có hàm đọc ref: tải lại, mở hồ sơ; gọi hai chỗ thì react-compiler báo lỗi).
+  const headEl = headActions();
+  const listEl = listCard();
+  const detailNode = selected ? detailEl(selected) : null;
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trên xuống: đầu trang (PageHeadMoi: chọn kỳ + sắp xếp; StaleChip, Excel) → một hàng 5 ô số (bấm mở "Vì sao ra số này", trong khung có nút lọc
+  // danh sách như bấm ô số cũ) → ô tìm / lọc → bảng chính Danh sách khách hàng (bấm dòng mở hồ sơ khách GIỮA màn, thay cột hồ sơ bên phải)
+  // → Cách tính thu gọn. Trang không có tỷ lệ chốt / hoàn / hủy nên không có dải "Cần xem".
+  if (uiMoi) {
+    const posLabel = !posIds.length || posIds.length >= POS.length ? 'Tất cả POS' : posIds.length <= 3 ? posIds.map(posName).join(', ') : `${vi.format(posIds.length)} POS`;
+    const periodLabel = periodKey === 'custom' ? `${start} → ${end}` : periodKey === 'all' ? 'Toàn bộ lịch sử' : PERIODS[periodKey];
+    const scope = `${periodLabel} · ${posLabel} · mỗi khách = một SĐT trong một POS · số Pancake tại lúc đồng bộ`;
+    const total = data?.groups?.total ?? 0;
+    const filterBtn = (key: string, label: string) => (
+      <Button variant="outline" size="sm" className="self-start" onClick={() => { reset(); setPeriodKey('all'); setSegment(key); setWhy(null); }}>{label}</Button>
+    );
+    const ofBuyers = (n: number) => pct(seg?.buyers ? n / seg.buyers * 100 : null);
+    return (
+      <div className="min-w-0 space-y-4">
+        {timelineEl()}
+        <PageHeadMoi title="Hồ sơ khách hàng" scope={scope} hint="Mỗi khách = một SĐT trong một POS" tools={filterBar()} right={headEl} />
+        {!data && !error && <SkeletonKpis count={5} className="xl:grid-cols-5" />}
+        {seg && (
+          <div className={tileGrid(5)}>
+            <KpiCard icon={Users} tone="green" label="Tổng khách hàng" className={KPI_TIGHT} value={vi.format(total)} countUp rawValue={total} note={`${vi.format(seg.buyers)} đã mua thành công`} active={!periodMode && !segment}
+              onClick={() => setWhy({ title: 'Tổng khách hàng', value: `${vi.format(total)} khách`, scope, rows: [{ label: 'Đã mua thành công', value: vi.format(seg.buyers) }, { label: 'Chưa từng mua', value: vi.format(seg.never) }], definition: data?.definitions.identity, more: filterBtn('', 'Xem tất cả phân khúc') })} />
+            <KpiCard icon={UserCheck} tone="teal" label="Khách đang hoạt động" className={KPI_TIGHT} value={vi.format(seg.active)} countUp rawValue={seg.active} note="Mua trong 30 ngày qua" active={!periodMode && segment === 'active'}
+              onClick={() => setWhy({ title: 'Khách đang hoạt động', value: `${vi.format(seg.active)} khách`, scope, rows: [{ label: 'Tỷ lệ trên khách đã mua', value: ofBuyers(seg.active) }], definition: 'Khách có đơn mua thành công trong 30 ngày qua.', more: filterBtn('active', 'Lọc danh sách: khách đang hoạt động') })} />
+            <KpiCard icon={Star} tone="lime" label="Khách thân thiết" className={KPI_TIGHT} value={vi.format(seg.loyal)} countUp rawValue={seg.loyal} note="≥ 3 lần mua, quay lại trong 90 ngày" active={!periodMode && segment === 'loyal'}
+              onClick={() => setWhy({ title: 'Khách thân thiết', value: `${vi.format(seg.loyal)} khách`, scope, rows: [{ label: 'Tỷ lệ trên khách đã mua', value: ofBuyers(seg.loyal) }], definition: 'Mua thành công từ 3 lần và lần gần nhất trong 90 ngày.', more: filterBtn('loyal', 'Lọc danh sách: khách thân thiết') })} />
+            <KpiCard icon={AlertTriangle} tone="red" label="Có nguy cơ rời bỏ" className={KPI_TIGHT} value={vi.format(seg.risk)} countUp rawValue={seg.risk} note="≥ 2 lần mua, > 60 ngày chưa quay lại" active={!periodMode && segment === 'risk'}
+              onClick={() => setWhy({ title: 'Có nguy cơ rời bỏ', value: `${vi.format(seg.risk)} khách`, scope, rows: [{ label: 'Tỷ lệ trên khách đã mua', value: ofBuyers(seg.risk) }], definition: 'Từng mua từ 2 lần nhưng đã hơn 60 ngày chưa quay lại.', more: filterBtn('risk', 'Lọc danh sách để gọi chăm sóc') })} />
+            <KpiCard icon={Wallet} tone="orange" label="Giá trị vòng đời trung bình" className={KPI_TIGHT} value={shortMoney(seg.buyers ? seg.ltvTotal / seg.buyers : null)} note={`${vi.format(seg.vip)} khách VIP (≥ 5 triệu)`} active={!periodMode && segment === 'vip'}
+              onClick={() => setWhy({ title: 'Giá trị vòng đời trung bình', value: money(seg.buyers ? seg.ltvTotal / seg.buyers : null), scope, rows: [{ label: 'Tổng LTV', value: money(seg.ltvTotal) }, { label: 'Khách đã mua', value: vi.format(seg.buyers) }, { label: 'Khách VIP', value: vi.format(seg.vip) }], definition: 'Tổng doanh thu đơn thành công ÷ số khách đã mua.', more: filterBtn('vip', 'Lọc danh sách: khách VIP') })} />
+          </div>
+        )}
+        {searchEl()}
+        {error && !data && <ErrorBox error={error} onRetry={reload} />}
+        {listEl}
+        <FoldBlock icon={Sparkles} title="Cách tính và nguồn số liệu" storageKey="ui-moi:customers:defs">{defsEl()}</FoldBlock>
+        <Sheet open={detailOpen && !!selected} onOpenChange={(o) => { if (!o) setDetailOpen(false); }}>
+          <SheetContent className="gap-0 overflow-y-auto p-3 sm:max-w-3xl">
+            <SheetTitle className="sr-only">Hồ sơ khách hàng</SheetTitle>
+            <div className="min-w-0 space-y-4">{detailNode}</div>
+          </SheetContent>
+        </Sheet>
+        <WhySheet spec={why} onClose={() => setWhy(null)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      {timelineEl()}
+      <PageHeader eyebrow="Số liệu Pancake POS tại thời điểm đồng bộ" title="Hồ sơ khách hàng" subtitle="Mỗi khách = một SĐT trong một POS"
+        actions={headEl} />
+      {!data && !error && <SkeletonKpis count={5} className="xl:grid-cols-5" />}
+      {seg && (
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
+          <KpiCard icon={Users} tone="green" label="Tổng khách hàng" value={vi.format(data!.groups?.total ?? 0)} countUp rawValue={data!.groups?.total ?? 0} note={`${vi.format(seg.buyers)} đã mua thành công`} onClick={() => { reset(); setPeriodKey('all'); setSegment(''); }} active={!periodMode && !segment}
+            tooltip={tip('Tổng khách hàng', [['Tổng khách', `${vi.format(data!.groups?.total ?? 0)} khách`], ['Đã mua thành công', `${vi.format(seg.buyers)} khách`], ['Chưa từng mua', `${vi.format(seg.never)} khách`]], `${data!.definitions.identity} Bấm để xem tất cả phân khúc.`)} />
+          <KpiCard icon={UserCheck} tone="teal" label="Khách đang hoạt động" value={vi.format(seg.active)} countUp rawValue={seg.active} note="Mua trong 30 ngày qua" onClick={() => { reset(); setPeriodKey('all'); setSegment('active'); }} active={!periodMode && segment === 'active'}
+            tooltip={tip('Khách đang hoạt động', [['Số khách', `${vi.format(seg.active)} khách`], ['Tỷ lệ trên khách đã mua', pct(seg.buyers ? seg.active / seg.buyers * 100 : null)]], 'Khách có đơn mua thành công trong 30 ngày qua. Bấm để lọc.')} />
+          <KpiCard icon={Star} tone="lime" label="Khách thân thiết" value={vi.format(seg.loyal)} countUp rawValue={seg.loyal} note="≥ 3 lần mua, quay lại trong 90 ngày" onClick={() => { reset(); setPeriodKey('all'); setSegment('loyal'); }} active={!periodMode && segment === 'loyal'}
+            tooltip={tip('Khách thân thiết', [['Số khách', `${vi.format(seg.loyal)} khách`], ['Tỷ lệ trên khách đã mua', pct(seg.buyers ? seg.loyal / seg.buyers * 100 : null)]], 'Mua thành công từ 3 lần và lần gần nhất trong 90 ngày. Bấm để lọc.')} />
+          <KpiCard icon={AlertTriangle} tone="red" label="Có nguy cơ rời bỏ" value={vi.format(seg.risk)} countUp rawValue={seg.risk} note="≥ 2 lần mua, > 60 ngày chưa quay lại" onClick={() => { reset(); setPeriodKey('all'); setSegment('risk'); }} active={!periodMode && segment === 'risk'}
+            tooltip={tip('Có nguy cơ rời bỏ', [['Số khách', `${vi.format(seg.risk)} khách`], ['Tỷ lệ trên khách đã mua', pct(seg.buyers ? seg.risk / seg.buyers * 100 : null)]], 'Từng mua từ 2 lần nhưng đã hơn 60 ngày chưa quay lại. Bấm để lọc và gọi chăm sóc.')} />
+          <KpiCard icon={Wallet} tone="orange" label="Giá trị vòng đời trung bình" value={shortMoney(seg.buyers ? seg.ltvTotal / seg.buyers : null)} note={`${vi.format(seg.vip)} khách VIP (≥ 5 triệu)`} onClick={() => { reset(); setPeriodKey('all'); setSegment('vip'); }} active={!periodMode && segment === 'vip'}
+            tooltip={tip('Giá trị vòng đời trung bình', [['LTV trung bình', money(seg.buyers ? seg.ltvTotal / seg.buyers : null)], ['Tổng LTV', money(seg.ltvTotal)], ['Khách VIP', `${vi.format(seg.vip)} khách`]], 'Tổng doanh thu đơn thành công ÷ số khách đã mua. Bấm để xem khách VIP.')} />
+        </div>
+      )}
+      {filterBar()}
+      {searchEl()}
+      {error && !data && <ErrorBox error={error} onRetry={reload} />}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+        {listEl}
+
+        <div className="space-y-4 scroll-mt-16" id="customer-detail">
+          {!selected && <ChartCard icon={User} title="Chi tiết khách hàng"><EmptyState text="Chọn một khách trong danh sách để xem hồ sơ." /></ChartCard>}
+          {detailNode}
         </div>
       </div>
       <Definitions items={[data?.definitions.success, data?.definitions.dormant, data?.definitions.identity, SCORE_NOTE].filter((s): s is string => !!s)} />
