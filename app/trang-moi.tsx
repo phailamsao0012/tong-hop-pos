@@ -48,8 +48,8 @@ export function DuoSpark({ cur, prev, bad }: { cur: (number | null)[]; prev?: (n
   );
 }
 
-/** Lớp cho KpiCard trong hàng ô số kiểu mới: bỏ chiều cao tối thiểu 56px của chỗ biểu đồ để mọi ô thấp gọn (~150–170px) và bằng nhau. */
-export const KPI_TIGHT = '[&>span.mt-1]:!min-h-0';
+/** Lớp cho KpiCard trong hàng ô số kiểu mới: bỏ chiều cao tối thiểu 56px của chỗ biểu đồ và cắt ghi chú còn tối đa 2 dòng, để mọi ô thấp gọn (~150–170px) và bằng nhau. */
+export const KPI_TIGHT = '[&>span.mt-1]:!min-h-0 [&_.note]:line-clamp-2';
 
 /** Lưới một hàng ô số không để ô trống: số cột chia hết số ô ở mọi bề rộng (điện thoại 2 cột; ô lẻ cuối giãn hai cột). */
 const TILE_GRID: Record<number, string> = {
