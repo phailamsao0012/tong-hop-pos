@@ -1754,7 +1754,7 @@ export default function Dashboard({ user, initialView, demo = false, uiMoi = fal
           {!gated && canView(user, view) && view === 'growth' && <GrowthView key={activeDept} navDept={activeDept} uiMoi={uiMoi} />}
           {!gated && canView(user, view) && view === 'ho-so' && <StaffProfilePage uiMoi={uiMoi} onBack={profileBack ? () => { setView(profileBack); setProfileBack(null); } : undefined} />}
           {!gated && view === 'batches' && <BatchesView />}
-          {!gated && view === 'raw-orders' && <RawOrdersView onSyncNow={() => { void syncRecentAll(true); }} syncing={autoSyncing} />}
+          {!gated && view === 'raw-orders' && <RawOrdersView onSyncNow={() => { void syncRecentAll(true); }} syncing={autoSyncing} uiMoi={uiMoi} />}
           {!gated && view === 'customers' && <CustomersPage key={searchQuery} initialQ={searchQuery} canExport={canExport(user)} uiMoi={uiMoi} />}
           {!gated && view === 'dormant' && <CustomersView mode="dormant" canExport={canExport(user)} uiMoi={uiMoi} />}
           {!gated && view === 'repurchase' && <RepurchaseView uiMoi={uiMoi} />}

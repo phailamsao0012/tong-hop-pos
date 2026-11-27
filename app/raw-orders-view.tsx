@@ -8,6 +8,8 @@ import { SearchBar, GroupedRows, searchParams } from './search-bar';
 import { PosBadge } from './pos-badge';
 import { AlertTriangle, Check, CheckCircle2, ChevronLeft, ChevronRight, Copy, Database, ExternalLink, FileWarning, History, RefreshCw, Truck, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { PageHeadMoi } from './trang-moi';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { setOrderOrigin, useOrderOrigin } from './order-origin-filter';
 import { POS } from '@/lib/shared/report-model';
@@ -50,7 +52,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
   );
 }
 
-export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; syncing?: boolean }) {
+export function RawOrdersView({ onSyncNow, syncing, uiMoi = false }: { onSyncNow?: () => void; syncing?: boolean; /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới, tắt thì y như cũ. */ uiMoi?: boolean }) {
   const team = useTeam();
   const { orderOrigin, marketerId } = useOrderOrigin(team);
   const [posIds, setPosIds] = usePosIds();
@@ -132,11 +134,11 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
   const panelOpen = !!detailId;
   const rawText = detail?.raw ? JSON.stringify(detail.raw, null, 2) : '';
 
-  return (
-    <div className="space-y-5">
-      <PageHeader eyebrow={`${start ? dt(`${start}T00:00:00+07:00`) : '…'} – ${end ? dt(`${end}T00:00:00+07:00`) : '…'}`} title="Đơn nguồn Pancake POS" badge={<StatusChip tone="green">Đơn nguồn thật · chưa tính KPI</StatusChip>}
-        subtitle="Đối soát dữ liệu đơn đã đồng bộ"
-        actions={<><span className="num text-xs text-ink-3">Cập nhật lần cuối: {dt(lastSync, true)}</span><Button variant="outline" onClick={() => { void load(true); void loadSync(); }} disabled={loading}><RefreshCw size={14} className={loading ? 'animate-spin' : ''} />Tải lại</Button>{onSyncNow && <Button onClick={onSyncNow} disabled={syncing}><RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />{syncing ? 'Đang đồng bộ…' : 'Đồng bộ ngay'}</Button>}</>} />
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  const headActions = () => (
+        <><span className="num text-xs text-ink-3">Cập nhật lần cuối: {dt(lastSync, true)}</span><Button variant="outline" onClick={() => { void load(true); void loadSync(); }} disabled={loading}><RefreshCw size={14} className={loading ? 'animate-spin' : ''} />Tải lại</Button>{onSyncNow && <Button onClick={onSyncNow} disabled={syncing}><RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />{syncing ? 'Đang đồng bộ…' : 'Đồng bộ ngay'}</Button>}</>
+  );
+  const kpiRow = () => (
       <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
         <KpiCard icon={Database} tone="green" label="Tổng đơn đã lưu" value={vi.format(tot.records)} countUp rawValue={tot.records} format={(n) => vi.format(Math.round(n))} note={`${scoped.length} POS · từ ${scoped.map((s) => s.earliestCreatedAt).filter(Boolean).sort((a, b) => String(a).localeCompare(String(b)))[0]?.slice(0, 10) ?? '—'}`}
           tooltip={{ period: `${scoped.length} POS đang chọn`, current: `${vi.format(tot.records)} đơn`, definition: 'Tổng số đơn Pancake đã đồng bộ về máy chủ (mọi trạng thái, mọi thời điểm tạo).' }} />
@@ -149,12 +151,18 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
         <KpiCard icon={AlertTriangle} tone={tot.errors ? 'red' : 'gray'} label="Lỗi đồng bộ 24 giờ" value={vi.format(tot.errors)} note={scoped.filter((s) => s.lastError).map((s) => `${posName(s.posId)}: ${s.lastError?.slice(0, 40)}`).join(' · ') || 'Không có lỗi đang treo'}
           tooltip={{ current: `${vi.format(tot.errors)} lỗi`, definition: 'Số lượt đồng bộ lỗi trong 24 giờ qua của các POS đang chọn; ghi chú là lỗi gần nhất còn treo.' }} />
       </div>
+  );
+  const periodBar = () => (
       <Toolbar>
         <PeriodFields preset={period.preset} start={period.start} end={period.end} onPreset={(v) => { reset(); setDay(null); period.setPreset(v); }}
           onStart={(v) => { reset(); setDay(null); period.setStart(v); }} onEnd={(v) => { reset(); setDay(null); period.setEnd(v); }} />
       </Toolbar>
-      {day && <p className="notice flex flex-wrap items-center gap-2">Đang xem đơn tạo ngày {dt(`${day}T00:00:00+07:00`)}{group ? ` · ${GROUPS[group]}` : ''} (mở từ biểu đồ Trạng thái đơn).
-        <button type="button" className="btn sm" onClick={() => { reset(); setDay(null); setGroup(''); }}>Về kỳ {dt(`${period.start}T00:00:00+07:00`)} – {dt(`${period.end}T00:00:00+07:00`)}</button></p>}
+  );
+  const dayNote = (day: string) => (
+      <p className="notice flex flex-wrap items-center gap-2">Đang xem đơn tạo ngày {dt(`${day}T00:00:00+07:00`)}{group ? ` · ${GROUPS[group]}` : ''} (mở từ biểu đồ Trạng thái đơn).
+        <button type="button" className="btn sm" onClick={() => { reset(); setDay(null); setGroup(''); }}>Về kỳ {dt(`${period.start}T00:00:00+07:00`)} – {dt(`${period.end}T00:00:00+07:00`)}</button></p>
+  );
+  const searchEl = () => (
       <SearchBar onGroupChange={setGroupBy} pageKey="raw-orders" placeholder="Tìm theo mã đơn, SĐT hoặc tên khách" onTextChange={setQDraft} onSearch={() => { reset(); setQ(qDraft.trim()); }} value={{ text: qDraft, filters: { group, sellerId, posIds: posIds.join(','), orderOrigin: orderOrigin === 'all' ? '' : orderOrigin, marketerId }, groupBy }}
         groups={[{ value: 'status', label: 'Trạng thái' }, { value: 'pos', label: 'POS' }]}
         filters={[
@@ -164,9 +172,14 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
           ...(team === 'cskh' ? [{ key: 'orderOrigin', label: 'Nguồn đơn CSKH', options: [{ value: 'self', label: 'Tự ups' }, { value: 'mkt', label: 'Từ MKT' }] }, { key: 'marketerId', label: 'Marketer', options: (list?.marketers ?? []).map(m => ({ value: m.marketerId, label: m.marketerName })) }] : []),
         ]}
         onChange={v => { reset(); setQDraft(v.text); setQ(v.text.trim()); setGroup(v.filters.group || ''); setSellerId(v.filters.sellerId || ''); if ((v.filters.posIds || '') !== posIds.join(',')) setPosIds((v.filters.posIds || '').split(',').filter(Boolean)); if (team === 'cskh' && ((v.filters.orderOrigin || 'all') !== orderOrigin || (v.filters.marketerId || '') !== marketerId)) setOrderOrigin(v.filters.orderOrigin === 'mkt' ? 'mkt' : v.filters.orderOrigin === 'self' ? 'self' : 'all', v.filters.marketerId); setGroupBy(v.groupBy); }} />
+  );
+  const hintEl = () => (
       <p className="text-xs text-ink-3">Nhóm theo Người lên đơn chưa khả dụng vì danh sách hiện chưa trả trường này.</p>
-      {error && <ErrorBox error={error} onRetry={() => void load()} />}
-      <div className={`grid gap-4 ${panelOpen ? 'xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]' : ''}`}>
+  );
+  const errorBox = (error: string) => (
+      <ErrorBox error={error} onRetry={() => void load()} />
+  );
+  const listCard = () => (
         <ChartCard id="raw-list" icon={Database} title={`Danh sách đơn nguồn${list ? ` · trang ${list.page}` : ''}`} subtitle={list?.note}
           action={
             <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -206,7 +219,8 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
             </TableWrap>
           )}
         </ChartCard>
-        {panelOpen && (
+  );
+  const detailCard = () => (
           <div id="order-detail" className="scroll-mt-16">
             <ChartCard icon={Database} title="Chi tiết đơn hàng" subtitle={detail ? `${detail.posName} · đồng bộ lúc ${dt(detail.fetchedAt, true)}` : 'Đang tải…'} loading={!detail && !detailError}
               action={<div className="flex items-center gap-1.5">{detail?.pancakeUrl && <a href={detail.pancakeUrl} target="_blank" rel="noreferrer" className="btn primary sm">Mở trên Pancake <ExternalLink size={12} /></a>}<button type="button" className="btn sm icon text-ink-3" onClick={close} title="Đóng" aria-label="Đóng chi tiết"><X size={14} /></button></div>}>
@@ -286,7 +300,54 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
               )}
             </ChartCard>
           </div>
-        )}
+  );
+  // [hết khối chung]
+  // Đầu trang, hộp lỗi, danh sách và chi tiết đơn vẽ MỘT lần cho cả hai bố cục (bên trong có hàm đọc ref: tải lại, mở / đóng đơn).
+  const headEl = headActions();
+  const errorEl = error ? errorBox(error) : null;
+  const listEl = listCard();
+  const detailNode = panelOpen ? detailCard() : null;
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trên xuống: đầu trang (PageHeadMoi: chọn kỳ; Tải lại, Đồng bộ ngay) → một hàng 5 ô số (giữ ô cũ: bấm lọc danh sách, rê chuột xem cách tính;
+  // lưới 5 cột từ lg, ô lẻ cuối giãn hai cột trên màn hẹp) → ô tìm / lọc → bảng chính Danh sách đơn nguồn (bấm đơn mở chi tiết GIỮA màn
+  // thay cột bên phải). Trang không có tỷ lệ chốt / hoàn / hủy nên không có dải "Cần xem".
+  if (uiMoi) {
+    const posLabel = posIds.length <= 3 ? posIds.map(posName).join(', ') : `${vi.format(posIds.length)} POS`;
+    const scope = `${start ? dt(`${start}T00:00:00+07:00`) : '…'} – ${end ? dt(`${end}T00:00:00+07:00`) : '…'} · ${posLabel} · đối soát dữ liệu đơn đã đồng bộ, đơn nguồn thật, chưa tính KPI · cập nhật ${dt(lastSync, true)}`;
+    return (
+      <div className="min-w-0 space-y-4">
+        <PageHeadMoi title="Đơn nguồn Pancake POS" scope={scope} tools={periodBar()} right={headEl} />
+        <div className="min-w-0 lg:[&>div]:grid-cols-5 max-lg:[&>div>:last-child]:col-span-2 [&_.note]:line-clamp-2 [&>div>*>span.mt-1]:!min-h-0">{kpiRow()}</div>
+        {day && dayNote(day)}
+        {searchEl()}
+        {hintEl()}
+        {errorEl}
+        {listEl}
+        <Sheet open={panelOpen} onOpenChange={(o) => { if (!o) close(); }}>
+          <SheetContent className="gap-0 overflow-y-auto p-3 sm:max-w-3xl" showCloseButton={false}>
+            <SheetTitle className="sr-only">Chi tiết đơn hàng</SheetTitle>
+            {detailNode}
+          </SheetContent>
+        </Sheet>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <PageHeader eyebrow={`${start ? dt(`${start}T00:00:00+07:00`) : '…'} – ${end ? dt(`${end}T00:00:00+07:00`) : '…'}`} title="Đơn nguồn Pancake POS" badge={<StatusChip tone="green">Đơn nguồn thật · chưa tính KPI</StatusChip>}
+        subtitle="Đối soát dữ liệu đơn đã đồng bộ"
+        actions={headEl} />
+      {kpiRow()}
+      {periodBar()}
+      {day && dayNote(day)}
+      {searchEl()}
+      {hintEl()}
+      {errorEl}
+      <div className={`grid gap-4 ${panelOpen ? 'xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]' : ''}`}>
+        {listEl}
+        {detailNode}
       </div>
     </div>
   );
