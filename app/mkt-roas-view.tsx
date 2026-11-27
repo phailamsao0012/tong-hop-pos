@@ -214,7 +214,7 @@ export function MktRoasView({ owner = false, uiMoi = false }: { owner?: boolean;
                       <td className="n"><NumDetail spec={dt('share', x)}>{pct(x.costShare === null ? null : x.costShare * 100)}</NumDetail></td>
                       <td className="n"><NumDetail spec={dt('cpc', x)}>{shortMoney(x.costPerClosed)}</NumDetail></td>
                       <td className="n">{pct(x.closeRate)}</td>
-                      <td className="n">{pct(x.returnRate)}</td>
+                      <td className="n"><span data-ui={x.returnRate == null ? undefined : 'rate-pill'} data-tone={overRet(x.returnRate) ? 'bad' : 'ok'}>{pct(x.returnRate)}</span></td>
                     </tr>
                   ))}</tbody>
                   <tfoot><tr><th>Tổng</th><td>{shortMoney(r.total.cost)}</td><td>{shortMoney(r.total.net)}</td>{team === 'all' && <><td>{shortMoney(r.total.newNet)}</td><td className="text-ink-3">{shortMoney(r.total.cskhNet)}</td></>}<td>{roasText(r.total.roas)}</td><td>{vi.format(r.total.phones)}</td><td>{shortMoney(r.total.costPerLead)}</td><td>{vi.format(team === 'cskh' ? r.total.closed : r.total.newOrders)}</td><td>{pct(r.total.costShare === null ? null : r.total.costShare * 100)}</td><td>{shortMoney(r.total.costPerClosed)}</td><td colSpan={2}>—</td></tr></tfoot>

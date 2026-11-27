@@ -6,7 +6,8 @@
 // - WhySheet: bấm một ô số / một việc cần xem mở khung GIỮA màn hình (Sheet đã căn giữa) "Vì sao ra số này": số gì, phạm vi, số thành phần,
 //   kỳ trước, cách tính. Khung nằm trên chính trang nên bộ lọc kỳ / POS / trạng thái giữ nguyên.
 import { useState, type ReactNode } from 'react';
-import { AlertTriangle, Info } from 'lucide-react';
+import { AlertTriangle, Info, type LucideIcon } from 'lucide-react';
+import { ICON } from './icons';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { BOSS_CANCEL_RED, BOSS_CLOSE_RED, BOSS_RETURN_RED } from '@/lib/zalo/boss-report';
 
@@ -151,8 +152,29 @@ export function WhySheet({ spec, onClose }: { spec: WhySpec | null; onClose: () 
 }
 
 /** Một việc cần xem. `team`: số cả đội / cả trang (luôn đứng trước); `gap`: vượt mốc bao nhiêu (điểm %), lớn hơn là nặng hơn.
- *  `why`: câu vì sao (không có thì dùng ghi chú mốc của hàng thẻ); `action`: chữ trên nút (mặc định "Xem vì sao"); `tone: 'warn'`: sắp chạm mốc (vàng). */
+ *  `why`: câu vì sao (không có thì tự ghi số điểm cách mốc + mốc của đúng số đó, xem whyOf); `action`: chữ trên nút (mặc định "Xem vì sao"); `tone: 'warn'`: sắp chạm mốc (vàng). */
 export type CanXemItem = { key: string; text: string; onClick?: () => void; team?: boolean; gap?: number; why?: string; action?: string; tone?: 'warn' };
+
+/** Loại số của một việc, đoán từ chữ sau dấu ":" mà chỗ gọi đã viết ("Đội Sale: hủy sau chốt 6,1%", "Team B: chốt 36%"…).
+ *  Thứ tự hoàn → hủy → chốt ("hủy sau chốt" là hủy). Không khớp (vd "khách ít quay lại", "quá tải") thì null: dùng icon cảnh báo và ghi chú chung. */
+type CanXemKind = 'chot' | 'huy' | 'hoan';
+const kindOf = (text: string): CanXemKind | null => {
+  const s = text.slice(text.lastIndexOf(':') + 1);
+  return /hoàn/i.test(s) ? 'hoan' : /hủy/i.test(s) ? 'huy' : /chốt|xác nhận/i.test(s) ? 'chot' : null;
+};
+const KIND_ICON: Record<CanXemKind, LucideIcon> = { chot: ICON.rate, huy: ICON.cancelled, hoan: ICON.returned };
+const KIND_MARK: Record<CanXemKind, string> = { chot: `Mốc: chốt dưới ${BOSS_CLOSE_RED}%`, huy: `Mốc: hủy từ ${BOSS_CANCEL_RED}%`, hoan: `Mốc: hoàn từ ${BOSS_RETURN_RED}%` };
+/** Icon thẻ theo loại số (icon truyền qua prop, không chọn component trong lúc vẽ). */
+function TodoIcon({ icon: Icon }: { icon: LucideIcon }) {
+  return <Icon size={18} />;
+}
+/** Dòng vì sao riêng từng thẻ: `why` của chỗ gọi; không có thì số điểm cách mốc (gap chỗ gọi đã tính) + mốc của đúng số đó; loại lạ thì ghi chú chung. */
+const whyOf = (i: CanXemItem, k: CanXemKind | null, note: string | undefined) => {
+  if (i.why) return i.why;
+  if (!k) return note;
+  const far = i.gap != null && i.gap > 0 ? `${k === 'chot' ? 'Dưới' : 'Trên'} mốc ${i.gap.toFixed(1).replace('.', ',')} điểm · ` : '';
+  return `${far}${KIND_MARK[k]}`;
+};
 
 /** Hàng thẻ "Việc cần xử lý" (bộ thiết kế 28/11/2026): không có số nào vượt mốc thì không hiện gì.
  *  Mỗi thẻ: ô icon đỏ nhạt (vàng nhạt nếu sắp chạm), chuyện gì (đậm), vì sao (chữ phụ), một nút nhỏ đen đi thẳng tới chỗ xem; nhãn trạng thái bên phải (màn ≥ 2xl).
@@ -168,17 +190,20 @@ export function CanXemStrip({ items, note, max = 3 }: { items: CanXemItem[]; not
   const pillOf = (i: CanXemItem) => i.tone === 'warn' ? <span className="pill warn">Sắp chạm</span> : <span className="pill bad">Vượt mốc</span>;
   return (
     <section aria-label="Việc cần xử lý" className="flex min-w-0 flex-wrap items-stretch gap-3">
-      {shown.map((i, n) => (
-        <article key={i.key} className={`todo flex-[1_1_18rem] ${i.tone === 'warn' ? 'is-warn' : ''} ${n ? 'max-sm:hidden' : ''}`}>
-          <span className="todo-ic" aria-hidden="true"><AlertTriangle size={18} /></span>
-          <div className="min-w-0 flex-1">
-            <b className="block text-[14px] font-semibold leading-snug text-ink" title={i.text}>{i.text}</b>
-            {(i.why ?? note) && <p className="mb-2.5 mt-0.5 line-clamp-2 text-[12.5px] text-ink-3" title={i.why ?? note}>{i.why ?? note}</p>}
-            {i.onClick && <button type="button" className="btn sm primary" onClick={i.onClick}>{i.action ?? 'Xem vì sao'}</button>}
-          </div>
-          <span className="shrink-0 max-2xl:hidden">{pillOf(i)}</span>
-        </article>
-      ))}
+      {shown.map((i, n) => {
+        const k = kindOf(i.text), why = whyOf(i, k, note);
+        return (
+          <article key={i.key} className={`todo flex-[1_1_18rem] ${i.tone === 'warn' ? 'is-warn' : ''} ${n ? 'max-sm:hidden' : ''}`}>
+            <span className="todo-ic" aria-hidden="true"><TodoIcon icon={k ? KIND_ICON[k] : AlertTriangle} /></span>
+            <div className="min-w-0 flex-1">
+              <b className="block text-[14px] font-semibold leading-snug text-ink" title={i.text}>{i.text}</b>
+              {why && <p className="mb-2.5 mt-0.5 line-clamp-2 text-[12.5px] text-ink-3" title={why}>{why}</p>}
+              {i.onClick && <button type="button" className="btn sm primary" onClick={i.onClick}>{i.action ?? 'Xem vì sao'}</button>}
+            </div>
+            <span className="shrink-0 max-2xl:hidden">{pillOf(i)}</span>
+          </article>
+        );
+      })}
       {restSm > 0 && <button type="button" onClick={() => setAll(true)} className="btn self-center sm:hidden">+{restSm} mục khác</button>}
       {rest > 0 && <button type="button" onClick={() => setAll(true)} className="btn self-center max-sm:hidden">+{rest} mục khác</button>}
       <WhySheet onClose={() => setAll(false)} spec={all ? {

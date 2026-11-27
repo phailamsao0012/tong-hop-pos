@@ -298,8 +298,8 @@ export function SaleAnalyticsView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bậ
                       <td className="n">{vi.format(s.assigned)}</td>
                       <td className={`n font-semibold ${s.dataRate === null ? '' : LEVEL_TEXT[rateLevel(s.dataRate)]}`}>{pct(s.dataRate)}<span className="block text-[11px] font-normal text-ink-3">{vi.format(s.closedFromAssigned)} chốt</span></td>
                       <td className="n">{duration(s.medianMinutes)}</td>
-                      <td className="n">{pct(s.returnRate)}</td>
-                      <td className="n">{pct(s.cancelAfterClose)}</td>
+                      <td className="n"><span data-ui={s.returnRate == null ? undefined : 'rate-pill'} data-tone={overRet(s.returnRate) ? 'bad' : 'ok'}>{pct(s.returnRate)}</span></td>
+                      <td className="n"><span data-ui={s.cancelAfterClose == null ? undefined : 'rate-pill'} data-tone={overCancel(s.cancelAfterClose) ? 'bad' : 'ok'}>{pct(s.cancelAfterClose)}</span></td>
                     </tr>
                   ))}</tbody>
                 </table>

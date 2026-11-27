@@ -32,7 +32,7 @@ function Spark({ values }: { values: (number | null)[] }) {
   if (nums.length < 2) return <svg className="h-6 w-full" aria-hidden />;
   const min = Math.min(...nums), max = Math.max(...nums), span = max - min || 1;
   const pts = values.map((v, i) => v === null ? null : `${(i / (values.length - 1)) * 100},${22 - ((v - min) / span) * 20}`).filter(Boolean).join(' ');
-  return <svg viewBox="0 0 100 24" preserveAspectRatio="none" className="h-6 w-full" aria-hidden><polyline points={pts} fill="none" stroke="var(--primary)" strokeWidth="1.6" vectorEffect="non-scaling-stroke" /></svg>;
+  return <svg viewBox="0 0 100 24" preserveAspectRatio="none" className="h-6 w-full" aria-hidden><polyline points={pts} fill="none" stroke="var(--chart-ky-nay, var(--primary))" strokeWidth="1.6" vectorEffect="non-scaling-stroke" /></svg>;
 }
 
 export function MktTrendPanel({ start, end, posIds, marketerId, teamId }: { start: string; end: string; posIds: string[]; marketerId: string; teamId: string }) {
@@ -66,7 +66,7 @@ export function MktTrendPanel({ start, end, posIds, marketerId, teamId }: { star
       {open && (() => { const [key, label, , fn] = columns.find(c => c[0] === open)!; return <div data-ui="box" className="mt-3 rounded-xl border border-line p-3">
         <h3 className="text-sm font-semibold">{label}</h3>
         <ChartContainer config={{ [key]: { label, color: 'var(--primary)' } }} className="mt-2 h-56 w-full aspect-auto">
-          <LineChart data={trendChartRows(data.rows, key)} margin={{ left: 0, right: 8 }}><CartesianGrid vertical={false} /><XAxis dataKey="key" minTickGap={28} tick={{ fontSize: 11 }} /><YAxis width={52} tick={{ fontSize: 11 }} tickFormatter={(n: number) => short(n)} /><ChartTooltip content={<ChartTooltipContent formatter={(v) => format(typeof v === 'number' ? v : null, fn)} />} /><Line name={label} dataKey="complete" stroke="var(--primary)" dot={false} isAnimationActive={false} /><Line name={`${label} · đang chạy`} dataKey="running" stroke="var(--primary)" strokeDasharray="5 4" dot={{ fill: "white", stroke: "var(--primary)", r: 3 }} isAnimationActive={false} /></LineChart>
+          <LineChart data={trendChartRows(data.rows, key)} margin={{ left: 0, right: 8 }}><CartesianGrid vertical={false} /><XAxis dataKey="key" minTickGap={28} tick={{ fontSize: 11 }} /><YAxis width={52} tick={{ fontSize: 11 }} tickFormatter={(n: number) => short(n)} /><ChartTooltip content={<ChartTooltipContent formatter={(v) => format(typeof v === 'number' ? v : null, fn)} />} /><Line name={label} dataKey="complete" stroke="var(--chart-ky-nay, var(--primary))" dot={false} isAnimationActive={false} /><Line name={`${label} · đang chạy`} dataKey="running" stroke="var(--chart-ky-nay, var(--primary))" strokeDasharray="5 4" dot={{ fill: "white", stroke: "var(--chart-ky-nay, var(--primary))", r: 3 }} isAnimationActive={false} /></LineChart>
         </ChartContainer>
       </div>; })()}
       <p className="mt-2 text-[11px] text-ink-3">Số về tính một lần trong kỳ theo từng marketer; đoạn đang chạy nét đứt; chi phí từ sheet CPQC Daily theo giờ.</p>

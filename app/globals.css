@@ -969,9 +969,9 @@ table th { white-space: nowrap; font-weight: 600; font-size: 11.5px; letter-spac
   .ui-moi-root .kpi .lbl { text-transform: none; letter-spacing: 0; font-size: 12.5px; font-weight: 500; color: var(--ink-2); padding-right: 26px; }
   .ui-moi-root .kpi .tile { top: 14px; right: 16px; width: 18px; height: 18px; border-radius: 0; background: transparent !important; color: var(--ink-3) !important; }
   .ui-moi-root .kpi .tile svg { width: 18px; height: 18px; }
-  .ui-moi-root .kpi .val { letter-spacing: -.02em; font-weight: 700; line-height: 1.2; --kpi-val-max: 27px; }
+  .ui-moi-root .kpi .val { letter-spacing: -.01em; font-weight: 700; font-feature-settings: normal; line-height: 1.2; --kpi-val-max: 27px; }
   .ui-moi-root .kpi .note { font-size: 12px; color: var(--ink-3); }
-  .ui-moi-root .kpi .kpi-footer { margin-top: 4px; align-items: flex-end; }
+  .ui-moi-root .kpi .kpi-footer { margin-top: auto; padding-top: 4px; align-items: flex-end; }
   .ui-moi-root .kpi .bar > i { background: var(--ink); }
 
   /* Chọn kỳ: hàng nút nền #f1f3f2 bo 11px, mục đang chọn nổi trắng có bóng nhẹ */
@@ -1145,6 +1145,12 @@ html.ui-moi-root:not(.dark) {
   --chart-grid: #e5e9e6; --chart-fill: rgb(14 21 18 / .06); --chart-bar: #cfd6d2;
   /* Biểu đồ: kỳ này đen, kỳ trước xám (components/ui/chart.tsx đổi màu cấu hình var(--primary) / var(--ink-4) sang hai token này khi cờ bật). */
   --chart-cur: #0e1512; --chart-prev: #cfd6d2;
+  /* Biểu đồ tự vẽ / màu đặt thẳng trong trang: var(--chart-ky-nay, var(--primary)) = kỳ này, var(--chart-dang-chay, var(--primary)) = cột / kỳ đang chạy.
+     Chỉ đặt ở đây (cờ bật, nền sáng); cờ tắt không ai đặt nên rơi về var(--primary) như cũ. */
+  --chart-ky-nay: #0e1512; --chart-dang-chay: #17684b;
+  /* Số chính Marketing (app/mkt-headline.tsx): cột nhỏ kỳ này đen, kỳ trước xám (không có mốc vượt nên không tô đỏ); dải tách doanh thu đen / xám đậm / xám nhạt. */
+  --mkt-cot: #0e1512; --mkt-cot-tot: #0e1512; --mkt-cot-kem: #0e1512; --mkt-cot-truoc: #cfd6d2;
+  --mkt-tach-1: #0e1512; --mkt-tach-2: #75807b; --mkt-tach-3: #cfd6d2;
   --skel-1: #f1f3f2; --skel-2: #e7eae8;
   --shadow: none;
   --font-display: var(--font-ui);
@@ -1154,7 +1160,10 @@ html.ui-moi-root body { font-size: 14px; line-height: 1.5; }
 
 /* (B) Icon: một kiểu đặc, một màu (currentColor). Lucide là nét viền: trong ô số, thẻ việc cần xử lý, nhãn trạng thái thì tô đặc phần kín
    và giữ nét, để ra icon khối một màu như mẫu. Không thêm thư viện icon. */
-.ui-moi-root :is(.kpi .tile, .todo-ic, .ministat > span:first-child) svg { fill: currentColor; fill-opacity: .18; stroke-width: 2.1; }
+.ui-moi-root :is(.kpi .tile, .todo-ic, .ministat > span:first-child, [data-ui="mkt-ic"]) svg { fill: currentColor; fill-opacity: .18; stroke-width: 2.1; }
+/* Ô số chính Marketing (Giant): icon trơn một màu chữ phụ, bỏ ô vuông màu cam / xanh / tím (màu đặt inline nên cần !important). */
+.ui-moi-root [data-ui="mkt-ic"] { width: 18px; height: 18px; background: transparent !important; color: var(--ink-3) !important; border-radius: 0; }
+.ui-moi-root [data-ui="mkt-ic"] svg { width: 18px; height: 18px; }
 
 /* (C) Ô số: nhãn trái + icon góc phải; số to 27px (co lại nếu chuỗi dài, xem --kpi-val-max ở KpiCard); chân ô = nhãn tăng giảm + ghi chú bên trái,
    đường xu hướng 74×26 màu đen bên phải. Ô có DuoSpark (trang-moi.tsx) đưa đường nhỏ sang cột phải, ngang hàng chân ô. */
@@ -1205,7 +1214,9 @@ html.ui-moi-root:not(.dark) .skel { background: linear-gradient(90deg, var(--sur
 .ui-moi-root .pill.nd::before { display: none; }
 
 /* (G) Bảng: tiêu đề cột 12px chữ phụ, số căn phải (td.n sẵn có), dòng đang chọn nền xanh nhạt #e6f2ec, avatar chữ cái 30px nền xám nhạt,
-   thanh tỷ lệ 70×6 màu đen (đỏ khi dưới mốc: ProgressBar low), ô hoàn / hủy (RateCells) thành nhãn có chấm thay cho chữ tô màu rời. */
+   thanh tỷ lệ 70×6 màu đen (đỏ khi dưới mốc: ProgressBar low), ô hoàn / hủy thành nhãn có chấm thay cho chữ tô màu rời:
+   RateCells lấy màu từ lớp td; bảng nhân viên Sale / Marketing gắn data-tone="ok" | "bad" ngay trên span (cùng mốc trang đang dùng). */
+.ui-moi-root [data-ui="rate-pill"].block { display: flex; width: fit-content; margin-left: auto; margin-top: 2px; }
 .ui-moi-root :is(table.tbl, [data-ui="tbl"]) th { font-size: 12px; }
 .ui-moi-root :is(table.tbl, [data-ui="tbl"]) tbody tr:is([aria-selected="true"], [data-state="selected"]) > td { background: var(--tint); }
 .ui-moi-root table.tbl tbody tr:is(:hover, :focus-within) td:first-child { box-shadow: none; }
@@ -1213,11 +1224,11 @@ html.ui-moi-root:not(.dark) .skel { background: linear-gradient(90deg, var(--sur
 .ui-moi-root [data-ui="av-sm"] { background: var(--surface-2); color: var(--ink-2); font-weight: 700; }
 .ui-moi-root .pbar { height: 6px !important; background: var(--surface-2); }
 .ui-moi-root .pbar > i[style*="var(--primary)"] { background: var(--ink) !important; }
-.ui-moi-root td > [data-ui="rate-pill"] { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 600; background: var(--surface-2); color: var(--ink-2); }
-.ui-moi-root td > [data-ui="rate-pill"]::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
-.ui-moi-root td.text-good > [data-ui="rate-pill"] { background: var(--good-bg); color: var(--good); }
-.ui-moi-root td.text-warn > [data-ui="rate-pill"] { background: var(--warn-bg); color: var(--warn); }
-.ui-moi-root td.text-bad > [data-ui="rate-pill"] { background: var(--bad-bg); color: var(--bad); }
+.ui-moi-root [data-ui="rate-pill"] { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 600; background: var(--surface-2); color: var(--ink-2); }
+.ui-moi-root [data-ui="rate-pill"]::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+.ui-moi-root :is(td.text-good > [data-ui="rate-pill"], [data-ui="rate-pill"][data-tone="ok"]) { background: var(--good-bg); color: var(--good); }
+.ui-moi-root :is(td.text-warn > [data-ui="rate-pill"], [data-ui="rate-pill"][data-tone="warn"]) { background: var(--warn-bg); color: var(--warn); }
+.ui-moi-root :is(td.text-bad > [data-ui="rate-pill"], [data-ui="rate-pill"][data-tone="bad"]) { background: var(--bad-bg); color: var(--bad); }
 
 /* (H) Biểu đồ: kỳ trước xám, kỳ này đen (màu cấu hình đổi ở components/ui/chart.tsx), mốc / ngưỡng là nét đứt xám, lưới mảnh. */
 .ui-moi-root .recharts-cartesian-grid line { stroke: var(--line); stroke-dasharray: 0; }
@@ -1247,3 +1258,24 @@ html.ui-moi-root:not(.dark) .snapshot-line { border-radius: 12px; color: #6f4300
 
 /* (M) Màn ≥ 85.375rem (1366px): hàng 6 ô số vừa một dòng — chữ ghi chú cắt 2 dòng, nhãn 1 dòng. */
 @media (min-width: 85.375rem) { .ui-moi-root .kpi .lbl { -webkit-line-clamp: 1; } }
+
+/* (N) Ô số ở màn 1366–1536 (mốc 3, 28/11/2026): ô cao theo ô cao nhất hàng nên nội dung dồn lên trên, chân ô (nhãn tăng giảm, ghi chú) bám đáy;
+   ghi chú một dòng cắt "…" (chữ đủ ở title của KpiCard); chân ô không xuống 3–4 dòng. */
+.ui-moi-root .kpi .note { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; -webkit-line-clamp: unset; }
+.ui-moi-root .kpi .kpi-footer { flex-wrap: nowrap; min-width: 0; }
+.ui-moi-root .kpi .d { flex-wrap: nowrap; min-width: 0; overflow: hidden; }
+.ui-moi-root .kpi .d > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Ô không có DuoSpark: KpiCard là cột flex, chân ô có margin-top:auto (khối .ui-moi-root .kpi .kpi-footer); ghi chú nằm ngay dưới chân ô.
+   WhyTile ép ô thành block (để rộng hết ô lưới) làm mất margin-top:auto: trả lại cột flex, vẫn w-full h-full. */
+.ui-moi-root .kpi:not(:has(> span.mt-1 > .duo-spark)) { display: flex; flex-direction: column; }
+/* Dưới 96rem (1536px): đường nhỏ xuống một hàng riêng ở đáy ô (DuoSpark) / ẩn (Sparkline trong chân ô) để chữ không bị ép. */
+@media (width < 96rem) {
+  .ui-moi-root .kpi:has(> span.mt-1 > .duo-spark) { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto 1fr auto auto; }
+  .ui-moi-root .kpi > span.mt-1:has(> .duo-spark) { grid-column: 1; grid-row: auto; order: 9; width: 100%; margin-top: 6px; }
+  .ui-moi-root .kpi .kpi-spark { display: none; }
+}
+/* Số to không giãn chữ: trong ô số, bỏ bánh số lăn (mỗi chữ số một ô rộng bằng số 0 làm "2,21" trông như "2,2 1") và hiện chuỗi số thường,
+   kerning bình thường, tabular-nums, letter-spacing -0.01em. Số không đổi, chỉ bỏ hiệu ứng lăn ở ô số khi cờ bật. */
+.ui-moi-root .kpi .val .odo { display: inline; vertical-align: baseline; }
+.ui-moi-root .kpi .val .odo > :not(.sr-only) { display: none; }
+.ui-moi-root .kpi .val .odo > .sr-only { position: static; width: auto; height: auto; margin: 0; padding: 0; overflow: visible; clip: auto; clip-path: none; white-space: nowrap; }

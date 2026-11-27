@@ -67,8 +67,8 @@ export function AdvisorPanel({ dept }: { dept?: TrendDept }) {
               <XAxis dataKey="day" tickFormatter={(d: string) => d.slice(8, 10)} minTickGap={16} tick={{ fontSize: 11 }} />
               <YAxis width={50} tick={{ fontSize: 11 }} tickFormatter={(n: number) => n >= 1e9 ? `${(n / 1e9).toFixed(1).replace('.', ',')} tỷ` : n >= 1e6 ? `${Math.round(n / 1e6)} tr` : short(n)} />
               <ChartTooltip content={<ChartTooltipContent labelFormatter={(d) => `${String(d).slice(8, 10)}/${String(d).slice(5, 7)}`} formatter={(v, name) => `${name === 'forecast' ? 'Dự đoán' : 'Đã có'}: ${shortMoney(Number(v))}`} />} />
-              <Line dataKey="actual" stroke="var(--primary)" strokeWidth={2.5} dot={false} isAnimationActive={false} connectNulls={false} />
-              <Line dataKey="forecast" stroke="var(--primary)" strokeWidth={2} strokeDasharray="5 4" dot={false} isAnimationActive={false} connectNulls={false} />
+              <Line dataKey="actual" stroke="var(--chart-ky-nay, var(--primary))" strokeWidth={2.5} dot={false} isAnimationActive={false} connectNulls={false} />
+              <Line dataKey="forecast" stroke="var(--chart-ky-nay, var(--primary))" strokeWidth={2} strokeDasharray="5 4" dot={false} isAnimationActive={false} connectNulls={false} />
             </LineChart>
           </ChartContainer>}
           {marketing.forecast !== null && <div className="num flex flex-wrap justify-between gap-2 text-xs"><span>— Đã có {shortMoney(marketing.actual)}</span><span>- - Còn dự kiến {shortMoney(marketing.forecast - marketing.actual)}</span></div>}

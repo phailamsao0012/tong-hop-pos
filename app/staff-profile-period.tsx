@@ -81,7 +81,7 @@ export function ProfilePeriod({ id, posSel }: { id: string; posSel: string[] }) 
                     <CartesianGrid vertical={false} /><XAxis dataKey="key" tick={{ fontSize: 11 }} minTickGap={10} />
                     <YAxis width={58} tick={{ fontSize: 11 }} tickFormatter={(n: number) => shortMoney(n).replace(' ₫', '')} />
                     <ChartTooltip content={<ChartTooltipContent formatter={(v) => money(typeof v === 'number' ? v : null)} />} />
-                    <Bar dataKey="net" name="Doanh thu" fill="var(--primary)" radius={barRadius([4, 4, 0, 0])} isAnimationActive={false} />
+                    <Bar dataKey="net" name="Doanh thu" fill="var(--chart-ky-nay, var(--primary))" radius={barRadius([4, 4, 0, 0])} isAnimationActive={false} />
                   </BarChart>
                 </ChartContainer>
               ) : <p className="mt-2 text-[12.5px] text-ink-3">Không có doanh thu trong kỳ.</p>}

@@ -165,7 +165,7 @@ export function MonthlyCompare({ month, end, posIds, team, onOpenRange }: {
             <ChartTooltip cursor={{ fill: 'var(--surface-2)' }} content={<ChartTooltipContent labelFormatter={(_l, p) => { const r = p?.[0]?.payload as (typeof monthRows)[number] | undefined; return r ? `${r.label}${r.partial ? ` (ngày ${r.partial})` : ''} · ${dmy(r.start)}–${dmy(r.end)}` : ''; }}
               formatter={(value) => <span className="flex w-full justify-between gap-4"><span>{metricLabel}</span><strong className="num">{tipValue(value)}</strong></span>} />} />
             <Bar dataKey="value" radius={barRadius([4, 4, 0, 0])} isAnimationActive={motionOn}>
-              {monthRows.map((r) => <Cell key={r.month} fill={r.month === month ? 'var(--primary)' : PAST[0]} />)}
+              {monthRows.map((r) => <Cell key={r.month} fill={r.month === month ? 'var(--chart-dang-chay, var(--primary))' : PAST[0]} />)}
               <LabelList dataKey="vsPrev" position="top" content={(p) => {
                 const { x, y, width, value } = p as { x: number; y: number; width: number; value: unknown };
                 if (typeof value !== 'number') return null;

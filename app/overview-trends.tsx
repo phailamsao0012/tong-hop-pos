@@ -120,19 +120,19 @@ export function BigTrendChart({ data, series, metric, height = 260 }: { data: Tr
             const h = Math.max((v ?? 0) > 0 ? 1.5 : 0, (H - T - B) * (v ?? 0) / (maxT ?? max));
             const isPartial = partial && k === N - 1;
             const on = hover?.i === k;
-            return <rect key={k} x={x(k) - bw / 2} y={y(0) - h} width={bw} height={h} rx={Math.min(3, bw / 2)} fill={on ? 'var(--primary)' : 'var(--t-blue)'}
+            return <rect key={k} x={x(k) - bw / 2} y={y(0) - h} width={bw} height={h} rx={Math.min(3, bw / 2)} fill={on ? 'var(--chart-ky-nay, var(--primary))' : 'var(--t-blue)'}
               style={{ transition: 'opacity .25s var(--ease), fill .25s var(--ease)' }} opacity={on ? 0.95 : hover ? 0.22 : isPartial ? 0.25 : 0.45} />;
           })}
           <path d={line(prevT)} fill="none" stroke="var(--ink-3)" strokeWidth={1.5} strokeDasharray="5 4" className={seen ? 'chart-fade' : 'opacity-0'} />
-          <path d={line(maT)} fill="none" stroke="var(--primary)" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" {...drawIn(seen, 250)} />
+          <path d={line(maT)} fill="none" stroke="var(--chart-ky-nay, var(--primary))" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" {...drawIn(seen, 250)} />
           {lastMa !== null && lastMa !== undefined && maT[lastIdx] !== null && <g className={seen ? 'chart-fade' : 'opacity-0'} style={{ animationDelay: '1.2s' }}>
-            <circle cx={x(lastIdx)} cy={y(maT[lastIdx]!)} r={4.5} fill="var(--primary)" stroke="var(--surface)" strokeWidth={2} />
+            <circle cx={x(lastIdx)} cy={y(maT[lastIdx]!)} r={4.5} fill="var(--chart-ky-nay, var(--primary))" stroke="var(--surface)" strokeWidth={2} />
             <text x={x(lastIdx) - 8} y={y(maT[lastIdx]!) - 9} textAnchor="end" className="fill-ink text-[11px] font-semibold">TB 7 ngày {fmtVal(lastMa, metric)}</text>
           </g>}
           {Array.from({ length: TREND_WEEKS }, (_, w) => w * 7).filter((k) => step * 7 >= 44 || k % 14 === 0).map((k) => <text key={k} x={x(k)} y={H - 6} textAnchor="middle" className="fill-ink-3 text-[10.5px]">{dmy(data.days[from + k])}</text>)}
           {gx !== null && <g pointerEvents="none">
             <line x1={gx} x2={gx} y1={T} y2={H - B} stroke="var(--ink-2)" strokeWidth={1} />
-            {hover && maT[hover.i] !== null && <circle cx={gx} cy={y(maT[hover.i]!)} r={4} fill="var(--surface)" stroke="var(--primary)" strokeWidth={2} />}
+            {hover && maT[hover.i] !== null && <circle cx={gx} cy={y(maT[hover.i]!)} r={4} fill="var(--surface)" stroke="var(--chart-ky-nay, var(--primary))" strokeWidth={2} />}
           </g>}
           <rect x={L} y={T} width={Math.max(0, W - L - R)} height={H - T - B} fill="transparent" style={{ touchAction: 'pan-y' }}
             onPointerMove={(e) => { const r = e.currentTarget.getBoundingClientRect(); const i = Math.max(0, Math.min(N - 1, Math.floor((e.clientX - r.left) / step))); setHover({ i, y: e.clientY - r.top + T }); }} />
@@ -531,9 +531,9 @@ export function PeriodBars({ series, unit, fill = false, kind = 'bars', periodEn
     return <div className={fill ? 'flex min-h-0 min-w-0 flex-1 flex-col' : 'min-w-0'}>
       <div className={`relative ${fill ? 'min-h-16 flex-1' : 'h-16'}`}>
         <svg viewBox="0 0 240 64" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" aria-label="Cộng dồn tới từng mốc. Đường liền: kỳ này; nét đứt: kỳ trước cùng mốc">
-          <path d={`${path(cur)} L${x(end).toFixed(1)},62 L${x(0).toFixed(1)},62 Z`} fill="var(--primary)" fillOpacity=".12" />
+          <path d={`${path(cur)} L${x(end).toFixed(1)},62 L${x(0).toFixed(1)},62 Z`} fill="var(--chart-ky-nay, var(--primary))" fillOpacity=".12" />
           <path d={path(prev)} fill="none" stroke="var(--ink-3)" strokeWidth="1.4" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
-          <path d={path(cur)} fill="none" stroke="var(--primary)" strokeWidth="2.2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+          <path d={path(cur)} fill="none" stroke="var(--chart-ky-nay, var(--primary))" strokeWidth="2.2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
           {series.map((p, i) => <rect key={p.label} x={x(i) - 117 / Math.max(1, slots - 1)} y="0" width={234 / Math.max(1, slots - 1)} height="64" fill="transparent"><title>{`Tới ${lab(p.label)}: ${chartVal(cur[i], unit)} · kỳ trước ${chartVal(prev[i], unit)}`}</title></rect>)}
         </svg>
         <span className="pointer-events-none absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary" style={{ left: `${x(end) / 240 * 100}%`, top: `${y(cur[end] ?? 0) / 64 * 100}%` }} />
@@ -548,7 +548,7 @@ export function PeriodBars({ series, unit, fill = false, kind = 'bars', periodEn
     return <div className={fill ? 'flex min-h-0 min-w-0 flex-1 flex-col' : 'min-w-0'}>
       <svg viewBox="0 0 240 64" preserveAspectRatio="none" className={fill ? 'min-h-16 w-full flex-1' : 'h-16 w-full'} aria-label="Đường liền: kỳ này; nét đứt: kỳ trước cùng mốc">
         <path d={path(before)} fill="none" stroke="var(--ink-3)" strokeWidth="1.4" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
-        <path d={path(now)} fill="none" stroke="var(--primary)" strokeWidth="2.2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+        <path d={path(now)} fill="none" stroke="var(--chart-ky-nay, var(--primary))" strokeWidth="2.2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
         {series.map((p, i) => <rect key={p.label} x={x(i) - 117 / Math.max(1, n - 1)} y="0" width={234 / Math.max(1, n - 1)} height="64" fill="transparent"><title>{`${lab(p.label)}: ${chartVal(now[i], unit)} · kỳ trước ${chartVal(before[i], unit)}`}</title></rect>)}
       </svg>
       <div className="num mt-0.5 flex justify-between text-[10.5px] text-ink-3"><span>{lab(first)}</span><span className="inline-flex items-center gap-2"><span className="inline-flex items-center gap-1"><i className="inline-block h-0.5 w-3 rounded bg-primary" />kỳ này</span><span className="inline-flex items-center gap-1"><i className="inline-block w-3 border-t border-dashed border-ink-3" />kỳ trước</span></span><span className={up ? 'text-good' : 'text-bad'}>{lab(last)} {up ? '▲' : '▼'}</span></div>

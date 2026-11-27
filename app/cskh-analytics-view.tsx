@@ -75,8 +75,8 @@ function Lorenz({ points }: { points: { people: number; share: number }[] }) {
     <svg viewBox={`0 0 ${S + P * 2} ${S + P * 2}`} className="mx-auto block w-full max-w-[260px]" role="img" aria-label="Đường cong phân bổ doanh thu giữa nhân viên">
       <rect x={P} y={P} width={S} height={S} fill="none" stroke="var(--line)" />
       <line x1={x(0)} y1={y(0)} x2={x(100)} y2={y(100)} stroke="var(--ink-4)" strokeDasharray="4 4" />
-      <path d={`${d} L${x(100)},${y(0)} Z`} fill="var(--primary)" fillOpacity={0.12} />
-      <path d={d} fill="none" stroke="var(--primary)" strokeWidth={2} />
+      <path d={`${d} L${x(100)},${y(0)} Z`} fill="var(--chart-ky-nay, var(--primary))" fillOpacity={0.12} />
+      <path d={d} fill="none" stroke="var(--chart-ky-nay, var(--primary))" strokeWidth={2} />
       <text x={P} y={S + P + 16} fontSize="10" fill="var(--ink-3)">0%</text>
       <text x={S + P} y={S + P + 16} fontSize="10" fill="var(--ink-3)" textAnchor="end">100% nhân viên</text>
       <text x={P - 4} y={P + 4} fontSize="10" fill="var(--ink-3)" textAnchor="end">100%</text>

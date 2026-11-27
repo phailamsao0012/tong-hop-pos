@@ -85,7 +85,7 @@ function MonthCharts({ months, mkt }: { months: MonthRow[]; mkt: boolean }) {
             <CartesianGrid vertical={false} /><XAxis dataKey="key" tick={{ fontSize: 11 }} minTickGap={8} />
             <YAxis width={44} tick={{ fontSize: 11 }} tickFormatter={(n: number) => (n >= 1e9 ? `${+(n / 1e9).toFixed(1)}tỷ` : `${Math.round(n / 1e6)}tr`)} />
             <ChartTooltip content={<ChartTooltipContent formatter={(v) => money(typeof v === 'number' ? v : null)} />} />
-            <Bar dataKey="normal" name="Doanh số" stackId="n" fill="var(--primary)" radius={barRadius([4, 4, 0, 0])} isAnimationActive={false} />
+            <Bar dataKey="normal" name="Doanh số" stackId="n" fill="var(--chart-ky-nay, var(--primary))" radius={barRadius([4, 4, 0, 0])} isAnimationActive={false} />
             <Bar dataKey="topNet" name="Doanh số (lọt top)" stackId="n" fill="var(--warn)" radius={barRadius([4, 4, 0, 0])} isAnimationActive={false} />
           </BarChart>
         </ChartContainer>
@@ -96,13 +96,13 @@ function MonthCharts({ months, mkt }: { months: MonthRow[]; mkt: boolean }) {
         <ChartContainer config={{ rate: { label: 'Tỷ lệ chốt', color: 'var(--primary)' }, orders: { label: 'Đơn', color: 'var(--primary)' } }} className="mt-2 aspect-auto h-52 w-full">
           {mkt ? (
             <BarChart data={data} margin={{ left: 0, right: 4 }}><CartesianGrid vertical={false} /><XAxis dataKey="key" tick={{ fontSize: 11 }} minTickGap={8} /><YAxis width={40} tick={{ fontSize: 11 }} />
-              <ChartTooltip content={<ChartTooltipContent />} /><Bar dataKey="orders" name="Đơn" fill="var(--primary)" radius={barRadius([4, 4, 0, 0])} isAnimationActive={false} /></BarChart>
+              <ChartTooltip content={<ChartTooltipContent />} /><Bar dataKey="orders" name="Đơn" fill="var(--chart-ky-nay, var(--primary))" radius={barRadius([4, 4, 0, 0])} isAnimationActive={false} /></BarChart>
           ) : (
             <LineChart data={data} margin={{ left: 0, right: 8 }}><CartesianGrid vertical={false} /><XAxis dataKey="key" tick={{ fontSize: 11 }} minTickGap={8} />
               <YAxis width={36} domain={[0, 100]} tick={{ fontSize: 11 }} tickFormatter={(n: number) => `${n}%`} />
               <ReferenceLine y={RATE_THRESHOLDS.good} stroke="var(--good)" strokeDasharray="4 3" />
               <ChartTooltip content={<ChartTooltipContent formatter={(v) => (typeof v === 'number' ? `${String(v).replace('.', ',')}%` : '—')} />} />
-              <Line dataKey="rate" name="Tỷ lệ chốt" stroke="var(--primary)" strokeWidth={2} dot={{ r: 3 }} connectNulls isAnimationActive={false} /></LineChart>
+              <Line dataKey="rate" name="Tỷ lệ chốt" stroke="var(--chart-ky-nay, var(--primary))" strokeWidth={2} dot={{ r: 3 }} connectNulls isAnimationActive={false} /></LineChart>
           )}
         </ChartContainer>
       </section>

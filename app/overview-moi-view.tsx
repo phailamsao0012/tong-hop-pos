@@ -152,7 +152,7 @@ export function OverviewMoiView({ onNavigate, userName }: { onNavigate: (view: s
               <div className="om-dwrap">
                 <svg width="160" height="160" viewBox="0 0 160 160" aria-hidden="true">
                   <circle cx="80" cy="80" r="68" stroke="var(--surface-3)" />
-                  <circle cx="80" cy="80" r="68" stroke="var(--primary)" style={{ strokeDasharray: `${Math.max(0, closedShare * C - 2)} ${C}` }} />
+                  <circle cx="80" cy="80" r="68" stroke="var(--chart-ky-nay, var(--primary))" style={{ strokeDasharray: `${Math.max(0, closedShare * C - 2)} ${C}` }} />
                 </svg>
                 <div className="om-dmid"><span><b>{s.assigned ? Math.round(closedShare * 100) : 0}%</b><span className="om-mute">đã chốt</span></span></div>
               </div>

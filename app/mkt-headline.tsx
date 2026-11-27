@@ -49,6 +49,8 @@ const productName = (p: string) => p || 'Chưa ghi sản phẩm';
 const bucketLabel = (key: string, b: Analytics['bucket']) => b === 'month' ? `${key.slice(5, 7)}/${key.slice(0, 4)}` : b === 'week' ? `Tuần ${dmy(key)}` : dmy(key);
 
 /** Cột nhỏ từng ngày / tuần: xanh khi tốt hơn cột trước, đỏ khi kém hơn (invert: chi phí tăng là đỏ). Chỉ một kỳ thì so kỳ trước với kỳ này.
+ * Giao diện mới (bộ thiết kế 28/11/2026): màu cột đọc --mkt-cot-* (globals.css, chỉ khi cờ bật) → kỳ này đen, kỳ trước xám, không tô xanh / đỏ lên xuống
+ * (ô này không có mốc vượt). Cờ tắt không ai đặt các biến này nên vẫn xanh / đỏ như cũ.
  * Anh Vũ 21/10/2026: "ô chi phí doanh thu làm to mà chẳng có biểu đồ gì cả... làm chữ số vừa phải, có biểu đồ lên xuống đỏ xanh". */
 function Spark({ values, prev, invert, labels, fmt }: { values: (number | null)[]; prev: number | null; invert?: boolean; labels: string[]; fmt: (n: number) => string }) {
   const one = values.length <= 1;
@@ -62,7 +64,7 @@ function Spark({ values, prev, invert, labels, fmt }: { values: (number | null)[
       const better = v === null || before === null ? null : invert ? v <= before : v >= before;
       const h = v === null ? 0 : Math.max(1.5, v / max * 42);
       return <rect key={i} x={i * (w + gap)} y={44 - h} width={w} height={h} rx={Math.min(2, w / 2)}
-        fill={one && i === 0 ? 'var(--ink-4)' : better === null ? 'var(--ink-4)' : better ? 'var(--good)' : 'var(--bad)'} opacity={one && i === 0 ? 0.45 : 1}>
+        fill={one && i === 0 ? 'var(--mkt-cot-truoc, var(--ink-4))' : better === null ? 'var(--mkt-cot, var(--ink-4))' : better ? 'var(--mkt-cot-tot, var(--good))' : 'var(--mkt-cot-kem, var(--bad))'} opacity={one && i === 0 ? 0.45 : 1}>
         <title>{`${names[i]}: ${v === null ? '—' : fmt(v)}`}</title>
       </rect>;
     })}
@@ -78,7 +80,7 @@ function Giant({ icon: Icon, label, value, raw, format, unit, d, invert, prevTex
   return (
     <button type="button" onClick={onClick} title={note} data-ui="tile"
       className="group relative flex min-w-0 flex-col items-start gap-1.5 overflow-hidden rounded-xl border border-line bg-surface p-4 text-left transition-[box-shadow,border-color] duration-200 hover:border-primary hover:shadow-card focus-visible:outline-2 focus-visible:outline-primary">
-      <span className="flex items-center gap-1.5 text-[12.5px] font-semibold text-ink-2"><span className="grid size-6 place-items-center rounded-md" style={{ background: `color-mix(in oklab, ${tone} 14%, transparent)`, color: tone }}><Icon size={14} /></span>{label}</span>
+      <span className="flex items-center gap-1.5 text-[12.5px] font-semibold text-ink-2"><span data-ui="mkt-ic" className="grid size-6 place-items-center rounded-md" style={{ background: `color-mix(in oklab, ${tone} 14%, transparent)`, color: tone }}><Icon size={14} /></span>{label}</span>
       <span className="flex w-full flex-wrap items-baseline gap-x-2.5 gap-y-1">
         <span className="num truncate text-[1.75rem] font-bold leading-none tracking-[-.025em] text-ink" title={value}>
           {raw === null ? value : <CountUp value={raw} format={format} />}
@@ -291,12 +293,13 @@ function BreakdownTable({ rows, first, onPick, onOrders, totalCost: _totalCost, 
   </>);
 }
 
-/** Tách doanh thu MKT khi xem Tất cả: New (Sale chốt), CSKH chốt, và người bán ngoài hai bộ phận nếu có. Bấm một ô thì đổi nút đầu trang sang bộ phận đó. */
+/** Tách doanh thu MKT khi xem Tất cả: New (Sale chốt), CSKH chốt, và người bán ngoài hai bộ phận nếu có. Bấm một ô thì đổi nút đầu trang sang bộ phận đó.
+ *  Màu đọc --mkt-tach-1..3 (chỉ đặt khi cờ giao diện mới bật: đen, xám đậm, xám nhạt); cờ tắt vẫn xanh / xanh dương / xám như cũ. */
 function SplitStrip({ cur, prev, total }: { cur: Split; prev: Split; total: number }) {
   const parts = [
-    { key: 'sale' as const, label: 'Doanh thu chốt', who: 'Sale chốt', tone: 'var(--primary)' },
-    { key: 'cskh' as const, label: 'Doanh thu CSKH', who: 'CSKH chốt', tone: 'var(--t-blue)' },
-    { key: 'other' as const, label: 'Người bán khác', who: 'chưa có hậu tố SALE, CSKH', tone: 'var(--ink-4)' },
+    { key: 'sale' as const, label: 'Doanh thu chốt', who: 'Sale chốt', tone: 'var(--mkt-tach-1, var(--primary))' },
+    { key: 'cskh' as const, label: 'Doanh thu CSKH', who: 'CSKH chốt', tone: 'var(--mkt-tach-2, var(--t-blue))' },
+    { key: 'other' as const, label: 'Người bán khác', who: 'chưa có hậu tố SALE, CSKH', tone: 'var(--mkt-tach-3, var(--ink-4))' },
   ].filter((x) => x.key !== 'other' || cur.other.closed || cur.other.net);
   return (
     <div data-ui="tile-in" className="flex min-w-0 flex-col gap-2 rounded-xl border border-line bg-surface-2/60 p-3">
