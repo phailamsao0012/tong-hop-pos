@@ -31,10 +31,11 @@ import type { GroupBasis, GroupDim } from '@/lib/reports/product-groups';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import { Th,
-  ChartCard, ContextLine, Definitions, Donut, ErrorBox, EmptyState, Funnel, HoverReveal, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, Toolbar, Tooltip, heat,
+  ChartCard, ContextLine, Definitions, Donut, ErrorBox, EmptyState, FoldBlock, Funnel, HoverReveal, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, Toolbar, Tooltip, heat,
   dmy, dt, money, pct, posName, posVar, shortMoney, toast, useMotionOK, useSort, vi, type SortState,
 } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
+import { KPI_TIGHT, PageHeadMoi, WhySheet, tileGrid, type WhySpec } from './trang-moi';
 
 type SurfaceComponent = React.ComponentType<{ title: string; description?: string; children: React.ReactNode; action?: React.ReactNode }>;
 const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
@@ -230,8 +231,8 @@ const useDetail = () => {
 };
 
 // ---------- Hồ sơ khách hàng ----------
-export function CustomersView({ mode, initialQ = '', canExport = false }: { Surface?: SurfaceComponent; mode: 'profiles' | 'dormant'; initialQ?: string; canExport?: boolean }) {
-  if (mode === 'dormant') return <DormantView canExport={canExport} />;
+export function CustomersView({ mode, initialQ = '', canExport = false, uiMoi = false }: { Surface?: SurfaceComponent; mode: 'profiles' | 'dormant'; initialQ?: string; canExport?: boolean; /** Cờ THP_UI_MOI (chỉ trang Khách lâu chưa mua dùng). */ uiMoi?: boolean }) {
+  if (mode === 'dormant') return <DormantView canExport={canExport} uiMoi={uiMoi} />;
   return <ProfilesView initialQ={initialQ} />;
 }
 
@@ -387,7 +388,9 @@ function ProfilesView({ initialQ }: { initialQ: string }) {
 }
 
 // ---------- Khách lâu chưa mua ----------
-function DormantView({ canExport }: { canExport: boolean }) {
+function DormantView({ canExport, uiMoi = false }: { canExport: boolean; /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới, tắt thì y như cũ. */ uiMoi?: boolean }) {
+  // Giao diện mới: khung "Vì sao ra số này" đang mở (null = đóng).
+  const [why, setWhy] = useState<WhySpec | null>(null);
   const [posIds, setPosIds] = usePosIds();
   const [q, setQ] = useState('');
   const [group, setGroup] = useState('30-45');
@@ -417,10 +420,10 @@ function DormantView({ canExport }: { canExport: boolean }) {
   const listSort = customerSort(sort, (v) => { reset(); setSort(v); });
   const searching = loading && q.trim() !== '' && q.trim() === query;
 
-  return (
-    <div className="space-y-5">
-      <PageHeader eyebrow="Số liệu Pancake POS tại thời điểm đồng bộ" title="Khách lâu chưa mua" subtitle="Theo số ngày từ lần mua thành công gần nhất"
-        actions={<><StaleChip stale={stale} at={at} loading={loading} error={data ? error : null} onRetry={reload} />{canExport && <Button variant="outline" disabled={!data || exporting} onClick={async () => {
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  // fold: chỉ bố cục mới truyền (thu gọn thẻ); bố cục cũ không truyền nên thẻ y như trước.
+  const headActions = () => (
+        <><StaleChip stale={stale} at={at} loading={loading} error={data ? error : null} onRetry={reload} />{canExport && <Button variant="outline" disabled={!data || exporting} onClick={async () => {
           if (!data) return;
           setExporting(true);
           // Xuất toàn bộ nhóm đang chọn theo bộ lọc (tối đa 20.000 khách).
@@ -430,26 +433,15 @@ function DormantView({ canExport }: { canExport: boolean }) {
           title: 'Khách lâu chưa mua', rows: [['POS', 'SĐT', 'Tên', 'Phụ trách', 'Mua TC', 'Tổng tiền mua', 'Mua gần nhất', 'Ngày chưa mua', 'Sản phẩm hay mua', 'Ưu tiên'],
             ...rows.map((c) => [c.posName, c.phone, c.name, c.sellerName, c.successOrders, c.successNet, dt(c.lastSuccessAt), c.daysSinceSuccess, c.products[0]?.name ?? '', priority(c).label])],
         }]); } finally { setExporting(false); }
-        }}>{exporting ? 'Đang xuất…' : 'Xuất Excel toàn bộ'}</Button>}</>} />
-      {!data && !error && <SkeletonKpis count={6} className="xl:grid-cols-6" />}
-      {g && nets && (
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-6">
-          <KpiCard icon={Users} tone="green" label="Tổng khách cần chăm sóc" value={vi.format(dormantTotal)} countUp rawValue={dormantTotal} note={`${pct(g.total ? dormantTotal / g.total * 100 : null)} tổng khách đã mua`}
-            tooltip={tip('Tổng khách cần chăm sóc', [['Số khách', `${vi.format(dormantTotal)} khách`], ['Tỷ lệ trên khách đã mua', pct(g.total ? dormantTotal / g.total * 100 : null)]], data?.definitions.dormant)} />
-          {DORMANT_KEYS.map((k) => (
-            <KpiCard key={k} icon={Clock} tone={DORMANT_TONES[k]} label={GROUP_LABELS[k]} value={vi.format(g[k] ?? 0)} countUp rawValue={g[k] ?? 0}
-              note={`${pct(dormantTotal ? (g[k] ?? 0) / dormantTotal * 100 : null)} · ${shortMoney(nets[k] ?? 0)} đã mua`} onClick={() => { reset(); setGroup(k); }} active={group === k}
-              tooltip={tip(GROUP_LABELS[k], [['Số khách', `${vi.format(g[k] ?? 0)} khách`], ['Tỷ trọng nhóm chăm sóc', pct(dormantTotal ? (g[k] ?? 0) / dormantTotal * 100 : null)], ['Giá trị đã mua', money(nets[k] ?? 0)]], 'Khách có lần mua thành công gần nhất cách đây trong khoảng ngày này. Bấm để xem danh sách.')} />
-          ))}
-          <KpiCard icon={Wallet} tone="purple" label="Giá trị đã mua của nhóm" value={shortMoney(dormantNet)} note="Tổng tiền các khách này từng mua thành công"
-            tooltip={tip('Giá trị đã mua của nhóm', [['Tổng', money(dormantNet)], ...DORMANT_KEYS.map((k) => [GROUP_LABELS[k], money(nets[k] ?? 0)] as [string, string])], 'Cộng dồn doanh thu đơn thành công của mọi khách trong 4 nhóm lâu chưa mua.')} />
-        </div>
-      )}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-        <ChartCard icon={Layers} title="Phân bổ khách theo thời gian chưa mua" subtitle="Tỷ trọng khách theo nhóm ngày chưa mua lại · bấm một cung để lọc danh sách" loading={!g}>
+        }}>{exporting ? 'Đang xuất…' : 'Xuất Excel toàn bộ'}</Button>}</>
+  );
+  const donutCard = (fold?: { storageKey: string; summary?: string }) => (
+        <ChartCard collapse={fold} icon={Layers} title="Phân bổ khách theo thời gian chưa mua" subtitle="Tỷ trọng khách theo nhóm ngày chưa mua lại · bấm một cung để lọc danh sách" loading={!g}>
           {g ? <Donut centerValue={vi.format(dormantTotal)} centerRaw={dormantTotal} centerLabel="khách" slices={DORMANT_KEYS.map((k) => ({ key: k, label: GROUP_LABELS[k], value: g[k] ?? 0, color: DORMANT_COLORS[k] }))} onSelect={(s) => { reset(); setGroup(s.key); }} /> : <div className="h-44" />}
         </ChartCard>
-        <ChartCard icon={Phone} title="Khách cần liên hệ trước" subtitle={`Top khách có giá trị cao nhất trong nhóm ${GROUP_LABELS[group]}`} loading={!data}>
+  );
+  const topCard = (fold?: { storageKey: string; summary?: string }) => (
+        <ChartCard collapse={fold} icon={Phone} title="Khách cần liên hệ trước" subtitle={`Top khách có giá trị cao nhất trong nhóm ${GROUP_LABELS[group]}`} loading={!data}>
           {data ? (
             data.customers.length ? (
               <ol className="space-y-0.5">
@@ -469,8 +461,8 @@ function DormantView({ canExport }: { canExport: boolean }) {
             ) : <EmptyState text="Không có khách trong nhóm này." />
           ) : <div className="h-44" />}
         </ChartCard>
-      </div>
-      <CskhFocusBar />
+  );
+  const filterBar = () => (
       <Toolbar>
         <SearchBox value={q} onChange={setQ} onSubmit={applyNow} searching={searching} />
         <div className="-mx-1 min-w-0 max-w-full overflow-x-auto px-1 py-0.5">
@@ -485,10 +477,8 @@ function DormantView({ canExport }: { canExport: boolean }) {
         <span className="pl-2 text-sm font-semibold text-ink-2">Phụ trách</span>
         <EmployeeSelect value={sellerId} onChange={(v) => { reset(); setSellerId(v); }} employees={employees} />
       </Toolbar>
-      <PosChips posIds={posIds} onChange={(v) => { reset(); setPosIds(v); }} />
-      {error && !data && <ErrorBox error={error} onRetry={reload} />}
-      {loading && !data && <ChartCard icon={Users} title="Danh sách khách" subtitle="Đang tải…"><SkeletonTable rows={8} cols={8} /></ChartCard>}
-      {data && (
+  );
+  const listCard = (data: CustomerList) => (
         <ChartCard icon={Users} title={`Danh sách ${GROUP_LABELS[group].toLowerCase()} · ${vi.format(data.total)} khách`} subtitle={`${data.definitions.dormant} Bấm tiêu đề cột để sắp xếp.`} bodyClassName="transition-opacity duration-[var(--dur)]"
           action={<div className="flex items-center gap-2">{!viewAll && <Pager page={page} hasMore={data.hasMore} disabled={loading} onPage={setPage} />}<Button size="sm" variant={viewAll ? 'default' : 'outline'} aria-pressed={viewAll} onClick={() => { setViewAll(!viewAll); setPage(1); }} title="Tải một lượt tới 5.000 khách theo bộ lọc hiện tại">{viewAll ? 'Theo trang' : 'Xem toàn bộ'}</Button></div>}>
           {data.customers.length ? (
@@ -529,9 +519,92 @@ function DormantView({ canExport }: { canExport: boolean }) {
           ) : <EmptyState text={query ? `Không có khách nào khớp "${query}".` : 'Không có khách phù hợp bộ lọc.'} />}
           <p className="mt-3 text-xs text-ink-3">Ưu tiên: Nguy cơ cao = trên 90 ngày và đã mua ≥ 1 triệu; Cần chú ý = trên 60 ngày hoặc đã mua ≥ 2 triệu. Bấm vào khách để xem lịch sử mua.</p>
         </ChartCard>
-      )}
-      {data && <Definitions items={data.definitions} />}
+  );
+  const dialogEl = () => (
       <CustomerDialog detail={detail} loading={detailLoading} error={detailError} onClose={close} onRetry={retry} />
+  );
+  // [hết khối chung]
+  // Đầu trang, khách cần liên hệ, danh sách và hộp hồ sơ vẽ MỘT lần cho cả hai bố cục (bên trong có hàm đọc ref: tải lại, mở hồ sơ).
+  const headEl = headActions();
+  const topEl = topCard(uiMoi ? { storageKey: 'ui-moi:dormant:top', summary: `Top 5 · ${GROUP_LABELS[group]}` } : undefined);
+  const listEl = data ? listCard(data) : null;
+  const dialogNode = dialogEl();
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trên xuống: đầu trang (PageHeadMoi: tìm, nhóm ngày, sắp xếp, phụ trách; StaleChip, Excel; POS) → chọn riêng NV CSKH → một hàng 6 ô số
+  // (bấm mở "Vì sao ra số này"; ô nhóm ngày có nút xem danh sách nhóm đó) → bảng chính danh sách khách (bấm khách mở hồ sơ giữa màn như cũ)
+  // → khối phụ thu gọn: Phân bổ theo thời gian chưa mua, Khách cần liên hệ trước, Cách tính. Trang không có tỷ lệ chốt / hoàn / hủy nên không có dải "Cần xem".
+  if (uiMoi) {
+    const posLabel = !posIds.length || posIds.length >= POS.length ? 'Tất cả POS' : posIds.length <= 3 ? posIds.map(posName).join(', ') : `${vi.format(posIds.length)} POS`;
+    const scope = `Số Pancake tại lúc đồng bộ · ${posLabel} · tính từ lần mua thành công gần nhất · đang xem ${GROUP_LABELS[group]}`;
+    const k = (s: string) => `ui-moi:dormant:${s}`;
+    const groupBtn = (key: string) => (
+      <Button variant="outline" size="sm" className="self-start" onClick={() => { reset(); setGroup(key); setWhy(null); }}>Xem danh sách {GROUP_LABELS[key].toLowerCase()}</Button>
+    );
+    return (
+      <div className="min-w-0 space-y-4">
+        <PageHeadMoi title="Khách lâu chưa mua" scope={scope} hint="Theo số ngày từ lần mua thành công gần nhất" tools={filterBar()} right={headEl}
+          pos={<PosChips posIds={posIds} onChange={(v) => { reset(); setPosIds(v); }} />} />
+        <CskhFocusBar />
+        {!data && !error && <SkeletonKpis count={6} className="xl:grid-cols-6" />}
+        {g && nets && (
+          <div className={tileGrid(6)}>
+            <KpiCard icon={Users} tone="green" label="Tổng khách cần chăm sóc" className={KPI_TIGHT} value={vi.format(dormantTotal)} countUp rawValue={dormantTotal} note={`${pct(g.total ? dormantTotal / g.total * 100 : null)} tổng khách đã mua`}
+              onClick={() => setWhy({ title: 'Tổng khách cần chăm sóc', value: `${vi.format(dormantTotal)} khách`, scope, rows: [...DORMANT_KEYS.map((key) => ({ label: GROUP_LABELS[key], value: vi.format(g[key] ?? 0) })), { label: 'Tỷ lệ trên khách đã mua', value: pct(g.total ? dormantTotal / g.total * 100 : null), strong: true }], definition: data?.definitions.dormant })} />
+            {DORMANT_KEYS.map((key) => (
+              <KpiCard key={key} icon={Clock} tone={DORMANT_TONES[key]} label={GROUP_LABELS[key]} className={KPI_TIGHT} value={vi.format(g[key] ?? 0)} countUp rawValue={g[key] ?? 0}
+                note={`${pct(dormantTotal ? (g[key] ?? 0) / dormantTotal * 100 : null)} · ${shortMoney(nets[key] ?? 0)} đã mua`} active={group === key}
+                onClick={() => setWhy({ title: GROUP_LABELS[key], value: `${vi.format(g[key] ?? 0)} khách`, scope, rows: [{ label: 'Tỷ trọng nhóm chăm sóc', value: pct(dormantTotal ? (g[key] ?? 0) / dormantTotal * 100 : null) }, { label: 'Giá trị đã mua', value: money(nets[key] ?? 0) }],
+                  definition: 'Khách có lần mua thành công gần nhất cách đây trong khoảng ngày này.', more: groupBtn(key) })} />
+            ))}
+            <KpiCard icon={Wallet} tone="purple" label="Giá trị đã mua của nhóm" className={KPI_TIGHT} value={shortMoney(dormantNet)} note="Tổng tiền các khách này từng mua thành công"
+              onClick={() => setWhy({ title: 'Giá trị đã mua của nhóm', value: money(dormantNet), scope, rows: DORMANT_KEYS.map((key) => ({ label: GROUP_LABELS[key], value: money(nets[key] ?? 0) })), definition: 'Cộng dồn doanh thu đơn thành công của mọi khách trong 4 nhóm lâu chưa mua.' })} />
+          </div>
+        )}
+        {error && !data && <ErrorBox error={error} onRetry={reload} />}
+        {loading && !data && <ChartCard icon={Users} title="Danh sách khách" subtitle="Đang tải…"><SkeletonTable rows={8} cols={8} /></ChartCard>}
+        {listEl}
+        <div className="grid min-w-0 gap-3">
+          {donutCard({ storageKey: k('donut'), summary: `${vi.format(dormantTotal)} khách` })}
+          {topEl}
+          {data && <FoldBlock icon={Layers} title="Cách tính" storageKey={k('defs')}><Definitions items={data.definitions} /></FoldBlock>}
+        </div>
+        {dialogNode}
+        <WhySheet spec={why} onClose={() => setWhy(null)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <PageHeader eyebrow="Số liệu Pancake POS tại thời điểm đồng bộ" title="Khách lâu chưa mua" subtitle="Theo số ngày từ lần mua thành công gần nhất"
+        actions={headEl} />
+      {!data && !error && <SkeletonKpis count={6} className="xl:grid-cols-6" />}
+      {g && nets && (
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-6">
+          <KpiCard icon={Users} tone="green" label="Tổng khách cần chăm sóc" value={vi.format(dormantTotal)} countUp rawValue={dormantTotal} note={`${pct(g.total ? dormantTotal / g.total * 100 : null)} tổng khách đã mua`}
+            tooltip={tip('Tổng khách cần chăm sóc', [['Số khách', `${vi.format(dormantTotal)} khách`], ['Tỷ lệ trên khách đã mua', pct(g.total ? dormantTotal / g.total * 100 : null)]], data?.definitions.dormant)} />
+          {DORMANT_KEYS.map((k) => (
+            <KpiCard key={k} icon={Clock} tone={DORMANT_TONES[k]} label={GROUP_LABELS[k]} value={vi.format(g[k] ?? 0)} countUp rawValue={g[k] ?? 0}
+              note={`${pct(dormantTotal ? (g[k] ?? 0) / dormantTotal * 100 : null)} · ${shortMoney(nets[k] ?? 0)} đã mua`} onClick={() => { reset(); setGroup(k); }} active={group === k}
+              tooltip={tip(GROUP_LABELS[k], [['Số khách', `${vi.format(g[k] ?? 0)} khách`], ['Tỷ trọng nhóm chăm sóc', pct(dormantTotal ? (g[k] ?? 0) / dormantTotal * 100 : null)], ['Giá trị đã mua', money(nets[k] ?? 0)]], 'Khách có lần mua thành công gần nhất cách đây trong khoảng ngày này. Bấm để xem danh sách.')} />
+          ))}
+          <KpiCard icon={Wallet} tone="purple" label="Giá trị đã mua của nhóm" value={shortMoney(dormantNet)} note="Tổng tiền các khách này từng mua thành công"
+            tooltip={tip('Giá trị đã mua của nhóm', [['Tổng', money(dormantNet)], ...DORMANT_KEYS.map((k) => [GROUP_LABELS[k], money(nets[k] ?? 0)] as [string, string])], 'Cộng dồn doanh thu đơn thành công của mọi khách trong 4 nhóm lâu chưa mua.')} />
+        </div>
+      )}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+        {donutCard()}
+        {topEl}
+      </div>
+      <CskhFocusBar />
+      {filterBar()}
+      <PosChips posIds={posIds} onChange={(v) => { reset(); setPosIds(v); }} />
+      {error && !data && <ErrorBox error={error} onRetry={reload} />}
+      {loading && !data && <ChartCard icon={Users} title="Danh sách khách" subtitle="Đang tải…"><SkeletonTable rows={8} cols={8} /></ChartCard>}
+      {listEl}
+      {data && <Definitions items={data.definitions} />}
+      {dialogNode}
     </div>
   );
 }

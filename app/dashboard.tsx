@@ -1756,7 +1756,7 @@ export default function Dashboard({ user, initialView, demo = false, uiMoi = fal
           {!gated && view === 'batches' && <BatchesView />}
           {!gated && view === 'raw-orders' && <RawOrdersView onSyncNow={() => { void syncRecentAll(true); }} syncing={autoSyncing} />}
           {!gated && view === 'customers' && <CustomersPage key={searchQuery} initialQ={searchQuery} canExport={canExport(user)} uiMoi={uiMoi} />}
-          {!gated && view === 'dormant' && <CustomersView mode="dormant" canExport={canExport(user)} />}
+          {!gated && view === 'dormant' && <CustomersView mode="dormant" canExport={canExport(user)} uiMoi={uiMoi} />}
           {!gated && view === 'repurchase' && <RepurchaseView />}
           {!gated && view === 'monthly' && <MonthlyView onNavigate={(v) => goTo(v as View)} />}
           {!gated && view === 'pipeline' && <PipelineView uiMoi={uiMoi} />}
