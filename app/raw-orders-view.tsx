@@ -173,10 +173,61 @@ export function RawOrdersView({ onSyncNow, syncing, uiMoi = false }: { onSyncNow
   const hintEl = () => (
       <p className="text-xs text-ink-3">Nhóm theo Người lên đơn chưa khả dụng vì danh sách hiện chưa trả trường này.</p>
   );
-  const errorBox = (error: string) => (
-      <ErrorBox error={error} onRetry={() => void load()} />
+  // [hết khối chung]
+  // Đầu trang, hộp lỗi, danh sách và chi tiết đơn vẽ MỘT lần cho cả hai bố cục (bên trong có hàm đọc ref: tải lại, mở / đóng đơn).
+  // Thanh đầu trang và bảng là JSX viết thẳng trong thân component (không qua hàm gọi lúc vẽ), dùng chung cho hai bố cục:
+  // nút / dòng gọi load, open (đọc ref) nằm trong JSX trực tiếp như bản cũ nên react-compiler không báo lỗi.
+  const headEl = (
+        <><span className="num text-xs text-ink-3">Cập nhật lần cuối: {dt(lastSync, true)}</span><Button variant="outline" onClick={() => { void load(true); void loadSync(); }} disabled={loading}><RefreshCw size={14} className={loading ? 'animate-spin' : ''} />Tải lại</Button>{onSyncNow && <Button onClick={onSyncNow} disabled={syncing}><RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />{syncing ? 'Đang đồng bộ…' : 'Đồng bộ ngay'}</Button>}</>
   );
-  const detailCard = () => (
+  // Thanh chọn kỳ vẽ MỘT lần cho cả hai bố cục (đổi kỳ gọi reset, đọc ref; gọi hai chỗ thì react-compiler báo lỗi).
+  const periodEl = periodBar();
+  const errorEl = error ? (
+      <ErrorBox error={error} onRetry={() => void load()} />
+  ) : null;
+  const listEl = (
+        <ChartCard id="raw-list" icon={Database} title={`Danh sách đơn nguồn${list ? ` · trang ${list.page}` : ''}`} subtitle={list?.note}
+          action={
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-xs text-ink-3">Hiển thị</span>
+              <Select value={String(size)} items={{ '25': '25', '50': '50', '100': '100' }} onValueChange={(v) => { reset(); setSize(Number(v)); }}><SelectTrigger className="w-20" aria-label="Số dòng mỗi trang"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="25">25</SelectItem><SelectItem value="50">50</SelectItem><SelectItem value="100">100</SelectItem></SelectContent></Select>
+              <Button size="icon-sm" variant="outline" aria-label="Trang trước" disabled={page <= 1 || loading} onClick={() => setPage(page - 1)}><ChevronLeft size={14} /></Button>
+              <span className="num text-xs text-ink-2">Trang {page}</span>
+              <Button size="icon-sm" variant="outline" aria-label="Trang sau" disabled={!list?.hasMore || loading} onClick={() => setPage(page + 1)}><ChevronRight size={14} /></Button>
+            </div>
+          }>
+          {list && !list.orders.length && !loading ? <EmptyState text="Không có đơn phù hợp bộ lọc." /> : !list && loading ? <SkeletonTable rows={8} cols={8} /> : (
+            <TableWrap minWidth={960} className="transition-opacity duration-[var(--dur)]">
+              <table className="tbl" aria-busy={loading || undefined}>
+                <thead><tr><Th className="n">#</Th><Th>Mã đơn</Th><Th>POS</Th><Th>Khách</Th><Th>Thời gian tạo</Th><Th>Nhân viên bán</Th>{team === 'cskh' && <Th>Nguồn / Marketer</Th>}<Th>Xác nhận lúc</Th><Th>Trạng thái</Th><Th className="n">Tổng tiền</Th><Th>Độ đầy đủ</Th></tr></thead>
+                <tbody>
+                  {<GroupedRows rows={list?.orders ?? []} columns={team === 'cskh' ? 11 : 10} keyOf={groupBy ? o => groupBy === 'status' ? o.statusName : o.posName : undefined} summary={rows => <>{vi.format(rows.length)} đơn · {money(rows.reduce((sum, o) => sum + (o.net ?? 0), 0))}</>}>{(o, i) => {
+                    const full = !!o.sellerAssignedAt && (!!o.firstConfirmedAt || groupOf(o.statusCode) === 'new' || groupOf(o.statusCode) === 'cancelled') && !o.historyLimited && o.hasRaw;
+                    const on = detailId === o.id;
+                    return (
+                      <tr key={o.id} tabIndex={0} role="button" aria-current={on ? 'true' : undefined} aria-label={`Mở chi tiết đơn ${o.orderId}`} className={`cursor-pointer focus-visible:outline-none ${on ? '[&>td]:bg-tint-2 [&>td:first-child]:shadow-[inset_2px_0_0_var(--primary)]' : ''}`} onClick={() => void open(o.id)} onKeyDown={rowKey(o.id)}>
+                        <td className="n mut text-xs">{(page - 1) * size + i + 1}</td>
+                        <td className="num font-semibold text-ink">{o.orderId}</td>
+                        <td className="text-xs"><PosBadge posId={o.posId} size={16} className="mr-1.5" />{o.posName}</td>
+                        <td className="text-xs"><div>{o.customer || '—'}</div><div className="num text-ink-3">{o.phone ?? ''}</div></td>
+                        <td className="num text-xs font-medium text-ink-2">{dt(o.createdAt, true)}</td>
+                        <td className="text-xs">{o.sellerName ?? '—'}</td>
+                        {team === 'cskh' && <td><StatusChip tone={o.orderOrigin === 'mkt' ? 'blue' : 'green'}>{o.marketerName || 'Tự ups'}</StatusChip></td>}
+                        <td className="num text-xs font-medium text-ink-2">{o.firstConfirmedAt ? dt(o.firstConfirmedAt, true) : '—'}</td>
+                        <td><StatusChip tone={statusTone(o.statusCode)}>{o.statusName}</StatusChip></td>
+                        <td className="n">{money(o.net)}</td>
+                        <td className="text-xs">{full ? <span className="inline-flex items-center gap-1 text-good"><CheckCircle2 size={13} />Đầy đủ</span> : <span className="inline-flex items-center gap-1 text-warn"><FileWarning size={13} />{!o.hasRaw ? 'Thiếu JSON gốc' : o.historyLimited ? 'Thiếu lịch sử' : !o.sellerAssignedAt ? 'Chưa giao người bán' : 'Thiếu mốc XN'}</span>}</td>
+                      </tr>
+                    );
+                  }}</GroupedRows>}
+                </tbody>
+              </table>
+            </TableWrap>
+          )}
+        </ChartCard>
+  );
+  // Khung chi tiết đơn: JSX viết thẳng (không qua hàm gọi lúc vẽ), vì nút Thử lại gọi open (đọc ref).
+  const detailNode = panelOpen ? (
           <div id="order-detail" className="scroll-mt-16">
             <ChartCard icon={Database} title="Chi tiết đơn hàng" subtitle={detail ? `${detail.posName} · đồng bộ lúc ${dt(detail.fetchedAt, true)}` : 'Đang tải…'} loading={!detail && !detailError}
               action={<div className="flex items-center gap-1.5">{detail?.pancakeUrl && <a href={detail.pancakeUrl} target="_blank" rel="noreferrer" className="btn primary sm">Mở trên Pancake <ExternalLink size={12} /></a>}<button type="button" className="btn sm icon text-ink-3" onClick={close} title="Đóng" aria-label="Đóng chi tiết"><X size={14} /></button></div>}>
@@ -256,59 +307,7 @@ export function RawOrdersView({ onSyncNow, syncing, uiMoi = false }: { onSyncNow
               )}
             </ChartCard>
           </div>
-  );
-  // [hết khối chung]
-  // Đầu trang, hộp lỗi, danh sách và chi tiết đơn vẽ MỘT lần cho cả hai bố cục (bên trong có hàm đọc ref: tải lại, mở / đóng đơn).
-  // Thanh đầu trang và bảng là JSX viết thẳng trong thân component (không qua hàm gọi lúc vẽ), dùng chung cho hai bố cục:
-  // nút / dòng gọi load, open (đọc ref) nằm trong JSX trực tiếp như bản cũ nên react-compiler không báo lỗi.
-  const headEl = (
-        <><span className="num text-xs text-ink-3">Cập nhật lần cuối: {dt(lastSync, true)}</span><Button variant="outline" onClick={() => { void load(true); void loadSync(); }} disabled={loading}><RefreshCw size={14} className={loading ? 'animate-spin' : ''} />Tải lại</Button>{onSyncNow && <Button onClick={onSyncNow} disabled={syncing}><RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />{syncing ? 'Đang đồng bộ…' : 'Đồng bộ ngay'}</Button>}</>
-  );
-  // Thanh chọn kỳ vẽ MỘT lần cho cả hai bố cục (đổi kỳ gọi reset, đọc ref; gọi hai chỗ thì react-compiler báo lỗi).
-  const periodEl = periodBar();
-  const errorEl = error ? errorBox(error) : null;
-  const listEl = (
-        <ChartCard id="raw-list" icon={Database} title={`Danh sách đơn nguồn${list ? ` · trang ${list.page}` : ''}`} subtitle={list?.note}
-          action={
-            <div className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="text-xs text-ink-3">Hiển thị</span>
-              <Select value={String(size)} items={{ '25': '25', '50': '50', '100': '100' }} onValueChange={(v) => { reset(); setSize(Number(v)); }}><SelectTrigger className="w-20" aria-label="Số dòng mỗi trang"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="25">25</SelectItem><SelectItem value="50">50</SelectItem><SelectItem value="100">100</SelectItem></SelectContent></Select>
-              <Button size="icon-sm" variant="outline" aria-label="Trang trước" disabled={page <= 1 || loading} onClick={() => setPage(page - 1)}><ChevronLeft size={14} /></Button>
-              <span className="num text-xs text-ink-2">Trang {page}</span>
-              <Button size="icon-sm" variant="outline" aria-label="Trang sau" disabled={!list?.hasMore || loading} onClick={() => setPage(page + 1)}><ChevronRight size={14} /></Button>
-            </div>
-          }>
-          {list && !list.orders.length && !loading ? <EmptyState text="Không có đơn phù hợp bộ lọc." /> : !list && loading ? <SkeletonTable rows={8} cols={8} /> : (
-            <TableWrap minWidth={960} className="transition-opacity duration-[var(--dur)]">
-              <table className="tbl" aria-busy={loading || undefined}>
-                <thead><tr><Th className="n">#</Th><Th>Mã đơn</Th><Th>POS</Th><Th>Khách</Th><Th>Thời gian tạo</Th><Th>Nhân viên bán</Th>{team === 'cskh' && <Th>Nguồn / Marketer</Th>}<Th>Xác nhận lúc</Th><Th>Trạng thái</Th><Th className="n">Tổng tiền</Th><Th>Độ đầy đủ</Th></tr></thead>
-                <tbody>
-                  {<GroupedRows rows={list?.orders ?? []} columns={team === 'cskh' ? 11 : 10} keyOf={groupBy ? o => groupBy === 'status' ? o.statusName : o.posName : undefined} summary={rows => <>{vi.format(rows.length)} đơn · {money(rows.reduce((sum, o) => sum + (o.net ?? 0), 0))}</>}>{(o, i) => {
-                    const full = !!o.sellerAssignedAt && (!!o.firstConfirmedAt || groupOf(o.statusCode) === 'new' || groupOf(o.statusCode) === 'cancelled') && !o.historyLimited && o.hasRaw;
-                    const on = detailId === o.id;
-                    return (
-                      <tr key={o.id} tabIndex={0} role="button" aria-current={on ? 'true' : undefined} aria-label={`Mở chi tiết đơn ${o.orderId}`} className={`cursor-pointer focus-visible:outline-none ${on ? '[&>td]:bg-tint-2 [&>td:first-child]:shadow-[inset_2px_0_0_var(--primary)]' : ''}`} onClick={() => void open(o.id)} onKeyDown={rowKey(o.id)}>
-                        <td className="n mut text-xs">{(page - 1) * size + i + 1}</td>
-                        <td className="num font-semibold text-ink">{o.orderId}</td>
-                        <td className="text-xs"><PosBadge posId={o.posId} size={16} className="mr-1.5" />{o.posName}</td>
-                        <td className="text-xs"><div>{o.customer || '—'}</div><div className="num text-ink-3">{o.phone ?? ''}</div></td>
-                        <td className="num text-xs font-medium text-ink-2">{dt(o.createdAt, true)}</td>
-                        <td className="text-xs">{o.sellerName ?? '—'}</td>
-                        {team === 'cskh' && <td><StatusChip tone={o.orderOrigin === 'mkt' ? 'blue' : 'green'}>{o.marketerName || 'Tự ups'}</StatusChip></td>}
-                        <td className="num text-xs font-medium text-ink-2">{o.firstConfirmedAt ? dt(o.firstConfirmedAt, true) : '—'}</td>
-                        <td><StatusChip tone={statusTone(o.statusCode)}>{o.statusName}</StatusChip></td>
-                        <td className="n">{money(o.net)}</td>
-                        <td className="text-xs">{full ? <span className="inline-flex items-center gap-1 text-good"><CheckCircle2 size={13} />Đầy đủ</span> : <span className="inline-flex items-center gap-1 text-warn"><FileWarning size={13} />{!o.hasRaw ? 'Thiếu JSON gốc' : o.historyLimited ? 'Thiếu lịch sử' : !o.sellerAssignedAt ? 'Chưa giao người bán' : 'Thiếu mốc XN'}</span>}</td>
-                      </tr>
-                    );
-                  }}</GroupedRows>}
-                </tbody>
-              </table>
-            </TableWrap>
-          )}
-        </ChartCard>
-  );
-  const detailNode = panelOpen ? detailCard() : null;
+  ) : null;
 
   // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
   // Trên xuống: đầu trang (PageHeadMoi: chọn kỳ; Tải lại, Đồng bộ ngay) → một hàng 5 ô số (giữ ô cũ: bấm lọc danh sách, rê chuột xem cách tính;
