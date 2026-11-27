@@ -9,7 +9,7 @@ import { BarChart3, Check, CheckCircle2, Filter, Megaphone, PackageCheck, Phone,
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { MarketingTeam } from '@/lib/teams/marketing-teams';
 import { PeriodToolbar, PosChips } from './overview-view';
-import { Th, ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SortTh, StatusChip, TableWrap, Toolbar, dmy, money, pct, shortMoney, toast, useSort, vi } from './ui-kit';
+import { Th, ChartCard, Definitions, EmptyState, ErrorBox, FoldBlock, KpiCard, posName, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SortTh, StatusChip, TableWrap, Toolbar, dmy, money, pct, shortMoney, toast, useSort, vi } from './ui-kit';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import { TrendNotes } from './overview-trends';
@@ -19,6 +19,8 @@ import { useTeam, useMktTeam, setMktTeam, useBranch } from './team-store';
 import { saveXlsx } from '@/app/save-xlsx';
 import { RANK_STAGES, rankByStage, type RankStage, type RankRow } from '@/lib/reports/mkt-rank';
 import { SegmentHintNote } from './segment-hint-note';
+import { BOSS_CLOSE_RED } from '@/lib/zalo/boss-report';
+import { CanXemStrip, KPI_RED, KPI_TIGHT, PageHeadMoi, WhySheet, overClose, tileGrid, type CanXemItem, type WhySpec } from './trang-moi';
 import { MktProductsCard, MktRecentCard } from './mkt-compact-cards';
 import { MktCrossCard, type SaleTeamOption } from './mkt-cross-card';
 import { MarketerDetailSheet } from './mkt-marketer-detail';
@@ -106,7 +108,9 @@ function MarketingTeamSelect({ teams, value, onChange, label = 'Team Marketing',
 }
 
 /** onOpenRoas chỉ có khi người xem được trang Chi phí & ROAS; không có thì không hiện khối số chính (chi phí, ROAS). */
-export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: () => void; onOpenRoas?: () => void }) {
+export function MarketingView({ onManageTeams, onOpenRoas, uiMoi = false }: { onManageTeams?: () => void; onOpenRoas?: () => void; /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới, tắt thì y như cũ. */ uiMoi?: boolean }) {
+  // Giao diện mới: khung "Vì sao ra số này" đang mở (null = đóng).
+  const [why, setWhy] = useState<WhySpec | null>(null);
   const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
   const team = useTeam();
@@ -383,17 +387,15 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
     toast('Đã xuất báo cáo Marketing từ dữ liệu Pancake.');
   };
 
-  return (
-    <div className="space-y-5">
-      <PageHeader eyebrow="Chi phí QC + đơn marketer trên Pancake" title="Tổng quan Marketing"
-        subtitle="Chi phí quảng cáo lấy từ Google Sheet CPQC Daily (và chi phí nhập tay); đơn, số, doanh thu lấy từ Pancake POS."
-        badge={<StatusChip tone="green">Sheet CPQC + Pancake POS</StatusChip>}
-        actions={onManageTeams ? <button type="button" className="btn" onClick={onManageTeams}><UsersRound size={14} /> Quản lý team MKT</button> : undefined} />
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  // fold: chỉ bố cục mới truyền (thu gọn thẻ); bố cục cũ không truyền nên thẻ y như trước.
+  const periodBar = () => (
       <PeriodToolbar preset={preset} start={start} end={end}
         onPreset={setPreset}
         onStart={setStart} onEnd={setEnd}
         loading={loading} onReload={reload} onExport={exportExcel} exportDisabled={!data} />
-      <PosChips posIds={posIds} onChange={setPosIds} />
+  );
+  const saleTeamRow = () => (
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[12.5px] font-semibold text-ink-2">Team Sale</span>
         <Select value={saleTeam} items={{ __all: 'Tất cả team Sale', ...Object.fromEntries(saleTeams.map((t) => [t.id, t.name])) }} onValueChange={(v) => setSaleTeam(String(v))}>
@@ -402,15 +404,20 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
         </Select>
         {saleTeam !== '__all' && <span className="text-[11.5px] text-ink-3">Chỉ đơn do người của team này bấm xác nhận · không hiện chi phí (chi phí là của Marketing)</span>}
       </div>
-      <SegmentHintNote />
-      {onOpenRoas && <MktHeadline start={start} end={end} posIds={posIds} onOpen={onOpenRoas}
+  );
+  const headline = (/*{}*/) => (
+      onOpenRoas && <MktHeadline start={start} end={end} posIds={posIds} onOpen={onOpenRoas}
         marketerId={marketerId === '__all' ? null : marketerId} onMarketer={(id) => setMarketerId(id ?? '__all')}
         teamId={marketingTeamId === '__all' ? null : marketingTeamId} onTeam={(id) => { setMarketingTeamId(id ?? '__all'); setMarketerId('__all'); }}
-        saleTeam={saleTeam === '__all' ? null : saleTeam} onDetail={setDetailId} />}
+        saleTeam={saleTeam === '__all' ? null : saleTeam} onDetail={setDetailId} />
+  );
+  const detailSheet = () => (
       <MarketerDetailSheet marketerId={detailId} onClose={() => setDetailId(null)} posIds={posIds} page={{ start, end }} saleTeams={saleTeams} />
-      {saleTeam === '__all' && <MktTrendPanel start={start} end={end} posIds={posIds} marketerId={marketerId} teamId={marketingTeamId} />}
-      <AdvisorPanel dept="mkt" />
-      <TrendNotes depts={['mkt']} mktTeam={marketingTeamId} />
+  );
+  const trendPanel = (/*{}*/) => (
+      saleTeam === '__all' && <MktTrendPanel start={start} end={end} posIds={posIds} marketerId={marketerId} teamId={marketingTeamId} />
+  );
+  const calcBar = () => (
       <Toolbar>
         <span className="px-1 text-[12.5px] font-semibold text-ink-2">Cách tính</span>
         <MarketingTeamSelect teams={marketingTeams} onPos={onPos} value={marketingTeamId} onChange={(v) => { setMarketingTeamId(v); setMarketerId('__all'); }} />
@@ -426,6 +433,8 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
           <SelectContent><SelectItem value="__all">Tất cả sản phẩm</SelectItem>{(data?.productOptions ?? []).map((x) => <SelectItem key={x.key} value={x.key}>{x.name} · {vi.format(x.orders)} đơn</SelectItem>)}</SelectContent>
         </Select>
       </Toolbar>
+  );
+  const sourceBar = () => (
       <Toolbar>
         <span className="px-1 text-[12.5px] font-semibold text-ink-2">Nguồn đơn</span>
         <FilterSelect label="nguồn đơn" value={source} onChange={setSource} options={(data?.sourceOptions ?? []).map((v) => ({ id: v, name: v }))} />
@@ -435,19 +444,8 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
           setSource('__all'); setStage('confirmed'); setBasis('confirmed'); setRankStage('confirmed'); setOtherStages(false);
         }}>Xóa bộ lọc</button>
       </Toolbar>
-
-      {error && <ErrorBox error={error} onRetry={reload} />}
-      {loading && !data ? <SkeletonKpis count={6} /> : s ? <>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
-          <KpiCard id="mkt-orders" icon={Megaphone} tone="green" label={STAGES[stage]} value={vi.format(s.orders)} note={BASES[basis]} tooltip="Số đơn có Marketer trên Pancake, theo mốc thời gian và trạng thái đang chọn." />
-          <KpiCard icon={Phone} tone="blue" label="SĐT trên đơn" value={vi.format(s.phones)} note="SĐT duy nhất · không phải tổng lead" tooltip="Chỉ đếm số điện thoại xuất hiện trên đơn Pancake của marketer." />
-          <KpiCard id="mkt-rate" icon={CheckCircle2} tone="teal" label="Tỷ lệ xác nhận" value={pct(s.confirmationRate)} note={`${vi.format(s.confirmedOrders)} / ${vi.format(s.createdOrders)} đơn`} />
-          <KpiCard id="mkt-revenue" icon={ICON.revenue} tone="lime" label="Doanh thu theo mốc" value={shortMoney(s.net)} note={`AOV ${money(s.averageOrder)}`} />
-          <KpiCard icon={ICON.revenue} tone="blue" label="Doanh thu / SĐT" value={money(s.revenuePerPhone)} note="Trên số điện thoại có đơn theo mốc" />
-          <KpiCard icon={Truck} tone="orange" label="Đã cho ĐVVC" value={vi.format(s.shippedOrders)} note={`${pct(s.shippingRate)} trên đơn xác nhận`} />
-          <KpiCard icon={PackageCheck} tone="purple" label="Đã nhận / thu tiền" value={vi.format(s.deliveredOrders)} note={`${pct(s.deliveryRate)} trên đơn đã gửi`} />
-        </div>
-
+  );
+  const funnelCard = (s: Summary) => (
         <ChartCard icon={Target} title="Phễu đơn Marketing" subtitle="Cohort đơn có Marketer được tạo trong kỳ · trạng thái hiện tại trên Pancake">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             {[
@@ -461,7 +459,8 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
             </div>)}
           </div>
         </ChartCard>
-
+  );
+  const rankCard = (data: Report) => (
         <ChartCard icon={BarChart3} title={rankingMode === 'team' ? 'Xếp hạng team Marketing' : 'Xếp hạng marketer'} subtitle={`Chỉ số theo mốc: ${STAGES[otherStages ? stage : rankStage]} · phễu theo đơn tạo trong kỳ`}
           action={<div className="flex flex-wrap items-center gap-2">
             <fieldset data-ui="pill-group" className="flex flex-wrap rounded-lg border border-line p-0.5"><legend className="sr-only">Mốc xếp hạng</legend>
@@ -499,9 +498,107 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
               </span></td>{groupCells(r, r.marketerName, costPeople.get(r.marketerId), sheet?.byMarketer.get(r.marketerId), r.marketerId)}</tr>)}{outsideRow}</tbody>
             <tfoot><tr><td><span className="sr-only">Tổng</span></td>{!otherStages && rankStage !== 'confirmed' && <td className="n">–</td>}<td>Tổng đơn duy nhất<span className="block text-[11px] font-normal text-ink-3">{marketingTeamId === '__all' ? 'Mọi team' : marketingTeamId === '__unassigned' ? 'Chưa phân nhóm' : marketingTeams.find((t) => t.id === marketingTeamId)?.name ?? 'Team đã chọn'}</span></td>{groupCells(totalNums, 'Tổng đơn duy nhất', costApi.data?.current ? { ...costApi.data.current, id: '__total' } : null, undefined, null)}</tr></tfoot></table></TableWrap> : <EmptyState text="Không có đơn gắn Marketer trong phạm vi đang chọn." />}
         </ChartCard>
-
+  );
+  const crossCard = () => (
         <MktCrossCard start={start} end={end} posIds={posIds} saleTeams={saleTeams} mktTeams={marketingTeams.filter((t) => !onPos || t.memberIds.some((id) => onPos(id)))}
           onPick={(st, mt) => { setSaleTeam(st ?? '__all'); if (mt) { setMarketingTeamId(mt); setMarketerId('__all'); } window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
+  );
+  // [hết khối chung]
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trên xuống: đầu trang (PageHeadMoi: chọn kỳ + Excel; quản lý team, StaleChip; POS) → team Sale → nhắc lọc nhóm đơn → số chi phí đầu trang (MktHeadline)
+  // → hai thanh lọc (Cách tính, Nguồn đơn) → "Cần xem" (tỷ lệ xác nhận dưới 40%) → một hàng 7 ô số (bấm mở "Vì sao ra số này")
+  // → Phễu đơn → bảng chính Xếp hạng → khối phụ thu gọn: xu hướng theo ngày, gợi ý, xu hướng, Sale × Marketing, Cách tính;
+  // Sản phẩm và Đơn mới nhất vốn đã là thẻ thu gọn.
+  if (uiMoi) {
+    const scope = `${dmy(start)} – ${dmy(end)} · ${posIds.length <= 3 ? posIds.map(posName).join(', ') : `${vi.format(posIds.length)} POS`} · ${BASES[basis]} · ${STAGES[stage]}${saleTeam !== '__all' ? ' · chỉ đơn team Sale đang chọn xác nhận' : ''}`;
+    const k = (x: string) => `ui-moi:marketing:${x}`;
+    const need: CanXemItem[] = s && overClose(s.confirmationRate) ? [{ key: 'confirm', team: true, text: `Marketing: xác nhận ${pct(s.confirmationRate)}`,
+      onClick: () => setWhy({ title: 'Tỷ lệ xác nhận', value: pct(s.confirmationRate), tone: 'bad', scope, mark: `Đỏ khi dưới ${BOSS_CLOSE_RED}%`,
+        rows: [{ label: 'Đơn đã xác nhận', value: vi.format(s.confirmedOrders) }, { label: 'Đơn tạo', value: vi.format(s.createdOrders) }], definition: 'Đơn có Marketer tạo trong kỳ đã xác nhận ÷ đơn tạo trong kỳ.' }) }] : [];
+    return (
+      <div className="min-w-0 space-y-4">
+        <PageHeadMoi title="Tổng quan Marketing" scope={scope} hint="Chi phí quảng cáo lấy từ Google Sheet CPQC Daily (và chi phí nhập tay); đơn, số, doanh thu lấy từ Pancake POS."
+          tools={periodBar()} pos={<PosChips posIds={posIds} onChange={setPosIds} />}
+          right={<>{onManageTeams && <button type="button" className="btn" onClick={onManageTeams}><UsersRound size={14} /> Quản lý team MKT</button>}<StaleChip at={at} stale={stale} loading={loading} /></>} />
+        {saleTeamRow()}
+        <SegmentHintNote />
+        {headline()}
+        {detailSheet()}
+        {calcBar()}
+        {sourceBar()}
+        {error && <ErrorBox error={error} onRetry={reload} />}
+        {loading && !data ? <SkeletonKpis count={7} className="lg:grid-cols-7" /> : s && data ? <>
+          <CanXemStrip items={need} note={`Tỷ lệ xác nhận đơn Marketing dưới ${BOSS_CLOSE_RED}%`} />
+          <div className={tileGrid(7)}>
+            <KpiCard id="mkt-orders" icon={Megaphone} tone="green" label={STAGES[stage]} className={KPI_TIGHT} value={vi.format(s.orders)} note={BASES[basis]}
+              onClick={() => setWhy({ title: STAGES[stage], value: `${vi.format(s.orders)} đơn`, scope, definition: 'Số đơn có Marketer trên Pancake, theo mốc thời gian và trạng thái đang chọn.' })} />
+            <KpiCard icon={Phone} tone="blue" label="SĐT trên đơn" className={KPI_TIGHT} value={vi.format(s.phones)} note="SĐT duy nhất · không phải tổng lead"
+              onClick={() => setWhy({ title: 'SĐT trên đơn', value: vi.format(s.phones), scope, definition: 'Chỉ đếm số điện thoại xuất hiện trên đơn Pancake của marketer.' })} />
+            <KpiCard id="mkt-rate" icon={CheckCircle2} tone="teal" label="Tỷ lệ xác nhận" className={`${KPI_TIGHT} ${overClose(s.confirmationRate) ? KPI_RED : ''}`} value={pct(s.confirmationRate)} note={`${vi.format(s.confirmedOrders)} / ${vi.format(s.createdOrders)} đơn tạo`}
+              onClick={() => setWhy({ title: 'Tỷ lệ xác nhận', value: pct(s.confirmationRate), tone: overClose(s.confirmationRate) ? 'bad' : undefined, scope, mark: `Đỏ khi dưới ${BOSS_CLOSE_RED}%`,
+                rows: [{ label: 'Đơn đã xác nhận', value: vi.format(s.confirmedOrders) }, { label: 'Đơn tạo', value: vi.format(s.createdOrders) }], definition: 'Đơn có Marketer tạo trong kỳ đã xác nhận ÷ đơn tạo trong kỳ.' })} />
+            <KpiCard id="mkt-revenue" icon={ICON.revenue} tone="lime" label="Doanh thu theo mốc" className={KPI_TIGHT} value={shortMoney(s.net)} note={`AOV ${money(s.averageOrder)}`}
+              onClick={() => setWhy({ title: 'Doanh thu theo mốc', value: money(s.net), scope, rows: [{ label: 'Đơn', value: vi.format(s.orders) }, { label: 'AOV', value: money(s.averageOrder) }], definition: `Doanh thu đơn có Marketer theo mốc ${STAGES[stage]}.` })} />
+            <KpiCard icon={ICON.revenue} tone="blue" label="Doanh thu / SĐT" className={KPI_TIGHT} value={money(s.revenuePerPhone)} note="Trên số điện thoại có đơn theo mốc"
+              onClick={() => setWhy({ title: 'Doanh thu / SĐT', value: money(s.revenuePerPhone), scope, rows: [{ label: 'Doanh thu', value: money(s.net) }, { label: 'SĐT', value: vi.format(s.phones) }], definition: 'Doanh thu theo mốc ÷ số điện thoại có đơn theo mốc.' })} />
+            <KpiCard icon={Truck} tone="orange" label="Đã cho ĐVVC" className={KPI_TIGHT} value={vi.format(s.shippedOrders)} note={`${pct(s.shippingRate)} trên đơn xác nhận`}
+              onClick={() => setWhy({ title: 'Đã cho ĐVVC', value: vi.format(s.shippedOrders), scope, rows: [{ label: 'Đơn xác nhận', value: vi.format(s.confirmedOrders) }, { label: '% trên đơn xác nhận', value: pct(s.shippingRate) }], definition: 'Đơn đã giao cho đơn vị vận chuyển ÷ đơn xác nhận.' })} />
+            <KpiCard icon={PackageCheck} tone="purple" label="Đã nhận / thu tiền" className={KPI_TIGHT} value={vi.format(s.deliveredOrders)} note={`${pct(s.deliveryRate)} trên đơn đã gửi`}
+              onClick={() => setWhy({ title: 'Đã nhận / thu tiền', value: vi.format(s.deliveredOrders), scope, rows: [{ label: 'Đơn đã gửi', value: vi.format(s.shippedOrders) }, { label: '% trên đơn đã gửi', value: pct(s.deliveryRate) }], definition: 'Đơn đã nhận / thu tiền ÷ đơn đã gửi.' })} />
+          </div>
+          {funnelCard(s)}
+          {rankCard(data)}
+          <MktProductsCard rows={data.byProduct} totalOrders={s.orders} totalNet={s.net} />
+          <MktRecentCard rows={data.recentOrders} basis={basis} />
+          <div className="grid min-w-0 gap-3">
+            {saleTeam === '__all' && <FoldBlock icon={BarChart3} title="Xu hướng theo ngày" storageKey={k('trend-panel')}>{trendPanel()}</FoldBlock>}
+            <FoldBlock icon={Target} title="Gợi ý" storageKey={k('advisor')}><AdvisorPanel dept="mkt" /></FoldBlock>
+            <FoldBlock icon={BarChart3} title="Xu hướng" storageKey={k('trend')}><TrendNotes depts={['mkt']} mktTeam={marketingTeamId} /></FoldBlock>
+            <FoldBlock icon={UsersRound} title="Team Sale × team Marketing" storageKey={k('cross')}>{crossCard()}</FoldBlock>
+            <FoldBlock icon={Filter} title="Cách tính" storageKey={k('defs')}><Definitions items={data.definitions} /></FoldBlock>
+          </div>
+        </> : !error ? <EmptyState text="Chưa có dữ liệu Marketing từ Pancake." /> : null}
+        <WhySheet spec={why} onClose={() => setWhy(null)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <PageHeader eyebrow="Chi phí QC + đơn marketer trên Pancake" title="Tổng quan Marketing"
+        subtitle="Chi phí quảng cáo lấy từ Google Sheet CPQC Daily (và chi phí nhập tay); đơn, số, doanh thu lấy từ Pancake POS."
+        badge={<StatusChip tone="green">Sheet CPQC + Pancake POS</StatusChip>}
+        actions={onManageTeams ? <button type="button" className="btn" onClick={onManageTeams}><UsersRound size={14} /> Quản lý team MKT</button> : undefined} />
+      {periodBar()}
+      <PosChips posIds={posIds} onChange={setPosIds} />
+      {saleTeamRow()}
+      <SegmentHintNote />
+      {headline()}
+      {detailSheet()}
+      {trendPanel()}
+      <AdvisorPanel dept="mkt" />
+      <TrendNotes depts={['mkt']} mktTeam={marketingTeamId} />
+      {calcBar()}
+      {sourceBar()}
+
+      {error && <ErrorBox error={error} onRetry={reload} />}
+      {loading && !data ? <SkeletonKpis count={6} /> : s ? <>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
+          <KpiCard id="mkt-orders" icon={Megaphone} tone="green" label={STAGES[stage]} value={vi.format(s.orders)} note={BASES[basis]} tooltip="Số đơn có Marketer trên Pancake, theo mốc thời gian và trạng thái đang chọn." />
+          <KpiCard icon={Phone} tone="blue" label="SĐT trên đơn" value={vi.format(s.phones)} note="SĐT duy nhất · không phải tổng lead" tooltip="Chỉ đếm số điện thoại xuất hiện trên đơn Pancake của marketer." />
+          <KpiCard id="mkt-rate" icon={CheckCircle2} tone="teal" label="Tỷ lệ xác nhận" value={pct(s.confirmationRate)} note={`${vi.format(s.confirmedOrders)} / ${vi.format(s.createdOrders)} đơn`} />
+          <KpiCard id="mkt-revenue" icon={ICON.revenue} tone="lime" label="Doanh thu theo mốc" value={shortMoney(s.net)} note={`AOV ${money(s.averageOrder)}`} />
+          <KpiCard icon={ICON.revenue} tone="blue" label="Doanh thu / SĐT" value={money(s.revenuePerPhone)} note="Trên số điện thoại có đơn theo mốc" />
+          <KpiCard icon={Truck} tone="orange" label="Đã cho ĐVVC" value={vi.format(s.shippedOrders)} note={`${pct(s.shippingRate)} trên đơn xác nhận`} />
+          <KpiCard icon={PackageCheck} tone="purple" label="Đã nhận / thu tiền" value={vi.format(s.deliveredOrders)} note={`${pct(s.deliveryRate)} trên đơn đã gửi`} />
+        </div>
+
+        {funnelCard(s)}
+
+        {rankCard(data)}
+
+        {crossCard()}
         <MktProductsCard rows={data.byProduct} totalOrders={s.orders} totalNet={s.net} />
         <MktRecentCard rows={data.recentOrders} basis={basis} />
         <Definitions items={data.definitions} />
