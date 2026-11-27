@@ -119,7 +119,8 @@ export function KpiCard({ icon: Icon, tone = 'green', label, value, delta: d, de
   const hook = useTip(content, { delay: 120, side: 'bottom', auto: false });
   const Tag = onClick ? 'button' : 'div';
   // Cỡ chữ của số co theo bề rộng thẻ (container query, trừ 40px padding): tối đa 36px, sàn 12px; luôn cắt bằng "…" + title để không tràn viền.
-  const fit = `clamp(0.75rem, calc((100cqw - 40px) / ${Math.max(4, value.length * 0.62).toFixed(2)}), 2.25rem)`;
+  // Trần 36px đọc từ --kpi-val-max nếu có (giao diện mới đặt 27px theo bộ thiết kế ở globals.css); cờ tắt không ai đặt biến này nên vẫn 2.25rem như cũ.
+  const fit = `clamp(0.75rem, calc((100cqw - 40px) / ${Math.max(4, value.length * 0.62).toFixed(2)}), var(--kpi-val-max, 2.25rem))`;
   const canCount = countUp && rawValue !== undefined && Number.isFinite(rawValue);
   const fmt = format ?? ((n: number) => n === rawValue ? value : vi.format(Math.round(n)));
   const w = progress ? (progress.max ? Math.min(100, Math.max(0, progress.value / progress.max * 100)) : 0) : 0;
