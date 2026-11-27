@@ -304,6 +304,8 @@ export function RawOrdersView({ onSyncNow, syncing, uiMoi = false }: { onSyncNow
   // [hết khối chung]
   // Đầu trang, hộp lỗi, danh sách và chi tiết đơn vẽ MỘT lần cho cả hai bố cục (bên trong có hàm đọc ref: tải lại, mở / đóng đơn).
   const headEl = headActions();
+  // Thanh chọn kỳ vẽ MỘT lần cho cả hai bố cục (đổi kỳ gọi reset, đọc ref; gọi hai chỗ thì react-compiler báo lỗi).
+  const periodEl = periodBar();
   const errorEl = error ? errorBox(error) : null;
   const listEl = listCard();
   const detailNode = panelOpen ? detailCard() : null;
@@ -317,14 +319,15 @@ export function RawOrdersView({ onSyncNow, syncing, uiMoi = false }: { onSyncNow
     const scope = `${start ? dt(`${start}T00:00:00+07:00`) : '…'} – ${end ? dt(`${end}T00:00:00+07:00`) : '…'} · ${posLabel} · đối soát dữ liệu đơn đã đồng bộ, đơn nguồn thật, chưa tính KPI · cập nhật ${dt(lastSync, true)}`;
     return (
       <div className="min-w-0 space-y-4">
-        <PageHeadMoi title="Đơn nguồn Pancake POS" scope={scope} tools={periodBar()} right={headEl} />
+        <PageHeadMoi title="Đơn nguồn Pancake POS" scope={scope} tools={periodEl} right={headEl} />
         <div className="min-w-0 lg:[&>div]:grid-cols-5 max-lg:[&>div>:last-child]:col-span-2 [&_.note]:line-clamp-2 [&>div>*>span.mt-1]:!min-h-0">{kpiRow()}</div>
         {day && dayNote(day)}
         {searchEl()}
         {hintEl()}
         {errorEl}
         {listEl}
-        <Sheet open={panelOpen} onOpenChange={(o) => { if (!o) close(); }}>
+        {/* Đóng khung chỉ bỏ chọn đơn (không gọi close() vì close đọc ref lúc vẽ); yêu cầu chi tiết đang tải tự xong. */}
+        <Sheet open={panelOpen} onOpenChange={(o) => { if (!o) { setDetail(null); setDetailId(null); setDetailError(null); } }}>
           <SheetContent className="gap-0 overflow-y-auto p-3 sm:max-w-3xl" showCloseButton={false}>
             <SheetTitle className="sr-only">Chi tiết đơn hàng</SheetTitle>
             {detailNode}
@@ -340,7 +343,7 @@ export function RawOrdersView({ onSyncNow, syncing, uiMoi = false }: { onSyncNow
         subtitle="Đối soát dữ liệu đơn đã đồng bộ"
         actions={headEl} />
       {kpiRow()}
-      {periodBar()}
+      {periodEl}
       {day && dayNote(day)}
       {searchEl()}
       {hintEl()}
