@@ -16,8 +16,10 @@ import { useTeam } from './team-store';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import { ShippingLines } from './shipping-lines';
-import { Th, ChartCard, ErrorBox, EmptyState, Funnel, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, dmy, money, pct, posName, posVar, shortMoney, toast, vi, type SortState } from './ui-kit';
+import { Th, ChartCard, ErrorBox, EmptyState, FoldBlock, Funnel, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, dmy, money, pct, posName, posVar, shortMoney, toast, vi, type SortState } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
+import { BOSS_CANCEL_RED, BOSS_RETURN_RED, COACH_MIN_BASE } from '@/lib/zalo/boss-report';
+import { CanXemStrip, KPI_RED, KPI_TIGHT, PageHeadMoi, WhySheet, overCancel, overRet, tileGrid, type CanXemItem, type WhySpec } from './trang-moi';
 
 type Bucket = { orders: number; net: number; gross: number };
 type BucketKey = 'closed' | 'processing' | 'shipping' | 'delivered' | 'returned' | 'cancelled' | 'shipped' | 'confirmed' | 'packing' | 'waiting' | 'other' | 'unconfirmed' | 'pending';
@@ -57,7 +59,9 @@ const GROUP_META: Record<ColGroup, { label: string; cls: string }> = { orders: {
 const GROUP_OPTIONS: { value: 'all' | ColGroup; label: string }[] = [{ value: 'all', label: 'Tất cả' }, { value: 'orders', label: 'Số đơn' }, { value: 'rate', label: 'Tỷ lệ' }, { value: 'money', label: 'Tiền' }];
 const BASIS_OPTIONS: { value: 'confirmed' | 'created'; label: string; title: string }[] = [{ value: 'confirmed', label: 'Giờ chốt đơn', title: 'Theo giờ chốt đơn (như Pancake)' }, { value: 'created', label: 'Ngày tạo đơn', title: 'Theo ngày tạo đơn' }];
 
-export function PipelineView() {
+export function PipelineView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới, tắt thì y như cũ. */ uiMoi?: boolean } = {}) {
+  // Giao diện mới: khung "Vì sao ra số này" đang mở (null = đóng).
+  const [why, setWhy] = useState<WhySpec | null>(null);
   const team = useTeam();
   const { orderOrigin, marketerId } = useOrderOrigin(team);
   const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
@@ -117,11 +121,9 @@ export function PipelineView() {
   const period = `${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`;
   const kpiTip = (current: string, definition: string) => ({ period, current, definition });
 
-  return (
-    <div className="space-y-5">
-      <PageHeader eyebrow={period} title="Vận hành đơn theo nhân viên" subtitle="Chốt → xuất kho → gửi hàng → đã nhận / hoàn / hủy"
-        badge={<StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} />}
-        actions={<Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button>} />
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  // fold: chỉ bố cục mới truyền (thu gọn thẻ); bố cục cũ không truyền nên thẻ y như trước.
+  const periodBar = () => (
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset}
         onStart={setStart} onEnd={setEnd} loading={loading} onReload={update}
         extra={
@@ -139,43 +141,8 @@ export function PipelineView() {
             )}
           </>
         } />
-      <PosChips posIds={posIds} onChange={setPosIds} />
-      <OrderOriginFilter team={team} />
-      {error && !report && <ErrorBox error={error} onRetry={reload} />}
-      {!report && !error && (
-        <>
-          <SkeletonKpis count={6} className="2xl:grid-cols-6" />
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
-            <ChartCard icon={Truck} title="Hành trình đơn trong kỳ" loading><div className="h-48" /></ChartCard>
-            <ChartCard icon={PackageCheck} title="Theo POS"><SkeletonTable rows={6} cols={6} /></ChartCard>
-          </div>
-          <ChartCard icon={CheckCircle2} title="Theo nhân viên"><SkeletonTable rows={8} cols={8} /></ChartCard>
-        </>
-      )}
-      {report && T && (
-        <>
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 2xl:grid-cols-6 transition-opacity duration-[var(--dur)]" aria-busy={busy || undefined}>
-
-            <KpiCard icon={CheckCircle2} tone="green" label={basis === 'confirmed' ? 'Đơn chốt trong kỳ' : 'Đơn tạo trong kỳ đã chốt'} value={vi.format(T.closed.orders)} countUp rawValue={T.closed.orders} format={(n) => vi.format(Math.round(n))}
-              note={`Doanh số ${shortMoney(T.closed.gross)}${basis === 'created' && T.unconfirmed.orders ? ` · ${vi.format(T.unconfirmed.orders)} chưa chốt` : ''}`}
-              tooltip={kpiTip(`${vi.format(T.closed.orders)} đơn · ${money(T.closed.gross)}`, report.definitions.basis)} />
-            <KpiCard icon={Warehouse} tone="gray" label="Chưa xuất kho" value={vi.format(T.processing.orders)} countUp rawValue={T.processing.orders} format={(n) => vi.format(Math.round(n))}
-              note={`${pct(rate(T.processing.orders, T.closed.orders))} đơn chốt · ${shortMoney(T.processing.net)}`}
-              tooltip={kpiTip(`${vi.format(T.processing.orders)} đơn · ${money(T.processing.net)}`, 'Chưa xuất = đã xác nhận, đang đóng hàng, chờ chuyển hàng, chờ hàng/in.')} />
-            <KpiCard icon={ICON.shipping} tone="orange" label="Đang giao" value={vi.format(T.shipping.orders)} countUp rawValue={T.shipping.orders} format={(n) => vi.format(Math.round(n))}
-              note={`${pct(rate(T.shipping.orders, T.shipped.orders))} đơn đã xuất · ${shortMoney(T.shipping.net)}`}
-              tooltip={kpiTip(`${vi.format(T.shipping.orders)} đơn · ${money(T.shipping.net)}`, 'Đang giao = shipper đã lấy, chưa giao xong; % tính trên đơn đã xuất đi.')} />
-            <KpiCard icon={PackageCheck} tone="teal" label="Đã nhận (thành công)" value={vi.format(T.delivered.orders)} countUp rawValue={T.delivered.orders} format={(n) => vi.format(Math.round(n))}
-              note={`${pct(rate(T.delivered.orders, T.shipped.orders))} đơn đã xuất · ${shortMoney(T.delivered.net)}`}
-              tooltip={kpiTip(`${vi.format(T.delivered.orders)} đơn · ${money(T.delivered.net)}`, '% thành công = đã nhận ÷ đã xuất đi.')} />
-            <KpiCard icon={ICON.returned} tone="purple" label="Hoàn" value={vi.format(T.returned.orders)} countUp rawValue={T.returned.orders} format={(n) => vi.format(Math.round(n))}
-              note={`Tỷ lệ hoàn ${pct(rate(T.returned.orders, T.shipped.orders))} · ${shortMoney(T.returned.gross)}`}
-              tooltip={kpiTip(`${vi.format(T.returned.orders)} đơn · ${money(T.returned.gross)}`, 'Tỷ lệ hoàn = hoàn ÷ đã xuất đi; tiền hoàn tính theo doanh số (tổng giá sản phẩm).')} />
-            <KpiCard icon={ICON.cancelled} tone="red" label="Hủy sau chốt" value={vi.format(T.cancelled.orders)} countUp rawValue={T.cancelled.orders} format={(n) => vi.format(Math.round(n))}
-              note={`${pct(rate(T.cancelled.orders, T.closed.orders))} đơn chốt`}
-              tooltip={kpiTip(`${vi.format(T.cancelled.orders)} đơn`, 'Hủy = đơn bị hủy sau khi đã chốt; % tính trên đơn chốt.')} />
-          </div>
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+  );
+  const flowCard = (report: Report, T: Buckets) => (
             <ChartCard icon={Truck} title="Hành trình đơn trong kỳ" subtitle={report.definitions.flow}>
               <Funnel steps={[
                 { label: 'Đơn chốt', value: T.closed.orders, note: shortMoney(T.closed.net) },
@@ -192,7 +159,9 @@ export function PipelineView() {
                 ))}
               </div>
             </ChartCard>
-            <ChartCard icon={PackageCheck} title="Theo POS" subtitle="Cùng bộ lọc kỳ và bộ phận (bộ phận áp cho bảng nhân viên)">
+  );
+  const posCard = (report: Report, fold?: { storageKey: string; summary?: string }) => (
+            <ChartCard collapse={fold} icon={PackageCheck} title="Theo POS" subtitle="Cùng bộ lọc kỳ và bộ phận (bộ phận áp cho bảng nhân viên)">
               <TableWrap minWidth={640}>
                 <table className="tbl">
                   <thead><tr><Th>POS</Th><Th className="n">Chốt</Th><Th className="n">Xuất đi</Th><Th className="n">Đã nhận</Th><Th className="n">% TC</Th><Th className="n">Hoàn</Th><Th className="n">% hoàn</Th><Th className="n">Hủy</Th><Th className="n">DT thành công</Th></tr></thead>
@@ -217,8 +186,8 @@ export function PipelineView() {
                 </table>
               </TableWrap>
             </ChartCard>
-          </div>
-          <ShippingLines start={start} end={end} posIds={posIds} basis={basis} team={team} />
+  );
+  const staffCard = (report: Report) => (
           <ChartCard icon={CheckCircle2} title={`Theo nhân viên · ${rows.length} người`} subtitle={`${report.definitions.shipped} ${report.definitions.rates}`}
             action={
               <div className="flex flex-wrap items-center gap-2">
@@ -260,6 +229,122 @@ export function PipelineView() {
             ) : <EmptyState text="Không có nhân viên có đơn trong kỳ với bộ lọc này." />}
             <p className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-ink-3">{report.definitions.basis} <StatusChip tone="red">Đỏ: tỷ lệ hoàn trên 10%</StatusChip> <StatusChip tone="green">Xanh: thành công từ 85%</StatusChip></p>
           </ChartCard>
+  );
+  // [hết khối chung]
+  // Thanh chọn kỳ dùng hàm update (đọc manualRef): dựng một lần, cả hai bố cục dùng chung phần tử này (luật react-compiler).
+  const periodEl = periodBar();
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trên xuống: đầu trang (PageHeadMoi: chọn kỳ kèm cách tính, bộ phận; StaleChip, Excel; POS) → lọc nguồn đơn
+  // → "Cần xem" (hoàn ÷ đã xuất từ 7%, hủy sau chốt ÷ đơn chốt từ 5%: cả trang, từng POS, từng người từ 20 đơn) → một hàng 6 ô số
+  // (bấm mở "Vì sao ra số này") → Hành trình đơn → bảng chính Theo nhân viên → khối phụ thu gọn: Theo POS, Theo đơn vị vận chuyển.
+  if (uiMoi) {
+    const scope = `${period} · ${posIds.length <= 3 ? posIds.map(posName).join(', ') : `${vi.format(posIds.length)} POS`} · ${basis === 'confirmed' ? 'theo giờ chốt' : 'theo ngày tạo'} · chốt → xuất kho → gửi hàng → đã nhận / hoàn / hủy`;
+    const head = <PageHeadMoi title="Vận hành đơn theo nhân viên" scope={scope} hint="Chốt → xuất kho → gửi hàng → đã nhận / hoàn / hủy" tools={periodEl}
+      right={<><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} /><Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button></>}
+      pos={<PosChips posIds={posIds} onChange={setPosIds} />} />;
+    if (!report || !T) return <div className="min-w-0 space-y-4">{head}<OrderOriginFilter team={team} />{error ? <ErrorBox error={error} onRetry={reload} /> : <SkeletonKpis count={6} className="sm:grid-cols-3 xl:grid-cols-6" />}</div>;
+    const retOf = (b: Buckets) => rate(b.returned.orders, b.shipped.orders), canOf = (b: Buckets) => rate(b.cancelled.orders, b.closed.orders);
+    const whyB = (who: string, b: Buckets, kind: 'ret' | 'cancel'): WhySpec => {
+      const v = kind === 'ret' ? retOf(b) : canOf(b), over = kind === 'ret' ? overRet(v) : overCancel(v);
+      return {
+        title: `${kind === 'ret' ? 'Tỷ lệ hoàn' : 'Hủy sau chốt'} · ${who}`, value: pct(v), tone: over ? 'bad' : undefined, scope, mark: kind === 'ret' ? `Đỏ từ ${BOSS_RETURN_RED}%` : `Đỏ từ ${BOSS_CANCEL_RED}%`,
+        rows: kind === 'ret'
+          ? [{ label: 'Đơn hoàn', value: vi.format(b.returned.orders) }, { label: 'Đơn đã xuất đi', value: vi.format(b.shipped.orders) }, { label: '= Tỷ lệ hoàn', value: pct(v), strong: true, tone: over ? 'bad' : undefined }]
+          : [{ label: 'Đơn hủy sau chốt', value: vi.format(b.cancelled.orders) }, { label: 'Đơn chốt', value: vi.format(b.closed.orders) }, { label: '= Hủy sau chốt', value: pct(v), strong: true, tone: over ? 'bad' : undefined }],
+        definition: kind === 'ret' ? 'Tỷ lệ hoàn = hoàn ÷ đã xuất đi.' : 'Hủy = đơn bị hủy sau khi đã chốt; % tính trên đơn chốt.',
+      };
+    };
+    const need: CanXemItem[] = [];
+    const scan = (key: string, who: string, b: Buckets, team: boolean) => {
+      const h = retOf(b), x = canOf(b);
+      if (overRet(h) && (team || b.shipped.orders >= COACH_MIN_BASE)) need.push({ key: `r-${key}`, team, text: `${who}: hoàn ${pct(h)}`, gap: (h ?? 0) - BOSS_RETURN_RED, onClick: () => setWhy(whyB(who, b, 'ret')) });
+      if (overCancel(x) && (team || b.closed.orders >= COACH_MIN_BASE)) need.push({ key: `c-${key}`, team, text: `${who}: hủy sau chốt ${pct(x)}`, gap: (x ?? 0) - BOSS_CANCEL_RED, onClick: () => setWhy(whyB(who, b, 'cancel')) });
+    };
+    scan('all', 'Cả trang', T, true);
+    if (report.byPos.length > 1) for (const p of report.byPos) scan(p.posId, p.posName, p.buckets, false);
+    for (const e of rows) scan(e.sellerId || 'none', e.name, e.buckets, false);
+    const tile = (label: string, b: { orders: number; net: number }, definition: string, extra: { label: string; value: string }[] = []) => () => setWhy({ title: label, value: `${vi.format(b.orders)} đơn`, scope, rows: [{ label: 'Tiền', value: money(b.net) }, ...extra], definition });
+    const k = (s: string) => `ui-moi:pipeline:${s}`;
+    return (
+      <div className="min-w-0 space-y-4">
+        {head}
+        <OrderOriginFilter team={team} />
+        <CanXemStrip items={need} note={`Hoàn ÷ đã xuất từ ${BOSS_RETURN_RED}%, hủy sau chốt từ ${BOSS_CANCEL_RED}% · POS / người từ ${COACH_MIN_BASE} đơn`} />
+        <div className={tileGrid(6)} aria-busy={busy || undefined}>
+          <KpiCard icon={CheckCircle2} tone="green" label={basis === 'confirmed' ? 'Đơn chốt trong kỳ' : 'Đơn tạo trong kỳ đã chốt'} className={KPI_TIGHT} value={vi.format(T.closed.orders)}
+            note={`Doanh số ${shortMoney(T.closed.gross)}${basis === 'created' && T.unconfirmed.orders ? ` · ${vi.format(T.unconfirmed.orders)} chưa chốt` : ''}`}
+            onClick={tile('Đơn chốt', T.closed, report.definitions.basis, [{ label: 'Doanh số', value: money(T.closed.gross) }])} />
+          <KpiCard icon={Warehouse} tone="gray" label="Chưa xuất kho" className={KPI_TIGHT} value={vi.format(T.processing.orders)} note={`${pct(rate(T.processing.orders, T.closed.orders))} đơn chốt · ${shortMoney(T.processing.net)}`}
+            onClick={tile('Chưa xuất kho', T.processing, 'Chưa xuất = đã xác nhận, đang đóng hàng, chờ chuyển hàng, chờ hàng/in.', [{ label: '% đơn chốt', value: pct(rate(T.processing.orders, T.closed.orders)) }])} />
+          <KpiCard icon={ICON.shipping} tone="orange" label="Đang giao" className={KPI_TIGHT} value={vi.format(T.shipping.orders)} note={`${pct(rate(T.shipping.orders, T.shipped.orders))} đơn đã xuất · ${shortMoney(T.shipping.net)}`}
+            onClick={tile('Đang giao', T.shipping, 'Đang giao = shipper đã lấy, chưa giao xong; % tính trên đơn đã xuất đi.', [{ label: 'Đơn đã xuất đi', value: vi.format(T.shipped.orders) }])} />
+          <KpiCard icon={PackageCheck} tone="teal" label="Đã nhận (thành công)" className={KPI_TIGHT} value={vi.format(T.delivered.orders)} note={`${pct(rate(T.delivered.orders, T.shipped.orders))} đơn đã xuất · ${shortMoney(T.delivered.net)}`}
+            onClick={tile('Đã nhận', T.delivered, '% thành công = đã nhận ÷ đã xuất đi.', [{ label: 'Đơn đã xuất đi', value: vi.format(T.shipped.orders) }, { label: '% thành công', value: pct(rate(T.delivered.orders, T.shipped.orders)) }])} />
+          <KpiCard icon={ICON.returned} tone="purple" label="Hoàn" className={`${KPI_TIGHT} ${overRet(retOf(T)) ? KPI_RED : ''}`} value={vi.format(T.returned.orders)} note={`Tỷ lệ hoàn ${pct(retOf(T))} · ${shortMoney(T.returned.gross)}`}
+            onClick={() => setWhy(whyB('Cả trang', T, 'ret'))} />
+          <KpiCard icon={ICON.cancelled} tone="red" label="Hủy sau chốt" className={`${KPI_TIGHT} ${overCancel(canOf(T)) ? KPI_RED : ''}`} value={vi.format(T.cancelled.orders)} note={`${pct(canOf(T))} đơn chốt`}
+            onClick={() => setWhy(whyB('Cả trang', T, 'cancel'))} />
+        </div>
+        {flowCard(report, T)}
+        {staffCard(report)}
+        <div className="grid min-w-0 gap-3">
+          {posCard(report, { storageKey: k('pos'), summary: `${vi.format(report.byPos.length)} POS` })}
+          <FoldBlock icon={Truck} title="Vận đơn theo dòng sản phẩm" storageKey={k('lines')}><ShippingLines start={start} end={end} posIds={posIds} basis={basis} team={team} /></FoldBlock>
+        </div>
+        <WhySheet spec={why} onClose={() => setWhy(null)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <PageHeader eyebrow={period} title="Vận hành đơn theo nhân viên" subtitle="Chốt → xuất kho → gửi hàng → đã nhận / hoàn / hủy"
+        badge={<StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} />}
+        actions={<Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button>} />
+      {periodEl}
+      <PosChips posIds={posIds} onChange={setPosIds} />
+      <OrderOriginFilter team={team} />
+      {error && !report && <ErrorBox error={error} onRetry={reload} />}
+      {!report && !error && (
+        <>
+          <SkeletonKpis count={6} className="2xl:grid-cols-6" />
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+            <ChartCard icon={Truck} title="Hành trình đơn trong kỳ" loading><div className="h-48" /></ChartCard>
+            <ChartCard icon={PackageCheck} title="Theo POS"><SkeletonTable rows={6} cols={6} /></ChartCard>
+          </div>
+          <ChartCard icon={CheckCircle2} title="Theo nhân viên"><SkeletonTable rows={8} cols={8} /></ChartCard>
+        </>
+      )}
+      {report && T && (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 2xl:grid-cols-6 transition-opacity duration-[var(--dur)]" aria-busy={busy || undefined}>
+
+            <KpiCard icon={CheckCircle2} tone="green" label={basis === 'confirmed' ? 'Đơn chốt trong kỳ' : 'Đơn tạo trong kỳ đã chốt'} value={vi.format(T.closed.orders)} countUp rawValue={T.closed.orders} format={(n) => vi.format(Math.round(n))}
+              note={`Doanh số ${shortMoney(T.closed.gross)}${basis === 'created' && T.unconfirmed.orders ? ` · ${vi.format(T.unconfirmed.orders)} chưa chốt` : ''}`}
+              tooltip={kpiTip(`${vi.format(T.closed.orders)} đơn · ${money(T.closed.gross)}`, report.definitions.basis)} />
+            <KpiCard icon={Warehouse} tone="gray" label="Chưa xuất kho" value={vi.format(T.processing.orders)} countUp rawValue={T.processing.orders} format={(n) => vi.format(Math.round(n))}
+              note={`${pct(rate(T.processing.orders, T.closed.orders))} đơn chốt · ${shortMoney(T.processing.net)}`}
+              tooltip={kpiTip(`${vi.format(T.processing.orders)} đơn · ${money(T.processing.net)}`, 'Chưa xuất = đã xác nhận, đang đóng hàng, chờ chuyển hàng, chờ hàng/in.')} />
+            <KpiCard icon={ICON.shipping} tone="orange" label="Đang giao" value={vi.format(T.shipping.orders)} countUp rawValue={T.shipping.orders} format={(n) => vi.format(Math.round(n))}
+              note={`${pct(rate(T.shipping.orders, T.shipped.orders))} đơn đã xuất · ${shortMoney(T.shipping.net)}`}
+              tooltip={kpiTip(`${vi.format(T.shipping.orders)} đơn · ${money(T.shipping.net)}`, 'Đang giao = shipper đã lấy, chưa giao xong; % tính trên đơn đã xuất đi.')} />
+            <KpiCard icon={PackageCheck} tone="teal" label="Đã nhận (thành công)" value={vi.format(T.delivered.orders)} countUp rawValue={T.delivered.orders} format={(n) => vi.format(Math.round(n))}
+              note={`${pct(rate(T.delivered.orders, T.shipped.orders))} đơn đã xuất · ${shortMoney(T.delivered.net)}`}
+              tooltip={kpiTip(`${vi.format(T.delivered.orders)} đơn · ${money(T.delivered.net)}`, '% thành công = đã nhận ÷ đã xuất đi.')} />
+            <KpiCard icon={ICON.returned} tone="purple" label="Hoàn" value={vi.format(T.returned.orders)} countUp rawValue={T.returned.orders} format={(n) => vi.format(Math.round(n))}
+              note={`Tỷ lệ hoàn ${pct(rate(T.returned.orders, T.shipped.orders))} · ${shortMoney(T.returned.gross)}`}
+              tooltip={kpiTip(`${vi.format(T.returned.orders)} đơn · ${money(T.returned.gross)}`, 'Tỷ lệ hoàn = hoàn ÷ đã xuất đi; tiền hoàn tính theo doanh số (tổng giá sản phẩm).')} />
+            <KpiCard icon={ICON.cancelled} tone="red" label="Hủy sau chốt" value={vi.format(T.cancelled.orders)} countUp rawValue={T.cancelled.orders} format={(n) => vi.format(Math.round(n))}
+              note={`${pct(rate(T.cancelled.orders, T.closed.orders))} đơn chốt`}
+              tooltip={kpiTip(`${vi.format(T.cancelled.orders)} đơn`, 'Hủy = đơn bị hủy sau khi đã chốt; % tính trên đơn chốt.')} />
+          </div>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+            {flowCard(report, T)}
+            {posCard(report)}
+          </div>
+          <ShippingLines start={start} end={end} posIds={posIds} basis={basis} team={team} />
+          {staffCard(report)}
         </>
       )}
     </div>

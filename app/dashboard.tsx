@@ -1759,7 +1759,7 @@ export default function Dashboard({ user, initialView, demo = false, uiMoi = fal
           {!gated && view === 'dormant' && <CustomersView mode="dormant" canExport={canExport(user)} />}
           {!gated && view === 'repurchase' && <RepurchaseView />}
           {!gated && view === 'monthly' && <MonthlyView onNavigate={(v) => goTo(v as View)} />}
-          {!gated && view === 'pipeline' && <PipelineView />}
+          {!gated && view === 'pipeline' && <PipelineView uiMoi={uiMoi} />}
           {!gated && view === 'van-don' && <VanDonView />}
           {!gated && view === 'calls' && <CallsView canExport={canExport(user)} uiMoi={uiMoi} />}
           {!gated && view === 'origin' && <OriginView uiMoi={uiMoi} />}
