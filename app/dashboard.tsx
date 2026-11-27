@@ -152,6 +152,7 @@ import { MetricChangesCard, MetricSettingsButton } from './metric-settings';
 import { SettingsHub, SettingsSectionHeader, useSettingsPills, type SettingsSection } from './settings-hub';
 import { savedSettingsSection, useStayOnReload } from './stay-on-reload';
 import { IdleLock, Watermark } from './idle-lock';
+import { idleLockPaused } from '@/lib/auth/idle-pause';
 const TeamOverviewView = lazy(() => import('./team-overview-view').then((m) => ({ default: m.TeamOverviewView })));
 const OriginView = lazy(() => import('./origin-view').then((m) => ({ default: m.OriginView })));
 const CareView = lazy(() => import('./care-view').then((m) => ({ default: m.CareView })));
@@ -1554,7 +1555,8 @@ export default function Dashboard({ user, initialView, demo = false, uiMoi = fal
           onSelect={(id, deptKey) => goTo(id as View, deptKey)} counts={navCounts} />}
         <Spotlight />
         <StatusPainter />
-        <IdleLock paused={presenting} owner={user.role === 'owner'} onLogout={async () => { await clearSnapshots(); await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/login'; }} />
+        {/* Bản thử (giao diện mới / demo / bản chụp chỉ xem): chủ hệ thống không bị tự khoá (lib/auth/idle-pause.ts); người khác và web thật như cũ. */}
+        <IdleLock paused={idleLockPaused({ presenting, owner: user.role === 'owner', uiMoi, demo, snapshotAt })} owner={user.role === 'owner'} onLogout={async () => { await clearSnapshots(); await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/login'; }} />
         {user.role !== 'owner' && <Watermark text={`${user.displayName} · ${user.email} · ${today()}`} />}
         {/* Màn 1280–1440 (có thanh bên): tên web chỉ hiện từ 1700px, chữ "Trình chiếu" từ 2xl, để thanh trên không tràn (QA 08/10). */}
         {!presenting && <header className="topbar">
