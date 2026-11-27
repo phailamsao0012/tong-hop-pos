@@ -1761,7 +1761,7 @@ export default function Dashboard({ user, initialView, demo = false, uiMoi = fal
           {!gated && view === 'monthly' && <MonthlyView onNavigate={(v) => goTo(v as View)} />}
           {!gated && view === 'pipeline' && <PipelineView />}
           {!gated && view === 'van-don' && <VanDonView />}
-          {!gated && view === 'calls' && <CallsView canExport={canExport(user)} />}
+          {!gated && view === 'calls' && <CallsView canExport={canExport(user)} uiMoi={uiMoi} />}
           {!gated && view === 'origin' && <OriginView uiMoi={uiMoi} />}
           {!gated && view === 'cskh-overview' && <TeamOverviewView key="cskh" team="cskh" kpi={canView(user, 'cskh-kpi')} uiMoi={uiMoi} onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
           {!gated && view === 'sale-overview' && <TeamOverviewView key="sale" team="sale" uiMoi={uiMoi} onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}

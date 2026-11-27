@@ -24,10 +24,11 @@ import { useTeam } from './team-store';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import { Th,
-  BackfillNotice, ChartCard, Definitions, ErrorBox, EmptyState, HoverReveal, KpiCard, PageHeader, ProgressBar, SkeletonKpis, SkeletonTable, SortTh, Sparkline, StatusChip, TableWrap,
+  BackfillNotice, ChartCard, Definitions, ErrorBox, EmptyState, FoldBlock, HoverReveal, KpiCard, posName, PageHeader, ProgressBar, SkeletonKpis, SkeletonTable, SortTh, Sparkline, StatusChip, TableWrap,
   dmy, dt, posVar, short, timeOnly, toast, useMotionOK, vi, type SortState, barRadius,
 } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
+import { DuoSpark, KPI_TIGHT, PageHeadMoi, WhySheet, tileGrid, type WhySpec } from './trang-moi';
 
 type DayStat = { notes: number; customers: number; orders: number; net: number };
 type Staff = { authorId: string; name: string; department: string | null; assigned: number; notes: number; customers: number; orders: number; net: number; activeDays: number; byDay: Record<string, DayStat> };
@@ -43,7 +44,9 @@ const rowKeys = (fn: () => void) => (e: KeyboardEvent<HTMLElement>) => {
   if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); }
 };
 
-export function CallsView({ canExport = false }: { canExport?: boolean }) {
+export function CallsView({ canExport = false, uiMoi = false }: { canExport?: boolean; /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới, tắt thì y như cũ. */ uiMoi?: boolean }) {
+  // Giao diện mới: khung "Vì sao ra số này" đang mở (null = đóng).
+  const [why, setWhy] = useState<WhySpec | null>(null);
   const team = useTeam();
   const motionOn = useMotionOK();
   const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
@@ -140,11 +143,12 @@ export function CallsView({ canExport = false }: { canExport?: boolean }) {
     saveXlsx(XLSX, wb, `lich-su-goi_${history.author.replace(/\s+/g, '-')}_${history.period.start}_${history.period.end}.xlsx`);
   };
 
-  return (
-    <div className="space-y-5">
-      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title="Cuộc gọi CSKH" subtitle="Mỗi ghi chú trên hồ sơ khách Pancake = một cuộc gọi"
-        actions={<><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} />{canExport && <Button variant="outline" onClick={exportStaff} disabled={!report}><FileDown size={14} />Xuất Excel bảng nhân viên</Button>}</>} />
-      <CskhFocusBar />
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  // fold: chỉ bố cục mới truyền (thu gọn thẻ); bố cục cũ không truyền nên thẻ y như trước.
+  const headActions = () => (
+        <><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} />{canExport && <Button variant="outline" onClick={exportStaff} disabled={!report}><FileDown size={14} />Xuất Excel bảng nhân viên</Button>}</>
+  );
+  const periodBar = () => (
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset}
         onStart={setStart} onEnd={setEnd} loading={loading} onReload={reload}
         extra={
@@ -170,29 +174,17 @@ export function CallsView({ canExport = false }: { canExport?: boolean }) {
             )}
           </>
         } />
-      <PosChips posIds={posIds} onChange={setPosIds} />
-      {error && !report && <ErrorBox error={error} onRetry={reload} />}
-      {!report && !error && (
-        <>
-          <SkeletonKpis count={5} className="xl:grid-cols-5" />
-          <ChartCard icon={Users} title="Theo nhân viên" subtitle="Đang tải…"><SkeletonTable rows={6} cols={8} /></ChartCard>
-        </>
-      )}
-      {report && (
-        <>
-          <div className="grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-4" aria-busy={loading}>
-            <KpiCard icon={ICON.calls} tone="green" label="Cuộc gọi (ghi chú)" value={vi.format(totals.notes)} countUp rawValue={totals.notes} note={`${rows.length} nhân viên · ${days.length} ngày`}
-              tooltip={{ period: periodLabel, current: `${vi.format(totals.notes)} ghi chú`, definition: report.definitions.call }} />
-            <KpiCard icon={Users} tone="teal" label="Số khách đã gọi" value={vi.format(totals.customers)} countUp rawValue={totals.customers} note={`TB ${vi.format(avgCustomers)} khách/người/ngày`}
-              tooltip={{ period: periodLabel, current: `${vi.format(totals.customers)} khách`, definition: 'Số khách khác nhau có ít nhất một ghi chú trong ngày; một khách được gọi nhiều lần trong ngày chỉ tính một.' }} />
-            <KpiCard icon={ICON.calls} tone="blue" label="Cuộc gọi/người/ngày" value={vi.format(avgCalls)} countUp rawValue={avgCalls} note={threshold ? `Đang lọc dưới ${threshold}/ngày` : 'Trung bình toàn nhóm'}
-              tooltip={{ period: periodLabel, current: `${vi.format(avgCalls)} cuộc/người/ngày`, definition: 'Tổng ghi chú ÷ số nhân viên đang hiện trong bảng ÷ số ngày trong kỳ.' }} />
-            <KpiCard icon={Database} tone="gray" label="Dữ liệu ghi chú đã gom" value={vi.format(report.coverage.notes)} countUp rawValue={report.coverage.notes} note={`${vi.format(report.coverage.customers)} khách · cập nhật ${dt(report.coverage.lastFetch, true)}`}
-              tooltip={{ current: `${vi.format(report.coverage.notes)} ghi chú · ${vi.format(report.coverage.customers)} khách`, definition: report.definitions.coverage }} />
-          </div>
+  );
+  const backfillNote = (report: Report) => (
           <BackfillNotice backfill={report.coverage.backfill} />
-          {!report.coverage.notes && <p className="notice warn"><span>Chưa có ghi chú nào được đồng bộ. Hệ thống đang lấy danh sách khách hàng từ Pancake ở nền (vài giờ cho toàn bộ); số liệu sẽ tự xuất hiện.</span></p>}
-          {team !== 'all' && (report.coverage.unknownAuthorNotes ?? 0) > 0 && <p className="notice warn"><span>Trong kỳ có <strong className="num">{vi.format(report.coverage.unknownAuthorNotes ?? 0)}</strong> ghi chú của <span className="num">{report.coverage.unknownAuthors}</span> người viết không khớp nhân viên nào trong danh sách Pancake, nên không hiện khi lọc riêng Sale/CSKH. Chuyển bộ lọc sang "Tất cả" để thấy đủ; nếu người đó là nhân viên thật, hãy đặt bộ phận cho tài khoản trong Pancake.</span></p>}
+  );
+  const emptyNote = (/*{}*/report: Report) => (
+          !report.coverage.notes && <p className="notice warn"><span>Chưa có ghi chú nào được đồng bộ. Hệ thống đang lấy danh sách khách hàng từ Pancake ở nền (vài giờ cho toàn bộ); số liệu sẽ tự xuất hiện.</span></p>
+  );
+  const unknownNote = (/*{}*/report: Report) => (
+          team !== 'all' && (report.coverage.unknownAuthorNotes ?? 0) > 0 && <p className="notice warn"><span>Trong kỳ có <strong className="num">{vi.format(report.coverage.unknownAuthorNotes ?? 0)}</strong> ghi chú của <span className="num">{report.coverage.unknownAuthors}</span> người viết không khớp nhân viên nào trong danh sách Pancake, nên không hiện khi lọc riêng Sale/CSKH. Chuyển bộ lọc sang "Tất cả" để thấy đủ; nếu người đó là nhân viên thật, hãy đặt bộ phận cho tài khoản trong Pancake.</span></p>
+  );
+  const dailyCard = () => (
           <ChartCard icon={PhoneCall} title="Theo ngày" subtitle={`${metric === 'notes' ? 'Số ghi chú' : 'Số khách đã gọi'} của nhóm đang lọc, theo ngày`}>
             {dailyTotals.length ? (
               <ChartContainer className="h-56 w-full aspect-auto" config={{ v: { label: metric === 'notes' ? 'Cuộc gọi' : 'Khách', color: 'var(--primary)' } }}>
@@ -206,6 +198,8 @@ export function CallsView({ canExport = false }: { canExport?: boolean }) {
               </ChartContainer>
             ) : <EmptyState text="Không có ngày nào trong kỳ." />}
           </ChartCard>
+  );
+  const staffCard = (report: Report) => (
           <ChartCard icon={Users} title={`Theo nhân viên · ${rows.length} người${threshold ? ` dưới ${threshold} ${metric === 'notes' ? 'cuộc' : 'khách'}/ngày` : ''}`}
             subtitle="Bấm vào một dòng để xem lịch sử từng cuộc gọi và xuất Excel · bấm tiêu đề cột để sắp xếp"
             info={`${metricLabel}/ngày = số ${metric === 'notes' ? 'ghi chú' : 'khách đã gọi'} ÷ số ngày người đó có ít nhất một ghi chú. Mức = so với người cao nhất trong bảng; đỏ = dưới ngưỡng đang lọc.`}
@@ -264,7 +258,8 @@ export function CallsView({ canExport = false }: { canExport?: boolean }) {
               </TableWrap>
             ) : <EmptyState text={report.coverage.notes ? 'Không có nhân viên nào khớp bộ lọc trong kỳ.' : 'Chưa có dữ liệu ghi chú.'} />}
           </ChartCard>
-          {/* Khung nổi giữa màn: rộng tối đa ~960px, cao tối đa 85vh, phần dưới tiêu đề cuộn bên trong; điện thoại gần kín màn. Đóng: nút X, Đóng, Esc, bấm ra ngoài. */}
+  );
+  const historyDialog = () => (
           <Dialog open={!!selected} onOpenChange={(o) => { if (!o) closeHistory(); }}>
             {selected && (
               <DialogContent className="flex max-h-[85vh] w-full max-w-[min(960px,calc(100%-2rem))] flex-col gap-3 p-0 sm:max-w-[min(960px,calc(100%-2rem))] max-sm:h-[96dvh] max-sm:max-h-[96dvh] max-sm:max-w-[calc(100%-1rem)]">
@@ -311,8 +306,95 @@ export function CallsView({ canExport = false }: { canExport?: boolean }) {
               </DialogContent>
             )}
           </Dialog>
+  );
+  const defsBlock = (report: Report) => (
           <Definitions items={[report.definitions.call, 'Đơn chốt, doanh thu của CSKH xem ở Tổng quan CSKH và Tự ups & từ MKT.', report.definitions.assigned, report.definitions.coverage, `Ghi chú sớm nhất đã gom: ${dt(report.coverage.firstNote, true)}.`].filter((s): s is string => !!s)} />
-          {(report.coverage.pendingCustomers ?? 0) > 0 && <p className="text-xs text-muted-foreground">Số liệu ghi chú còn thiếu: {vi.format(report.coverage.pendingCustomers ?? 0)} khách đang chờ lấy đủ ghi chú trong các POS đã chọn (mọi ngày, mọi nhân viên). Hệ thống tự lấy bù ở nền.</p>}
+  );
+  const pendingNote = (/*{}*/report: Report) => (
+          (report.coverage.pendingCustomers ?? 0) > 0 && <p className="text-xs text-muted-foreground">Số liệu ghi chú còn thiếu: {vi.format(report.coverage.pendingCustomers ?? 0)} khách đang chờ lấy đủ ghi chú trong các POS đã chọn (mọi ngày, mọi nhân viên). Hệ thống tự lấy bù ở nền.</p>
+  );
+  // [hết khối chung]
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trên xuống: đầu trang (PageHeadMoi: chọn kỳ kèm bộ lọc của trang, StaleChip, Excel, POS) → chọn riêng một NV CSKH
+  // → một hàng 4 ô số (bấm mở "Vì sao ra số này") → nhắc dữ liệu đang gom → Theo ngày → bảng chính Theo nhân viên
+  // (bấm người: lịch sử cuộc gọi mở khung giữa màn như cũ) → Cách tính thu gọn. Cuộc gọi chưa có mốc nên không có dải "Cần xem".
+  if (uiMoi) {
+    const scope = `${periodLabel} · ${posIds.length <= 3 ? posIds.map(posName).join(', ') : `${vi.format(posIds.length)} POS`} · mỗi ghi chú trên hồ sơ khách Pancake = một cuộc gọi${threshold ? ` · đang lọc dưới ${threshold}/ngày` : ''}`;
+    const top = (key: 'notes' | 'customers') => [...rows].sort((a, b) => b[key] - a[key]).slice(0, 10).map((s) => ({ label: s.name, value: vi.format(s[key]) }));
+    return (
+      <div className="min-w-0 space-y-4">
+        <PageHeadMoi title="Cuộc gọi CSKH" scope={scope} hint="Mỗi ghi chú trên hồ sơ khách Pancake = một cuộc gọi" tools={periodBar()} right={headActions()}
+          pos={<PosChips posIds={posIds} onChange={setPosIds} />} />
+        <CskhFocusBar />
+        {error && !report && <ErrorBox error={error} onRetry={reload} />}
+        {!report && !error && <SkeletonKpis count={4} className="xl:grid-cols-4" />}
+        {report && (
+          <>
+            <div className={tileGrid(4)} aria-busy={loading}>
+              <KpiCard icon={ICON.calls} tone="green" label="Cuộc gọi (ghi chú) trong kỳ" className={KPI_TIGHT} value={vi.format(totals.notes)} note={`${rows.length} nhân viên · ${days.length} ngày`}
+                chart={<DuoSpark cur={dailyTotals.map((d) => d.notes)} />}
+                onClick={() => setWhy({ title: 'Cuộc gọi trong kỳ', value: `${vi.format(totals.notes)} ghi chú`, scope, rows: top('notes'), definition: report.definitions.call })} />
+              <KpiCard icon={Users} tone="teal" label="Số khách đã gọi" className={KPI_TIGHT} value={vi.format(totals.customers)} note={`TB ${vi.format(avgCustomers)} khách/người/ngày`}
+                chart={<DuoSpark cur={dailyTotals.map((d) => d.customers)} />}
+                onClick={() => setWhy({ title: 'Số khách đã gọi', value: `${vi.format(totals.customers)} khách`, scope, rows: top('customers'), definition: 'Số khách khác nhau có ít nhất một ghi chú trong ngày; một khách được gọi nhiều lần trong ngày chỉ tính một.' })} />
+              <KpiCard icon={ICON.calls} tone="blue" label="Cuộc gọi / người / ngày" className={KPI_TIGHT} value={vi.format(avgCalls)} note={threshold ? `Đang lọc dưới ${threshold}/ngày` : 'Trung bình toàn nhóm'}
+                onClick={() => setWhy({ title: 'Cuộc gọi / người / ngày', value: vi.format(avgCalls), scope,
+                  rows: [{ label: 'Tổng ghi chú', value: vi.format(totals.notes) }, { label: 'Số nhân viên trong bảng', value: vi.format(rows.length) }, { label: 'Số ngày trong kỳ', value: vi.format(days.length) }, { label: '= Cuộc / người / ngày', value: vi.format(avgCalls), strong: true }],
+                  definition: 'Tổng ghi chú ÷ số nhân viên đang hiện trong bảng ÷ số ngày trong kỳ.' })} />
+              <KpiCard icon={Database} tone="gray" label="Dữ liệu ghi chú đã gom" className={KPI_TIGHT} value={vi.format(report.coverage.notes)} note={`${vi.format(report.coverage.customers)} khách · cập nhật ${dt(report.coverage.lastFetch, true)}`}
+                onClick={() => setWhy({ title: 'Dữ liệu ghi chú đã gom', value: vi.format(report.coverage.notes), scope: 'Mọi ghi chú đã đồng bộ từ Pancake',
+                  rows: [{ label: 'Khách', value: vi.format(report.coverage.customers) }, { label: 'Cập nhật', value: dt(report.coverage.lastFetch, true) }], definition: report.definitions.coverage })} />
+            </div>
+            {backfillNote(report)}
+            {emptyNote(report)}
+            {unknownNote(report)}
+            {dailyCard()}
+            {staffCard(report)}
+            {historyDialog()}
+            <FoldBlock icon={PhoneCall} title="Cách tính" storageKey="ui-moi:calls:defs">{defsBlock(report)}{pendingNote(report)}</FoldBlock>
+          </>
+        )}
+        <WhySheet spec={why} onClose={() => setWhy(null)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title="Cuộc gọi CSKH" subtitle="Mỗi ghi chú trên hồ sơ khách Pancake = một cuộc gọi"
+        actions={headActions()} />
+      <CskhFocusBar />
+      {periodBar()}
+      <PosChips posIds={posIds} onChange={setPosIds} />
+      {error && !report && <ErrorBox error={error} onRetry={reload} />}
+      {!report && !error && (
+        <>
+          <SkeletonKpis count={5} className="xl:grid-cols-5" />
+          <ChartCard icon={Users} title="Theo nhân viên" subtitle="Đang tải…"><SkeletonTable rows={6} cols={8} /></ChartCard>
+        </>
+      )}
+      {report && (
+        <>
+          <div className="grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-4" aria-busy={loading}>
+            <KpiCard icon={ICON.calls} tone="green" label="Cuộc gọi (ghi chú)" value={vi.format(totals.notes)} countUp rawValue={totals.notes} note={`${rows.length} nhân viên · ${days.length} ngày`}
+              tooltip={{ period: periodLabel, current: `${vi.format(totals.notes)} ghi chú`, definition: report.definitions.call }} />
+            <KpiCard icon={Users} tone="teal" label="Số khách đã gọi" value={vi.format(totals.customers)} countUp rawValue={totals.customers} note={`TB ${vi.format(avgCustomers)} khách/người/ngày`}
+              tooltip={{ period: periodLabel, current: `${vi.format(totals.customers)} khách`, definition: 'Số khách khác nhau có ít nhất một ghi chú trong ngày; một khách được gọi nhiều lần trong ngày chỉ tính một.' }} />
+            <KpiCard icon={ICON.calls} tone="blue" label="Cuộc gọi/người/ngày" value={vi.format(avgCalls)} countUp rawValue={avgCalls} note={threshold ? `Đang lọc dưới ${threshold}/ngày` : 'Trung bình toàn nhóm'}
+              tooltip={{ period: periodLabel, current: `${vi.format(avgCalls)} cuộc/người/ngày`, definition: 'Tổng ghi chú ÷ số nhân viên đang hiện trong bảng ÷ số ngày trong kỳ.' }} />
+            <KpiCard icon={Database} tone="gray" label="Dữ liệu ghi chú đã gom" value={vi.format(report.coverage.notes)} countUp rawValue={report.coverage.notes} note={`${vi.format(report.coverage.customers)} khách · cập nhật ${dt(report.coverage.lastFetch, true)}`}
+              tooltip={{ current: `${vi.format(report.coverage.notes)} ghi chú · ${vi.format(report.coverage.customers)} khách`, definition: report.definitions.coverage }} />
+          </div>
+          {backfillNote(report)}
+          {emptyNote(report)}
+          {unknownNote(report)}
+          {dailyCard()}
+          {staffCard(report)}
+          {/* Khung nổi giữa màn: rộng tối đa ~960px, cao tối đa 85vh, phần dưới tiêu đề cuộn bên trong; điện thoại gần kín màn. Đóng: nút X, Đóng, Esc, bấm ra ngoài. */}
+          {historyDialog()}
+          {defsBlock(report)}
+          {pendingNote(report)}
         </>
       )}
     </div>
