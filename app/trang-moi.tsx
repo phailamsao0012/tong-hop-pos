@@ -135,17 +135,23 @@ export function CanXemStrip({ items, note, max = 4 }: { items: CanXemItem[]; not
   const sorted = [...items].sort((a, b) => Number(!!b.team) - Number(!!a.team) || (a.team && b.team ? 0 : (b.gap ?? 0) - (a.gap ?? 0)));
   const shown = sorted.length > max ? sorted.slice(0, max - 1) : sorted;
   const rest = sorted.length - shown.length;
-  const chip = 'tap inline-flex min-w-0 shrink items-center rounded-full px-3 py-1 text-left text-[12.5px] font-semibold';
+  // Không cắt chữ (sửa 27/11/2026, máy đám mây thấy ở 390px nhãn còn một chữ cái): chip không co lại; từ sm hàng chip cuộn ngang
+  // trong dải nếu thiếu chỗ (nhãn rất dài mới cắt "…" ở 22rem). Dưới sm chỉ hiện 1 nhãn đầy đủ (được xuống dòng) + "+N mục khác".
+  const chip = 'tap inline-flex shrink-0 items-center rounded-full px-3 py-1 text-left text-[12.5px] font-semibold';
+  const restSm = sorted.length - 1;
   return (
-    <section aria-label="Cần xem" className="card flex min-w-0 flex-nowrap items-center gap-2 overflow-hidden px-4 py-3">
+    <section aria-label="Cần xem" className="card flex min-w-0 items-center gap-2 px-4 py-3 max-sm:flex-wrap sm:flex-nowrap sm:overflow-x-auto sm:[scrollbar-width:thin]">
       <span className="inline-flex shrink-0 items-center gap-1.5 text-[13px] font-semibold text-ink" title={note}><AlertTriangle size={15} className="text-bad" aria-hidden="true" />Cần xem</span>
-      {shown.map((i) => (
-        <button key={i.key} type="button" onClick={i.onClick} title={i.text} className={`${chip} max-w-[22rem] bg-bad-bg text-bad`}>
-          <span className="min-w-0 truncate">{i.text}</span>
+      {shown.map((i, n) => (
+        <button key={i.key} type="button" onClick={i.onClick} title={i.text} className={`${chip} bg-bad-bg text-bad ${n ? 'max-sm:hidden' : 'max-sm:max-w-full max-sm:shrink'} sm:max-w-[22rem]`}>
+          <span className="min-w-0 max-sm:whitespace-normal sm:truncate">{i.text}</span>
         </button>
       ))}
+      {restSm > 0 && (
+        <button type="button" onClick={() => setAll(true)} className={`${chip} border border-line bg-surface text-ink-2 sm:hidden`}>+{restSm} mục khác</button>
+      )}
       {rest > 0 && (
-        <button type="button" onClick={() => setAll(true)} className={`${chip} shrink-0 border border-line bg-surface text-ink-2`}>+{rest} mục khác</button>
+        <button type="button" onClick={() => setAll(true)} className={`${chip} border border-line bg-surface text-ink-2 max-sm:hidden`}>+{rest} mục khác</button>
       )}
       {note && <span className="ml-auto hidden min-w-0 shrink truncate text-[11.5px] text-ink-3 2xl:inline" title={note}>{note}</span>}
       <WhySheet onClose={() => setAll(false)} spec={all ? {
