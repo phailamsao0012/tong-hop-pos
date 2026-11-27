@@ -5,6 +5,7 @@ import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node
 import { env } from 'cloudflare:workers';
 import { emptyDb } from './support/d1-sqlite';
 import { libPath } from './support/lib-path';
+import { legacyRevenueBasis } from './support/legacy-basis';
 import { SHOPS, dayData, toSourceOrder } from '../lib/demo/world';
 import { fakePancake } from '../lib/demo/fake-pancake';
 import { setPancakeTransport } from '../lib/pancake/pancake';
@@ -21,7 +22,8 @@ void test('K2: three demo days and 24 hours of all sync stages, HR and dispatch 
     for (const file of files) {
       const fixture = new URL(`./fixtures/fad5bb7/${file}.ts.txt`, import.meta.url);
       assert.ok(existsSync(fixture), `thiếu tests/fixtures/fad5bb7/${file}.ts.txt`);
-      let source = readFileSync(fixture, 'utf8');
+      // Bản cũ đổi sang doanh thu theo ngày tạo + received_* (27/11/2026) để chỉ so cách ghi, xem tests/support/legacy-basis.ts.
+      let source = legacyRevenueBasis(file, readFileSync(fixture, 'utf8'));
       source = source.replace(/from ['"]@\/lib\/([^'"]+)['"]/g, (_all, name: string) =>
         `from '${files.includes(name) ? './' + name : '../../../' + libPath(name)}'`);
       writeFileSync(new URL(`${file}.ts`, directory), source);

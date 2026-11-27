@@ -6,12 +6,15 @@ import { buildAskPack, hoursCsv, limitAskPack, peopleCsv, runAskTool, todayAskPa
 import { readSpend } from '../lib/ai/claude';
 import { GET, POST } from '../app/api/ai/ask/route';
 import { emptyDb } from './support/d1-sqlite';
+import { markRevenueReady } from './support/revenue-ready';
 import { loginAs } from './support/session';
 import { parseAccess, scopeApi } from '../lib/auth/access';
 import { addDays, todayVn, vnDayStartUtc } from '../lib/shared/report-time';
 import { POS } from '../lib/shared/report-model';
 
 function seed(raw: ReturnType<typeof emptyDb>['raw'], today: string) {
+  // Số giả ghi thẳng vào stats_daily: đánh dấu bảng đã theo ngày tạo đơn, nếu không gói AI tính lại từ đơn gốc (27/11/2026).
+  markRevenueReady(raw);
   const pos = POS[0].id;
   for (const [id,name] of [['NV_A','TEN_GIA_LAP SALE'],['NV_B','TEN_KHAC MKT'],['NV_X','KHONG_TINH']]) {
     raw.prepare('INSERT INTO pos_users(id,pos_id,user_id,name,fetched_at) VALUES (?,?,?,?,?)').run(id,pos,id,name,today);
@@ -157,6 +160,7 @@ void test('Demo world local: gói số và câu hỏi mẫu từ bộ dữ liệ
 void test('Công cụ giới hạn 3.000 dòng nhưng gói tuần lớn vẫn được đọc để cắt theo tuần',async () => {
   const {raw,db}=emptyDb();
   try {
+    markRevenueReady(raw); // số giả ghi thẳng vào stats_daily (27/11/2026)
     const today=todayVn();
     for(let n=0;n<34;n++){
       const id=`NV_${n}`;

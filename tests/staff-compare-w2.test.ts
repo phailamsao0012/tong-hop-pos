@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import type { DatabaseSync } from 'node:sqlite';
 import { GET } from '../app/api/reports/staff-compare/route';
@@ -8,6 +7,7 @@ import { GET as productGroups } from '../app/api/reports/product-groups/route';
 import { POS } from '../lib/shared/report-model';
 import { demoWorld, emptyDb } from './support/d1-sqlite';
 import { loginAs } from './support/session';
+import { hashSnapshots } from './support/snapshot-hash';
 
 const fields = ['closed', 'closedNet', 'created', 'createdClosed'] as const;
 type Cell = Record<(typeof fields)[number], number> & { closeRate: number | null };
@@ -81,12 +81,12 @@ function checkRowsTotal(r: Report, ids: string[]) {
 
 void test('W2: JSON cũ giữ nguyên; seriesRate trùng pointValue và rowsTotal khớp dòng Tổng, staffTotal.people trên demo', async () => {
   // Hash chụp từ route trước W2, trên cùng dữ liệu demo và các bộ lọc dưới đây.
-  const snapshots = JSON.parse(readFileSync(
-    new URL('./fixtures/staff-compare-before-w2.json', import.meta.url), 'utf8',
-  )) as { params: Record<string, string>; hash: string }[];
+  // Băm chụp lại khi số đổi có chủ ý (27/11/2026: đơn chốt / doanh thu theo ngày tạo đơn): UPDATE_SNAPSHOTS=1, xem tests/support/snapshot-hash.ts.
+  const snap = hashSnapshots(new URL('./fixtures/staff-compare-before-w2.json', import.meta.url));
   const buckets = new Set<string>();
   const groups = new Set<number>();
-  for (const { params, hash } of snapshots) {
+  for (const snapshot of snap.list) {
+    const { params } = snapshot;
     const r = await report(params) as Report;
     const old = JSON.parse(JSON.stringify(r)) as {
       rowsTotal?: unknown;
@@ -99,13 +99,14 @@ void test('W2: JSON cũ giữ nguyên; seriesRate trùng pointValue và rowsTota
       delete s.seriesRate;
       delete s.chart;
     }
-    assert.equal(createHash('sha256').update(JSON.stringify(old)).digest('hex'), hash, JSON.stringify(params));
+    snap.check(snapshot, createHash('sha256').update(JSON.stringify(old)).digest('hex'));
     const p = await report(params, true) as ProductReport;
     checkRowsTotal(r, p.staff.map((s) => s.sellerId));
     assert.equal(p.staff.length, p.staffTotal.people);
     buckets.add(r.bucket);
     groups.add(r.group);
   }
+  snap.save();
   assert.deepEqual(buckets, new Set(['hour', 'day']));
   assert.ok(groups.has(1));
   assert.ok([...groups].some((g) => g > 1));
@@ -141,17 +142,19 @@ void test('W2: loại người chỉ có kỳ so và mã trống; giữ người
   };
   const r = await report(params) as Report;
   assert.equal(r.group, 2);
-  assert.equal(r.staff.length, 4);
+  // Từ 27/11/2026 đơn chốt xếp theo ngày tạo đơn: 'b' (đơn tạo 01/07, chốt 02/09) không còn trong kỳ 09–10 nên bị loại;
+  // còn a, c và người chỉ có kỳ so (hiện trong bảng, không vào dòng Tổng).
+  assert.equal(r.staff.length, 3);
+  assert.equal(r.staff.find((s) => s.sellerId === 'b'), undefined);
   const p = await report(params, true) as ProductReport;
-  assert.equal(p.staffTotal.people, 3);
+  assert.equal(p.staffTotal.people, 2);
   checkRowsTotal(r, p.staff.map((s) => s.sellerId));
-  assert.deepEqual(r.rowsTotal.current, { closed: 3, closedNet: 300, created: 5, createdClosed: 1, closeRate: 20 });
+  assert.deepEqual(r.rowsTotal.current, { closed: 1, closedNet: 100, created: 5, createdClosed: 1, closeRate: 20 });
   assert.deepEqual(r.rowsTotal.previous, { closed: 1, closedNet: 100, created: 1, createdClosed: 1, closeRate: 100 });
   assert.equal(r.previous.total.closed, 4);
   const a = r.staff.find((s) => s.sellerId === 'a')!;
   assert.equal(a.seriesRate.current[0], 25);
   assert.equal(a.seriesRate.current[1], null);
-  assert.equal(r.staff.find((s) => s.sellerId === 'b')!.current.closeRate, null);
   assert.equal(r.staff.find((s) => s.sellerId === 'c')!.current.closeRate, 0);
   assert.equal(r.rowsTotal.series.current.length, 22);
   assert.equal(r.rowsTotal.series.previous.length, 16);

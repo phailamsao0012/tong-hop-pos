@@ -97,10 +97,11 @@ void test('trend-period: D1 theo POS/team/MKT, cùng mốc tới phút; cache h�
     const profiles = JSON.parse(stored.value);
     assert.equal(Object.keys(profiles).length, 2);
     assert.equal(Object.values(profiles)[0] && (Object.values(profiles)[0] as { sale: { hours: number[] } }).sale.hours.length, 24);
-    for (const [dept, bySent, index] of [['sale', false, 'closed'], ['mkt', false, 'confirmed'], ['vandon', true, 'sent']] as const) {
+    // Sale / MKT theo ngày tạo đơn từ 27/11/2026 (chỉ mục created); Vận đơn theo ngày gửi.
+    for (const [dept, bySent, index] of [['sale', false, 'idx_raw_orders_pos_created'], ['mkt', false, 'idx_raw_orders_pos_created'], ['vandon', true, 'idx_raw_orders_pos_sent_status_money']] as const) {
       const q = trendQuery(dept, ['p'], '2026-10-01', '2026-10-18', '', [], bySent);
       const plan = raw.prepare(`EXPLAIN QUERY PLAN ${q.sql}`).all(...q.binds);
-      assert.ok(JSON.stringify(plan).includes(`idx_raw_orders_pos_${index}_status_money`));
+      assert.ok(JSON.stringify(plan).includes(index));
     }
   } finally { raw.close(); }
 });
@@ -113,7 +114,8 @@ void test('trend-period: team nhân sự, team MKT, chi nhánh và ngày gửi g
     raw.prepare("INSERT INTO hr_pos_team (pos_user_id,employee_id,employee_name,team,department_id,status) VALUES ('s','e','NV A','sale','u','dang_lam')").run();
     const team = 'mkt_00000000-0000-0000-0000-000000000001';
     raw.prepare("INSERT INTO app_settings (key,value,updated_at) VALUES ('marketing_teams_v1',?,?)").run(JSON.stringify([{ id: team, name: 'Team MKT 1', memberIds: ['m'] }]), today);
-    for (const [id, seller, marketer, net] of [['a', 's', 'm', 100], ['b', 's2', 'm', 200], ['c', 's', 'm2', 300]] as const) raw.prepare('INSERT INTO raw_pos_orders (id,pos_id,shop_id,source_order_id,seller_id,marketer_id,status_code,net_total,created_at,first_closed_at,first_confirmed_at,first_sent_at,fetched_at) VALUES (?,?,?,?,?,?,2,?,?,?,?,?,?)').run(id, 'p', 'p', id, seller, marketer, net, '2026-10-16T01:00:00', '2026-10-17T01:00:00', '2026-10-17T02:00:00', '2026-10-16T03:00:00', today);
+    // Đơn tạo hôm nay (doanh thu Sale / MKT theo ngày tạo đơn từ 27/11/2026); gửi hàng hôm qua để Vận đơn theo ngày gửi ra 0.
+    for (const [id, seller, marketer, net] of [['a', 's', 'm', 100], ['b', 's2', 'm', 200], ['c', 's', 'm2', 300]] as const) raw.prepare('INSERT INTO raw_pos_orders (id,pos_id,shop_id,source_order_id,seller_id,marketer_id,status_code,net_total,created_at,first_closed_at,first_confirmed_at,first_sent_at,fetched_at) VALUES (?,?,?,?,?,?,2,?,?,?,?,?,?)').run(id, 'p', 'p', id, seller, marketer, net, '2026-10-17T00:30:00', '2026-10-17T01:00:00', '2026-10-17T02:00:00', '2026-10-16T03:00:00', today);
     const mkt = await trendCards(db, { ...opts, mktTeam: team }, ['mkt'], now);
     assert.equal(mkt.cards.mkt?.actual, 300);
     const scope = { ...opts, mktTeam: team, branch: 'b', unit: { id: 'u', name: 'Team Sale 1', dept: 'sale' as const } };

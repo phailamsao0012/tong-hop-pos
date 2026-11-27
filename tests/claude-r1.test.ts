@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type Anthropic from '@anthropic-ai/sdk';
 import { emptyDb } from './support/d1-sqlite';
+import { markRevenueReady } from './support/revenue-ready';
 import { loginAs } from './support/session';
 import { POS } from '../lib/shared/report-model';
 import { todayVn, addDays } from '../lib/shared/report-time';
@@ -64,6 +65,8 @@ void test('R1 UUID và ranh giới Unicode; chỉ giữ chữ lượt cuối, m�
 
 void test('R1 cache: cùng ngày dùng cùng promise, đổi ngày dựng mới; SQL dùng chỉ mục POS và khoảng ngày', async t => {
   const { raw, db } = emptyDb({ DEMO_MODE: '1' });
+  // Kiểm câu đọc bảng tính sẵn ở trạng thái thường (bảng đã dựng lại theo ngày tạo đơn, 27/11/2026).
+  markRevenueReady(raw);
   const queries: { sql: string; args: (string | number | null)[] }[] = [];
   // Quan sát đúng SQL chạy thật, gồm cả lời gọi từ overviewReport qua env.DB.
   const prepare = db.prepare.bind(db);
@@ -92,7 +95,8 @@ void test('R1 cache: cùng ngày dùng cùng promise, đổi ngày dựng mới;
     assert.equal(hourly.length, 5);
     for (const q of hourly) {
       assert.ok(!q.sql.includes(' OR (first_closed_at')); assert.ok(q.sql.includes('pos_id IN'));
-      assert.ok(raw.prepare(`EXPLAIN QUERY PLAN ${q.sql}`).all(...q.args).some(r => String(r.detail).includes('idx_raw_orders_pos_closed_status_money')));
+      // Đường giờ dự báo theo giờ tạo đơn từ 27/11/2026 (doanh thu theo ngày tạo): dùng chỉ mục (pos_id, created_at…).
+      assert.ok(raw.prepare(`EXPLAIN QUERY PLAN ${q.sql}`).all(...q.args).some(r => String(r.detail).includes('idx_raw_orders_pos_created')));
     }
     // Thêm SQL pack/review vào tập kiểm EXPLAIN.
     await peopleCsv(db, today, today, null, 'ngay'); await hoursCsv(db, today, today, null);

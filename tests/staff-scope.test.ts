@@ -125,7 +125,9 @@ void test('C1: mọi route khách chặn người ngoài team, lọc seller OR c
     assert.deepEqual((await (await mentorReport(db, { ...user, userId: 'unlinked' }, request())).json() as MentorReport).customers, []);
     const query = mentorOrdersQuery([pos], ['staff-a', 'staff-b'], day, day);
     const plan = raw.prepare('EXPLAIN QUERY PLAN ' + query.sql).all(...query.binds);
-    assert.match(JSON.stringify(plan), /idx_raw_orders_pos_closed_status_money/);
+    // Từ 27/11/2026 doanh thu theo ngày tạo đơn: câu đơn của Mentor tìm theo chỉ mục (pos_id, created_at…), không quét cả bảng.
+    assert.match(JSON.stringify(plan), /idx_raw_orders_pos_created/);
+    assert.doesNotMatch(JSON.stringify(plan), /SCAN (o|raw_pos_orders)\b/);
   } finally { raw.close(); }
 });
 

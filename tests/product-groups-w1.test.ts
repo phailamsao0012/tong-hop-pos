@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import type { DatabaseSync } from 'node:sqlite';
 import { GET } from '../app/api/reports/product-groups/route';
@@ -8,6 +7,7 @@ import { dayData, toSourceOrder } from '../lib/demo/world';
 import { POS } from '../lib/shared/report-model';
 import { demoWorld, emptyDb } from './support/d1-sqlite';
 import { loginAs } from './support/session';
+import { hashSnapshots } from './support/snapshot-hash';
 
 const added = [
   'warehouseConfirmed', 'otherUnconfirmed', 'closedFromCreated',
@@ -88,10 +88,10 @@ const canonical = (v: unknown): unknown =>
 void test('W1: JSON demo bỏ trường mới khớp nguyên bản sau X1 ở mọi dim và bộ lọc', async () => {
   // Chụp trước khi sửa route W1, trên cùng dữ liệu demo có đơn quay lại Chờ xác nhận.
   // SHA-256 của toàn bộ JSON chuẩn hóa, gồm cả definitions cũ và các nhóm.
-  const snapshots = JSON.parse(readFileSync(
-    new URL('./fixtures/product-groups-after-x1.json', import.meta.url), 'utf8',
-  )) as { params: Record<string, string>; hash: string }[];
-  for (const { params, hash } of snapshots) {
+  // Băm chụp lại khi số đổi có chủ ý (27/11/2026: đơn chốt / doanh thu theo ngày tạo đơn): UPDATE_SNAPSHOTS=1, xem tests/support/snapshot-hash.ts.
+  const snap = hashSnapshots(new URL('./fixtures/product-groups-after-x1.json', import.meta.url));
+  for (const snapshot of snap.list) {
+    const { params } = snapshot;
     const r = await report(params);
     // R2 chỉ thêm trường; vẫn so toàn bộ các trường cũ với snapshot gốc.
     // 03/11 thêm khách đã nhận / tiền khách trả: cũng chỉ thêm trường.
@@ -108,10 +108,11 @@ void test('W1: JSON demo bỏ trường mới khớp nguyên bản sau X1 ở m�
     delete old.staffTotal;
     for (const s of old.staff) for (const key of added) delete s[key];
     for (const key of [...added, 'staffTotal']) delete old.definitions[key];
-    assert.equal(createHash('sha256').update(JSON.stringify(canonical(old))).digest('hex'), hash, JSON.stringify(params));
+    snap.check(snapshot, createHash('sha256').update(JSON.stringify(canonical(old))).digest('hex'));
     for (const s of r.staff) checkSplits(s);
     checkTotal(r);
   }
+  snap.save();
 });
 
 void test('W1: đơn demo trạng thái 17 đã XN kho không cộng hai lần ở mọi dim và cách tính người', async () => {

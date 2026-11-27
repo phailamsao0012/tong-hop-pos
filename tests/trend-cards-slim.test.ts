@@ -34,14 +34,15 @@ void test('trendQuery: sale, cskh, vận đơn giữ nguyên từng ký tự câ
     const b = trendQuery(dept, ['p', 'q'], '2026-08-01', '2026-10-31', ' AND x=?', ['1'], bySent, byDay, SLIM_SOURCE);
     assert.equal(b.sql, a.sql, `${dept} ${bySent} ${byDay}`);
     assert.deepEqual(b.binds, a.binds);
-    assert.match(a.sql, /FROM raw_pos_orders o INDEXED BY idx_raw_orders_pos_(closed|sent)_status_money WHERE/);
+    // Sale / CSKH theo ngày tạo đơn từ 27/11/2026 (chỉ mục created); Vận đơn giữ ngày chốt / ngày gửi.
+    assert.match(a.sql, /FROM raw_pos_orders o INDEXED BY idx_raw_orders_pos_(created|closed_status_money|sent_status_money) WHERE/);
   }
   const raw = trendQuery('mkt', ['p'], '2026-08-01', '2026-10-31', '', [], false);
   const slim = trendQuery('mkt', ['p'], '2026-08-01', '2026-10-31', '', [], false, false, SLIM_SOURCE);
-  assert.match(raw.sql, /FROM raw_pos_orders o INDEXED BY idx_raw_orders_pos_confirmed_status_money WHERE/);
+  assert.match(raw.sql, /FROM raw_pos_orders o INDEXED BY idx_raw_orders_pos_created WHERE/);
   assert.match(slim.sql, /FROM mkt_orders_slim o WHERE/);
   assert.doesNotMatch(slim.sql, /INDEXED BY|raw_pos_orders/);
-  assert.equal(slim.sql.replace('FROM mkt_orders_slim o WHERE', 'X'), raw.sql.replace('FROM raw_pos_orders o INDEXED BY idx_raw_orders_pos_confirmed_status_money WHERE', 'X'), 'phần còn lại của câu mkt giữ nguyên');
+  assert.equal(slim.sql.replace('FROM mkt_orders_slim o WHERE', 'X'), raw.sql.replace('FROM raw_pos_orders o INDEXED BY idx_raw_orders_pos_created WHERE', 'X'), 'phần còn lại của câu mkt giữ nguyên');
 });
 
 void test('trend-cards MKT kỳ dài: bảng gốc và bảng gọn cho JSON giống hệt; bộ phận khác vẫn đọc bảng gốc', async () => {

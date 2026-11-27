@@ -63,14 +63,16 @@ void test('R2: D1 giả — số mới, trường cũ, dòng tổng và packed=1
   const { raw } = await demoWorld(['2026-10-07','2026-10-08','2026-10-09','2026-10-10','2026-10-11','2026-10-12','2026-10-13'], Date.parse('2026-10-14T05:00:00Z'));
   try {
     await loginAs(raw, 'owner');
-    const all = raw.prepare('SELECT id,seller_id,care_id,status_code,status_history_json,first_confirmed_at,first_confirmed_by,first_closed_at FROM raw_pos_orders WHERE COALESCE(first_closed_at,created_at)>=? AND COALESCE(first_closed_at,created_at)<?').all('2026-10-06T17:00:00.000Z','2026-10-13T17:00:00.000Z') as Order[];
+    // Đơn của kỳ theo ngày tạo đơn (doanh thu theo ngày tạo, 27/11/2026).
+    const all = raw.prepare('SELECT id,seller_id,care_id,status_code,status_history_json,first_confirmed_at,first_confirmed_by,first_closed_at FROM raw_pos_orders WHERE created_at>=? AND created_at<?').all('2026-10-06T17:00:00.000Z','2026-10-13T17:00:00.000Z') as Order[];
     assert.ok(all.some(o => o.status_code === 6 && isPacked(o)), 'demo có đơn hủy sau khi vào 8');
     for (const by of ['seller', 'care']) {
       for (const dim of ['tag', 'main', 'product']) {
         for (const custom of [false, true]) {
           const params = { by, dim, ...(custom ? { status: 'c:0,1,2,3,4,5,6,7,8,9,11,12,13,15,16,17,20' } : {}) };
           const r = await report(params);
-          const selected = custom ? all : all.filter(o => o.first_closed_at !== null && ![0,6,7].includes(o.status_code));
+          // Từ 27/11/2026 đơn chốt theo ngày tạo đơn: đơn tạo trong kỳ đang ở Chờ xác nhận trở đi.
+          const selected = custom ? all : all.filter(o => ![0,6,7].includes(o.status_code));
           check(r.total, selected, by);
           check(r.staffTotal, selected.filter(o => (by === 'care' ? o.care_id || o.seller_id : o.seller_id)), by);
           for (const s of r.staff) {

@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import { after, before, mock, test } from 'node:test';
 import type { DatabaseSync } from 'node:sqlite';
 import { GET } from '../app/api/reports/staff-compare/route';
 import { buildCompareChart, type CompareChart, type CompareChartCell } from '../lib/reports/compare-chart';
 import { demoWorld } from './support/d1-sqlite';
 import { loginAs } from './support/session';
+import { hashSnapshots } from './support/snapshot-hash';
 
 type Report = {
   bucket: 'hour' | 'day';
@@ -63,17 +63,18 @@ function checkCharts(r: Report) {
 }
 
 void test('W5: JSON trước W5 giữ nguyên trên demo; chart cả đội và mọi người khớp số cũ, không gộp chuỗi focus lần hai', async () => {
-  const snapshots = JSON.parse(readFileSync(
-    new URL('./fixtures/staff-compare-before-w5.json', import.meta.url), 'utf8',
-  )) as { params: Record<string, string>; hash: string }[];
-  for (const { params, hash } of snapshots) {
+  // Băm chụp lại khi số đổi có chủ ý (27/11/2026: đơn chốt / doanh thu theo ngày tạo đơn): UPDATE_SNAPSHOTS=1, xem tests/support/snapshot-hash.ts.
+  const snap = hashSnapshots(new URL('./fixtures/staff-compare-before-w5.json', import.meta.url));
+  for (const snapshot of snap.list) {
+    const { params } = snapshot;
     const r = await report({ ...params, test: `w5-${++requestId}` });
     const old = JSON.parse(JSON.stringify(r)) as { chart?: unknown; staff: { chart?: unknown }[] };
     delete old.chart;
     for (const s of old.staff) delete s.chart;
-    assert.equal(createHash('sha256').update(JSON.stringify(old)).digest('hex'), hash, JSON.stringify(params));
+    snap.check(snapshot, createHash('sha256').update(JSON.stringify(old)).digest('hex'));
     checkCharts(r);
   }
+  snap.save();
   // Tháng 30 so 31 ngày: kỳ ngắn phải có null ở cuối; tự chọn đảo lại độ dài cũng vậy.
   for (const params of [
     { start: '2026-09-01', end: '2026-09-30', cstart: '2026-08-01', cend: '2026-08-31' },
