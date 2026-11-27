@@ -13,12 +13,15 @@ import type { Customer360 } from '@/lib/reports/customer360';
 import { ICON } from './icons';
 import { PosChips } from './overview-view';
 import { useApi } from './use-api';
-import { Th, ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, ThinkingLine, dt, pct, shortMoney, useSort, vi } from './ui-kit';
+import { Th, ChartCard, Definitions, EmptyState, ErrorBox, FoldBlock, KpiCard, posName, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, ThinkingLine, dt, pct, shortMoney, useSort, vi } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
+import { KPI_TIGHT, PageHeadMoi, WhySheet, tileGrid, type WhySpec } from './trang-moi';
 
 const STAGE_COLORS: Record<string, string> = { new: 'var(--ai-3)', repeat: 'var(--primary)', loyal: 'var(--good)', risk: 'var(--warn)', sleep: 'var(--bad)', never: 'var(--ink-4)' };
 
-export function Customer360View() {
+export function Customer360View({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới, tắt thì y như cũ. */ uiMoi?: boolean } = {}) {
+  // Giao diện mới: khung "Vì sao ra số này" đang mở (null = đóng).
+  const [why, setWhy] = useState<WhySpec | null>(null);
   const [posIds, setPosIds] = usePosIds();
   const [customer, setCustomer] = useState<{ phone: string; posIds: string[]; ref?: string } | null>(null);
   const url = useMemo(() => `/api/reports/customer360?${new URLSearchParams({ posIds: posIds.join(',') })}`, [posIds]);
@@ -39,11 +42,10 @@ export function Customer360View() {
     ]), 'Tới hạn gọi lại');
     saveXlsx(XLSX, wb, `khach-toi-han-goi-lai_${todayVn()}.xlsx`);
   };
-  return (
-    <div className="space-y-5">
-      <CustomerDetail key={customer ? customer.phone + customer.posIds.join() : "closed"} customer={customer} onClose={() => setCustomer(null)} />
-      <PageHeader eyebrow="Toàn bộ lịch sử" title="Khách hàng 360" subtitle="Khách gộp theo số điện thoại trên cả 6 POS: đang ở giai đoạn nào, bao lâu mua lại một lần, ai tới hạn cần gọi"
-        actions={<><AiPackButton disabled={!r} pack={() => r && ({
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  // fold: chỉ bố cục mới truyền (thu gọn thẻ); bố cục cũ không truyền nên thẻ y như trước.
+  const headActions = () => (
+        <><AiPackButton disabled={!r} pack={() => r && ({
           page: 'Khách hàng 360', period: 'toàn bộ lịch sử',
           facts: [['Khách (không trùng)', r.total.unique], ['Đếm riêng từng POS', r.total.perPosRows], ['Đã mua thành công', buyers], ['Mua ở nhiều POS', r.total.multiPos], ['Khoảng cách mua lại trung vị (ngày)', r.medianGap === null ? null : Math.round(r.medianGap)], ['Khách tới hạn gọi lại', r.due.length]],
           tables: [
@@ -52,23 +54,12 @@ export function Customer360View() {
           ],
           definitions: r.definitions,
           questions: ['Tập khách đang khỏe không (tỷ lệ mua lại, nhóm có nguy cơ, đang ngủ)?', 'Nên gọi lại khách sau bao nhiêu ngày? Nhóm nào ưu tiên?', 'Gợi ý chương trình giữ chân khách mới mua 1 lần.'],
-        })} /><Button variant="outline" onClick={() => void exportDue()} disabled={!r?.due.length}><FileDown size={14} />Xuất danh sách gọi lại</Button></>} />
-      <PosChips posIds={posIds} onChange={setPosIds} />
-      {error && !r && <ErrorBox error={error} onRetry={reload} />}
-      {!r && !error && <><SkeletonKpis count={4} className="xl:grid-cols-4" /><ChartCard title="Vòng đời khách" subtitle="Đang tải…"><ThinkingLine lines={['Đang gộp khách trên 6 POS…', 'Đang tính khoảng cách mua lại…']} /><SkeletonTable rows={4} cols={4} /></ChartCard></>}
-      {r && (
-        <>
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-            <KpiCard icon={Users} tone="blue" label="Khách (không trùng)" value={vi.format(r.total.unique)} note={`Đếm riêng từng POS là ${vi.format(r.total.perPosRows)}, trùng ${vi.format(r.total.perPosRows - r.total.unique)}`}
-              tooltip={{ current: `${vi.format(r.total.unique)} SĐT`, definition: r.definitions.merge }} />
-            <KpiCard icon={ICON.closed} tone="green" label="Đã mua thành công" value={vi.format(buyers)} note={`${pct(r.total.unique ? buyers / r.total.unique * 100 : null, 0)} khách · ${shortMoney(r.total.net)}`}
-              tooltip={{ current: `${vi.format(buyers)} khách`, definition: r.definitions.stages }} />
-            <KpiCard icon={Repeat} tone="purple" label="Mua ở nhiều POS" value={vi.format(r.total.multiPos)} note={`${pct(r.total.unique ? r.total.multiPos / r.total.unique * 100 : null, 1)} khách có đơn ở từ 2 POS`}
-              tooltip={{ current: `${vi.format(r.total.multiPos)} khách`, definition: r.definitions.merge }} />
-            <KpiCard icon={Hourglass} tone="teal" label="Mua lại sau (trung vị)" value={r.medianGap === null ? '—' : `${Math.round(r.medianGap)} ngày`} note={`${vi.format(gapTotal)} khách đã mua từ 2 lần`}
-              tooltip={{ current: r.medianGap === null ? '—' : `${r.medianGap.toFixed(1).replace('.', ',')} ngày`, definition: r.definitions.gap }} />
-          </div>
-
+        })} /><Button variant="outline" onClick={() => void exportDue()} disabled={!r?.due.length}><FileDown size={14} />Xuất danh sách gọi lại</Button></>
+  );
+  const detailEl = () => (
+      <CustomerDetail key={customer ? customer.phone + customer.posIds.join() : "closed"} customer={customer} onClose={() => setCustomer(null)} />
+  );
+  const stagesCard = (r: Customer360) => (
           <ChartCard icon={ICON.customers} title="Vòng đời khách" subtitle="Số khách và tiền đã mua ở từng giai đoạn · bấm Khách lâu chưa mua để xem danh sách nhóm nguy cơ / đang ngủ" info={r.definitions.stages}>
             <div className="flex h-4 gap-[2px] overflow-hidden rounded-full" role="img" aria-label={r.stages.map((s) => `${s.label} ${s.n}`).join(', ')}>
               {r.stages.map((s) => <i key={s.key} className="block h-full" style={{ width: `${r.total.unique ? s.n / r.total.unique * 100 : 0}%`, background: STAGE_COLORS[s.key] }} title={`${s.label}: ${vi.format(s.n)}`} />)}
@@ -84,9 +75,9 @@ export function Customer360View() {
               ))}
             </div>
           </ChartCard>
-
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-            <ChartCard icon={CalendarClock} title="Bao lâu mua lại một lần" subtitle="Khoảng cách trung bình giữa các lần mua của mỗi khách (khách mua từ 2 lần)" info={r.definitions.gap}>
+  );
+  const gapsCard = (r: Customer360, fold?: { storageKey: string; summary?: string }) => (
+            <ChartCard collapse={fold} icon={CalendarClock} title="Bao lâu mua lại một lần" subtitle="Khoảng cách trung bình giữa các lần mua của mỗi khách (khách mua từ 2 lần)" info={r.definitions.gap}>
               {gapTotal ? (
                 <ul className="m-0 list-none space-y-2.5 p-0">
                   {r.gaps.map((g) => (
@@ -99,6 +90,8 @@ export function Customer360View() {
                 </ul>
               ) : <EmptyState text="Chưa có khách mua từ 2 lần." />}
             </ChartCard>
+  );
+  const dueCard = () => (
             <ChartCard icon={PhoneCall} title={`Tới hạn gọi lại · ${vi.format(due.length)} khách`} subtitle="Đã tới lúc khách thường mua lại mà chưa mua · xếp theo tiền đã mua · tối đa 300 khách" info={r.definitions.due}>
               {due.length ? (
                 <TableWrap minWidth={860} maxHeight="30rem" stickyFirst>
@@ -127,6 +120,74 @@ export function Customer360View() {
                 </TableWrap>
               ) : <EmptyState text="Không có khách nào tới hạn gọi lại." />}
             </ChartCard>
+  );
+  // [hết khối chung]
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trên xuống: đầu trang (PageHeadMoi: Gói AI, xuất danh sách gọi lại; POS) → một hàng 4 ô số (bấm mở "Vì sao ra số này")
+  // → Vòng đời khách → bảng chính Tới hạn gọi lại (bấm khách mở hồ sơ khách giữa màn như cũ) → Bao lâu mua lại một lần, Cách tính thu gọn.
+  // Trang không có tỷ lệ chốt / hoàn / hủy nên không có dải "Cần xem".
+  if (uiMoi) {
+    const scope = `Toàn bộ lịch sử · ${posIds.length <= 3 ? posIds.map(posName).join(', ') : `${vi.format(posIds.length)} POS`} · khách gộp theo số điện thoại`;
+    const k = (s: string) => `ui-moi:customer360:${s}`;
+    return (
+      <div className="min-w-0 space-y-4">
+        {detailEl()}
+        <PageHeadMoi title="Khách hàng 360" scope={scope} hint="Khách gộp theo số điện thoại trên cả 6 POS: đang ở giai đoạn nào, bao lâu mua lại một lần"
+          right={headActions()} pos={<PosChips posIds={posIds} onChange={setPosIds} />} />
+        {error && !r && <ErrorBox error={error} onRetry={reload} />}
+        {!r && !error && <SkeletonKpis count={4} className="xl:grid-cols-4" />}
+        {r && (
+          <>
+            <div className={tileGrid(4)}>
+              <KpiCard icon={Users} tone="blue" label="Khách (không trùng)" className={KPI_TIGHT} value={vi.format(r.total.unique)} note={`Đếm riêng từng POS là ${vi.format(r.total.perPosRows)}`}
+                onClick={() => setWhy({ title: 'Khách (không trùng)', value: `${vi.format(r.total.unique)} SĐT`, scope, rows: [{ label: 'Đếm riêng từng POS', value: vi.format(r.total.perPosRows) }, { label: 'Trùng giữa các POS', value: vi.format(r.total.perPosRows - r.total.unique) }], definition: r.definitions.merge })} />
+              <KpiCard icon={ICON.closed} tone="green" label="Đã mua thành công" className={KPI_TIGHT} value={vi.format(buyers)} note={`${pct(r.total.unique ? buyers / r.total.unique * 100 : null, 0)} khách · ${shortMoney(r.total.net)}`}
+                onClick={() => setWhy({ title: 'Đã mua thành công', value: `${vi.format(buyers)} khách`, scope, rows: r.stages.map((s) => ({ label: s.label, value: `${vi.format(s.n)} · ${shortMoney(s.net)}` })), definition: r.definitions.stages })} />
+              <KpiCard icon={Repeat} tone="purple" label="Mua ở nhiều POS" className={KPI_TIGHT} value={vi.format(r.total.multiPos)} note={`${pct(r.total.unique ? r.total.multiPos / r.total.unique * 100 : null, 1)} khách`}
+                onClick={() => setWhy({ title: 'Mua ở nhiều POS', value: `${vi.format(r.total.multiPos)} khách`, scope, definition: r.definitions.merge })} />
+              <KpiCard icon={Hourglass} tone="teal" label="Mua lại sau (trung vị)" className={KPI_TIGHT} value={r.medianGap === null ? '—' : `${Math.round(r.medianGap)} ngày`} note={`${vi.format(gapTotal)} khách đã mua từ 2 lần`}
+                onClick={() => setWhy({ title: 'Mua lại sau (trung vị)', value: r.medianGap === null ? '—' : `${r.medianGap.toFixed(1).replace('.', ',')} ngày`, scope, rows: r.gaps.map((g) => ({ label: g.label, value: vi.format(g.n) })), definition: r.definitions.gap })} />
+            </div>
+            {stagesCard(r)}
+            {dueCard()}
+            <div className="grid min-w-0 gap-3">
+              {gapsCard(r, { storageKey: k('gaps') })}
+              <FoldBlock icon={CalendarClock} title="Cách tính" storageKey={k('defs')}><Definitions items={r.definitions} /></FoldBlock>
+            </div>
+          </>
+        )}
+        <WhySheet spec={why} onClose={() => setWhy(null)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      {detailEl()}
+      <PageHeader eyebrow="Toàn bộ lịch sử" title="Khách hàng 360" subtitle="Khách gộp theo số điện thoại trên cả 6 POS: đang ở giai đoạn nào, bao lâu mua lại một lần, ai tới hạn cần gọi"
+        actions={headActions()} />
+      <PosChips posIds={posIds} onChange={setPosIds} />
+      {error && !r && <ErrorBox error={error} onRetry={reload} />}
+      {!r && !error && <><SkeletonKpis count={4} className="xl:grid-cols-4" /><ChartCard title="Vòng đời khách" subtitle="Đang tải…"><ThinkingLine lines={['Đang gộp khách trên 6 POS…', 'Đang tính khoảng cách mua lại…']} /><SkeletonTable rows={4} cols={4} /></ChartCard></>}
+      {r && (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+            <KpiCard icon={Users} tone="blue" label="Khách (không trùng)" value={vi.format(r.total.unique)} note={`Đếm riêng từng POS là ${vi.format(r.total.perPosRows)}, trùng ${vi.format(r.total.perPosRows - r.total.unique)}`}
+              tooltip={{ current: `${vi.format(r.total.unique)} SĐT`, definition: r.definitions.merge }} />
+            <KpiCard icon={ICON.closed} tone="green" label="Đã mua thành công" value={vi.format(buyers)} note={`${pct(r.total.unique ? buyers / r.total.unique * 100 : null, 0)} khách · ${shortMoney(r.total.net)}`}
+              tooltip={{ current: `${vi.format(buyers)} khách`, definition: r.definitions.stages }} />
+            <KpiCard icon={Repeat} tone="purple" label="Mua ở nhiều POS" value={vi.format(r.total.multiPos)} note={`${pct(r.total.unique ? r.total.multiPos / r.total.unique * 100 : null, 1)} khách có đơn ở từ 2 POS`}
+              tooltip={{ current: `${vi.format(r.total.multiPos)} khách`, definition: r.definitions.merge }} />
+            <KpiCard icon={Hourglass} tone="teal" label="Mua lại sau (trung vị)" value={r.medianGap === null ? '—' : `${Math.round(r.medianGap)} ngày`} note={`${vi.format(gapTotal)} khách đã mua từ 2 lần`}
+              tooltip={{ current: r.medianGap === null ? '—' : `${r.medianGap.toFixed(1).replace('.', ',')} ngày`, definition: r.definitions.gap }} />
+          </div>
+
+          {stagesCard(r)}
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+            {gapsCard(r)}
+            {dueCard()}
           </div>
           <Definitions items={r.definitions} />
         </>
