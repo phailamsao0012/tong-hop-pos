@@ -10,6 +10,7 @@ import { todayVn } from '@/lib/shared/report-time';
 import { AUDIT_ACTIONS, AUDIT_GROUPS, auditLabel } from '@/lib/ops/audit-labels';
 import { Th, ChartCard, EmptyState, ErrorBox, PageHeader, SkeletonTable, StatusChip, TableWrap, Toolbar, dt, toast, vi } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
+import { PageHeadMoi } from './trang-moi';
 
 type Item = { id: string; at: string; userId: string | null; email: string | null; name: string | null; action: string; target: string | null; detail: string | null; status: number | null; ip: string | null; device: string | null };
 type Data = { items: Item[]; total: number; page: number; size: number; users: { id: string; name: string; email: string }[]; keepDays: number };
@@ -17,7 +18,7 @@ const PAGE = 100;
 const daysAgo = (n: number) => { const d = new Date(`${todayVn()}T00:00:00+07:00`); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
 const statusText = (s: number | null) => s === null ? '—' : s < 300 ? 'OK' : s === 401 ? 'Từ chối' : s === 403 ? 'Bị chặn' : s === 429 ? 'Quá nhiều' : `Lỗi ${s}`;
 
-export function AuditView() {
+export function AuditView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới, tắt thì y như cũ. */ uiMoi?: boolean } = {}) {
   const [from, setFrom] = useState(daysAgo(6));
   const [to, setTo] = useState(todayVn());
   const [userId, setUserId] = useState('all');
@@ -81,10 +82,11 @@ export function AuditView() {
     </div>
   ) : null;
 
-  return (
-    <div className="space-y-4">
-      <PageHeader eyebrow="Hệ thống" title="Nhật ký hoạt động" subtitle={`Đăng nhập · thao tác thay đổi · xuất dữ liệu · trang đã mở. Giữ ${data?.keepDays ?? 400} ngày gần nhất.`}
-        actions={<Button variant="outline" onClick={exportExcel} disabled={!data?.total || exporting}><FileDown className={`size-4 ${exporting ? 'animate-pulse' : ''}`} />{exporting ? 'Đang xuất…' : 'Xuất Excel'}</Button>} />
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  const exportBtn = () => (
+        <Button variant="outline" onClick={exportExcel} disabled={!data?.total || exporting}><FileDown className={`size-4 ${exporting ? 'animate-pulse' : ''}`} />{exporting ? 'Đang xuất…' : 'Xuất Excel'}</Button>
+  );
+  const toolbar = () => (
       <Toolbar>
         <div className="flex min-w-0 items-center gap-2">
           <Input aria-label="Từ ngày" type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} className="w-auto" />
@@ -110,7 +112,11 @@ export function AuditView() {
         </div>
         <span className="num ml-auto text-xs text-ink-3" aria-live="polite">{data ? `${vi.format(data.total)} dòng` : ''}{loading ? ' · đang tải…' : ''}</span>
       </Toolbar>
-      {error && <ErrorBox error={error} onRetry={() => void load()} />}
+  );
+  const errorBox = (error: string) => (
+      <ErrorBox error={error} onRetry={() => void load()} />
+  );
+  const listCard = () => (
       <ChartCard icon={ScrollText} title="Hoạt động" subtitle={data ? `${vi.format(data.total)} dòng · ${dt(`${from}T00:00:00+07:00`)} – ${dt(`${to}T00:00:00+07:00`)}` : undefined} action={pager}>
         {!data && loading && <SkeletonTable rows={8} cols={7} />}
         {data && !data.items.length && !loading && <EmptyState text="Không có hoạt động nào trong khoảng đã chọn." />}
@@ -138,6 +144,31 @@ export function AuditView() {
         )}
         {pager && <div className="mt-3 flex justify-end">{pager}</div>}
       </ChartCard>
+  );
+  // [hết khối chung]
+  // Hộp lỗi (nút thử lại gọi load, đọc ref huỷ request cũ) vẽ MỘT lần cho cả hai bố cục.
+  const errorEl = error ? errorBox(error) : null;
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trang tra cứu: đầu trang (PageHeadMoi: khoảng ngày, người dùng, nhóm / hành động, ô tìm; Excel) → một bảng chính Hoạt động.
+  if (uiMoi) {
+    return (
+      <div className="min-w-0 space-y-4">
+        <PageHeadMoi title="Nhật ký hoạt động" scope={`${dt(`${from}T00:00:00+07:00`)} – ${dt(`${to}T00:00:00+07:00`)} · đăng nhập, thao tác thay đổi, xuất dữ liệu, trang đã mở · giữ ${data?.keepDays ?? 400} ngày gần nhất`}
+          tools={toolbar()} right={exportBtn()} />
+        {errorEl}
+        {listCard()}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <PageHeader eyebrow="Hệ thống" title="Nhật ký hoạt động" subtitle={`Đăng nhập · thao tác thay đổi · xuất dữ liệu · trang đã mở. Giữ ${data?.keepDays ?? 400} ngày gần nhất.`}
+        actions={exportBtn()} />
+      {toolbar()}
+      {errorEl}
+      {listCard()}
     </div>
   );
 }
