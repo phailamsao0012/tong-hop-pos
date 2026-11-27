@@ -22,21 +22,21 @@ type Person = { id: string; name: string; department: string };
 type Order = { id: string; seller?: string; care?: string; marketer?: string; status: number; createdAt: string; closedAt?: string | null; confirmedAt?: string | null; net: number; phone?: string | null; item?: string };
 
 /** D1 giả có một POS, các tài khoản POS và đơn ảo; dựng lại bảng tổng hợp ngày (stats_daily) như lượt đồng bộ. */
-async function world(people: Person[], orders: Order[]) {
+async function world(people: Person[], orders: Order[], posId = POS_ID) {
   mock.timers.enable({ apis: ['Date'], now: NOW });
   const { raw, db } = emptyDb({ DEMO_MODE: '1' });
   const now = new Date(NOW).toISOString();
-  raw.prepare("INSERT INTO pos_shops (id,name,status,enabled) VALUES (?,?,'connected',1)").run(POS_ID, POS_ID);
+  raw.prepare("INSERT INTO pos_shops (id,name,status,enabled) VALUES (?,?,'connected',1)").run(posId, posId);
   for (const p of people) raw.prepare('INSERT INTO pos_users (id,pos_id,user_id,name,is_active,fetched_at,department) VALUES (?,?,?,?,1,?,?)')
-    .run(`${POS_ID}:${p.id}`, POS_ID, p.id, p.name, now, p.department);
+    .run(`${posId}:${p.id}`, posId, p.id, p.name, now, p.department);
   const dirty: DirtyBuckets = new Map();
   for (const o of orders) {
     raw.prepare(`INSERT INTO raw_pos_orders (id,pos_id,shop_id,source_order_id,created_at,updated_at,status_code,seller_id,care_id,marketer_id,
         first_closed_at,first_confirmed_at,net_total,current_total,phone,fetched_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-      .run(o.id, POS_ID, '1', o.id, o.createdAt, o.createdAt, o.status, o.seller ?? null, o.care ?? null, o.marketer ?? null,
+      .run(o.id, posId, '1', o.id, o.createdAt, o.createdAt, o.status, o.seller ?? null, o.care ?? null, o.marketer ?? null,
         o.closedAt ?? null, o.confirmedAt ?? null, o.net, o.net, o.phone ?? null, now);
-    if (o.item) raw.prepare('INSERT INTO raw_pos_order_items (id,order_id,pos_id,name,quantity,line_total) VALUES (?,?,?,?,1,?)').run(`${o.id}-1`, o.id, POS_ID, o.item, o.net);
-    for (const t of [o.createdAt, o.closedAt, o.confirmedAt]) markDirty(dirty, POS_ID, t);
+    if (o.item) raw.prepare('INSERT INTO raw_pos_order_items (id,order_id,pos_id,name,quantity,line_total) VALUES (?,?,?,?,1,?)').run(`${o.id}-1`, o.id, posId, o.item, o.net);
+    for (const t of [o.createdAt, o.closedAt, o.confirmedAt]) markDirty(dirty, posId, t);
   }
   await rebuildStats(db, dirty);
   await loginAs(raw, 'owner');
@@ -157,17 +157,19 @@ void test('Mục 4 sau khi thống nhất: chỉ tính đúng hậu tố, mỗi 
 // ---- Mục 5 (đã sửa): bấm số ở Tổng quan POS khi đang lọc nhóm đơn ----
 // Ô Sale của 4 bảng Tổng quan POS lọc nhóm Kháng sinh; Tổng quan Sale trước đây mở mọi nhóm nên số khác ô vừa bấm.
 // Nay trang nhận nhóm đơn qua gợi ý điều hướng và gửi productSegment cho cùng báo cáo overview (app/team-overview-view.tsx).
+// Thẻ theo POS (27/11/2026): Gentadox chỉ là thẻ ở POS Siêu Vô Gạo (POS khác xếp Khác), nên mục này dựng đơn ở Siêu Vô Gạo.
+const SEG_POS = 'sieu-vo-gao';
 const segWorld = async () => world([SALE], [
   { id: 'g1', seller: SALE.id, status: 1, createdAt: '2026-11-05T02:00:00', closedAt: '2026-11-05T02:00:00', confirmedAt: '2026-11-05T02:00:00', net: 110000, phone: '0000000006', item: 'Gentadox 100ml' },
   { id: 'h1', seller: SALE.id, status: 1, createdAt: '2026-11-05T02:40:00', closedAt: '2026-11-05T02:40:00', confirmedAt: '2026-11-05T02:40:00', net: 60000, phone: '0000000007', item: 'Men tiêu hoá' },
-]);
+], SEG_POS);
 
 void test('Mục 5: Tổng quan Sale nhận nhóm đơn thì khớp ô Sale vừa bấm ở Tổng quan POS', async () => {
   try {
     await segWorld();
-    const clicked = (await get(sectionsGET, '/api/reports/sections', { start: TODAY, end: TODAY, productSegment: 'gentadox' })).sale as { net: number };
-    const kept = totalOf(await get(overviewGET, '/api/reports/overview', { start: TODAY, end: TODAY, team: 'sale', groupBy: 'day', compare: 'previous', productSegment: 'gentadox' }), 'current');
-    const lost = totalOf(await get(overviewGET, '/api/reports/overview', { start: TODAY, end: TODAY, team: 'sale', groupBy: 'day', compare: 'previous' }), 'current');
+    const clicked = (await get(sectionsGET, '/api/reports/sections', { posIds: SEG_POS, start: TODAY, end: TODAY, productSegment: 'gentadox' })).sale as { net: number };
+    const kept = totalOf(await get(overviewGET, '/api/reports/overview', { posIds: SEG_POS, start: TODAY, end: TODAY, team: 'sale', groupBy: 'day', compare: 'previous', productSegment: 'gentadox' }), 'current');
+    const lost = totalOf(await get(overviewGET, '/api/reports/overview', { posIds: SEG_POS, start: TODAY, end: TODAY, team: 'sale', groupBy: 'day', compare: 'previous' }), 'current');
     assert.equal(clicked.net, 110000);
     assert.equal(kept.closedNet, clicked.net);
     // Mất bộ lọc (cách cũ): Tổng quan Sale cộng cả nhóm Khác.
