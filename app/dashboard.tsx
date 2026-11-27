@@ -1786,7 +1786,7 @@ export default function Dashboard({ user, initialView, demo = false, uiMoi = fal
           {!gated && workBoss && view === 'giao-viec-chat' && <GiaoViecChatView uiMoi={uiMoi} />}
           {!gated && workBoss && view === 'giao-viec-hop' && <GiaoViecHopView uiMoi={uiMoi} />}
           {!gated && workBoss && view === 'giao-viec-zalo' && <GiaoViecZaloView uiMoi={uiMoi} />}
-          {!gated && canNavigate('giao-viec-kpi') && view === 'giao-viec-kpi' && <GiaoViecKpiView owner={isOwner(user)} onOpen={(v) => goTo(v)} />}
+          {!gated && canNavigate('giao-viec-kpi') && view === 'giao-viec-kpi' && <GiaoViecKpiView owner={isOwner(user)} onOpen={(v) => goTo(v)} uiMoi={uiMoi} />}
           {!gated && workBoss && view === 'giao-viec-bao-cao' && <GiaoViecBaoCaoView uiMoi={uiMoi} />}
           {!gated && view === 'audit' && isOwner(user) && <AuditView />}
           {!gated && view === 'dispatch' && isOwner(user) && <DispatchView />}

@@ -25,7 +25,8 @@ import { setPosIds, usePosIds } from './pos-store';
 import { useGoalShare } from './goal-share-store';
 import { parseMoney, type TargetItem } from './targets-panel';
 import { setHrUnit, useBranch, useHrUnit, useTeamChoice } from './team-store';
-import { ChartCard, Definitions, EmptyState, ErrorBox, SkeletonTable, pct, shortMoney, toast, vi } from './ui-kit';
+import { ChartCard, Definitions, EmptyState, FoldBlock, ErrorBox, SkeletonTable, pct, shortMoney, toast, vi } from './ui-kit';
+import { PageHeadMoi } from './trang-moi';
 import { useApi } from './use-api';
 import { Kpi2Panel, ProductQtyCard } from './kpi2-panel';
 import { seesAllKpi, type KpiSeen } from '@/lib/kpi/kpi-seen';
@@ -132,7 +133,7 @@ function useDept(enabled: boolean, dept: Dept, reportUrl: string | null) {
   return { dept, teams, report };
 }
 
-export function GiaoViecKpiView({ owner, onOpen }: { owner: boolean; onOpen?: (view: 'sale-overview' | 'cskh-overview') => void }) {
+export function GiaoViecKpiView({ owner, onOpen, uiMoi = false }: { owner: boolean; onOpen?: (view: 'sale-overview' | 'cskh-overview') => void; /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới, tắt thì y như cũ. */ uiMoi?: boolean }) {
   // Quy tắc POS (anh Vũ 12/11/2026): số đã đạt / thực đạt tính trên POS đang chọn.
   const [kpiPos] = usePosIds();
   const today = todayVn(), uid = useId();
@@ -226,8 +227,8 @@ export function GiaoViecKpiView({ owner, onOpen }: { owner: boolean; onOpen?: (v
   } : undefined);
 
   const quick = matchQuick(period, today);
-  return (
-    <section className="min-w-0 space-y-4">
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  const periodBar = () => (
       <div className="flex flex-wrap items-center gap-2">
         <fieldset data-ui="pill-group" className="flex flex-wrap gap-1.5">
           <legend className="sr-only">Kỳ KPI</legend>
@@ -243,9 +244,9 @@ export function GiaoViecKpiView({ owner, onOpen }: { owner: boolean; onOpen?: (v
           <Input id={`${uid}-to`} type="date" className="h-8 w-[9.5rem]" value={period.end} onChange={(e) => e.target.value && setPeriod((p) => ({ ...p, end: e.target.value }))} />
         </div>
       </div>
-      {!ok && <ErrorBox error="Kỳ không hợp lệ: ngày bắt đầu phải trước ngày kết thúc, dài tối đa một năm." />}
-
-      {depts.map((d) => {
+  );
+  const overviewCards = () => (
+      depts.map((d) => {
         const sale = d.dept === 'sale', label = LABEL[d.dept], teams = teamsOf(d);
         const rows = ok && !future ? d.report.data?.current.byEmployee : undefined;
         const actualOf = (ids: string[]) => (rows ? teamActual(rows, ids, ms.rateBase) : null);
@@ -281,10 +282,10 @@ export function GiaoViecKpiView({ owner, onOpen }: { owner: boolean; onOpen?: (v
               )}
           </ChartCard>
         );
-      })}
-
-      {/* Chỉ tiêu mới (07/11/2026): KPI team và phần Leader / Mentor chia cho từng người, rồi số lượng sản phẩm để cân nên bán gì. */}
-      {ok && !future && targetsReady && scopeReady && editMonth && depts.map((d) => {
+      })
+  );
+  const kpi2Blocks = () => (
+      ok && !future && targetsReady && scopeReady && editMonth && depts.map((d) => {
         const teams = teamsOf(d);
         if (!teams.length || !d.teams.data) return null;
         return (
@@ -294,12 +295,13 @@ export function GiaoViecKpiView({ owner, onOpen }: { owner: boolean; onOpen?: (v
             <ProductQtyCard dept={d.dept} teams={teams} period={period} end={end} />
           </div>
         );
-      })}
-
-      {/* KPI số đưa về của Marketing (anh Vũ 14/11/2026), báo cáo sếp qua Zalo đọc số này. */}
-      {ok && !future && editMonth && owner && <MktLeadsKpiPanel month={editMonth} owner={owner} />}
-
-      {owner && ok && targetsReady && scopeReady && editMonth && depts.map((d) => {
+      })
+  );
+  const mktEl = () => (
+      ok && !future && editMonth && owner && <MktLeadsKpiPanel month={editMonth} owner={owner} />
+  );
+  const editCards = () => (
+      owner && ok && targetsReady && scopeReady && editMonth && depts.map((d) => {
         const sale = d.dept === 'sale', label = LABEL[d.dept], teams = teamsOf(d);
         if (!teams.length) return null;
         const dirty = teams.some((t) => draft[`${editMonth}:${t.id}`]);
@@ -329,8 +331,9 @@ export function GiaoViecKpiView({ owner, onOpen }: { owner: boolean; onOpen?: (v
             </div>
           </ChartCard>
         );
-      })}
-
+      })
+  );
+  const defsEl = () => (
       <Definitions items={[
         'KPI đặt theo tháng cho cả team (doanh thu, trung bình đơn, tỉ lệ chốt); leader tự chia cho từng người, web không chia.',
         'Chỉ tiêu mới (07/11/2026): Sale có Số nhận (số được chia), Số chốt (chốt từ số được chia), Doanh số, Số đơn (đơn chốt), số lượng từng sản phẩm; CSKH có Doanh số, Tỷ lệ tự upsell, số lượng từng sản phẩm. Chủ hệ thống đặt KPI cả team, Leader / Mentor chia cho người của mình; chia vượt KPI team thì hiện chữ đỏ.',
@@ -345,6 +348,53 @@ export function GiaoViecKpiView({ owner, onOpen }: { owner: boolean; onOpen?: (v
         'Bấm số của một team: mở Tổng quan Sale / CSKH của team đó, cùng kỳ, mọi POS.',
         'Ô tiền nhận "500tr", "1,2 tỷ", "450k" hoặc số đủ. Để trống TB đơn hay tỉ lệ chốt = bỏ KPI đó.',
       ]} />
+  );
+  // [hết khối chung]
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trên xuống: đầu trang (PageHeadMoi: chọn kỳ) → khối chính Tổng quan KPI từng bộ phận (bấm số team mở Tổng quan Sale / CSKH như cũ)
+  // → khối phụ thu gọn: Chỉ tiêu từng người và số lượng sản phẩm, KPI số đưa về của Marketing, Đặt KPI team (chủ hệ thống), Cách tính.
+  // Không thêm dải "Cần xem": số ở đây là tiến độ so với KPI tự đặt, không phải tỷ lệ có mốc đỏ chung.
+  if (uiMoi) {
+    const k = (s: string) => `ui-moi:giao-viec-kpi:${s}`;
+    const scope = `${ok ? periodLabel(period) : 'Kỳ chưa hợp lệ'} · ${share.note ?? 'mọi POS'}${scopeName ? ` · ${scopeName}` : ''} · KPI đặt theo tháng cho cả team, leader tự chia`;
+    return (
+      <section className="min-w-0 space-y-4">
+        <PageHeadMoi title="KPI team" scope={scope} tools={periodBar()} />
+        {!ok && <ErrorBox error="Kỳ không hợp lệ: ngày bắt đầu phải trước ngày kết thúc, dài tối đa một năm." />}
+        {overviewCards()}
+        <div className="grid min-w-0 gap-3">
+          {ok && !future && targetsReady && scopeReady && editMonth && (
+            <FoldBlock icon={Target} title="Chỉ tiêu từng người và số lượng sản phẩm" storageKey={k('kpi2')}><div className="min-w-0 space-y-4">{kpi2Blocks()}</div></FoldBlock>
+          )}
+          {ok && !future && editMonth && owner && (
+            <FoldBlock icon={Target} title="KPI số đưa về của Marketing" storageKey={k('mkt')}>{mktEl()}</FoldBlock>
+          )}
+          {owner && ok && targetsReady && scopeReady && editMonth && (
+            <FoldBlock icon={Pencil} title={`Đặt KPI team tháng ${mmyyyy(editMonth)}`} storageKey={k('edit')}><div className="min-w-0 space-y-4">{editCards()}</div></FoldBlock>
+          )}
+          <FoldBlock icon={Target} title="Cách tính" storageKey={k('defs')}>{defsEl()}</FoldBlock>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="min-w-0 space-y-4">
+      {periodBar()}
+      {!ok && <ErrorBox error="Kỳ không hợp lệ: ngày bắt đầu phải trước ngày kết thúc, dài tối đa một năm." />}
+
+      {overviewCards()}
+
+      {/* Chỉ tiêu mới (07/11/2026): KPI team và phần Leader / Mentor chia cho từng người, rồi số lượng sản phẩm để cân nên bán gì. */}
+      {kpi2Blocks()}
+
+      {/* KPI số đưa về của Marketing (anh Vũ 14/11/2026), báo cáo sếp qua Zalo đọc số này. */}
+      {mktEl()}
+
+      {editCards()}
+
+      {defsEl()}
     </section>
   );
 }
