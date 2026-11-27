@@ -5,7 +5,8 @@
 import { usePosIds } from './pos-store';
 import { usePeriod } from './period-store';
 import { AiPackButton } from './ai-pack';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { KPI_TIGHT, PageHeadMoi, WhySheet, tileGrid, type WhySpec } from './trang-moi';
 import { GitBranch, Layers, Scale, Users } from 'lucide-react';
 import { POS } from '@/lib/shared/report-model';
 import type { CskhAnalytics } from '@/lib/reports/cskh-analytics';
@@ -13,7 +14,7 @@ import { ICON } from './icons';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';
-import { Th, ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, ThinkingLine, dmy, money, pct, shortMoney, useSort, vi } from './ui-kit';
+import { Th, ChartCard, Definitions, EmptyState, ErrorBox, FoldBlock, KpiCard, posName, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, ThinkingLine, dmy, money, pct, shortMoney, useSort, vi } from './ui-kit';
 
 const COLORS: Record<string, string> = { 'Kháng sinh': 'var(--ai-3)', 'Combo': 'var(--ai-5)', 'Khác': 'var(--ink-4)' };
 const num = (n: number | null | undefined, d = 1) => n === null || n === undefined ? '—' : n.toFixed(d).replace('.', ',');
@@ -84,7 +85,9 @@ function Lorenz({ points }: { points: { people: number; share: number }[] }) {
   );
 }
 
-export function CskhAnalyticsView() {
+export function CskhAnalyticsView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới, tắt thì y như cũ. */ uiMoi?: boolean } = {}) {
+  // Giao diện mới: khung "Vì sao ra số này" đang mở (null = đóng).
+  const [why, setWhy] = useState<WhySpec | null>(null);
   const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
   const focus = useCskhFocus();
@@ -97,10 +100,10 @@ export function CskhAnalyticsView() {
   const divTotal = r ? r.diversity[1] + r.diversity[2] + r.diversity[3] : 0;
   const periodLabel = `${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`;
   const aovDiff = r?.total.aov && r.sale.aov ? (r.total.aov - r.sale.aov) / r.sale.aov * 100 : null;
-  return (
-    <div className="space-y-5">
-      <PageHeader eyebrow={periodLabel} title="Phân tích CSKH" subtitle="Khách của CSKH mua lần thứ mấy, đi từ nhóm sản phẩm nào sang nhóm nào, mua đa dạng không, doanh thu có chia đều giữa nhân viên không"
-        actions={<AiPackButton disabled={!r} pack={() => r && ({
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  // fold: chỉ bố cục mới truyền (thu gọn thẻ); bố cục cũ không truyền nên thẻ y như trước.
+  const aiPack = () => (
+        <AiPackButton disabled={!r} pack={() => r && ({
           page: 'Phân tích CSKH', period: periodLabel, scope: focus ? `riêng ${focus.name}` : 'mọi nhân viên CSKH',
           facts: [['Đơn chốt', r.total.orders], ['Khách', r.total.customers], ['Doanh thu', money(r.total.net)], ['GTTB CSKH', money(r.total.aov)], ['GTTB Sale cùng kỳ', money(r.sale.aov)],
             ['% đơn là mua lại', pct(r.total.repeatShare)], ['Đơn mỗi khách', num(r.total.ordersPerCustomer, 2)], ['Chỉ số đều (0–100)', num(r.evenness.index, 0)], ['20% người đứng đầu làm ra', pct(r.evenness.top20Share)]],
@@ -111,29 +114,9 @@ export function CskhAnalyticsView() {
           ],
           definitions: r.definitions,
           questions: ['CSKH đang bán thêm (upsell) tốt không? Đường đi sản phẩm nào đang mạnh, đường nào nên đẩy?', 'Nhân viên nào giỏi giữ khách mua lại, ai cần kèm? Vì sao?', 'Doanh thu có dồn vào vài người không, rủi ro gì?', 'GTTB CSKH so với Sale nói lên điều gì?'],
-        })} />} />
-      <CskhFocusBar />
-      <PeriodToolbar preset={preset} start={start} end={end} loading={loading} onReload={reload}
-        onPreset={setPreset}
-        onStart={setStart} onEnd={setEnd} />
-      <PosChips posIds={posIds} onChange={setPosIds} />
-      {error && !r && <ErrorBox error={error} onRetry={reload} />}
-      {!r && !error && <><SkeletonKpis count={4} className="xl:grid-cols-4" /><ChartCard title="Đường đi sản phẩm" subtitle="Đang tải…"><ThinkingLine lines={['Đang lấy lịch sử mua của từng khách…', 'Đang đối chiếu 6 POS…', 'Sắp xong…']} /><SkeletonTable rows={5} cols={4} /></ChartCard></>}
-      {r && (
-        <>
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-            <KpiCard icon={ICON.aov} tone="teal" label="GTTB CSKH" value={shortMoney(r.total.aov)} note={`Sale ${shortMoney(r.sale.aov)}${aovDiff === null ? '' : ` · CSKH ${aovDiff >= 0 ? 'cao hơn' : 'thấp hơn'} ${pct(Math.abs(aovDiff), 0)}`}`}
-              tooltip={{ period: periodLabel, current: money(r.total.aov), previous: money(r.sale.aov), previousLabel: 'GTTB Sale cùng kỳ', definition: r.definitions.aov }} />
-            <KpiCard icon={ICON.upsell} tone="green" label="Đơn là mua lại" value={pct(r.total.repeatShare, 0)} note={`${vi.format(r.total.orders - r.seqDist[1])} / ${vi.format(r.total.orders)} đơn là lần mua thứ 2 trở đi`}
-              tooltip={{ period: periodLabel, current: pct(r.total.repeatShare), definition: r.definitions.seq }} />
-            <KpiCard icon={ICON.customers} tone="blue" label="Đơn mỗi khách" value={num(r.total.ordersPerCustomer, 2)} note={`${vi.format(r.total.orders)} đơn · ${vi.format(r.total.customers)} khách trong kỳ`}
-              tooltip={{ period: periodLabel, current: `${vi.format(r.total.orders)} đơn ÷ ${vi.format(r.total.customers)} khách`, definition: r.definitions.scope }} />
-            <KpiCard icon={Scale} tone="purple" label="Chỉ số đều" value={r.evenness.index === null ? '—' : num(r.evenness.index, 0)} unit={r.evenness.index === null ? undefined : '/100'}
-              note={r.evenness.top20Share === null ? 'Cần từ 2 nhân viên' : `20% người đứng đầu làm ra ${pct(r.evenness.top20Share, 0)} doanh thu`}
-              tooltip={{ period: periodLabel, current: r.evenness.index === null ? '—' : `${num(r.evenness.index, 0)} / 100`, definition: r.definitions.evenness }} />
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        })} />
+  );
+  const flowCard = (r: CskhAnalytics) => (
             <ChartCard icon={GitBranch} title="Đường đi sản phẩm" subtitle="Nhóm của đơn liền trước → nhóm của đơn này (đơn mua lần 2 trở đi) · rê chuột vào dải để xem số" info={r.definitions.flows}>
               <FlowDiagram flows={r.flows} groups={r.groups} />
               {r.flows.length > 0 && (
@@ -148,6 +131,8 @@ export function CskhAnalyticsView() {
                 </ul>
               )}
             </ChartCard>
+  );
+  const seqDivCards = (r: CskhAnalytics) => (
             <div className="grid gap-4">
               <ChartCard icon={ICON.upsell} title="Khách mua lần thứ mấy" subtitle="Số đơn trong kỳ theo thứ tự mua của khách" info={r.definitions.seq}>
                 <ul className="m-0 list-none space-y-2 p-0">
@@ -172,12 +157,13 @@ export function CskhAnalyticsView() {
                 </div>
               </ChartCard>
             </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-            <ChartCard icon={Scale} title="Độ đều giữa nhân viên" subtitle={`${r.evenness.people} nhân viên · đường cong càng sát đường chéo càng đều`} info={r.definitions.evenness}>
+  );
+  const lorenzCard = (r: CskhAnalytics, fold?: { storageKey: string; summary?: string }) => (
+            <ChartCard collapse={fold} icon={Scale} title="Độ đều giữa nhân viên" subtitle={`${r.evenness.people} nhân viên · đường cong càng sát đường chéo càng đều`} info={r.definitions.evenness}>
               {r.evenness.people > 1 ? <Lorenz points={r.evenness.lorenz} /> : <EmptyState text="Cần từ 2 nhân viên để so độ đều." />}
             </ChartCard>
+  );
+  const staffCard = (r: CskhAnalytics) => (
             <ChartCard icon={Users} title={`Từng nhân viên · ${staff.length} người`} subtitle="Bấm tiêu đề cột để sắp xếp">
               {staff.length ? (
                 <TableWrap minWidth={880} maxHeight="30rem" stickyFirst>
@@ -210,6 +196,90 @@ export function CskhAnalyticsView() {
                 </TableWrap>
               ) : <EmptyState text="Chưa có đơn chốt của CSKH trong kỳ." />}
             </ChartCard>
+  );
+  // [hết khối chung]
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trên xuống: đầu trang (PageHeadMoi) → chọn riêng một nhân viên CSKH → một hàng 4 ô số (bấm mở "Vì sao ra số này")
+  // → Đường đi sản phẩm → bảng chính Từng nhân viên → khối phụ thu gọn: lần mua thứ mấy + độ đa dạng, độ đều, Cách tính.
+  // Trang không có tỷ lệ chốt / hoàn / hủy nên không có dải "Cần xem".
+  if (uiMoi) {
+    const scope = `${periodLabel} · ${posIds.length <= 3 ? posIds.map(posName).join(', ') : `${vi.format(posIds.length)} POS`} · ${focus ? `riêng ${focus.name}` : 'mọi nhân viên CSKH'} · đơn chốt của CSKH`;
+    const head = <PageHeadMoi title="Phân tích CSKH" scope={scope} hint="Khách của CSKH mua lần thứ mấy, đi từ nhóm sản phẩm nào sang nhóm nào, mua đa dạng không, doanh thu có chia đều giữa nhân viên không"
+      tools={<PeriodToolbar preset={preset} start={start} end={end} loading={loading} onReload={reload} onPreset={setPreset} onStart={setStart} onEnd={setEnd} />}
+      right={aiPack()} pos={<PosChips posIds={posIds} onChange={setPosIds} />} />;
+    const k = (s: string) => `ui-moi:cskh-analytics:${s}`;
+    return (
+      <div className="min-w-0 space-y-4">
+        {head}
+        <CskhFocusBar />
+        {error && !r && <ErrorBox error={error} onRetry={reload} />}
+        {!r && !error && <SkeletonKpis count={4} className="xl:grid-cols-4" />}
+        {r && (
+          <>
+            <div className={tileGrid(4)}>
+              <KpiCard icon={ICON.aov} tone="teal" label="GTTB CSKH" className={KPI_TIGHT} value={shortMoney(r.total.aov)} note={`Sale cùng kỳ ${shortMoney(r.sale.aov)}${aovDiff === null ? '' : ` · ${aovDiff >= 0 ? 'cao hơn' : 'thấp hơn'} ${pct(Math.abs(aovDiff), 0)}`}`}
+                onClick={() => setWhy({ title: 'GTTB CSKH', value: money(r.total.aov), scope, previous: undefined,
+                  rows: [{ label: 'Doanh thu', value: money(r.total.net) }, { label: 'Đơn chốt', value: vi.format(r.total.orders) }, { label: '= GTTB CSKH', value: money(r.total.aov), strong: true }, { label: 'GTTB Sale cùng kỳ', value: money(r.sale.aov) }],
+                  definition: r.definitions.aov })} />
+              <KpiCard icon={ICON.upsell} tone="green" label="Đơn là mua lại" className={KPI_TIGHT} value={pct(r.total.repeatShare, 0)} note={`${vi.format(r.total.orders - r.seqDist[1])} / ${vi.format(r.total.orders)} đơn là lần mua thứ 2 trở đi`}
+                onClick={() => setWhy({ title: 'Đơn là mua lại', value: pct(r.total.repeatShare), scope,
+                  rows: [1, 2, 3, 4].map((n) => ({ label: n === 1 ? 'Lần 1 · khách mới' : n === 4 ? 'Lần 4 trở lên' : `Lần ${n}`, value: vi.format(r.seqDist[n as 1 | 2 | 3 | 4]) })), definition: r.definitions.seq })} />
+              <KpiCard icon={ICON.customers} tone="blue" label="Đơn mỗi khách" className={KPI_TIGHT} value={num(r.total.ordersPerCustomer, 2)} note={`${vi.format(r.total.orders)} đơn · ${vi.format(r.total.customers)} khách trong kỳ`}
+                onClick={() => setWhy({ title: 'Đơn mỗi khách', value: num(r.total.ordersPerCustomer, 2), scope,
+                  rows: [{ label: 'Đơn chốt', value: vi.format(r.total.orders) }, { label: 'Khách', value: vi.format(r.total.customers) }, { label: '= Đơn mỗi khách', value: num(r.total.ordersPerCustomer, 2), strong: true }], definition: r.definitions.scope })} />
+              <KpiCard icon={Scale} tone="purple" label="Chỉ số đều giữa nhân viên" className={KPI_TIGHT} value={r.evenness.index === null ? '—' : num(r.evenness.index, 0)} unit={r.evenness.index === null ? undefined : '/100'}
+                note={r.evenness.top20Share === null ? 'Cần từ 2 nhân viên' : `20% người đứng đầu làm ra ${pct(r.evenness.top20Share, 0)} doanh thu`}
+                onClick={() => setWhy({ title: 'Chỉ số đều', value: r.evenness.index === null ? '—' : `${num(r.evenness.index, 0)} / 100`, scope,
+                  rows: [{ label: 'Số nhân viên', value: vi.format(r.evenness.people) }, { label: '20% người đứng đầu làm ra', value: pct(r.evenness.top20Share, 0) }], definition: r.definitions.evenness })} />
+            </div>
+            {flowCard(r)}
+            {staffCard(r)}
+            <div className="grid min-w-0 gap-3">
+              <FoldBlock icon={Layers} title="Khách mua lần thứ mấy · độ đa dạng" storageKey={k('seq')}>{seqDivCards(r)}</FoldBlock>
+              {lorenzCard(r, { storageKey: k('even'), summary: `${vi.format(r.evenness.people)} nhân viên` })}
+              <FoldBlock icon={Users} title="Cách tính" storageKey={k('defs')}><Definitions items={r.definitions} /></FoldBlock>
+            </div>
+          </>
+        )}
+        <WhySheet spec={why} onClose={() => setWhy(null)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <PageHeader eyebrow={periodLabel} title="Phân tích CSKH" subtitle="Khách của CSKH mua lần thứ mấy, đi từ nhóm sản phẩm nào sang nhóm nào, mua đa dạng không, doanh thu có chia đều giữa nhân viên không"
+        actions={aiPack()} />
+      <CskhFocusBar />
+      <PeriodToolbar preset={preset} start={start} end={end} loading={loading} onReload={reload}
+        onPreset={setPreset}
+        onStart={setStart} onEnd={setEnd} />
+      <PosChips posIds={posIds} onChange={setPosIds} />
+      {error && !r && <ErrorBox error={error} onRetry={reload} />}
+      {!r && !error && <><SkeletonKpis count={4} className="xl:grid-cols-4" /><ChartCard title="Đường đi sản phẩm" subtitle="Đang tải…"><ThinkingLine lines={['Đang lấy lịch sử mua của từng khách…', 'Đang đối chiếu 6 POS…', 'Sắp xong…']} /><SkeletonTable rows={5} cols={4} /></ChartCard></>}
+      {r && (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+            <KpiCard icon={ICON.aov} tone="teal" label="GTTB CSKH" value={shortMoney(r.total.aov)} note={`Sale ${shortMoney(r.sale.aov)}${aovDiff === null ? '' : ` · CSKH ${aovDiff >= 0 ? 'cao hơn' : 'thấp hơn'} ${pct(Math.abs(aovDiff), 0)}`}`}
+              tooltip={{ period: periodLabel, current: money(r.total.aov), previous: money(r.sale.aov), previousLabel: 'GTTB Sale cùng kỳ', definition: r.definitions.aov }} />
+            <KpiCard icon={ICON.upsell} tone="green" label="Đơn là mua lại" value={pct(r.total.repeatShare, 0)} note={`${vi.format(r.total.orders - r.seqDist[1])} / ${vi.format(r.total.orders)} đơn là lần mua thứ 2 trở đi`}
+              tooltip={{ period: periodLabel, current: pct(r.total.repeatShare), definition: r.definitions.seq }} />
+            <KpiCard icon={ICON.customers} tone="blue" label="Đơn mỗi khách" value={num(r.total.ordersPerCustomer, 2)} note={`${vi.format(r.total.orders)} đơn · ${vi.format(r.total.customers)} khách trong kỳ`}
+              tooltip={{ period: periodLabel, current: `${vi.format(r.total.orders)} đơn ÷ ${vi.format(r.total.customers)} khách`, definition: r.definitions.scope }} />
+            <KpiCard icon={Scale} tone="purple" label="Chỉ số đều" value={r.evenness.index === null ? '—' : num(r.evenness.index, 0)} unit={r.evenness.index === null ? undefined : '/100'}
+              note={r.evenness.top20Share === null ? 'Cần từ 2 nhân viên' : `20% người đứng đầu làm ra ${pct(r.evenness.top20Share, 0)} doanh thu`}
+              tooltip={{ period: periodLabel, current: r.evenness.index === null ? '—' : `${num(r.evenness.index, 0)} / 100`, definition: r.definitions.evenness }} />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+            {flowCard(r)}
+            {seqDivCards(r)}
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+            {lorenzCard(r)}
+            {staffCard(r)}
           </div>
           <Definitions items={r.definitions} />
         </>
