@@ -936,57 +936,60 @@ table th { white-space: nowrap; font-weight: 600; font-size: 11.5px; letter-spac
 }
 
 /* Đợt 2 giao diện mới (plan 2026-11-26-tong-quan-kieu-moi, mẫu bo-giao-dien-mau.html "Bộ linh kiện"): mọi mục dùng chung một bộ khối.
-   Chỉ áp dưới .ui-moi (SidebarInset khi cờ THP_UI_MOI bật); cờ tắt thì không phần tử nào mang class này nên web thật y như cũ.
+   Chỉ áp dưới .ui-moi-root (SidebarInset khi cờ THP_UI_MOI bật); cờ tắt thì không phần tử nào mang class này nên web thật y như cũ.
    Không đổi số, chữ, quyền: chỉ màu, bo góc, khoảng cách. Xanh --primary là màu nhấn duy nhất; nút chính đen; đỏ chỉ ở số vượt mốc đang có. */
 @layer components {
   .ui-moi { --radius-card: 20px; background: color-mix(in srgb, var(--ink) 4%, var(--bg)); overflow-x: clip; }
   .ui-moi main { overflow-x: clip; }
+  /* 27/11/2026 (anh Vũ: "mới được màn ngoài, còn chi tiết bên trong vẫn như cũ"): mọi luật con dưới đây gắn vào .ui-moi-root (thẻ <html>) thay cho
+     .ui-moi (SidebarInset), để phủ cả khung chi tiết, danh sách đơn, hồ sơ… bật ra ở portal ngoài SidebarInset. */
+  .ui-moi-root { --radius-card: 20px; }
   .snapshot-line { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 500; color: var(--warn); background: var(--warn-bg); }
 
   /* Tiêu đề trang */
-  .ui-moi .ph-title { font-size: 23px; font-weight: 700; letter-spacing: -.01em; }
+  .ui-moi-root .ph-title { font-size: 23px; font-weight: 700; letter-spacing: -.01em; }
 
   /* Thẻ: bo 20px, viền nhạt, bóng rất nhẹ */
-  .ui-moi .card { border-radius: 20px; border-color: var(--line); box-shadow: 0 1px 3px rgba(0,0,0,.04); }
-  .ui-moi .toolbar { border-radius: 20px; border-color: var(--line); box-shadow: 0 1px 3px rgba(0,0,0,.04); padding: 10px 12px; }
+  .ui-moi-root .card { border-radius: 20px; border-color: var(--line); box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+  .ui-moi-root .toolbar { border-radius: 20px; border-color: var(--line); box-shadow: 0 1px 3px rgba(0,0,0,.04); padding: 10px 12px; }
 
   /* Ô số: nền xám nhạt, không viền, nhãn thường (không viết hoa), số to; ô biểu tượng không màu riêng */
-  .ui-moi .kpi { border-radius: 16px; border-color: transparent; background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.04); padding: 16px 18px; }
-  .ui-moi .kpi .lbl { text-transform: none; letter-spacing: 0; font-size: 12.5px; font-weight: 500; color: var(--ink-2); }
-  .ui-moi .kpi .tile { background: var(--surface-2) !important; color: var(--ink-3) !important; }
-  .ui-moi .kpi .val { letter-spacing: -.01em; font-weight: 700; }
-  .ui-moi .kpi .note { font-size: 11.5px; }
+  .ui-moi-root .kpi { border-radius: 16px; border-color: transparent; background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.04); padding: 16px 18px; }
+  .ui-moi-root .kpi .lbl { text-transform: none; letter-spacing: 0; font-size: 12.5px; font-weight: 500; color: var(--ink-2); }
+  .ui-moi-root .kpi .tile { background: var(--surface-2) !important; color: var(--ink-3) !important; }
+  .ui-moi-root .kpi .val { letter-spacing: -.01em; font-weight: 700; }
+  .ui-moi-root .kpi .note { font-size: 11.5px; }
 
   /* Chọn kỳ và các nút chọn dạng viên thuốc */
-  .ui-moi .seg { border-radius: 999px; border-color: transparent; background: var(--surface-2); padding: 3px; }
-  .ui-moi .seg-thumb { top: 3px; left: 3px; height: calc(100% - 6px); border-radius: 999px; background: var(--surface); box-shadow: 0 1px 2px rgba(0,0,0,.1); }
-  .ui-moi .seg-btn { border-radius: 999px; padding: 5px 12px; color: var(--ink-3); font-weight: 500; }
-  .ui-moi .seg-btn.is-active { color: var(--ink); font-weight: 600; }
+  .ui-moi-root .seg { border-radius: 999px; border-color: transparent; background: var(--surface-2); padding: 3px; }
+  .ui-moi-root .seg-thumb { top: 3px; left: 3px; height: calc(100% - 6px); border-radius: 999px; background: var(--surface); box-shadow: 0 1px 2px rgba(0,0,0,.1); }
+  .ui-moi-root .seg-btn { border-radius: 999px; padding: 5px 12px; color: var(--ink-3); font-weight: 500; }
+  .ui-moi-root .seg-btn.is-active { color: var(--ink); font-weight: 600; }
 
   /* Hàng POS: một dòng, cuộn ngang trong hàng (không tràn trang), POS đang chọn là viên đen */
-  .ui-moi .posrow { flex-wrap: nowrap; overflow-x: auto; }
-  .ui-moi .poschip { border-radius: 999px; }
-  .ui-moi .poschip:not(.is-off) { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+  .ui-moi-root .posrow { flex-wrap: nowrap; overflow-x: auto; }
+  .ui-moi-root .poschip { border-radius: 999px; }
+  .ui-moi-root .poschip:not(.is-off) { background: var(--ink); border-color: var(--ink); color: var(--surface); }
 
   /* Nút: viên thuốc; nút chính đen */
-  .ui-moi .btn { border-radius: 999px; border-color: var(--line); font-weight: 600; }
-  .ui-moi .btn.primary { background: var(--ink); border-color: var(--ink); color: var(--surface); }
-  .ui-moi .btn.primary:hover { background: color-mix(in srgb, var(--ink) 85%, var(--surface)); }
+  .ui-moi-root .btn { border-radius: 999px; border-color: var(--line); font-weight: 600; }
+  .ui-moi-root .btn.primary { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+  .ui-moi-root .btn.primary:hover { background: color-mix(in srgb, var(--ink) 85%, var(--surface)); }
 
   /* Bảng: tiêu đề nhỏ màu xám, dòng thoáng, rê chuột nền xám nhạt */
-  .ui-moi table.tbl th { font-size: 11.5px; font-weight: 600; color: var(--ink-3); background: transparent; border-bottom: 1px solid var(--line); }
-  .ui-moi table.tbl td { border-bottom-color: var(--line); }
-  .ui-moi table.tbl tbody tr:hover > td { background: var(--surface-2); }
-  .ui-moi .tbl-wrap { border-radius: 12px; }
+  .ui-moi-root table.tbl th { font-size: 11.5px; font-weight: 600; color: var(--ink-3); background: transparent; border-bottom: 1px solid var(--line); }
+  .ui-moi-root table.tbl td { border-bottom-color: var(--line); }
+  .ui-moi-root table.tbl tbody tr:hover > td { background: var(--surface-2); }
+  .ui-moi-root .tbl-wrap { border-radius: 12px; }
 
   /* Dải cần xem / cảnh báo: bo tròn như mẫu */
-  .ui-moi .notice { border-radius: 16px; }
+  .ui-moi-root .notice { border-radius: 16px; }
 
   /* Điện thoại: không thanh kéo ngang cả trang, bảng tự cuộn trong khung */
   @media (max-width: 760px) {
-    .ui-moi .ph-title { font-size: 20px; }
-    .ui-moi .card, .ui-moi .toolbar { border-radius: 16px; }
-    .ui-moi .toolbar { flex-wrap: wrap; }
+    .ui-moi-root .ph-title { font-size: 20px; }
+    .ui-moi-root .card, .ui-moi-root .toolbar { border-radius: 16px; }
+    .ui-moi-root .toolbar { flex-wrap: wrap; }
   }
 }
 
@@ -1000,7 +1003,7 @@ table th { white-space: nowrap; font-weight: 600; font-size: 11.5px; letter-spac
 }
 
 /* Đợt 3 giao diện mới (anh Vũ 26/11/2026 23h24 "làm từng trang cũng phải mới"): các khối dùng chung chưa ăn luật đợt 2.
-   Chỉ áp khi cờ THP_UI_MOI bật: trong .ui-moi (SidebarInset) hoặc dưới .ui-moi-root (thẻ <html>, gắn ở app/dashboard.tsx khi cờ bật,
+   Chỉ áp khi cờ THP_UI_MOI bật: trong .ui-moi-root (SidebarInset) hoặc dưới .ui-moi-root (thẻ <html>, gắn ở app/dashboard.tsx khi cờ bật,
    để phủ cả khung nổi portal ra <body>). Cờ tắt thì không phần tử nào mang hai class này, web y như cũ.
    KHÔNG đặt trong @layer: utility Tailwind trên từng phần tử (rounded-lg, bg-primary…) ở lớp utilities, chỉ luật ngoài lớp mới thắng được. */
 
@@ -1022,12 +1025,12 @@ table th { white-space: nowrap; font-weight: 600; font-size: 11.5px; letter-spac
 .ui-moi-root :is([data-slot="dialog-overlay"], [data-slot="alert-dialog-overlay"], [data-slot="sheet-overlay"]) { background: color-mix(in srgb, var(--ink) 28%, transparent); }
 
 /* (3) Thanh tab bộ phận (.dept-tabs, dashboard.tsx): dạng viên thuốc như .seg — nền xám nhạt, tab đang chọn nền trắng; tên bộ phận màu chữ chính. */
-.ui-moi .dept-tabs { border-radius: 999px; border-color: transparent; background: var(--surface-2); box-shadow: none; padding: 3px; gap: 2px; }
-.ui-moi .dept-name { color: var(--ink); border-right-color: var(--line); }
-.ui-moi .dept-tab { border-radius: 999px; padding: 6px 14px; color: var(--ink-3); font-weight: 500; }
-.ui-moi .dept-tab:hover { background: color-mix(in srgb, var(--surface) 60%, transparent); color: var(--ink); }
-.ui-moi .dept-tab.is-active { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.1); }
-@media (max-width: 900px) { .ui-moi .dept-tabs { border-radius: 16px; } }
+.ui-moi-root .dept-tabs { border-radius: 999px; border-color: transparent; background: var(--surface-2); box-shadow: none; padding: 3px; gap: 2px; }
+.ui-moi-root .dept-name { color: var(--ink); border-right-color: var(--line); }
+.ui-moi-root .dept-tab { border-radius: 999px; padding: 6px 14px; color: var(--ink-3); font-weight: 500; }
+.ui-moi-root .dept-tab:hover { background: color-mix(in srgb, var(--surface) 60%, transparent); color: var(--ink); }
+.ui-moi-root .dept-tab.is-active { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.1); }
+@media (max-width: 900px) { .ui-moi-root .dept-tabs { border-radius: 16px; } }
 
 /* (4) Ô nhập trên thanh lọc: Input, SelectTrigger, ô chọn thô, .field — bo viên thuốc, viền nhạt; ô nhiều dòng bo 14px.
    MultiFilter (dashboard.tsx) là Button + Popover nên đã ăn luật (1), (2). */
@@ -1038,65 +1041,65 @@ table th { white-space: nowrap; font-weight: 600; font-size: 11.5px; letter-spac
 
 /* (5) Biểu đồ (recharts trong ChartContainer): lưới và trục nhạt theo token, khung gợi ý bo 12px. Bo góc cột: barRadius() ở app/ui-kit.tsx.
    Màu POS / trạng thái giữ nguyên (đã có bản theo token posVar / STATUS_VARS; hex giữ cho xuất pptx / canvas). */
-.ui-moi .recharts-cartesian-grid line { stroke: var(--line); stroke-dasharray: 3 4; }
-.ui-moi .recharts-cartesian-axis-tick text { fill: var(--ink-3); font-size: 11px; }
-.ui-moi .recharts-cartesian-axis-line, .ui-moi .recharts-cartesian-axis-tick-line { stroke: var(--line); }
-.ui-moi .recharts-tooltip-wrapper > div, .ui-moi [data-slot="chart"] .recharts-tooltip-wrapper > * { border-radius: 12px; border-color: var(--line); box-shadow: 0 8px 24px rgba(0,0,0,.10); }
-.ui-moi .recharts-legend-item-text { color: var(--ink-2) !important; }
+.ui-moi-root .recharts-cartesian-grid line { stroke: var(--line); stroke-dasharray: 3 4; }
+.ui-moi-root .recharts-cartesian-axis-tick text { fill: var(--ink-3); font-size: 11px; }
+.ui-moi-root .recharts-cartesian-axis-line, .ui-moi-root .recharts-cartesian-axis-tick-line { stroke: var(--line); }
+.ui-moi-root .recharts-tooltip-wrapper > div, .ui-moi-root [data-slot="chart"] .recharts-tooltip-wrapper > * { border-radius: 12px; border-color: var(--line); box-shadow: 0 8px 24px rgba(0,0,0,.10); }
+.ui-moi-root .recharts-legend-item-text { color: var(--ink-2) !important; }
 
 /* (6) Khối nhỏ dùng chung (app/ui-kit.tsx, dashboard.tsx Surface, settings-hub, advisor-panel): móc bằng data-ui (không đổi gì khi cờ tắt).
    StatusChip / DeltaPill vốn đã là viên thuốc (rounded-full) nên giữ nguyên. */
-.ui-moi .ministat { border-radius: 14px; background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.04); }
-.ui-moi .ministat:hover, .ui-moi .ministat:focus-visible { background: var(--surface-2); }
-.ui-moi .ministat.is-static:hover { background: var(--surface); }
-.ui-moi .ministat > span:first-child { background: var(--surface-2) !important; color: var(--ink-3) !important; border-radius: 10px; }
-.ui-moi .ministat.is-active { box-shadow: inset 0 0 0 1.5px var(--ink); }
-.ui-moi [data-ui="section-title"], .ui-moi [data-ui="surface-title"], .ui-moi [data-ui="settings-title"] { font-size: 19px; font-weight: 700; letter-spacing: -.01em; }
-.ui-moi [data-ui="skeleton-table"] th { background: transparent; }
-.ui-moi [data-ui="skeleton-table"] tr { border-color: var(--line); }
-.ui-moi [data-ui="advisor"] { background: var(--surface); border-color: var(--line); border-radius: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+.ui-moi-root .ministat { border-radius: 14px; background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+.ui-moi-root .ministat:hover, .ui-moi-root .ministat:focus-visible { background: var(--surface-2); }
+.ui-moi-root .ministat.is-static:hover { background: var(--surface); }
+.ui-moi-root .ministat > span:first-child { background: var(--surface-2) !important; color: var(--ink-3) !important; border-radius: 10px; }
+.ui-moi-root .ministat.is-active { box-shadow: inset 0 0 0 1.5px var(--ink); }
+.ui-moi-root [data-ui="section-title"], .ui-moi-root [data-ui="surface-title"], .ui-moi-root [data-ui="settings-title"] { font-size: 19px; font-weight: 700; letter-spacing: -.01em; }
+.ui-moi-root [data-ui="skeleton-table"] th { background: transparent; }
+.ui-moi-root [data-ui="skeleton-table"] tr { border-color: var(--line); }
+.ui-moi-root [data-ui="advisor"] { background: var(--surface); border-color: var(--line); border-radius: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
 
 /* Móc dùng chung cho từng trang (data-ui, không đổi gì khi cờ tắt), dùng từ đợt 3 trở đi:
    tile = ô số tự vẽ nằm trên nền trang; tile-in = ô số nằm trong thẻ; tile-pick = ô bấm chọn; box = khung phụ trong thẻ;
    pill-group = nhóm nút chọn tự vẽ (fieldset / radiogroup) → như .seg; btn = nút thô → như .btn; mini-tbl = bảng nhỏ trong khung nổi. */
-.ui-moi [data-ui="tile"] { border-radius: 16px; border-color: transparent; background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.04); }
-.ui-moi [data-ui="tile"]:hover { border-color: var(--line); box-shadow: 0 2px 8px rgba(0,0,0,.06); }
-.ui-moi [data-ui="tile-in"] { border-radius: 16px; border-color: transparent; background: var(--surface-2); }
-.ui-moi [data-ui="tile-pick"] { border-radius: 14px; border-color: transparent; background: var(--surface-2); }
-.ui-moi [data-ui="tile-pick"][aria-pressed="true"] { background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--ink); }
-.ui-moi [data-ui="box"] { border-radius: 14px; border-color: var(--line); }
-.ui-moi [data-ui="pill-group"] { border-radius: 999px; border-color: transparent; background: var(--surface-2); padding: 3px; gap: 2px; }
-.ui-moi [data-ui="pill-group"] > button { border-radius: 999px; padding: 5px 12px; background: transparent; color: var(--ink-3); font-weight: 500; }
-.ui-moi [data-ui="pill-group"] > button:hover { color: var(--ink); }
-.ui-moi [data-ui="pill-group"] > button:is([aria-pressed="true"], [aria-checked="true"], [aria-selected="true"]) { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.1); }
-.ui-moi [data-ui="btn"] { border-radius: 999px; border-color: var(--line); font-weight: 600; }
+.ui-moi-root [data-ui="tile"] { border-radius: 16px; border-color: transparent; background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+.ui-moi-root [data-ui="tile"]:hover { border-color: var(--line); box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+.ui-moi-root [data-ui="tile-in"] { border-radius: 16px; border-color: transparent; background: var(--surface-2); }
+.ui-moi-root [data-ui="tile-pick"] { border-radius: 14px; border-color: transparent; background: var(--surface-2); }
+.ui-moi-root [data-ui="tile-pick"][aria-pressed="true"] { background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--ink); }
+.ui-moi-root [data-ui="box"] { border-radius: 14px; border-color: var(--line); }
+.ui-moi-root [data-ui="pill-group"] { border-radius: 999px; border-color: transparent; background: var(--surface-2); padding: 3px; gap: 2px; }
+.ui-moi-root [data-ui="pill-group"] > button { border-radius: 999px; padding: 5px 12px; background: transparent; color: var(--ink-3); font-weight: 500; }
+.ui-moi-root [data-ui="pill-group"] > button:hover { color: var(--ink); }
+.ui-moi-root [data-ui="pill-group"] > button:is([aria-pressed="true"], [aria-checked="true"], [aria-selected="true"]) { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.1); }
+.ui-moi-root [data-ui="btn"] { border-radius: 999px; border-color: var(--line); font-weight: 600; }
 :is(.ui-moi, .ui-moi-root) [data-ui="mini-tbl"] th { font-size: 11px; font-weight: 600; color: var(--ink-3); }
 :is(.ui-moi, .ui-moi-root) [data-ui="mini-tbl"] :is(td, th) { padding-top: 4px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
 :is(.ui-moi, .ui-moi-root) [data-ui="mini-tbl"] tr:last-child > :is(td, th) { border-bottom: 0; }
 /* Bảng nhiệt (overview-trends): ô bo 6px, tiêu đề nhỏ xám; màu ô giữ nguyên vì là dữ liệu. */
-.ui-moi [data-ui="heat-tbl"] td { border-radius: 6px; }
-.ui-moi [data-ui="heat-tbl"] th { font-size: 11px; font-weight: 600; color: var(--ink-3); }
-.ui-moi [data-ui="tile-pick"][aria-pressed="true"] { border-color: transparent; }
+.ui-moi-root [data-ui="heat-tbl"] td { border-radius: 6px; }
+.ui-moi-root [data-ui="heat-tbl"] th { font-size: 11px; font-weight: 600; color: var(--ink-3); }
+.ui-moi-root [data-ui="tile-pick"][aria-pressed="true"] { border-color: transparent; }
 /* Ô phân khúc Sale (sale-segment-block): viền trên màu phân khúc là dữ liệu nhận diện, giữ; bo trên theo ô mới. */
-.ui-moi [data-ui="tile-in"][style*="border-top"] { border-top-left-radius: 16px; border-top-right-radius: 16px; }
+.ui-moi-root [data-ui="tile-in"][style*="border-top"] { border-top-left-radius: 16px; border-top-right-radius: 16px; }
 /* Hồ sơ nhân sự: tiêu đề trang như .ph-title, danh sách bo 16px, ô tìm viên thuốc, khối Theo kỳ là thẻ thường (bỏ viền xanh dày). */
-.ui-moi [data-ui="page-title"] { font-size: 23px; font-weight: 700; letter-spacing: -.01em; }
-.ui-moi [data-ui="list"] { border-radius: 16px; border-color: var(--line); background: var(--surface); overflow: hidden; }
-.ui-moi [data-ui="search"] { border-radius: 999px; border-color: var(--line); }
-.ui-moi [data-ui="period-card"] { border-width: 1px; border-color: var(--line); border-radius: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+.ui-moi-root [data-ui="page-title"] { font-size: 23px; font-weight: 700; letter-spacing: -.01em; }
+.ui-moi-root [data-ui="list"] { border-radius: 16px; border-color: var(--line); background: var(--surface); overflow: hidden; }
+.ui-moi-root [data-ui="search"] { border-radius: 999px; border-color: var(--line); }
+.ui-moi-root [data-ui="period-card"] { border-width: 1px; border-color: var(--line); border-radius: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
 /* Nhóm nút chọn ghép từ .btn (giao-viec-kpi, mkt-leads-kpi): bỏ viền từng nút trong nhóm viên thuốc. */
-.ui-moi [data-ui="pill-group"] > button { border-color: transparent; box-shadow: none; }
-.ui-moi [data-ui="pill-group"] { display: inline-flex; width: fit-content; }
+.ui-moi-root [data-ui="pill-group"] > button { border-color: transparent; box-shadow: none; }
+.ui-moi-root [data-ui="pill-group"] { display: inline-flex; width: fit-content; }
 /* round = chỉ đổi bo góc (giữ viền / màu trạng thái riêng của chỗ đó, vd form đang sửa viền xanh, team đang chọn). */
-.ui-moi [data-ui="round"] { border-radius: 16px; }
-/* tbl = bảng tự vẽ chưa có class .tbl: tiêu đề nhỏ xám, dòng viền nhạt, rê chuột nền xám như .ui-moi table.tbl. */
-.ui-moi [data-ui="tbl"] th { font-size: 11.5px; font-weight: 600; color: var(--ink-3); background: transparent; border-bottom: 1px solid var(--line); }
-.ui-moi [data-ui="tbl"] td { border-bottom: 1px solid var(--line); }
-.ui-moi [data-ui="tbl"] tbody tr:hover > td { background: var(--surface-2); }
-.ui-moi [data-ui="tbl"] tbody tr:last-child > td { border-bottom: 0; }
+.ui-moi-root [data-ui="round"] { border-radius: 16px; }
+/* tbl = bảng tự vẽ chưa có class .tbl: tiêu đề nhỏ xám, dòng viền nhạt, rê chuột nền xám như .ui-moi-root table.tbl. */
+.ui-moi-root [data-ui="tbl"] th { font-size: 11.5px; font-weight: 600; color: var(--ink-3); background: transparent; border-bottom: 1px solid var(--line); }
+.ui-moi-root [data-ui="tbl"] td { border-bottom: 1px solid var(--line); }
+.ui-moi-root [data-ui="tbl"] tbody tr:hover > td { background: var(--surface-2); }
+.ui-moi-root [data-ui="tbl"] tbody tr:last-child > td { border-bottom: 0; }
 /* round-pill = nhóm nút chọn có màu trạng thái riêng (vd chế độ chia số chạy thật / chạy thử): chỉ bo viên thuốc, giữ màu. */
-.ui-moi [data-ui="round-pill"], .ui-moi [data-ui="round-pill"] > button { border-radius: 999px; }
+.ui-moi-root [data-ui="round-pill"], .ui-moi-root [data-ui="round-pill"] > button { border-radius: 999px; }
 /* sub-title = tiêu đề nhóm nhỏ viết hoa: kiểu mới viết thường, đậm vừa. */
 :is(.ui-moi, .ui-moi-root) [data-ui="sub-title"] { text-transform: none; letter-spacing: 0; font-size: 12.5px; color: var(--ink-2); }
 /* pill-bar = thanh chọn nhỏ tự vẽ trong đầu thẻ (vd KPI CSKH / Sale): viên thuốc nền xám, không viền. */
-.ui-moi [data-ui="pill-bar"] { border-radius: 999px; border-color: transparent; padding-left: 10px; padding-right: 10px; }
+.ui-moi-root [data-ui="pill-bar"] { border-radius: 999px; border-color: transparent; padding-left: 10px; padding-right: 10px; }
