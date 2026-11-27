@@ -3,6 +3,8 @@
 // Khối theo nhóm sản phẩm (25/09/2026): "Khách bắt nguồn từ đâu" (Tổng quan CSKH) và "Chốt theo nhóm sản phẩm" (Tổng quan Sale).
 // Người xem chọn cách chia: nhóm chính (Kháng sinh · Combo · Khác, nhận diện theo nhãn / sản phẩm / cả hai), từng nhãn, từng sản phẩm.
 import { StaffName } from './staff-name';
+import type { ReactNode } from 'react';
+import { groupStaffCommon, staffCommonTotal, type StaffCommon } from '@/lib/reports/staff-merge';
 import { returnTone } from '@/lib/shared/return-tone';
 import {
   useEffect,
@@ -554,6 +556,10 @@ export function SaleGroupBlock({
   title = 'Chốt theo nhóm sản phẩm',
   plainTitle,
   plainSubtitle,
+  common,
+  deptNet = 0,
+  renderPacked,
+  onCompare,
   subtitle = 'Số chia = đơn lên trong kỳ (như ô Tất cả trên Pancake) · tỷ lệ chốt = số chia đã chốt ÷ số chia (không vượt 100%); theo nhóm = số chia đã chốt thuộc nhóm ÷ tổng số chia · một đơn có cả hai loại tính ở cả hai nhóm · bấm số để xem từng đơn',
 }: Params & {
   /** Có thì thêm cột Hoàn, Hủy tô màu (anh Vũ 21/10/2026: đỏ từ 7%, vàng từ 5%, xanh dưới 5%). */
@@ -565,6 +571,12 @@ export function SaleGroupBlock({
   subtitle?: string;
   /** Tiêu đề khi đang ẩn cột thẻ đơn. */ plainTitle?: string;
   plainSubtitle?: string;
+  /** Bảng nhân viên gộp (27/11/2026, plan gọn trang đợt 2): số chung từng người lấy từ báo cáo tổng quan (lib/reports/staff-merge.ts),
+   *  cùng nguồn với ô số đầu trang. Không có (CSKH) thì lấy từ chính bảng này. */
+  common?: Map<string, StaffCommon>;
+  /** Doanh thu chốt cả bộ phận (ô Doanh thu đầu trang), để tính tỷ trọng. */ deptNet?: number;
+  /** Ô DT đóng hàng trở đi (Sale): sellerId null = dòng Tổng. */ renderPacked?: (sellerId: string | null, net: number | undefined) => ReactNode;
+  /** Nút So sánh nhân viên ở đầu bảng. */ onCompare?: () => void;
 }) {
   const [tagPref, setTagPref] = useTagPref(team);
   const showTags = tagPref === 'show';
@@ -703,6 +715,13 @@ export function SaleGroupBlock({
   const labels = showTags ? (r?.groups.map((g) => g.label) ?? []) : [];
   const tagCount = r?.groups.length ?? 0;
   const sort = useSort<string>('closedNet');
+  // Số chung của một người: Sale lấy báo cáo tổng quan (common), CSKH lấy chính bảng này. Thẻ đơn, đang đóng hàng, đã nhận giữ nguồn bảng này.
+  const view = (x: { sellerId: string; created: number; createdClosed: number; closed: number; closedNet: number; closeRate: number | null; aov: number | null }) => {
+    const c = common?.get(x.sellerId);
+    if (common) return { created: c?.rateBase ?? 0, createdClosed: c?.rateTop ?? 0, closed: c?.closedOrders ?? 0, closedNet: c?.closedNet ?? 0, closeRate: c ? c.rate : null, aov: c?.averageOrder ?? null, share: c?.share ?? null, packedNet: c?.packedNet, packedShare: c?.packedShare ?? null, hidden: !!c?.assignedHidden };
+    const g = groupStaffCommon(x, deptNet);
+    return { created: x.created, createdClosed: x.createdClosed, closed: x.closed, closedNet: x.closedNet, closeRate: x.closeRate, aov: x.aov, share: g.share, packedNet: undefined as number | undefined, packedShare: null as number | null, hidden: false };
+  };
   // Cột So cùng kỳ: sắp theo mức đổi (tỷ lệ chốt theo điểm, còn lại theo %); thang vạch chung cho cả cột.
   const cmpDeltas = useMemo(
     () =>
@@ -741,13 +760,17 @@ export function SaleGroupBlock({
       [...(r?.staff ?? [])].sort((a, b) => {
         const v = (x: typeof a) =>
           sort.key === 'closedNet'
-            ? x.closedNet
+            ? view(x).closedNet
             : sort.key === 'closed'
-              ? x.closed
+              ? view(x).closed
               : sort.key === 'created'
-                ? x.created
+                ? view(x).created
                 : sort.key === 'closeRate'
-                  ? (x.closeRate ?? -1)
+                  ? (view(x).closeRate ?? -1)
+                : sort.key === '__aov'
+                  ? (view(x).aov ?? -1)
+                : sort.key === '__packed'
+                  ? (view(x).packedNet ?? -1)
                   : sort.key === 'packedRate'
                     ? (x.packedRate ?? -1)
                     : sort.key === 'delivered' || sort.key === 'deliveredNet'
@@ -761,7 +784,8 @@ export function SaleGroupBlock({
           ? (v(b) ?? -1) - (v(a) ?? -1)
           : (v(a) ?? -1) - (v(b) ?? -1);
       }),
-    [r, sort.key, sort.desc, metric, cmpDeltas, rates],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [r, sort.key, sort.desc, metric, cmpDeltas, rates, common, deptNet],
   );
   const pickCls = (sid: string, g: string | null, packed = false) =>
     `num rounded-md px-1.5 py-0.5 hover:bg-tint-2 ${pick?.staffId === sid && pick.group === g && !!pick.packed === packed ? 'bg-tint-2 font-semibold' : ''}`;
@@ -818,6 +842,7 @@ export function SaleGroupBlock({
       }
       action={
         <span className="flex flex-wrap items-center gap-2">
+          {onCompare && <button type="button" className="btn sm" onClick={onCompare}>So sánh nhân viên →</button>}
           {showTags && (
             <Select
               value={tag || '__all'}
@@ -991,17 +1016,17 @@ export function SaleGroupBlock({
                   >
                     Nhân viên
                   </Th>
-                  <SortTh k="created" label="Số chia" sort={sort} />
+                  <SortTh k="created" label="Số chia" sort={sort} title={common ? 'Mẫu số tỷ lệ chốt theo nút Cách tính (đơn lên hoặc số được chia), cùng ô Tỷ lệ chốt đầu trang' : undefined} />
                   <SortTh k="closed" label="Đơn chốt" sort={sort} />
                   {!noRate && <SortTh k="closeRate" label="Tỷ lệ chốt" sort={sort} />}
                   <SortTh
-                    k="packedRate"
-                    label="Đang đóng hàng"
+                    k={renderPacked ? '__packed' : 'packedRate'}
+                    label={renderPacked ? 'Đóng hàng trở đi' : 'Đang đóng hàng'}
                     sort={sort}
-                    title="Đơn chốt kho đã chuyển sang Đang đóng hàng (hoặc đã đi tiếp)"
+                    title={renderPacked ? 'Doanh thu các đơn chốt trong kỳ đã vào Đang đóng hàng trở đi (bấm để xem đơn) · dòng nhỏ: % trên doanh thu và số đơn đã đóng' : 'Đơn chốt kho đã chuyển sang Đang đóng hàng (hoặc đã đi tiếp)'}
                   />
                   {rates && <><SortTh k="__ret" label="Hoàn" sort={sort} title="Tỷ lệ hoàn, cùng cách tính ô Hoàn đầu trang · đỏ từ 7%, vàng từ 5%, xanh dưới 5%" /><SortTh k="__cancel" label="Hủy" sort={sort} title="Đơn hủy ÷ đơn lên, cùng cách tính ô Hủy đầu trang · đỏ từ 7%, vàng từ 5%, xanh dưới 5%" /></>}
-                  <SortTh k="closedNet" label="Doanh thu" sort={sort} />
+                  <SortTh k="closedNet" label="Doanh thu" sort={sort} title="Dòng nhỏ: giá trị một đơn (doanh thu ÷ đơn chốt) · phần trong doanh thu bộ phận" />
                   <SortTh k="delivered" label="Đơn đã nhận" sort={sort} title="Trong số Đơn chốt trong kỳ, đơn nay ở Đã nhận hoặc Đã thu tiền" />
                   <SortTh k="deliveredNet" label="Tiền khách trả" sort={sort} title="Tổng giá trị các đơn đã nhận · dòng nhỏ: phần Pancake đã thu tiền từ hãng vận chuyển" />
                   <SortTh k="__cmp" label="So cùng kỳ" sort={sort} />
@@ -1011,7 +1036,7 @@ export function SaleGroupBlock({
                 </tr>
               </thead>
               <tbody>
-                {rows.map((s) => (
+                {rows.map((s) => { const v = view(s); return (
                   <tr key={s.sellerId}>
                     <td className="text-left font-medium text-ink">
                       <StaffName id={s.sellerId} name={s.name} />
@@ -1027,21 +1052,21 @@ export function SaleGroupBlock({
                         rows={[
                           [
                             'Số chia (đơn lên trong kỳ)',
-                            `${vi.format(s.created)} đơn`,
+                            `${vi.format(v.created)} đơn`,
                           ],
                           [
                             'Trong đó đã chốt',
-                            `${vi.format(s.createdClosed)} đơn${share(s.createdClosed, s.created)}`,
+                            `${vi.format(v.createdClosed)} đơn${share(v.createdClosed, v.created)}`,
                           ],
                           [
                             'Chưa chốt / hủy',
-                            `${vi.format(Math.max(0, s.created - s.createdClosed))} đơn`,
+                            `${vi.format(Math.max(0, v.created - v.createdClosed))} đơn`,
                           ],
                         ]}
                         definition={`Đơn tạo trong kỳ của nhân viên này (không tính đơn xóa)${tag ? `, chỉ đơn mang thẻ ${tag}` : ''}, như ô Tất cả khi lọc NV xử lý trên Pancake.`}
                       >
                         <span tabIndex={0} className="cursor-help">
-                          {vi.format(s.created)}
+                          {vi.format(v.created)}
                         </span>
                       </Why>
                     </td>
@@ -1049,20 +1074,20 @@ export function SaleGroupBlock({
                       <Why
                         title={`${s.name} · đơn chốt`}
                         rows={[
-                          ['Đơn chốt trong kỳ', `${vi.format(s.closed)} đơn`],
+                          ['Đơn chốt trong kỳ', `${vi.format(v.closed)} đơn`],
                           [
                             'Từ số chia kỳ này',
-                            `${vi.format(Math.min(s.closed, s.createdClosed))} đơn`,
+                            `${vi.format(Math.min(v.closed, v.createdClosed))} đơn`,
                           ],
                           [
                             'Từ số chia trước đó',
-                            `${vi.format(Math.max(0, s.closed - s.createdClosed))} đơn`,
+                            `${vi.format(Math.max(0, v.closed - v.createdClosed))} đơn`,
                           ],
                           ...labels
                             .filter((l) => s.byGroup[l]?.closed)
                             .map((l): [string, string] => [
                               l,
-                              `${vi.format(s.byGroup[l].closed)} đơn${share(s.byGroup[l].closed, s.closed)}`,
+                              `${vi.format(s.byGroup[l].closed)} đơn${share(s.byGroup[l].closed, v.closed)}`,
                             ]),
                         ]}
                         definition="Đơn chốt trong kỳ (từ Chờ xác nhận trở đi, không tính hủy / xóa). Một đơn có cả hai loại tính ở cả hai nhóm. Bấm để xem từng đơn."
@@ -1078,7 +1103,7 @@ export function SaleGroupBlock({
                           }
                           className={pickCls(s.sellerId, null)}
                         >
-                          {vi.format(s.closed)}
+                          {vi.format(v.closed)}
                         </button>
                       </Why>
                     </td>
@@ -1089,20 +1114,20 @@ export function SaleGroupBlock({
                         rows={[
                           [
                             'Số chia đã chốt',
-                            `${vi.format(s.createdClosed)} đơn`,
+                            `${vi.format(v.createdClosed)} đơn`,
                           ],
-                          ['Tổng số chia', `${vi.format(s.created)} đơn`],
+                          ['Tổng số chia', `${vi.format(v.created)} đơn`],
                           [
                             'Tỷ lệ',
-                            `${vi.format(s.createdClosed)} ÷ ${vi.format(s.created)} = ${pct(s.closeRate)}`,
+                            `${vi.format(v.createdClosed)} ÷ ${vi.format(v.created)} = ${pct(v.closeRate)}`,
                           ],
                         ]}
                         definition="Trong số đơn chia trong kỳ, bao nhiêu đơn nay đã chốt — đơn chia hôm trước, hôm sau mới chốt vẫn tính cho ngày chia. Không vượt 100%."
                       >
                         <span tabIndex={0} className="cursor-help">
-                          {pct(s.closeRate)}
+                          {v.hidden ? '—' : pct(v.closeRate)}
                           <span className="block text-[11px] font-normal text-ink-3">
-                            {vi.format(s.createdClosed)}/{vi.format(s.created)}{' '}
+                            {vi.format(v.createdClosed)}/{vi.format(v.created)}{' '}
                             đã chốt
                           </span>
                         </span>
@@ -1113,6 +1138,7 @@ export function SaleGroupBlock({
                       className="n font-semibold"
                       aria-label={`${s.name} · đã vào Đang đóng hàng`}
                     >
+                      {renderPacked && <span className="block">{renderPacked(s.sellerId, v.packedNet)}<span className="block text-[11px] font-normal text-ink-3">{pct(v.packedShare, 0)} doanh thu</span></span>}
                       <Why
                         title={`${s.name} · đã vào Đang đóng hàng`}
                         rows={[
@@ -1144,9 +1170,10 @@ export function SaleGroupBlock({
                       <Why
                         title={`${s.name} · doanh thu`}
                         rows={[
-                          ['Doanh thu đơn chốt', money(s.closedNet)],
-                          ['Số đơn chốt', `${vi.format(s.closed)} đơn`],
-                          ['GTTB', money(s.aov)],
+                          ['Doanh thu đơn chốt', money(v.closedNet)],
+                          ['Số đơn chốt', `${vi.format(v.closed)} đơn`],
+                          ['GTTB', money(v.aov)],
+                          ['Phần trong bộ phận', pct(v.share)],
                           ...labels
                             .filter((l) => s.byGroup[l]?.closed)
                             .map((l): [string, string] => [
@@ -1157,11 +1184,12 @@ export function SaleGroupBlock({
                         definition="Tiền các đơn chốt trong kỳ sau giảm giá. Theo nhóm: một đơn có cả hai loại tính ở cả hai nhóm nên cộng các nhóm có thể lớn hơn tổng."
                       >
                         <span tabIndex={0} className="cursor-help">
-                          {shortMoney(s.closedNet)}
+                          {shortMoney(v.closedNet)}
+                          <span className="block text-[11px] font-normal text-ink-3">{shortMoney(v.aov)}/đơn{v.share !== null ? ` · ${pct(v.share, 0)}` : ''}</span>
                         </span>
                       </Why>
                     </td>
-                    <DeliveredCells name={s.name} c={s} definition={r.definitions.delivered} />
+<DeliveredCells name={s.name} c={s} definition={r.definitions.delivered} />
                     <td className="n">
                       <button
                         type="button"
@@ -1253,11 +1281,12 @@ export function SaleGroupBlock({
                       </td>
                     ))}
                   </tr>
-                ))}
+                ); })}
               </tbody>
               {rows.length > 1 &&
                 (() => {
-                  // Dòng Tổng của những người đang hiện (đã lọc).
+                  // Dòng Tổng của những người đang hiện (đã lọc). C: số chung cộng từ báo cáo tổng quan (Sale), khớp ô đầu trang.
+                  const C = common ? staffCommonTotal(rows.map((x) => common.get(x.sellerId)).filter((x): x is StaffCommon => !!x), deptNet) : null;
                   const T = rows.reduce(
                     (a, x) => ({
                       closed: a.closed + x.closed,
@@ -1326,18 +1355,19 @@ export function SaleGroupBlock({
                         <td className="text-left">
                           Tổng · {vi.format(rows.length)} người
                         </td>
-                        <td className="n">{vi.format(T.created)}</td>
-                        <td className="n">{vi.format(T.closed)}</td>
+                        <td className="n">{vi.format(C ? C.rateBase : T.created)}</td>
+                        <td className="n">{vi.format(C ? C.closedOrders : T.closed)}</td>
                         {!noRate && (
                           <td className="n">
-                            {pct(tRate)}
+                            {C ? (C.assignedHidden ? '—' : pct(C.rate)) : pct(tRate)}
                             <span className="block text-[11px] font-normal text-ink-3">
-                              {vi.format(T.createdClosed)}/{vi.format(T.created)}{' '}
+                              {vi.format(C ? C.rateTop : T.createdClosed)}/{vi.format(C ? C.rateBase : T.created)}{' '}
                               đã chốt
                             </span>
                           </td>
                         )}
                         <td className="n font-semibold">
+                          {renderPacked && <span className="block">{renderPacked(null, C?.packedNet)}<span className="block text-[11px] font-normal text-ink-3">{pct(C?.packedShare ?? null, 0)} doanh thu</span></span>}
                           {pct(packedRate)}
                           <span className="block text-[11px] font-normal text-ink-3">
                             {vi.format(T.packed)}/{vi.format(T.closed)} đơn
@@ -1345,7 +1375,7 @@ export function SaleGroupBlock({
                           </span>
                         </td>
                         {rates && <RateCells v={rates.get('')} />}
-                        <td className="n">{shortMoney(T.closedNet)}</td>
+                        <td className="n">{shortMoney(C ? C.closedNet : T.closedNet)}<span className="block text-[11px] font-normal text-ink-3">{shortMoney(C ? C.averageOrder : T.closed ? T.closedNet / T.closed : null)}/đơn{deptNet ? ` · ${pct((C ? C.closedNet : T.closedNet) / deptNet * 100, 0)}` : ''}</span></td>
                         <DeliveredCells c={T} />
                         <td className="n">
                           {cmp.api.data

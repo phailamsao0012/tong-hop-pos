@@ -6,6 +6,7 @@ import { AdvisorPanel } from './advisor-panel';
 // đơn chốt theo nhóm sản phẩm (thay chi phí giảm giá & ship từ 29/09/2026), hủy/hoàn, theo ngày, theo POS, theo nhân viên (yêu cầu 24/09/2026).
 // Số lấy từ cùng báo cáo Tổng quan POS (lọc đội), nên khớp các trang khác; trạng thái đơn theo bộ lọc chung trên thanh trên cùng.
 import { PackedRevenue, PACKED_HELP } from './sale-analytics-view';
+import { overviewStaffCommon } from '@/lib/reports/staff-merge';
 import type { PackedSeller } from '@/lib/reports/sale-packed';
 import { type MonthForecast } from '@/lib/kpi/forecast';
 import { todayVn } from '@/lib/shared/report-time';
@@ -689,7 +690,11 @@ export function TeamOverviewView({
           )}
 
           {team === 'sale' && !mktLens && (
-            <LazyBlock className="h-72"><SaleGroupBlock start={start} end={end} posIds={posIds} rates={staffRates} /></LazyBlock>
+            // Bảng nhân viên gộp (27/11/2026, plan gọn trang đợt 2): một bảng thay cho "Từng nhân viên" + "Theo nhân viên"; số chung từ báo cáo tổng quan.
+            <LazyBlock className="h-72"><SaleGroupBlock start={start} end={end} posIds={posIds} rates={staffRates}
+              common={overviewStaffCommon(report.current.byEmployee, report.packedStaff, ms.rateBase, cur?.closedNet ?? 0)} deptNet={cur?.closedNet ?? 0}
+              renderPacked={(id, net) => <PackedRevenue params={id ? new URLSearchParams({ ...Object.fromEntries(q), employeeIds: id }) : q} net={net} />}
+              onCompare={() => onNavigate('compare')} /></LazyBlock>
           )}
           {team === 'cskh' && !mktLens && (
             <LazyBlock className="h-72"><SaleGroupBlock
@@ -699,6 +704,9 @@ export function TeamOverviewView({
               team="cskh"
               by="care"
               focusId={focusId}
+              rates={staffRates}
+              deptNet={cur?.closedNet ?? 0}
+              onCompare={() => onNavigate('compare')}
               title="Đơn theo nhóm sản phẩm · từng nhân viên CSKH"
               plainTitle="Từng nhân viên CSKH"
               plainSubtitle="Đơn chốt trong kỳ của từng người (NV chăm sóc trên đơn, trống thì người bán) · so cùng kỳ chọn ngay dưới · bấm số để xem từng đơn"
@@ -833,6 +841,8 @@ export function TeamOverviewView({
             </div>
           </ChartCard>
 
+          {/* Bảng gộp ở trên đã gồm các cột này (27/11/2026); chỉ hiện khi đang lọc team MKT (bảng gộp không chạy với lens). */}
+          {mktLens && (
           <ChartCard
             icon={Users}
             title={`Theo nhân viên · ${staff.length} người`}
@@ -973,6 +983,7 @@ export function TeamOverviewView({
               <EmptyState text="Chưa có nhân viên nào có số trong kỳ." />
             )}
           </ChartCard>
+          )}
         </>
       )}
     </div>
