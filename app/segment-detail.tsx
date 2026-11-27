@@ -6,11 +6,9 @@ import { useMemo } from 'react';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import { closeRateOf, rateTextClass } from '@/lib/reports/metrics';
 import type { SegmentCombo } from '@/lib/reports/segment-combos';
 import type { OverviewReport } from './overview-view';
 import { ProfileLink } from './staff-profile-link';
-import { useMetricSettings } from './metric-settings';
 import { DeltaPill, TableWrap, delta, money, pct, shortMoney, vi } from './ui-kit';
 import { useApi } from './use-api';
 
@@ -18,12 +16,12 @@ type Props = {
   /** Khoá thẻ đang mở; null = đóng. */ seg: string | null;
   label: string; color: string; report: OverviewReport | null;
   /** Tổng doanh thu chốt mọi thẻ trong phạm vi đang xem (để tính phần trăm). */ allNet: number;
+  /** Tổng đơn chốt mọi thẻ trong phạm vi đang xem. */ allOrders?: number;
   /** Bộ lọc kỳ / POS / team như khối thẻ (không kèm groupBy, compare). */ q: string;
   onClose: () => void;
 };
 
-export function SegmentDetail({ seg, label, color, report, allNet, q, onClose }: Props) {
-  const ms = useMetricSettings();
+export function SegmentDetail({ seg, label, color, report, allNet, allOrders = 0, q, onClose }: Props) {
   const combos = useApi<{ combos: SegmentCombo[] }>(seg ? `/api/reports/overview?${q}&productSegment=${seg}&combos=1` : null);
   const cur = report?.current.total, prev = report?.compare?.total;
   // Lấy mảng ra ngoài useMemo để phụ thuộc đúng thứ đang dùng (react-compiler PreserveManualMemo).
@@ -69,7 +67,7 @@ export function SegmentDetail({ seg, label, color, report, allNet, q, onClose }:
               ))}
             </div>
           )}
-          {cur && <p className="text-[12.5px] text-ink-2">Tỷ lệ chốt <b className={`num ${rateTextClass(closeRateOf(cur, ms.rateBase)) || 'text-ink'}`}>{pct(closeRateOf(cur, ms.rateBase))}</b>{prev ? <> · kỳ trước {shortMoney(prev.closedNet)}, {vi.format(prev.closedOrders)} đơn</> : null}</p>}
+          {cur && <p className="text-[12.5px] text-ink-2"><b className="num text-ink">{allOrders ? pct(cur.closedOrders / allOrders * 100, 1) : '—'}</b> đơn chốt của kỳ{prev ? <> · kỳ trước {shortMoney(prev.closedNet)}, {vi.format(prev.closedOrders)} đơn</> : null}</p>}
 
           <section className="rounded-xl border border-line p-3">
             <h4 className="text-[13px] font-semibold">Doanh thu chốt theo ngày</h4>
@@ -110,8 +108,8 @@ export function SegmentDetail({ seg, label, color, report, allNet, q, onClose }:
             <h4 className="text-[13px] font-semibold">Nhân viên bán thẻ này</h4>
             {!staff.length ? <p className="mt-2 text-[12.5px] text-ink-3">{report ? 'Chưa có đơn chốt.' : 'Đang tải…'}</p> : (
               <TableWrap><table className="tbl mt-2">
-                <thead><tr><th>Nhân viên</th><th className="n">Đơn chốt</th><th className="n">Doanh thu</th><th className="n">Tỷ lệ chốt</th></tr></thead>
-                <tbody>{staff.map((r) => { const rate = closeRateOf(r, ms.rateBase); return <tr key={r.sellerId}><td><ProfileLink id={r.sellerId} name={r.name} /></td><td className="n">{vi.format(r.closedOrders)}</td><td className="n">{shortMoney(r.closedNet)}</td><td className={`n ${rateTextClass(rate)}`}>{pct(rate)}</td></tr>; })}</tbody>
+                <thead><tr><th>Nhân viên</th><th className="n">Đơn chốt</th><th className="n">Doanh thu</th><th className="n">Phần đơn của thẻ</th></tr></thead>
+                <tbody>{staff.map((r) => <tr key={r.sellerId}><td><ProfileLink id={r.sellerId} name={r.name} /></td><td className="n">{vi.format(r.closedOrders)}</td><td className="n">{shortMoney(r.closedNet)}</td><td className="n">{cur?.closedOrders ? pct(r.closedOrders / cur.closedOrders * 100, 0) : '—'}</td></tr>)}</tbody>
               </table></TableWrap>
             )}
           </section>
