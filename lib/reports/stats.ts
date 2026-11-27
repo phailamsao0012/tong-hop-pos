@@ -417,7 +417,7 @@ export async function statsDailyDone(db: D1Database) {
 }
 export async function markStatsDailyDone(db: D1Database) {
   if (await statsDailyDone(db)) return 0;
-  await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at')
+  await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at WHERE app_settings.value IS NOT excluded.value')
     .bind(STATS_DONE_KEY, String(STATS_EPOCH), new Date().toISOString()).run();
   return 1;
 }
