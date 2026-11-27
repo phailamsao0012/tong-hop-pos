@@ -832,6 +832,14 @@ table th { white-space: nowrap; font-weight: 600; font-size: 11.5px; letter-spac
   .nav-moi-pill:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
   .nav-moi-cnt { background: var(--primary); color: var(--primary-ink); border-radius: 999px; font-size: 11px; padding: 0 7px; font-weight: 700; }
   .nav-moi-cnt.hot { background: var(--bad); color: #fff; }
+  /* Màn 1366 (máy đám mây 27/11/2026: "Cài đặt" bị cắt ở mép phải): dưới 90rem bỏ chữ MEGATECH cạnh logo, viên sát hơn;
+     dưới 80rem bỏ biểu tượng trong viên hàng 1. Còn thiếu chỗ (điện thoại) thì hàng vẫn cuộn ngang trong thanh menu như cũ. */
+  @media (max-width: 90rem) {
+    .nav-moi-row { gap: 2px; padding-left: 12px; padding-right: 12px; }
+    .nav-moi-brand { font-size: 0; gap: 0; margin-right: 6px; }
+    .nav-moi-pill { gap: 5px; padding: 6px 9px; font-size: 13px; }
+  }
+  @media (max-width: 80rem) { .nav-moi-row:not(.nav-moi-sub) .nav-moi-pill > svg { display: none; } }
 
   .om-page { font-variant-numeric: tabular-nums; }
   /* Nhãn "Bản demo" ở giao diện mới: góc dưới trái, nhỏ, không đè khối số. */
