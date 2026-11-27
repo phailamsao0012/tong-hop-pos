@@ -33,11 +33,28 @@ export function StatusPill({ pill }: { pill?: Pill }) {
   return <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11.5px] font-semibold ${PILL[pill.tone]}`}><i aria-hidden="true" className="size-1.5 rounded-full bg-current" />{pill.text}</span>;
 }
 
-/** Trang đầu: ô tìm + ô bấm từng mục. */
-export function SettingsHub({ onOpen, pills }: { onOpen: (s: SettingsSection) => void; pills: Partial<Record<SettingsSection, Pill>> }) {
+/** Trang đầu: ô tìm + ô bấm từng mục.
+ *  row: chỉ bố cục kiểu mới (cờ THP_UI_MOI) truyền khi đang mở một mục: cùng danh sách mục, cùng onOpen, vẽ thành hàng nút tròn
+ *  (mục đang mở tô đậm, nút đầu "Tất cả" về trang đầu); màn hẹp tự xuống hàng, không cuộn ngang. Không truyền thì y như cũ. */
+export function SettingsHub({ onOpen, pills, row }: { onOpen: (s: SettingsSection) => void; pills: Partial<Record<SettingsSection, Pill>>; row?: { active: SettingsSection; onAll: () => void } }) {
   const [q, setQ] = useState('');
   const hits = useMemo(() => { const n = norm(q.trim()); return n ? SECTIONS.filter((s) => norm(`${s.name} ${s.sub} ${s.keys}`).includes(n)) : null; }, [q]);
   const groups = hits ? [[`${hits.length} mục khớp`, hits] as const] : (['Công ty', 'Của tôi'] as const).map((g) => [g, SECTIONS.filter((s) => s.group === g)] as const);
+  if (row) {
+    const pillCls = (on: boolean) => `tap inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-primary ${on ? 'border-primary bg-primary text-primary-ink' : 'border-line bg-surface text-ink-2 hover:text-ink'}`;
+    return (
+      <nav aria-label="Các mục cài đặt" className="flex min-w-0 flex-wrap gap-2">
+        <button type="button" onClick={row.onAll} className={pillCls(false)}><ChevronLeft size={15} className="shrink-0" aria-hidden="true" />Tất cả</button>
+        {SECTIONS.map((s) => (
+          <button key={s.id} type="button" onClick={() => onOpen(s.id)} aria-current={s.id === row.active ? 'page' : undefined} title={s.sub} className={pillCls(s.id === row.active)}>
+            <s.icon size={15} strokeWidth={1.9} className="shrink-0" aria-hidden="true" />
+            <span className="truncate">{s.name}</span>
+            {pills[s.id] && s.id !== row.active && <i aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${pills[s.id]!.tone === 'ok' ? 'bg-good' : pills[s.id]!.tone === 'warn' ? 'bg-warn' : 'bg-bad'}`} />}
+          </button>
+        ))}
+      </nav>
+    );
+  }
   return (
     <div className="space-y-5">
       {/* Ô tìm dùng nền thẻ như các mục bên dưới (anh Vũ 03/11/2026: khung xanh đậm không đồng bộ màu). */}
