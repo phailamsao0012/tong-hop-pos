@@ -150,7 +150,29 @@ export function bossText(d: BossData) {
   ].join('\n').slice(0, 2000);
 }
 
-export type BossImage = { kind: 'bossReport'; part: 1 | 2; data: BossData };
+/** Ảnh báo cáo sếp. Kiểu cũ (14/11/2026): part 1 tổng quan, part 2 chi tiết & cảnh báo.
+ *  Kiểu 5 ảnh (anh Vũ 27/11/2026: "gửi 4 ảnh, 1 ảnh sale, 1 ảnh cskh, 1 ảnh mkt, 1 ảnh tổng quan, nếu được thêm vận đơn nữa"): có page. */
+export type BossPage = 'tong' | 'sale' | 'cskh' | 'mkt' | 'vandon';
+export type BossImage = { kind: 'bossReport'; part: 1 | 2; page?: BossPage; data: BossData };
+export const BOSS_PAGES: { page: BossPage; label: string }[] = [
+  { page: 'tong', label: 'Tổng quan' }, { page: 'sale', label: 'Sale' }, { page: 'cskh', label: 'CSKH' }, { page: 'mkt', label: 'Marketing' }, { page: 'vandon', label: 'Vận đơn' },
+];
+export const isBossPage = (v: unknown): v is BossPage => BOSS_PAGES.some((p) => p.page === v);
+/** Bật gửi 5 ảnh cho mọi người nhận báo cáo sếp: app_settings key này = '1'. Chưa bật: lịch vẫn gửi 2 ảnh kiểu cũ;
+ *  lệnh gửi ngay có "five": true thì gửi thử 5 ảnh (Đầu não 27/11/2026: gửi thử cho anh Vũ trước, chưa bật cho sếp). */
+export const BOSS_FIVE_KEY = 'zalo_boss_5_anh_v1';
+/** Danh sách ảnh một lượt báo cáo sếp, theo thứ tự gửi: ảnh, chữ kèm, nhãn (hàng chờ gửi lại). */
+export function bossImages(data: BossData, five: boolean): { img: BossImage; text: string; label: string }[] {
+  if (!five) return [
+    { img: { kind: 'bossReport', part: 1, data }, text: bossText(data), label: `tổng quan ${data.title}` },
+    { img: { kind: 'bossReport', part: 2, data }, text: `Chi tiết & cảnh báo · ${data.title}`, label: `chi tiết ${data.title}` },
+  ];
+  return BOSS_PAGES.map(({ page, label }, i) => ({
+    img: { kind: 'bossReport', part: 1, page, data },
+    text: (i === 0 ? bossText(data) : `${i + 1}/${BOSS_PAGES.length} · ${label} · ${data.title}`).slice(0, 2000),
+    label: `${label.toLowerCase()} ${data.title}`,
+  }));
+}
 
 /** "12/11" của ngày trước ngày d (dùng ở ảnh 8h thay chữ "hôm qua"). */
 export function prevDay(day: string) {
