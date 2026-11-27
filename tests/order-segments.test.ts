@@ -101,7 +101,10 @@ void test('Oxy + Bổ huyết và Bio Nano Shield (tên cũ) chỉ vào thẻ Ge
   };
   add('svg-oxy','sieu-vo-gao','OXY + BỔ HUYẾT'); add('svg-bio','sieu-vo-gao','BIO NANO SHIELD 1L');
   add('apex-oxy','mgt-apex','OXY + BỔ HUYẾT'); add('apex-bio','mgt-apex','BIO NANO SHIELD 1L');
-  // Cộng thêm đơn mẫu của fixture (self: Gentadox → Gentadox; old: chưa có món → Khác).
+  // Đơn mẫu 'old' của fixture (chưa có món → Khác) tạo 20/09, nay ngoài kỳ vì doanh thu theo ngày tạo đơn (27/11/2026):
+  // thêm một đơn chưa có món tạo trong kỳ để vẫn kiểm "chưa có món → Khác".
+  db.prepare('INSERT INTO raw_pos_orders VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run('svg-none','sieu-vo-gao','care',null,'[]','2026-09-22T03:00:00','2026-09-22T03:00:00','2026-09-22T03:00:00',1,1000,800,200,20,820,'2026-09-22T03:00:00');
+  // Cộng thêm đơn mẫu của fixture tạo trong kỳ (self: Gentadox → Gentadox) và svg-none (chưa có món → Khác).
   assert.equal(seg('sieu-vo-gao','gentadox'),3);
   assert.equal(seg('sieu-vo-gao','khac'),1);
   assert.equal(seg('mgt-apex','gentadox'),0);
