@@ -23,7 +23,7 @@ import { saveXlsx } from '@/app/save-xlsx';
 import { SegmentHintNote } from './segment-hint-note';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { BOSS_RETURN_RED, COACH_MIN_BASE } from '@/lib/zalo/boss-report';
-import { CanXemStrip, PageHeadMoi, WhySheet, overRet, tileGrid, type CanXemItem, type WhySpec } from './trang-moi';
+import { CanXemStrip, KPI_RED, KPI_TIGHT, PageHeadMoi, WhySheet, overRet, tileGrid, type CanXemItem, type WhySpec } from './trang-moi';
 
 type Count = { label: string; n: number };
 type Report = VdReport & { period: { start: string; end: string }; syncedAt: string | null;
@@ -272,14 +272,17 @@ export function VanDonView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì 
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset} onStart={setStart} onEnd={setEnd} loading={loading} onReload={reload}
         extra={<><span className="px-1 text-xs font-semibold text-ink-2">Xem theo</span><SegmentedControl<Level> ariaLabel="Xem theo" size="sm" value={level} onChange={setLevel} options={LEVELS} /></>} />
   );
-  const tilesInner = (/*{}*/t: Report['total']) => (
-            [
+  // Năm thẻ của hàng ô số (dùng chung cho hàng ô cũ và hàng ô kiểu mới).
+  const vdCards = (t: Report['total']) => [
               { key: 'confirmed', label: 'Đơn chốt', icon: BadgeCheck, count: t.confirmed, net: t.confirmedNet, at: t.atConfirmed, prev: t.closed, base: 'đơn vào Chờ xác nhận', definition: 'Đơn vào Chờ xác nhận trong kỳ đã qua Đã xác nhận, kể cả hủy sau đó. Doanh số chuyển đi là tổng giá trị các đơn này.' },
               { key: 'packed', label: 'Đơn xác nhận', icon: BadgeCheck, count: t.packed, net: t.packedNet, at: t.atPacked, prev: t.confirmed, base: 'Đơn chốt', definition: 'Đơn vào Chờ xác nhận trong kỳ đã qua Đang đóng hàng, kể cả hủy sau đóng hàng. Doanh số chuyển đi là tổng giá trị các đơn này.' },
               { key: 'sent', label: 'Đơn chuyển', icon: Send, count: t.sent, net: t.sentNet, at: t.atSent, prev: t.packed, base: 'Đơn xác nhận', definition: bySent ? 'Đơn giao ĐVVC lần đầu trong kỳ, theo ngày gửi hàng; khác nhóm hai thẻ trước nên tỷ lệ có thể vượt 100%. Doanh số chuyển đi là tổng giá trị các đơn này.' : 'Đã giao ĐVVC trong các đơn vào Chờ xác nhận trong kỳ. Doanh số chuyển đi là tổng giá trị các đơn này.' },
               { key: 'delivered', label: 'Đơn nhận', icon: ShoppingCart, count: t.delivered, net: t.deliveredNet, at: t.atDelivered, prev: t.sent, base: 'Đơn chuyển', definition: 'Đã nhận hoặc đã thu tiền; cùng cơ sở kỳ với Đơn chuyển. Doanh số chuyển đi là tổng giá trị các đơn này.' },
               { key: 'returned', label: 'Đơn hoàn', icon: Undo2, count: t.returned, net: t.returnedNet, at: t.atReturned, prev: t.delivered, base: 'Đơn nhận', definition: 'Đang hoàn, hoàn một phần hoặc đã hoàn; cùng cơ sở kỳ với Đơn chuyển. Theo đơn = hoàn ÷ đơn chuyển; theo doanh số chuyển đi = giá trị hoàn ÷ doanh số chuyển đi.' },
-            ].map((c) => <KpiCard key={c.key} icon={c.icon} label={c.label} value={vi.format(c.count)} onClick={() => openCard(c.key)} active={card === c.key} tooltip={{ definition: c.definition, period }} note={<>
+  ];
+  const tilesInner = (/*{}*/t: Report['total']) => (
+            vdCards(t)
+            .map((c) => <KpiCard key={c.key} icon={c.icon} label={c.label} value={vi.format(c.count)} onClick={() => openCard(c.key)} active={card === c.key} tooltip={{ definition: c.definition, period }} note={<>
               <span className="block">Doanh số chuyển đi {money(c.net)}</span>
               <span className="block">{pct(share(c.count, c.prev))} so với {c.base}</span>
               <span className="block">Đang nằm ở bước này: {vi.format(c.at)}</span>
@@ -372,7 +375,26 @@ export function VanDonView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì 
         {head}
         <SegmentHintNote />
         <CanXemStrip items={need} note={`Hoàn ÷ đơn chuyển từ ${BOSS_RETURN_RED}% · người từ ${COACH_MIN_BASE} đơn chuyển`} />
-        <div className={tileGrid(5)} aria-busy={loading || undefined}>{tilesInner(t)}</div>
+        {/* Hàng ô riêng của bố cục mới: ghi chú tối đa 2 dòng, phần dài vào khung "Vì sao ra số này" (kèm nút mở danh sách đơn). */}
+        <div className={tileGrid(5)} aria-busy={loading || undefined}>
+          {vdCards(t).map((c) => (
+            <KpiCard key={c.key} icon={c.icon} label={c.label} value={vi.format(c.count)} active={card === c.key}
+              className={`${KPI_TIGHT} ${c.key === 'returned' && overRet(t.returnRate) ? KPI_RED : ''}`}
+              note={<><span className="block truncate">{shortMoney(c.net)} · {pct(share(c.count, c.prev))} so với {c.base}</span><span className="block truncate">{c.key === 'returned' ? `Theo đơn ${pct(t.returnRate)} · theo doanh số ${pct(t.returnRateNet)}` : `Đang ở bước này: ${vi.format(c.at)}`}</span></>}
+              onClick={() => setWhy({
+                title: c.label, value: `${vi.format(c.count)} đơn`, tone: c.key === 'returned' && overRet(t.returnRate) ? 'bad' : undefined, scope,
+                rows: [
+                  { label: 'Doanh số chuyển đi', value: money(c.net) },
+                  { label: `So với ${c.base}`, value: pct(share(c.count, c.prev)) },
+                  { label: 'Đang nằm ở bước này', value: vi.format(c.at) },
+                  ...(c.key === 'returned' ? [{ label: 'Theo đơn (hoàn ÷ đơn chuyển)', value: pct(t.returnRate), tone: overRet(t.returnRate) ? 'bad' as const : undefined }, { label: 'Theo doanh số chuyển đi', value: pct(t.returnRateNet) }] : []),
+                ],
+                mark: c.key === 'returned' ? `Đỏ từ ${BOSS_RETURN_RED}%` : undefined,
+                definition: c.definition,
+                more: <Button size="sm" variant="outline" className="self-start" onClick={() => { setWhy(null); openCard(c.key); }}>Xem danh sách đơn tính ra số này</Button>,
+              })} />
+          ))}
+        </div>
         {waitNote(t)}
         <ReturnBreakdown t={t} period={period} bySent={bySent} estimated={report?.sentEstimated} />
         {sellersCard()}
