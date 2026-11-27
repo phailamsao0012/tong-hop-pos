@@ -20,7 +20,8 @@ import { useTeam } from './team-store';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import { ShiftStatesCard, type OrderStates } from './shift-states';
-import { Th, ChartCard, Definitions, ErrorBox, EmptyState, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, StatusChip, SyncPill, TableWrap, Toolbar, delta, dt, money, pct, posName, posVar, short, shortMoney, timeOnly, toast, useMotionOK, vi, barRadius } from './ui-kit';
+import { CanXemStrip, DuoSpark, KPI_TIGHT, PageHeadMoi, WhySheet, tileGrid, type CanXemItem, type WhySpec } from './trang-moi';
+import { Th, ChartCard, Definitions, ErrorBox, EmptyState, FoldBlock, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, StatusChip, SyncPill, TableWrap, Toolbar, delta, dt, money, pct, posName, posVar, short, shortMoney, timeOnly, toast, useMotionOK, vi, barRadius } from './ui-kit';
 
 type Staff = { employeeId: string; name: string; department: string | null; received: number; closed: number; rate: number | null; hotOrders: number; hotValue: number; activityOrders: number; activityValue: number; pending: number; posIds: string[]; yesterday: { received: number; closed: number; rate: number | null } | null; assignedHidden?: boolean; shiftHours?: string | null };
 type Shift = {
@@ -55,7 +56,9 @@ function useElementWidth() {
   return [setEl, width] as const;
 }
 
-export function ShiftView() {
+export function ShiftView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới, tắt thì y như cũ. */ uiMoi?: boolean } = {}) {
+  // Giao diện mới: khung "Vì sao ra số này" đang mở (null = đóng).
+  const [why, setWhy] = useState<WhySpec | null>(null);
   const today = todayVn();
   const team = useTeam();
   const motionOn = useMotionOK();
@@ -107,10 +110,9 @@ export function ShiftView() {
   const slot = hourly.length ? (chartW - 48) / hourly.length : 0;
   const showLabels = chartW > 0 && slot / 2 >= maxDigits * 6.4 + 8;
 
-  return (
-    <div className="space-y-5">
-      <PageHeader eyebrow={`${weekday}, ${dt(`${date}T00:00:00+07:00`)}`} title="Trong ngày · chốt nóng" subtitle="Số nhận, chốt nóng theo SĐT · so với cùng ca hôm qua"
-        badge={data || error ? (
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  // fold: chỉ bố cục mới truyền (thu gọn thẻ); bố cục cũ không truyền nên thẻ y như trước.
+  const badgeEl = () => (
           <span className="inline-flex flex-wrap items-center gap-1.5">
             {data && <StatusChip tone="green"><Clock size={11} />{shiftLabel}</StatusChip>}
             {live && (
@@ -121,14 +123,15 @@ export function ShiftView() {
             )}
             <StaleChip stale={stale} at={at} loading={loading} error={data ? error : null} onRetry={reload} />
           </span>
-        ) : null}
-        actions={
+  );
+  const actionsEl = () => (
           <div className="flex flex-wrap items-center gap-2">
             <SyncPill lastSyncAt={data?.syncedAt} state={data ? (fresh ? 'ok' : 'bad') : 'warn'}
               detail={<span className="block whitespace-normal">{fresh ? 'Đồng bộ Pancake còn mới (dưới 15 phút).' : 'Đồng bộ Pancake đã cũ hơn 15 phút — số liệu có thể thiếu.'} Trang tự làm mới mỗi 2 phút; báo cáo dựng lúc {timeOnly(data?.generatedAt)}.</span>} />
             <Button onClick={update} disabled={loading}><RefreshCw size={14} className={loading ? 'animate-spin' : ''} />{loading ? 'Đang cập nhật…' : 'Cập nhật ngay'}</Button>
           </div>
-        } />
+  );
+  const dayBar = () => (
       <Toolbar>
         <span className="px-1 text-xs font-semibold text-ink-2">Ngày</span>
         <Input aria-label="Ngày" type="date" className="w-auto" value={date} max={today} onChange={(e) => e.target.value && setDate(e.target.value)} />
@@ -141,39 +144,8 @@ export function ShiftView() {
           </SelectContent>
         </Select>
       </Toolbar>
-      <PosChips posIds={posIds} onChange={setPosIds} />
-      {error && !data && <ErrorBox error={error} onRetry={reload} />}
-      {!data && !error && (
-        <>
-          <SkeletonKpis count={5} className="xl:grid-cols-5" />
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
-            <ChartCard icon={Clock} title="Theo giờ" subtitle="Số nhận và số chốt từng giờ" loading><div className="h-64" /></ChartCard>
-            <ChartCard icon={Zap} title="Xác nhận mới nhất" subtitle="Trong ca" loading><div className="h-40" /></ChartCard>
-          </div>
-          <ChartCard icon={Users} title="Nhân viên trong ca" subtitle="So với cùng ca hôm qua"><SkeletonTable rows={6} cols={8} /></ChartCard>
-        </>
-      )}
-      {data && t && y && (
-        <>
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5 transition-opacity duration-[var(--dur)]" aria-busy={busy || undefined}>
-
-            <KpiCard icon={ShoppingCart} tone="green" label="Số đã nhận" value={vi.format(t.received)} countUp rawValue={t.received} format={(n) => vi.format(Math.round(n))}
-              delta={delta(t.received, y.received)} deltaLabel="So với cùng ca hôm qua" note={`TB ${vi.format(Math.round(t.received / hoursInShift))} số/giờ · hôm qua ${vi.format(y.received)}`}
-              tooltip={tip(`${vi.format(t.received)} số`, `${vi.format(y.received)} số`, data.definitions.received)} />
-            <KpiCard icon={Zap} tone="teal" label="Số đã chốt" value={vi.format(t.closed)} countUp rawValue={t.closed} format={(n) => vi.format(Math.round(n))}
-              delta={delta(t.closed, y.closed)} deltaLabel="So với cùng ca hôm qua" note={`TB ${vi.format(Math.round(t.closed / hoursInShift))} số/giờ · hôm qua ${vi.format(y.closed)}`}
-              tooltip={tip(`${vi.format(t.closed)} số`, `${vi.format(y.closed)} số`, data.definitions.closed)} />
-            <KpiCard icon={ICON.rate} tone="blue" label="Tỷ lệ chốt nóng" value={pct(t.rate)} delta={t.rate !== null && y.rate !== null ? t.rate - y.rate : null} deltaLabel="điểm % so với cùng ca hôm qua" note={`${vi.format(t.closed)} / ${vi.format(t.received)} số`}
-              tooltip={tip(`${pct(t.rate)} (${vi.format(t.closed)}/${vi.format(t.received)})`, `${pct(y.rate)} (${vi.format(y.closed)}/${vi.format(y.received)})`, 'Tỷ lệ chốt nóng = số chốt ÷ số nhận trong khung giờ; chênh lệch tính bằng điểm %.')} />
-            <KpiCard icon={ICON.closed} tone="orange" label="Số đơn chốt nóng" value={vi.format(t.hotOrders)} countUp rawValue={t.hotOrders} format={(n) => vi.format(Math.round(n))}
-              delta={delta(t.hotOrders, y.hotOrders)} deltaLabel="So với cùng ca hôm qua" note={`${vi.format(t.activityOrders)} đơn xác nhận trong ca (mọi nguồn)`}
-              tooltip={tip(`${vi.format(t.hotOrders)} đơn`, `${vi.format(y.hotOrders)} đơn`, data.definitions.activity)} />
-            <KpiCard icon={Wallet} tone="purple" label="Giá trị hiện tại đơn chốt" value={shortMoney(t.hotValue)} countUp rawValue={t.hotValue} format={shortMoney}
-              delta={delta(t.hotValue, y.hotValue)} deltaLabel="So với cùng ca hôm qua" note={<span className="inline-flex items-center gap-1"><Info size={11} />Không phải doanh thu Pancake</span>}
-              tooltip={tip(money(t.hotValue), money(y.hotValue), data.definitions.value)} />
-          </div>
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
-            <div className="space-y-4">
+  );
+  const hourCard = (data: Shift) => (
               <ChartCard icon={Clock} title="Theo giờ" subtitle="Số nhận và số chốt từng giờ" info={`${data.definitions.received} ${data.definitions.closed}`}>
                 <div ref={chartRef} className="w-full">
                   <ChartContainer className="h-64 w-full aspect-auto" config={{ received: { label: 'Số đã nhận', color: 'var(--chart-bar)' }, closed: { label: 'Đơn đã chốt', color: 'var(--primary)' } }}>
@@ -194,6 +166,8 @@ export function ShiftView() {
                 </div>
                 {!showLabels && hourly.length > 0 && <p className="mt-1 text-[11px] text-ink-4">Rê chuột / chạm vào cột để xem số từng giờ.</p>}
               </ChartCard>
+  );
+  const staffCard = (data: Shift) => (
               <ChartCard icon={Users} title="Nhân viên trong ca" subtitle="So với cùng ca hôm qua"
                 action={<SegmentedControl ariaLabel="Sắp xếp nhân viên theo" size="sm" value={staffSort} onChange={setStaffSort} options={STAFF_SORTS} />}>
                 {staff.length ? (
@@ -232,9 +206,9 @@ export function ShiftView() {
                   </TableWrap>
                 ) : <EmptyState text="Chưa có số được giao trong khung giờ này." />}
               </ChartCard>
-            </div>
-            <div className="space-y-4">
-              <ChartCard icon={Zap} title="Xác nhận mới nhất" subtitle="Trong ca">
+  );
+  const feedCard = (data: Shift, fold?: { storageKey: string; summary?: string }) => (
+              <ChartCard collapse={fold} icon={Zap} title="Xác nhận mới nhất" subtitle="Trong ca">
                 {data.feed.length ? (
                   <ul className="max-h-[22rem] space-y-1.5 overflow-auto overscroll-contain">
                     {data.feed.map((f) => (
@@ -250,7 +224,9 @@ export function ShiftView() {
                   </ul>
                 ) : <EmptyState text="Chưa có đơn nào được xác nhận trong ca." />}
               </ChartCard>
-              <ChartCard icon={AlertTriangle} title="Cảnh báo" subtitle="Chốt thấp · quá tải · đồng bộ">
+  );
+  const alertsCard = (data: Shift, fold?: { storageKey: string; summary?: string }) => (
+              <ChartCard collapse={fold} icon={AlertTriangle} title="Cảnh báo" subtitle="Chốt thấp · quá tải · đồng bộ">
                 {data.alerts.length ? (
                   <ul className="space-y-2">
                     {data.alerts.map((a, i) => (
@@ -262,6 +238,102 @@ export function ShiftView() {
                   </ul>
                 ) : <p className="notice ok"><CheckCircle2 size={15} className="mt-0.5 shrink-0" />Không có cảnh báo. Mọi thứ đang ổn.</p>}
               </ChartCard>
+  );
+  // [hết khối chung]
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trên xuống: đầu trang (PageHeadMoi: ngày, ca; ca · trực tiếp · đồng bộ · cập nhật; POS) → "Cần xem" = chính các cảnh báo của trang
+  // (chốt thấp, quá tải, đồng bộ) → một hàng 5 ô số so cùng ca hôm qua (bấm mở "Vì sao ra số này") → Theo giờ → bảng chính Nhân viên trong ca
+  // → khối phụ thu gọn: Xác nhận mới nhất, Cảnh báo, trạng thái đơn trong ca, Cách tính.
+  if (uiMoi) {
+    const scope = `${weekday}, ${dt(`${date}T00:00:00+07:00`)}${shiftLabel ? ` · ${shiftLabel}` : ''} · ${posIds.length <= 3 ? posIds.map(posName).join(', ') : `${vi.format(posIds.length)} POS`} · số nhận, chốt nóng theo SĐT · so với cùng ca hôm qua`;
+    const head = <PageHeadMoi title="Trong ngày · chốt nóng" scope={scope} hint="Số nhận, chốt nóng theo SĐT · so với cùng ca hôm qua" tools={dayBar()}
+      right={<>{(data || error) && badgeEl()}{actionsEl()}</>} pos={<PosChips posIds={posIds} onChange={setPosIds} />} />;
+    if (!data || !t || !y) return <div className="min-w-0 space-y-4">{head}{error ? <ErrorBox error={error} onRetry={reload} /> : <SkeletonKpis count={5} className="lg:grid-cols-5" />}</div>;
+    const need: CanXemItem[] = data.alerts.map((a, i) => ({ key: `${a.kind}-${i}`, text: a.title, team: false, gap: a.level === 'high' ? 1 : 0,
+      onClick: () => setWhy({ title: a.title, value: a.level === 'high' ? 'Mức cao' : 'Mức vừa', tone: a.level === 'high' ? 'bad' : undefined, scope, definition: a.detail }) }));
+    const cmp = (label: string, cur: string, prev: string, definition: string, extra: { label: string; value: string }[] = []): WhySpec => ({ title: label, value: cur, previous: prev, scope, rows: extra, definition });
+    const k = (s: string) => `ui-moi:shift:${s}`;
+    return (
+      <div className="min-w-0 space-y-4">
+        {head}
+        <CanXemStrip items={need} note="Cảnh báo của trang: chốt thấp · quá tải · đồng bộ" />
+        <div className={tileGrid(5)} aria-busy={busy || undefined}>
+          <KpiCard icon={ShoppingCart} tone="green" label="Số đã nhận trong ca" className={KPI_TIGHT} value={vi.format(t.received)} delta={delta(t.received, y.received)} deltaLabel="so cùng ca hôm qua"
+            note={`TB ${vi.format(Math.round(t.received / hoursInShift))} số/giờ · hôm qua ${vi.format(y.received)}`} chart={<DuoSpark cur={hourly.map((h) => h.received)} />}
+            onClick={() => setWhy(cmp('Số đã nhận', `${vi.format(t.received)} số`, `${vi.format(y.received)} số`, data.definitions.received, [{ label: 'Trung bình mỗi giờ', value: vi.format(Math.round(t.received / hoursInShift)) }]))} />
+          <KpiCard icon={Zap} tone="teal" label="Số đã chốt trong ca" className={KPI_TIGHT} value={vi.format(t.closed)} delta={delta(t.closed, y.closed)} deltaLabel="so cùng ca hôm qua"
+            note={`TB ${vi.format(Math.round(t.closed / hoursInShift))} số/giờ · hôm qua ${vi.format(y.closed)}`} chart={<DuoSpark cur={hourly.map((h) => h.closed)} />}
+            onClick={() => setWhy(cmp('Số đã chốt', `${vi.format(t.closed)} số`, `${vi.format(y.closed)} số`, data.definitions.closed, [{ label: 'Trung bình mỗi giờ', value: vi.format(Math.round(t.closed / hoursInShift)) }]))} />
+          <KpiCard icon={ICON.rate} tone="blue" label="Tỷ lệ chốt nóng" className={KPI_TIGHT} value={pct(t.rate)} delta={t.rate !== null && y.rate !== null ? t.rate - y.rate : null} deltaLabel="điểm so cùng ca hôm qua" note={`${vi.format(t.closed)} / ${vi.format(t.received)} số`}
+            onClick={() => setWhy(cmp('Tỷ lệ chốt nóng', pct(t.rate), pct(y.rate), 'Tỷ lệ chốt nóng = số chốt ÷ số nhận trong khung giờ; chênh lệch tính bằng điểm %.', [{ label: 'Số chốt', value: vi.format(t.closed) }, { label: 'Số nhận', value: vi.format(t.received) }]))} />
+          <KpiCard icon={ICON.closed} tone="orange" label="Đơn chốt nóng" className={KPI_TIGHT} value={vi.format(t.hotOrders)} delta={delta(t.hotOrders, y.hotOrders)} deltaLabel="so cùng ca hôm qua" note={`${vi.format(t.activityOrders)} đơn xác nhận trong ca (mọi nguồn)`}
+            onClick={() => setWhy(cmp('Đơn chốt nóng', `${vi.format(t.hotOrders)} đơn`, `${vi.format(y.hotOrders)} đơn`, data.definitions.activity, [{ label: 'Đơn xác nhận trong ca (mọi nguồn)', value: vi.format(t.activityOrders) }]))} />
+          <KpiCard icon={Wallet} tone="purple" label="Giá trị hiện tại đơn chốt" className={KPI_TIGHT} value={shortMoney(t.hotValue)} delta={delta(t.hotValue, y.hotValue)} deltaLabel="so cùng ca hôm qua" note="Không phải doanh thu Pancake"
+            onClick={() => setWhy(cmp('Giá trị hiện tại đơn chốt', money(t.hotValue), money(y.hotValue), data.definitions.value))} />
+        </div>
+        {hourCard(data)}
+        {staffCard(data)}
+        <div className="grid min-w-0 gap-3">
+          {feedCard(data, { storageKey: k('feed'), summary: `${vi.format(data.feed.length)} đơn` })}
+          {alertsCard(data, { storageKey: k('alerts'), summary: data.alerts.length ? `${vi.format(data.alerts.length)} cảnh báo` : 'không có' })}
+          <FoldBlock icon={Clock} title="Trạng thái đơn trong ca" storageKey={k('states')}><ShiftStatesCard data={data.orderStates} hourly={hourly} info={data.definitions.states} /></FoldBlock>
+          <FoldBlock icon={Info} title="Cách tính" storageKey={k('defs')}><Definitions items={data.definitions} /></FoldBlock>
+        </div>
+        <WhySheet spec={why} onClose={() => setWhy(null)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <PageHeader eyebrow={`${weekday}, ${dt(`${date}T00:00:00+07:00`)}`} title="Trong ngày · chốt nóng" subtitle="Số nhận, chốt nóng theo SĐT · so với cùng ca hôm qua"
+        badge={data || error ? (
+          badgeEl()
+        ) : null}
+        actions={
+          actionsEl()
+        } />
+      {dayBar()}
+      <PosChips posIds={posIds} onChange={setPosIds} />
+      {error && !data && <ErrorBox error={error} onRetry={reload} />}
+      {!data && !error && (
+        <>
+          <SkeletonKpis count={5} className="xl:grid-cols-5" />
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+            <ChartCard icon={Clock} title="Theo giờ" subtitle="Số nhận và số chốt từng giờ" loading><div className="h-64" /></ChartCard>
+            <ChartCard icon={Zap} title="Xác nhận mới nhất" subtitle="Trong ca" loading><div className="h-40" /></ChartCard>
+          </div>
+          <ChartCard icon={Users} title="Nhân viên trong ca" subtitle="So với cùng ca hôm qua"><SkeletonTable rows={6} cols={8} /></ChartCard>
+        </>
+      )}
+      {data && t && y && (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5 transition-opacity duration-[var(--dur)]" aria-busy={busy || undefined}>
+
+            <KpiCard icon={ShoppingCart} tone="green" label="Số đã nhận" value={vi.format(t.received)} countUp rawValue={t.received} format={(n) => vi.format(Math.round(n))}
+              delta={delta(t.received, y.received)} deltaLabel="So với cùng ca hôm qua" note={`TB ${vi.format(Math.round(t.received / hoursInShift))} số/giờ · hôm qua ${vi.format(y.received)}`}
+              tooltip={tip(`${vi.format(t.received)} số`, `${vi.format(y.received)} số`, data.definitions.received)} />
+            <KpiCard icon={Zap} tone="teal" label="Số đã chốt" value={vi.format(t.closed)} countUp rawValue={t.closed} format={(n) => vi.format(Math.round(n))}
+              delta={delta(t.closed, y.closed)} deltaLabel="So với cùng ca hôm qua" note={`TB ${vi.format(Math.round(t.closed / hoursInShift))} số/giờ · hôm qua ${vi.format(y.closed)}`}
+              tooltip={tip(`${vi.format(t.closed)} số`, `${vi.format(y.closed)} số`, data.definitions.closed)} />
+            <KpiCard icon={ICON.rate} tone="blue" label="Tỷ lệ chốt nóng" value={pct(t.rate)} delta={t.rate !== null && y.rate !== null ? t.rate - y.rate : null} deltaLabel="điểm % so với cùng ca hôm qua" note={`${vi.format(t.closed)} / ${vi.format(t.received)} số`}
+              tooltip={tip(`${pct(t.rate)} (${vi.format(t.closed)}/${vi.format(t.received)})`, `${pct(y.rate)} (${vi.format(y.closed)}/${vi.format(y.received)})`, 'Tỷ lệ chốt nóng = số chốt ÷ số nhận trong khung giờ; chênh lệch tính bằng điểm %.')} />
+            <KpiCard icon={ICON.closed} tone="orange" label="Số đơn chốt nóng" value={vi.format(t.hotOrders)} countUp rawValue={t.hotOrders} format={(n) => vi.format(Math.round(n))}
+              delta={delta(t.hotOrders, y.hotOrders)} deltaLabel="So với cùng ca hôm qua" note={`${vi.format(t.activityOrders)} đơn xác nhận trong ca (mọi nguồn)`}
+              tooltip={tip(`${vi.format(t.hotOrders)} đơn`, `${vi.format(y.hotOrders)} đơn`, data.definitions.activity)} />
+            <KpiCard icon={Wallet} tone="purple" label="Giá trị hiện tại đơn chốt" value={shortMoney(t.hotValue)} countUp rawValue={t.hotValue} format={shortMoney}
+              delta={delta(t.hotValue, y.hotValue)} deltaLabel="So với cùng ca hôm qua" note={<span className="inline-flex items-center gap-1"><Info size={11} />Không phải doanh thu Pancake</span>}
+              tooltip={tip(money(t.hotValue), money(y.hotValue), data.definitions.value)} />
+          </div>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+            <div className="space-y-4">
+              {hourCard(data)}
+              {staffCard(data)}
+            </div>
+            <div className="space-y-4">
+              {feedCard(data)}
+              {alertsCard(data)}
             </div>
           </div>
           <ShiftStatesCard data={data.orderStates} hourly={hourly} info={data.definitions.states} />
