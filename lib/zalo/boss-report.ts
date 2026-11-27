@@ -34,7 +34,8 @@ export type BossData = {
   cskh: { kpi: DeptKpi; orders: number; prevOrders: number; base: number; closed: number; prevBase: number; prevClosed: number; teams: TeamRow[]; people: PersonRow[]; prevNet?: number; byPos?: CskhPosRow[] };
   mkt: { kpi: DeptKpi; leads: number; monthLeads: number; leadsGoal: number | null; cost: number; prevNewNet?: number; prevLeads?: number; /** Lúc chi phí QC của ngày được nhập lần cuối (ISO), null = chưa có. */ costAt?: string | null; teams: MktTeamRow[]; people: MktPersonRow[] };
   pos: PosRow[];
-  ship: { packed: number; closed: number; vtp: number; spx: number; others?: { name: string; orders: number }[] };
+  ship: { packed: number; closed: number; vtp: number; spx: number; others?: { name: string; orders: number }[];
+    /** Doanh số chuyển đi trong khoảng giờ báo cáo (ảnh Vận đơn, 27/11/2026); số lưu cũ không có. */ net?: number; /** Doanh số theo hãng. */ nets?: { name: string; net: number }[] };
   overdueTasks: number;
 };
 

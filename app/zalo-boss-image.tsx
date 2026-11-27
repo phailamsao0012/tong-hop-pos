@@ -309,7 +309,7 @@ function SalePage({ d }: { d: BossData }) {
       <Box style={{ height: H.top }}>
         <BigTile label="DOANH THU SALE" value={money(d.sale.kpi.todayNet)} width={tileW} lines={[<Line key="a">{''}<Tone v={nv} text={vsText(nv)} />{so}</Line>, <Line key="b">{kpiLine(d.sale.kpi)}</Line>]} />
         <BigTile label="TỈ LỆ CHỐT" value={rateText(rate)} width={tileW} lines={[<Line key="a">{''}<Tone v={rv} text={rateVsText(rv)} />{so}</Line>, <Line key="b">{`${num(Math.min(d.sale.base, d.sale.closed))}/${num(d.sale.base)} số đã chốt`}</Line>]} />
-        <BigTile label="ĐƠN ĐI" value={num(d.sale.packed)} width={tileW} lines={[<Line key="a">{`Hoàn ${num(d.sale.returned)} · Hủy ${num(d.sale.cancelled)}`}</Line>]} />
+        <BigTile label="ĐƠN ĐI TỪ ĐẦU THÁNG" value={num(d.sale.packed)} width={tileW} lines={[<Line key="a">{`Hoàn ${num(d.sale.returned)} · Hủy ${num(d.sale.cancelled)}`}</Line>, <Line key="b">tính từ ngày 1 tới mốc này</Line>]} />
       </Box>
       <Gap />
       <Table title="SALE THEO POS" head={['POS', 'Doanh thu', `DT so ${pw}`, 'Đơn', 'TL chốt', `TLC so ${pw}`]} widths={[29, 15, 16, 9, 13, 18]} rows={pos} />
@@ -374,18 +374,19 @@ function MktPage({ d }: { d: BossData }) {
 
 function ShipPage({ d }: { d: BossData }) {
   const list = carriers(d), total = list.reduce((a, c) => a + c.orders, 0);
-  const rows: Cell[][] = list.map((c) => [{ t: c.name }, { t: num(c.orders) }, { t: rateText(pct(c.orders, total), 0) }]);
+  const netOf = new Map((d.ship.nets ?? []).map((x) => [x.name, x.net]));
+  const rows: Cell[][] = list.map((c) => [{ t: c.name }, { t: num(c.orders) }, { t: netOf.has(c.name) ? money(netOf.get(c.name)!) : '–' }, { t: rateText(pct(c.orders, total), 0) }]);
   const ret = pct(d.sale.returned, d.sale.packed), can = pct(d.sale.cancelled, d.sale.packed);
   return (
-    <Frame title="MEGATECH · Vận đơn" d={d} foot="Ảnh 5/5. Đơn gửi đi: đơn giao cho hãng vận chuyển trong khoảng giờ (theo ngày gửi, số riêng của Vận đơn, không cộng vào doanh thu). Hoàn / hủy: trên đơn đi của Sale.">
+    <Frame title="MEGATECH · Vận đơn" d={d} foot={`Ảnh 5/5. Đơn chuyển đi, Doanh số chuyển đi: đơn giao cho hãng vận chuyển trong ${d.range} (theo ngày chuyển đi, số riêng của Vận đơn, không cộng vào doanh thu). Hoàn / Hủy: trên đơn đi của Sale TỪ ĐẦU THÁNG tới mốc này.`}>
       <Box style={{ height: H.cards }}>
-        <SmallCard width="23.5%" label="Đơn gửi đi" value={num(d.ship.packed)} sub={`${num(d.ship.closed)} đơn chốt`} />
-        <SmallCard width="23.5%" label="Đơn đi Sale" value={num(d.sale.packed)} sub="đã đóng hàng" />
-        <SmallCard width="23.5%" label="Hoàn" value={num(d.sale.returned)} sub={rateText(ret)} red={ret != null && ret >= BOSS_RETURN_RED} />
-        <SmallCard width="23.5%" label="Hủy" value={num(d.sale.cancelled)} sub={rateText(can)} red={can != null && can >= BOSS_CANCEL_RED} />
+        <SmallCard width="23.5%" label="Đơn chuyển đi" value={num(d.ship.packed)} sub={d.range} />
+        <SmallCard width="23.5%" label="Doanh số chuyển đi" value={d.ship.net != null ? money(d.ship.net) : '–'} sub={d.range} />
+        <SmallCard width="23.5%" label="Hoàn từ đầu tháng" value={num(d.sale.returned)} sub={`${rateText(ret)} đơn đi Sale`} red={ret != null && ret >= BOSS_RETURN_RED} />
+        <SmallCard width="23.5%" label="Hủy từ đầu tháng" value={num(d.sale.cancelled)} sub={`${rateText(can)} đơn đi Sale`} red={can != null && can >= BOSS_CANCEL_RED} />
       </Box>
       <Gap />
-      <Table title="THEO HÃNG VẬN CHUYỂN" head={['Hãng', 'Đơn gửi', 'Phần']} widths={[50, 25, 25]} rows={rows} />
+      <Table title="THEO HÃNG VẬN CHUYỂN" head={['Hãng', 'Đơn chuyển đi', 'Doanh số chuyển đi', 'Phần đơn']} widths={[34, 20, 26, 20]} rows={rows} />
     </Frame>
   );
 }
