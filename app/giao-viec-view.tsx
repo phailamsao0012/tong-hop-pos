@@ -10,7 +10,7 @@ import { TaskChip, workDay, workDate, ConfirmWork } from './giao-viec-ui';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { KPI_TIGHT, PageHeadMoi, WhySheet, tileGrid, type WhySpec } from './trang-moi';
+import { KPI_TIGHT, PageHeadMoi, WhySheet, WhyTile, tileGrid, type WhySpec } from './trang-moi';
 import { STATUS_LABELS, weekOfMonth, taskState, type Contact, type Task, type Status } from '@/lib/zalo/zalo-work';
 
 // fetch được cài qua app/api-fetch.ts tại dashboard.
@@ -105,8 +105,8 @@ export function GiaoViecView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật th�
   // [hết khối chung]
 
   // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
-  // Trên xuống: đầu trang (PageHeadMoi: chọn tháng / tuần; + Giao việc) → một hàng 4 ô số (bấm mở "Vì sao ra số này", trong khung có nút lọc
-  // danh sách như bấm ô cũ) → bảng chính Danh sách việc (bấm việc mở khung giữa màn như cũ) → khối phụ thu gọn: Theo leader,
+  // Trên xuống: đầu trang (PageHeadMoi: chọn tháng / tuần; + Giao việc) → một hàng 4 ô số (bấm ô lọc danh sách như cũ, ô đang chọn sáng lên;
+  // nút "i" ở góc ô mở "Vì sao ra số này") → bảng chính Danh sách việc (bấm việc mở khung giữa màn như cũ) → khối phụ thu gọn: Theo leader,
   // Nhân viên của leader đang chọn, Cách tính. Trang không có tỷ lệ chốt / hoàn / hủy nên không có dải "Cần xem".
   if (uiMoi) {
     const periodText = week ? `Tuần ${week} · ${weeks.find(w => w.value === String(week))?.title}` : monthLabel;
@@ -122,10 +122,13 @@ export function GiaoViecView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật th�
       <PageHeadMoi title="Giao việc" scope={scope} tools={toolbar()} right={createBtn()} />
       <WorkMessage text={message} />{loadError && <ErrorBox error={loadError} />}
       {loading ? <><SkeletonKpis /><SkeletonTable /></> : <>
-        <div className={tileGrid(4)}>{tiles.map(t => <KpiCard key={t.key} icon={t.icon} tone={t.tone} label={t.label} className={KPI_TIGHT} value={vi.format(t.count)} active={filter === t.key}
-          note={`Việc có hạn trong ${week ? `tuần ${week}` : `tháng ${Number(month.slice(5))}`}`}
-          onClick={() => setWhy({ title: t.label, value: `${vi.format(t.count)} việc`, scope, definition: `${t.def} Kỳ lọc theo hạn của việc; tuần tính từ thứ Hai.`,
-            more: <button type="button" className="btn sm self-start" onClick={() => { setFilter(filter === t.key ? 'all' : t.key); setWhy(null); }}>{filter === t.key ? 'Bỏ lọc danh sách' : 'Lọc danh sách việc theo ô này'}</button> })} />)}</div>
+        <div className={tileGrid(4)}>{tiles.map(t => (
+          <WhyTile key={t.key} label={t.label} onWhy={() => setWhy({ title: t.label, value: `${vi.format(t.count)} việc`, scope, definition: `${t.def} Kỳ lọc theo hạn của việc; tuần tính từ thứ Hai.` })}>
+            <KpiCard icon={t.icon} tone={t.tone} label={t.label} className={KPI_TIGHT} value={vi.format(t.count)} active={filter === t.key}
+              note={`Việc có hạn trong ${week ? `tuần ${week}` : `tháng ${Number(month.slice(5))}`}`}
+              onClick={() => setFilter(filter === t.key ? 'all' : t.key)} />
+          </WhyTile>
+        ))}</div>
         {listCard()}
         <div className="grid min-w-0 gap-3">
           {leaderCard({ storageKey: k('leaders'), summary: `${vi.format(leaders.length)} leader` })}

@@ -35,7 +35,7 @@ import { Th,
   dmy, dt, money, pct, posName, posVar, shortMoney, toast, useMotionOK, useSort, vi, type SortState,
 } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
-import { KPI_TIGHT, PageHeadMoi, WhySheet, tileGrid, type WhySpec } from './trang-moi';
+import { KPI_TIGHT, PageHeadMoi, WhySheet, WhyTile, tileGrid, type WhySpec } from './trang-moi';
 
 type SurfaceComponent = React.ComponentType<{ title: string; description?: string; children: React.ReactNode; action?: React.ReactNode }>;
 const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
@@ -532,15 +532,12 @@ function DormantView({ canExport, uiMoi = false }: { canExport: boolean; /** C�
 
   // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
   // Trên xuống: đầu trang (PageHeadMoi: tìm, nhóm ngày, sắp xếp, phụ trách; StaleChip, Excel; POS) → chọn riêng NV CSKH → một hàng 6 ô số
-  // (bấm mở "Vì sao ra số này"; ô nhóm ngày có nút xem danh sách nhóm đó) → bảng chính danh sách khách (bấm khách mở hồ sơ giữa màn như cũ)
+  // (ô nhóm ngày bấm là lọc danh sách như cũ, nút "i" ở góc mở "Vì sao ra số này"; ô tổng / giá trị bấm mở "Vì sao ra số này") → bảng chính danh sách khách (bấm khách mở hồ sơ giữa màn như cũ)
   // → khối phụ thu gọn: Phân bổ theo thời gian chưa mua, Khách cần liên hệ trước, Cách tính. Trang không có tỷ lệ chốt / hoàn / hủy nên không có dải "Cần xem".
   if (uiMoi) {
     const posLabel = !posIds.length || posIds.length >= POS.length ? 'Tất cả POS' : posIds.length <= 3 ? posIds.map(posName).join(', ') : `${vi.format(posIds.length)} POS`;
     const scope = `Số Pancake tại lúc đồng bộ · ${posLabel} · tính từ lần mua thành công gần nhất · đang xem ${GROUP_LABELS[group]}`;
     const k = (s: string) => `ui-moi:dormant:${s}`;
-    const groupBtn = (key: string) => (
-      <Button variant="outline" size="sm" className="self-start" onClick={() => { reset(); setGroup(key); setWhy(null); }}>Xem danh sách {GROUP_LABELS[key].toLowerCase()}</Button>
-    );
     return (
       <div className="min-w-0 space-y-4">
         <PageHeadMoi title="Khách lâu chưa mua" scope={scope} hint="Theo số ngày từ lần mua thành công gần nhất" tools={filterBar()} right={headEl}
@@ -552,10 +549,12 @@ function DormantView({ canExport, uiMoi = false }: { canExport: boolean; /** C�
             <KpiCard icon={Users} tone="green" label="Tổng khách cần chăm sóc" className={KPI_TIGHT} value={vi.format(dormantTotal)} countUp rawValue={dormantTotal} note={`${pct(g.total ? dormantTotal / g.total * 100 : null)} tổng khách đã mua`}
               onClick={() => setWhy({ title: 'Tổng khách cần chăm sóc', value: `${vi.format(dormantTotal)} khách`, scope, rows: [...DORMANT_KEYS.map((key) => ({ label: GROUP_LABELS[key], value: vi.format(g[key] ?? 0) })), { label: 'Tỷ lệ trên khách đã mua', value: pct(g.total ? dormantTotal / g.total * 100 : null), strong: true }], definition: data?.definitions.dormant })} />
             {DORMANT_KEYS.map((key) => (
-              <KpiCard key={key} icon={Clock} tone={DORMANT_TONES[key]} label={GROUP_LABELS[key]} className={KPI_TIGHT} value={vi.format(g[key] ?? 0)} countUp rawValue={g[key] ?? 0}
-                note={`${pct(dormantTotal ? (g[key] ?? 0) / dormantTotal * 100 : null)} · ${shortMoney(nets[key] ?? 0)} đã mua`} active={group === key}
-                onClick={() => setWhy({ title: GROUP_LABELS[key], value: `${vi.format(g[key] ?? 0)} khách`, scope, rows: [{ label: 'Tỷ trọng nhóm chăm sóc', value: pct(dormantTotal ? (g[key] ?? 0) / dormantTotal * 100 : null) }, { label: 'Giá trị đã mua', value: money(nets[key] ?? 0) }],
-                  definition: 'Khách có lần mua thành công gần nhất cách đây trong khoảng ngày này.', more: groupBtn(key) })} />
+              <WhyTile key={key} label={GROUP_LABELS[key]} onWhy={() => setWhy({ title: GROUP_LABELS[key], value: `${vi.format(g[key] ?? 0)} khách`, scope, rows: [{ label: 'Tỷ trọng nhóm chăm sóc', value: pct(dormantTotal ? (g[key] ?? 0) / dormantTotal * 100 : null) }, { label: 'Giá trị đã mua', value: money(nets[key] ?? 0) }],
+                definition: 'Khách có lần mua thành công gần nhất cách đây trong khoảng ngày này.' })}>
+                <KpiCard icon={Clock} tone={DORMANT_TONES[key]} label={GROUP_LABELS[key]} className={KPI_TIGHT} value={vi.format(g[key] ?? 0)} countUp rawValue={g[key] ?? 0}
+                  note={`${pct(dormantTotal ? (g[key] ?? 0) / dormantTotal * 100 : null)} · ${shortMoney(nets[key] ?? 0)} đã mua`} active={group === key}
+                  onClick={() => { reset(); setGroup(key); }} />
+              </WhyTile>
             ))}
             <KpiCard icon={Wallet} tone="purple" label="Giá trị đã mua của nhóm" className={KPI_TIGHT} value={shortMoney(dormantNet)} note="Tổng tiền các khách này từng mua thành công"
               onClick={() => setWhy({ title: 'Giá trị đã mua của nhóm', value: money(dormantNet), scope, rows: DORMANT_KEYS.map((key) => ({ label: GROUP_LABELS[key], value: money(nets[key] ?? 0) })), definition: 'Cộng dồn doanh thu đơn thành công của mọi khách trong 4 nhóm lâu chưa mua.' })} />

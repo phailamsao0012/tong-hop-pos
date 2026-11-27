@@ -25,7 +25,7 @@ import { Th,
 } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
-import { KPI_TIGHT, PageHeadMoi, WhySheet, tileGrid, type WhySpec } from './trang-moi';
+import { KPI_TIGHT, PageHeadMoi, WhySheet, WhyTile, tileGrid, type WhySpec } from './trang-moi';
 
 type Customer = {
   phoneRef?: string;
@@ -434,17 +434,14 @@ export function CustomersPage({ initialQ = '', canExport = false, uiMoi = false 
   const detailNode = selected ? detailEl(selected) : null;
 
   // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
-  // Trên xuống: đầu trang (PageHeadMoi: chọn kỳ + sắp xếp; StaleChip, Excel) → một hàng 5 ô số (bấm mở "Vì sao ra số này", trong khung có nút lọc
-  // danh sách như bấm ô số cũ) → ô tìm / lọc → bảng chính Danh sách khách hàng (bấm dòng mở hồ sơ khách GIỮA màn, thay cột hồ sơ bên phải)
+  // Trên xuống: đầu trang (PageHeadMoi: chọn kỳ + sắp xếp; StaleChip, Excel) → một hàng 5 ô số (bấm ô lọc danh sách như cũ, ô đang chọn sáng lên;
+  // nút "i" ở góc ô mở "Vì sao ra số này") → ô tìm / lọc → bảng chính Danh sách khách hàng (bấm dòng mở hồ sơ khách GIỮA màn, thay cột hồ sơ bên phải)
   // → Cách tính thu gọn. Trang không có tỷ lệ chốt / hoàn / hủy nên không có dải "Cần xem".
   if (uiMoi) {
     const posLabel = !posIds.length || posIds.length >= POS.length ? 'Tất cả POS' : posIds.length <= 3 ? posIds.map(posName).join(', ') : `${vi.format(posIds.length)} POS`;
     const periodLabel = periodKey === 'custom' ? `${start} → ${end}` : periodKey === 'all' ? 'Toàn bộ lịch sử' : PERIODS[periodKey];
     const scope = `${periodLabel} · ${posLabel} · mỗi khách = một SĐT trong một POS · số Pancake tại lúc đồng bộ`;
     const total = data?.groups?.total ?? 0;
-    const filterBtn = (key: string, label: string) => (
-      <Button variant="outline" size="sm" className="self-start" onClick={() => { reset(); setPeriodKey('all'); setSegment(key); setWhy(null); }}>{label}</Button>
-    );
     const ofBuyers = (n: number) => pct(seg?.buyers ? n / seg.buyers * 100 : null);
     return (
       <div className="min-w-0 space-y-4">
@@ -453,16 +450,26 @@ export function CustomersPage({ initialQ = '', canExport = false, uiMoi = false 
         {!data && !error && <SkeletonKpis count={5} className="xl:grid-cols-5" />}
         {seg && (
           <div className={tileGrid(5)}>
-            <KpiCard icon={Users} tone="green" label="Tổng khách hàng" className={KPI_TIGHT} value={vi.format(total)} countUp rawValue={total} note={`${vi.format(seg.buyers)} đã mua thành công`} active={!periodMode && !segment}
-              onClick={() => setWhy({ title: 'Tổng khách hàng', value: `${vi.format(total)} khách`, scope, rows: [{ label: 'Đã mua thành công', value: vi.format(seg.buyers) }, { label: 'Chưa từng mua', value: vi.format(seg.never) }], definition: data?.definitions.identity, more: filterBtn('', 'Xem tất cả phân khúc') })} />
-            <KpiCard icon={UserCheck} tone="teal" label="Khách đang hoạt động" className={KPI_TIGHT} value={vi.format(seg.active)} countUp rawValue={seg.active} note="Mua trong 30 ngày qua" active={!periodMode && segment === 'active'}
-              onClick={() => setWhy({ title: 'Khách đang hoạt động', value: `${vi.format(seg.active)} khách`, scope, rows: [{ label: 'Tỷ lệ trên khách đã mua', value: ofBuyers(seg.active) }], definition: 'Khách có đơn mua thành công trong 30 ngày qua.', more: filterBtn('active', 'Lọc danh sách: khách đang hoạt động') })} />
-            <KpiCard icon={Star} tone="lime" label="Khách thân thiết" className={KPI_TIGHT} value={vi.format(seg.loyal)} countUp rawValue={seg.loyal} note="≥ 3 lần mua, quay lại trong 90 ngày" active={!periodMode && segment === 'loyal'}
-              onClick={() => setWhy({ title: 'Khách thân thiết', value: `${vi.format(seg.loyal)} khách`, scope, rows: [{ label: 'Tỷ lệ trên khách đã mua', value: ofBuyers(seg.loyal) }], definition: 'Mua thành công từ 3 lần và lần gần nhất trong 90 ngày.', more: filterBtn('loyal', 'Lọc danh sách: khách thân thiết') })} />
-            <KpiCard icon={AlertTriangle} tone="red" label="Có nguy cơ rời bỏ" className={KPI_TIGHT} value={vi.format(seg.risk)} countUp rawValue={seg.risk} note="≥ 2 lần mua, > 60 ngày chưa quay lại" active={!periodMode && segment === 'risk'}
-              onClick={() => setWhy({ title: 'Có nguy cơ rời bỏ', value: `${vi.format(seg.risk)} khách`, scope, rows: [{ label: 'Tỷ lệ trên khách đã mua', value: ofBuyers(seg.risk) }], definition: 'Từng mua từ 2 lần nhưng đã hơn 60 ngày chưa quay lại.', more: filterBtn('risk', 'Lọc danh sách để gọi chăm sóc') })} />
-            <KpiCard icon={Wallet} tone="orange" label="Giá trị vòng đời trung bình" className={KPI_TIGHT} value={shortMoney(seg.buyers ? seg.ltvTotal / seg.buyers : null)} note={`${vi.format(seg.vip)} khách VIP (≥ 5 triệu)`} active={!periodMode && segment === 'vip'}
-              onClick={() => setWhy({ title: 'Giá trị vòng đời trung bình', value: money(seg.buyers ? seg.ltvTotal / seg.buyers : null), scope, rows: [{ label: 'Tổng LTV', value: money(seg.ltvTotal) }, { label: 'Khách đã mua', value: vi.format(seg.buyers) }, { label: 'Khách VIP', value: vi.format(seg.vip) }], definition: 'Tổng doanh thu đơn thành công ÷ số khách đã mua.', more: filterBtn('vip', 'Lọc danh sách: khách VIP') })} />
+            <WhyTile label="Tổng khách hàng" onWhy={() => setWhy({ title: 'Tổng khách hàng', value: `${vi.format(total)} khách`, scope, rows: [{ label: 'Đã mua thành công', value: vi.format(seg.buyers) }, { label: 'Chưa từng mua', value: vi.format(seg.never) }], definition: data?.definitions.identity })}>
+              <KpiCard icon={Users} tone="green" label="Tổng khách hàng" className={KPI_TIGHT} value={vi.format(total)} countUp rawValue={total} note={`${vi.format(seg.buyers)} đã mua thành công`} active={!periodMode && !segment}
+                onClick={() => { reset(); setPeriodKey('all'); setSegment(''); }} />
+            </WhyTile>
+            <WhyTile label="Khách đang hoạt động" onWhy={() => setWhy({ title: 'Khách đang hoạt động', value: `${vi.format(seg.active)} khách`, scope, rows: [{ label: 'Tỷ lệ trên khách đã mua', value: ofBuyers(seg.active) }], definition: 'Khách có đơn mua thành công trong 30 ngày qua.' })}>
+              <KpiCard icon={UserCheck} tone="teal" label="Khách đang hoạt động" className={KPI_TIGHT} value={vi.format(seg.active)} countUp rawValue={seg.active} note="Mua trong 30 ngày qua" active={!periodMode && segment === 'active'}
+                onClick={() => { reset(); setPeriodKey('all'); setSegment('active'); }} />
+            </WhyTile>
+            <WhyTile label="Khách thân thiết" onWhy={() => setWhy({ title: 'Khách thân thiết', value: `${vi.format(seg.loyal)} khách`, scope, rows: [{ label: 'Tỷ lệ trên khách đã mua', value: ofBuyers(seg.loyal) }], definition: 'Mua thành công từ 3 lần và lần gần nhất trong 90 ngày.' })}>
+              <KpiCard icon={Star} tone="lime" label="Khách thân thiết" className={KPI_TIGHT} value={vi.format(seg.loyal)} countUp rawValue={seg.loyal} note="≥ 3 lần mua, quay lại trong 90 ngày" active={!periodMode && segment === 'loyal'}
+                onClick={() => { reset(); setPeriodKey('all'); setSegment('loyal'); }} />
+            </WhyTile>
+            <WhyTile label="Có nguy cơ rời bỏ" onWhy={() => setWhy({ title: 'Có nguy cơ rời bỏ', value: `${vi.format(seg.risk)} khách`, scope, rows: [{ label: 'Tỷ lệ trên khách đã mua', value: ofBuyers(seg.risk) }], definition: 'Từng mua từ 2 lần nhưng đã hơn 60 ngày chưa quay lại.' })}>
+              <KpiCard icon={AlertTriangle} tone="red" label="Có nguy cơ rời bỏ" className={KPI_TIGHT} value={vi.format(seg.risk)} countUp rawValue={seg.risk} note="≥ 2 lần mua, > 60 ngày chưa quay lại" active={!periodMode && segment === 'risk'}
+                onClick={() => { reset(); setPeriodKey('all'); setSegment('risk'); }} />
+            </WhyTile>
+            <WhyTile label="Giá trị vòng đời trung bình" onWhy={() => setWhy({ title: 'Giá trị vòng đời trung bình', value: money(seg.buyers ? seg.ltvTotal / seg.buyers : null), scope, rows: [{ label: 'Tổng LTV', value: money(seg.ltvTotal) }, { label: 'Khách đã mua', value: vi.format(seg.buyers) }, { label: 'Khách VIP', value: vi.format(seg.vip) }], definition: 'Tổng doanh thu đơn thành công ÷ số khách đã mua.' })}>
+              <KpiCard icon={Wallet} tone="orange" label="Giá trị vòng đời trung bình" className={KPI_TIGHT} value={shortMoney(seg.buyers ? seg.ltvTotal / seg.buyers : null)} note={`${vi.format(seg.vip)} khách VIP (≥ 5 triệu)`} active={!periodMode && segment === 'vip'}
+                onClick={() => { reset(); setPeriodKey('all'); setSegment('vip'); }} />
+            </WhyTile>
           </div>
         )}
         {searchEl()}
