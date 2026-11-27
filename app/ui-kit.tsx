@@ -201,7 +201,18 @@ function useCollapsed(storageKey: string | undefined) {
     try { if (storageKey) window.localStorage.setItem(storageKey, v ? 'closed' : 'open'); } catch { /* bỏ qua */ }
     return !v;
   });
-  return { open, toggle };
+  /** Mở hẳn (và nhớ là mở), dùng khi trang khác / nút khác cần cuộn tới nội dung bên trong khối thu gọn. */
+  const show = () => { setOpen(true); try { if (storageKey) window.localStorage.setItem(storageKey, 'open'); } catch { /* bỏ qua */ } };
+  return { open, toggle, show };
+}
+
+/** Sự kiện mở khối thu gọn có chứa phần tử `id` rồi cuộn tới (giao diện mới; xem FoldBlock `anchors`). */
+const OPEN_FOLD = 'thp:open-fold';
+/** Cuộn tới phần tử `id`; nếu phần tử nằm trong FoldBlock đang đóng (khai báo `anchors`) thì mở khối đó trước rồi cuộn. */
+export function scrollToAnchor(id: string) {
+  const el = document.getElementById(id);
+  if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+  window.dispatchEvent(new CustomEvent(OPEN_FOLD, { detail: id }));
 }
 
 export function ChartCard({ icon: Icon, title, subtitle, action, info, children, className = '', more, lift, loading, bodyClassName = '', id, collapse }: {
@@ -255,10 +266,28 @@ export function ChartCard({ icon: Icon, title, subtitle, action, info, children,
 
 /** Khối phụ thu gọn cho khối không phải ChartCard (giao diện mới, 27/11/2026): một dòng tiêu đề như ChartCard `collapse`, bấm mới xổ ra.
  *  Khi đóng không dựng khối bên trong (khối không tải số); nhớ đóng / mở theo storageKey như ChartCard. */
-export function FoldBlock({ icon: Icon, title, summary, storageKey, children, className = '' }: {
+export function FoldBlock({ icon: Icon, title, summary, storageKey, children, className = '', anchors }: {
   icon?: LucideIcon; title: string; summary?: ReactNode; storageKey: string; children: ReactNode; className?: string;
+  /** id các phần tử bên trong khối: scrollToAnchor(id) mở khối rồi cuộn tới phần tử đó (nút không bao giờ bấm vào khoảng không). */ anchors?: string[];
 }) {
   const fold = useCollapsed(storageKey);
+  const { show } = fold;
+  const anchorKey = anchors?.join('|') ?? '';
+  useEffect(() => {
+    if (!anchorKey) return;
+    const ids = anchorKey.split('|');
+    const onOpen = (e: Event) => {
+      const id = (e as CustomEvent<string>).detail;
+      if (!ids.includes(id)) return;
+      show();
+      // Chờ khối vẽ xong nội dung rồi mới cuộn.
+      let tries = 0;
+      const go = () => { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); else if (tries++ < 20) requestAnimationFrame(go); };
+      requestAnimationFrame(go);
+    };
+    window.addEventListener(OPEN_FOLD, onOpen);
+    return () => window.removeEventListener(OPEN_FOLD, onOpen);
+  }, [anchorKey]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <section className={`min-w-0 ${className}`}>
       <button type="button" onClick={fold.toggle} aria-expanded={fold.open} className="card tap flex w-full min-w-0 items-center gap-2 px-5 py-3 text-left max-sm:px-4">

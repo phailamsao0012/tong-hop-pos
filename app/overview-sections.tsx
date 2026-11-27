@@ -20,7 +20,7 @@ import { focusAfterNav, setNavHint } from './nav-focus';
 import { segmentDrillHint } from '@/lib/shared/drill-hint';
 import { useApi } from './use-api';
 import { PeriodBars, useTrendCards, type NoteDept } from './overview-trends';
-import { Th, DeltaPill, ErrorBox, InfoTip, SkeletonKpis, TableWrap, money, pct, shortMoney, vi } from './ui-kit';
+import { Th, DeltaPill, ErrorBox, InfoTip, SkeletonKpis, TableWrap, money, pct, scrollToAnchor, shortMoney, vi } from './ui-kit';
 import { KpiDayStrip, useKpiDay } from './kpi-day-strip';
 import type { KpiDayReport } from '@/lib/kpi/kpi-day-report';
 
@@ -152,7 +152,8 @@ function RevenueSplit({ data, start, end, posIds, productSegment, onDrill }: {
   const whole = productSegment === 'all';
   const sourceText = !ref.data ? 'đang lấy từ Pancake…' : fromPancake === total ? `ô Tổng cộng trên Pancake, cộng ${total} POS`
     : fromPancake ? `${fromPancake} POS lấy từ Pancake, ${total - fromPancake} POS web tự tính` : `web tự tính như Pancake (${total} POS)`;
-  const toRef = () => document.getElementById('pancake-ref')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // Có phần tử thì cuộn như cũ; giao diện mới để khối này trong FoldBlock thu gọn: scrollToAnchor mở khối rồi cuộn (không có khối nào nghe thì không làm gì, như cũ).
+  const toRef = () => scrollToAnchor('pancake-ref');
   // Hàm trả JSX (không phải component) để không tạo lại component mỗi lần vẽ.
   const dept = ({ k, tone, icon: Icon, label, value, orders, note }: { k: TargetKey; tone: Tone; icon: LucideIcon; label: string; value: number; orders: string; note: string }) => (
     <button key={k} type="button" onClick={onDrill ? () => onDrill(k) : undefined} disabled={!onDrill} title={onDrill ? hintOf(k) : undefined}

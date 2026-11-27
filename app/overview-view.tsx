@@ -783,7 +783,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false, uiMoi = false }
               {!mktLens && <FoldBlock icon={BarChart3} title="Xu hướng" storageKey={k('trend')}><TrendNotes canRewrite={canRewriteAi} onOpen={onNavigate ? (d) => onNavigate(DEPT_VIEW[d]) : undefined} /></FoldBlock>}
               <FoldBlock icon={ClipboardList} title="Nhân viên chưa tính vào bộ phận" storageKey={k('uncounted')}>{uncounted()}</FoldBlock>
               <FoldBlock icon={CheckCircle2} title="Gợi ý" storageKey={k('advisor')}><AdvisorPanel /></FoldBlock>
-              <FoldBlock icon={PackageCheck} title="Đối chiếu số · tham chiếu Pancake" storageKey={k('reconcile')}>
+              <FoldBlock icon={PackageCheck} title="Đối chiếu số · tham chiếu Pancake" storageKey={k('reconcile')} anchors={['pancake-ref']}>
                 <div className="grid min-w-0 gap-3"><ReconcileLine totals={{ ...cur, reconcile: report.current.reconcile }} /><div id="pancake-ref" className="scroll-mt-20"><LazyBlock><PancakeReference posIds={posIds} start={start} end={end} /></LazyBlock></div></div>
               </FoldBlock>
               <FoldBlock icon={ClipboardList} title="Cách tính" storageKey={k('defs')}><Definitions items={report.definitions} /></FoldBlock>
