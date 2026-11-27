@@ -14,3 +14,10 @@ void test('tự khoá màn hình: chỉ chủ hệ thống trên bản thử th�
     assert.equal(idleLockPaused({ ...base, ...flag, owner: false }), false, JSON.stringify(flag));
   }
 });
+
+void test('bản thử (giao diện mới / demo / bản chụp): không có khoá với bất kỳ ai; web thật vẫn có khoá', async () => {
+  const { idleLockOff } = await import('../lib/auth/idle-pause');
+  assert.equal(idleLockOff({ uiMoi: false, demo: false, snapshotAt: null }), false, 'web thật');
+  for (const flag of [{ uiMoi: true }, { demo: true }, { snapshotAt: '2026-11-27T03:00:00Z' }])
+    assert.equal(idleLockOff({ uiMoi: false, demo: false, snapshotAt: null, ...flag }), true, JSON.stringify(flag));
+});

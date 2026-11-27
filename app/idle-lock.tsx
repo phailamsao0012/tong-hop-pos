@@ -26,6 +26,12 @@ export const idleMinutes = (owner: boolean) => {
 export const setIdleMinutes = (v: number) => { write(MINUTES_KEY, String(v)); write(ACTIVE_KEY, String(Date.now())); };
 export const idleLabel = (v: number) => IDLE_OPTIONS.find((o) => o.value === v)?.label ?? `${v} phút`;
 
+/** Bản thử không khoá: gỡ trạng thái "đã khoá" còn lưu trên máy (khoá từ trước khi tắt) để mở trang là xem được ngay. */
+export function IdleLockOff() {
+  useEffect(() => { write(LOCK_KEY, null); write(ACTIVE_KEY, String(Date.now())); }, []);
+  return null;
+}
+
 export function IdleLock({ paused, owner = false, onLogout }: { paused: boolean; owner?: boolean; onLogout: () => void }) {
   const [locked, setLocked] = useState(false);
   const [password, setPassword] = useState('');
