@@ -122,7 +122,8 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
   const [rankingMode, setRankingMode] = useState<'marketer' | 'team'>('marketer');
   // Bảng xếp hạng gộp (25/11/2026): một bảng, nút chọn nhóm cột Chốt | Chi phí | Giao hàng.
   // "Tất cả" (anh Vũ 26/11/2026: "t nhớ nó dài lắm mà"): hiện cả ba nhóm trên một bảng, cuộn ngang trong khung bảng.
-  const [colGroup, setColGroup] = useState<ViewGroup>('chot');
+  // Mặc định "Tất cả" (anh Vũ 27/11/2026 8h23: "ok để Tất cả cột làm mặc định"); không nhớ lựa chọn giữa các lần mở như trước.
+  const [colGroup, setColGroup] = useState<ViewGroup>('tatca');
   const [sheet, setSheet] = useState<SheetCompare | null>(null);
   const [marketingTeams, setMarketingTeams] = useState<MarketingTeam[]>([]);
   const [sellerId, setSellerId] = useState('__all');
@@ -479,7 +480,7 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
           </div>}>
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <span className="text-[12.5px] font-semibold text-ink-2">Xem nhóm cột</span>
-            <SegmentedControl<ViewGroup> size="sm" ariaLabel="Nhóm cột bảng xếp hạng" value={colGroup} onChange={setColGroup} options={[...COL_GROUPS.filter((g) => g.value !== 'chiphi' || !noCost), { value: 'tatca' as const, label: 'Tất cả' }]} />
+            <SegmentedControl<ViewGroup> size="sm" ariaLabel="Nhóm cột bảng xếp hạng" value={colGroup} onChange={setColGroup} options={[{ value: 'tatca' as const, label: 'Tất cả' }, ...COL_GROUPS.filter((g) => g.value !== 'chiphi' || !noCost)]} />
             {(colGroup === 'chiphi' || (colGroup === 'tatca' && !noCost)) && <span className="text-[11.5px] text-ink-3">Chi phí, ROAS theo ngày xác nhận lần đầu, như khối số chính (không đổi theo mốc Đóng hàng / Đã gửi / Đã nhận).</span>}
           </div>
           {(colGroup === 'chiphi' || colGroup === 'tatca') && rankingMode === 'marketer' && !noCost && <MktSheetBar start={start} end={end} posIds={posIds} unmatchedSheet={costApi.data?.unmatchedSheet} onSheet={setSheet} />}
