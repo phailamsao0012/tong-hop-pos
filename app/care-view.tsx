@@ -312,6 +312,9 @@ export function CareView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì b�
                 </ChartCard>
   );
   // [hết khối chung]
+  // Đầu trang và danh sách khách vẽ MỘT lần cho cả hai bố cục (bên trong có hàm đọc ref; gọi hai chỗ thì react-compiler báo thêm lỗi).
+  const headEl = headActions();
+  const listEl = report ? listCard(report) : null;
 
   // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
   // Trên xuống: đầu trang (PageHeadMoi: thanh lọc của trang; StaleChip, Excel; POS) → chọn riêng NV CSKH → nhắc dữ liệu đang gom
@@ -324,7 +327,7 @@ export function CareView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì b�
     const s = report?.summary;
     return (
       <div className="min-w-0 space-y-4">
-        <PageHeadMoi title="Khách theo nhân viên" scope={scope} hint="Khách được phân công và ghi chú trao đổi, như mục Khách hàng Pancake" tools={filterBar()} right={headActions()}
+        <PageHeadMoi title="Khách theo nhân viên" scope={scope} hint="Khách được phân công và ghi chú trao đổi, như mục Khách hàng Pancake" tools={filterBar()} right={headEl}
           pos={<PosChips posIds={posIds} onChange={setPosIds} />} />
         <CskhFocusBar />
         {error && !report && <ErrorBox error={error} onRetry={refetch} />}
@@ -349,7 +352,7 @@ export function CareView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì b�
                 onClick={() => setWhy({ title: 'Doanh thu tự chốt', value: money(s.ownNet ?? 0), scope, rows: [{ label: 'Số đơn', value: vi.format(s.ownOrders ?? 0) }, { label: 'Doanh thu đơn chốt (ai bán cũng tính)', value: s.closedNet === null ? '—' : money(s.closedNet) }],
                   definition: 'Doanh thu đơn chốt do chính người đang cầm khách bán.' })} />
             </div>
-            {listCard(report)}
+            {listEl}
             <div className="grid min-w-0 gap-3">
               {staffRows.length > 0 && staffCard({ storageKey: k('staff'), summary: `${vi.format(staffRows.length)} người` })}
               {oneStaff && <FoldBlock icon={Users} title={`Data của ${assignedLabel}: mua lần đầu gì, mua tiếp mấy lần`} storageKey={k('ladder')}><CareLadderBlock assigned={assigned} name={assignedLabel} posIds={posIds} /></FoldBlock>}
@@ -372,7 +375,7 @@ export function CareView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì b�
   return (
     <div className="space-y-5">
       <PageHeader eyebrow="CSKH" title="Khách theo nhân viên" subtitle="Khách được phân công và ghi chú trao đổi, như mục Khách hàng Pancake"
-        actions={headActions()} />
+        actions={headEl} />
       <CskhFocusBar />
       {filterBar()}
       <PosChips posIds={posIds} onChange={setPosIds} />
@@ -406,7 +409,7 @@ export function CareView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì b�
           )}
           {oneStaff && <CareLadderBlock assigned={assigned} name={assignedLabel} posIds={posIds} />}
           <div className={`grid gap-4 ${selected ? '2xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]' : ''}`}>
-            {listCard(report)}
+            {listEl}
             {selected && (
               <div id="care-detail" className="scroll-mt-16">
                 detailCard(selected)
