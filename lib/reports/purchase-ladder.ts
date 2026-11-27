@@ -11,6 +11,7 @@ import { POS } from '@/lib/shared/report-model';
 import { groupsOf, itemNames } from '@/lib/reports/product-groups';
 import { STATUS_GROUPS } from '@/lib/reports/stats';
 import { teamSubquery } from '@/lib/teams/team';
+import { PRODUCT_SEGMENTS, isSegment, segmentKeyExpr, segmentsFor, type SegmentKey } from '@/lib/pancake/order-segments';
 
 export const LADDER_GROUPS = ['Kháng sinh', 'Combo'] as const;
 export type LadderGroup = typeof LADDER_GROUPS[number];
@@ -114,11 +115,11 @@ export const LADDER_DEFINITIONS = {
 };
 
 /** Một khách trong bảng bậc thang: nhóm của đơn T0 và các đơn đã nhận (để mở danh sách khách ở từng bậc). */
-export type LadderMember = { phone: string; group: LadderGroup; orders: H[] };
+export type LadderMember = { phone: string; /** Nhóm (Sale: Kháng sinh / Combo) hoặc tên thẻ sản phẩm (CSKH). */ group: string; orders: H[] };
 const member = (h: H[], group: LadderGroup): LadderMember => ({ phone: h[0].p, group, orders: h });
 
 /** Danh sách khách của một ô: step 0 = mọi khách T0; step k ≥ 1, mode "stopped" = đã tới T(k−1) nhưng chưa mua T(k); "reached" = đã tới T(k). */
-export async function ladderMembers(members: LadderMember[], opts: { group: LadderGroup | null; step: number; mode: 'stopped' | 'reached' }) {
+export async function ladderMembers(members: LadderMember[], opts: { group: string | null; step: number; mode: 'stopped' | 'reached' }) {
   const k = opts.step;
   const matched = members.filter((m) => (!opts.group || m.group === opts.group)
     && (k <= 0 ? true : opts.mode === 'reached' ? m.orders.length > k : m.orders.length === k));
@@ -157,34 +158,65 @@ const MAX_LIST = 5000;
 export async function ladderResponse<T extends { members: LadderMember[] }>(res: T, p: URLSearchParams) {
   const { members, ...rest } = res;
   if (!p.has('step')) return rest;
+  // Nhóm của ô: một nhóm có trong danh sách khách (Sale: Kháng sinh / Combo; CSKH: tên thẻ sản phẩm), lạ thì coi như cả bảng.
   const g = p.get('listGroup');
-  const group = (LADDER_GROUPS as readonly string[]).includes(g ?? '') ? g as LadderGroup : null;
+  const group = g && members.some((m) => m.group === g) ? g : null;
   const step = Math.max(0, Math.min(MAX_STEPS, Number(p.get('step')) || 0));
   const mode = p.get('mode') === 'reached' ? 'reached' : 'stopped';
   return { group, step, mode, ...await ladderMembers(members, { group, step, mode }) };
 }
 const chunks = (list: string[]) => { const out: string[][] = []; for (let i = 0; i < list.length; i += 80) out.push(list.slice(i, i + 80)); return out; };
 
-/** CSKH: bậc thang mua lại của khách đang được phân công cho một nhân viên. */
+/** CSKH: bậc thang mua lại của khách đang được phân công cho một nhân viên.
+ *  Theo POS đang chọn (anh Vũ 27/11/2026: "chọn pos nào thì sẽ ra đơn và khách của pos đó, còn nếu khách ở pos khác không thêm vào, nếu bắt nguồn
+ *  từ pos khác cũng k tính, chỉ ghi ở note nhỏ ở dưới là có bao nhiêu khách từ nguồn nào thôi"):
+ *  - chỉ tính khách có đơn đã nhận ĐẦU TIÊN (trên mọi POS) ở một POS đang chọn; khách bắt nguồn POS khác đếm riêng theo POS (fromOther);
+ *  - T0, T1… chỉ là đơn ở các POS đang chọn;
+ *  - nhóm của khách = thẻ sản phẩm của đơn T0 theo bộ thẻ mới của POS (lib/pancake/order-segments.ts, có cả "Khác"), không còn "không tính". */
+export const CSKH_LADDER_DEFINITIONS = {
+  t: 'T0 = đơn đầu tiên khách đã nhận hàng (Đã nhận / Đã thu tiền); T1 = lần mua đã nhận thứ 2, T2 = lần thứ 3… tới lần mua nhiều nhất của khách, chỉ tính đơn ở các POS đang chọn, ai bán cũng tính. % = số khách tới bậc đó ÷ số khách T0; "so bậc trước" = ÷ số khách ở bậc liền trước.',
+  groups: 'Nhóm của khách = thẻ sản phẩm của đơn T0, theo bộ thẻ của POS (như thẻ ở Tổng quan): Siêu Vô Gạo → Gentadox / Combo Oxytetra + Bổ đậm đặc / Sát trùng, Glucan, Điện giải / Khác; BIO NANO → Doxytylo / Khác; Oxytetra → Combo Oxytetra + Bổ đậm đặc; POS khác → Khác. Mỗi khách đúng một thẻ, cộng các thẻ = tổng.',
+  origin: 'Chỉ tính khách có đơn đã nhận ĐẦU TIÊN (xét mọi POS) ở một POS đang chọn. Khách cùng số điện thoại mà đơn đầu ở POS khác thì không tính, chỉ ghi số khách theo POS nguồn ở dòng chú thích.',
+  cross: 'Up sang thẻ khác = khách sau đơn T0 có mua một đơn thuộc thẻ khác thẻ của T0.',
+  gap: LADDER_DEFINITIONS.gap,
+  own: LADDER_DEFINITIONS.own,
+};
 export function cskhLadder(opts: { staffId: string; posIds: string[] }) {
-  return remember(`cskh|${opts.staffId}|${opts.posIds.join(',')}`, 15 * 60000, async () => {
+  return remember(`cskh2|${opts.staffId}|${opts.posIds.join(',')}`, 15 * 60000, async () => {
     const custs = (await env.DB.prepare(`SELECT DISTINCT TRIM(phone) AS phone FROM pos_customers WHERE pos_id IN (${opts.posIds.map(() => '?').join(',')}) AND assigned_user_id=? AND phone IS NOT NULL AND TRIM(phone)<>''`)
       .bind(...opts.posIds, opts.staffId).all<{ phone: string }>()).results.map((r) => r.phone);
-    const hist = await deliveredHistory(custs, opts.posIds);
-    const t0s = [...hist.values()].map((h) => h[0]);
+    // Lịch sử trên MỌI POS để biết đơn đầu của khách ở đâu; bậc thang chỉ giữ đơn ở POS đang chọn.
+    const everywhere = await deliveredHistory(custs, POS.map((x) => x.id));
+    const chosen = new Set(opts.posIds);
+    const hist = new Map<string, H[]>();
+    const fromOther = new Map<string, number>();
+    for (const [phone, h] of everywhere) {
+      if (!chosen.has(h[0].pos)) { fromOther.set(h[0].pos, (fromOther.get(h[0].pos) ?? 0) + 1); continue; }
+      hist.set(phone, h.filter((o) => chosen.has(o.pos)));
+    }
+    const all = [...hist.values()].flat();
     const later = [...hist.values()].flatMap((h) => h.slice(1));
-    const groups = await groupsFor([...t0s, ...later]);
-    const extra = new Map((await byRowid<{ rid: number; care: string | null; net: number }>((q) => `SELECT rowid AS rid, NULLIF(care_id,'') AS care, ${NET} AS net FROM raw_pos_orders WHERE rowid IN (${q})`, later.map((o) => o.rid))).map((r) => [r.rid, r]));
+    const [segRows, extraRows] = await Promise.all([
+      byRowid<{ rid: number; seg: string }>((q) => `SELECT o.rowid AS rid, ${segmentKeyExpr('o')} AS seg FROM raw_pos_orders o WHERE o.rowid IN (${q})`, all.map((o) => o.rid)),
+      byRowid<{ rid: number; care: string | null; net: number }>((q) => `SELECT rowid AS rid, NULLIF(care_id,'') AS care, ${NET} AS net FROM raw_pos_orders WHERE rowid IN (${q})`, later.map((o) => o.rid)),
+    ]);
+    const seg = new Map(segRows.map((r) => [r.rid, (isSegment(r.seg) ? r.seg : 'khac') as SegmentKey]));
+    const extra = new Map(extraRows.map((r) => [r.rid, r]));
+    const keys = segmentsFor(opts.posIds);
     const steps = stepsOf([...hist.values()]);
-    const lines = new Map<LadderGroup, Line>(LADDER_GROUPS.map((g) => [g, blank(steps)]));
+    const lines = new Map<SegmentKey, Line>(keys.map((k) => [k, blank(steps)]));
     const members: LadderMember[] = [];
-    let other = 0;
     for (const h of hist.values()) {
-      const g = primary(groups.get(h[0].rid));
-      if (!g) { other++; continue; }
-      const l = lines.get(g)!;
-      addTo(l, h, g, groups);
-      members.push(member(h, g));
+      const k = seg.get(h[0].rid) ?? 'khac';
+      let l = lines.get(k);
+      if (!l) { l = blank(steps); lines.set(k, l); }
+      l.t0++;
+      for (let i = 1; i <= l.ladder.length; i++) if (h.length > i) l.ladder[i - 1]++;
+      if (h.slice(1).some((o) => (seg.get(o.rid) ?? 'khac') !== k)) l.cross++;
+      l.laterOrders += h.length - 1;
+      if (h.length > 1) l.days.push((toMs(h[1].t) - toMs(h[0].t)) / DAY);
+      for (let i = 1; i <= l.ladder.length && i < h.length; i++) l.gaps[i - 1].push((toMs(h[i].t) - toMs(h[i - 1].t)) / DAY);
+      members.push({ phone: h[0].p, group: PRODUCT_SEGMENTS[k], orders: h });
       let own = 0;
       for (const o of h.slice(1)) { const x = extra.get(o.rid); l.laterNet += Number(x?.net ?? 0); if ((x?.care ?? o.s) === opts.staffId) own++; }
       if (own) { l.ownCustomers++; l.ownOrders += own; }
@@ -194,9 +226,11 @@ export function cskhLadder(opts: { staffId: string; posIds: string[] }) {
       total.t0 += l.t0; total.cross += l.cross; total.ownCustomers += l.ownCustomers; total.ownOrders += l.ownOrders; total.laterOrders += l.laterOrders; total.laterNet += l.laterNet; total.days.push(...l.days);
       l.ladder.forEach((n, i) => { total.ladder[i] += n; total.gaps[i].push(...l.gaps[i]); });
     }
+    const posName = (id: string) => POS.find((x) => x.id === id)?.name ?? id;
     return {
-      staffId: opts.staffId, data: custs.length, noDelivered: custs.length - hist.size, other, approx: (groups as { approx?: number }).approx ?? 0,
-      groups: LADDER_GROUPS.map((g) => ({ label: g, ...packLine(lines.get(g)!) })), total: packLine(total), steps, definitions: LADDER_DEFINITIONS, members,
+      staffId: opts.staffId, data: custs.length, noDelivered: custs.length - everywhere.size, other: 0, approx: 0,
+      fromOther: [...fromOther].sort((a, b) => b[1] - a[1]).map(([posId, customers]) => ({ posId, name: posName(posId), customers })),
+      groups: [...lines].map(([k, l]) => ({ key: k, label: PRODUCT_SEGMENTS[k], ...packLine(l) })), total: packLine(total), steps, definitions: CSKH_LADDER_DEFINITIONS, members,
     };
   });
 }
