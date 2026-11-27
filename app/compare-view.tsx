@@ -425,7 +425,7 @@ export function CompareView() {
                         </> : <>
                           <td className="n">{r.assignedHidden ? '—' : vi.format(r.assignedOrders)}</td>
                           <td className="n">{vi.format(r.closedOrders)}</td>
-                          <td className={`n ${r.assignedHidden ? '' : rateTextClass(closeRateOf(r, ms.rateBase))}`} title="Trong số chia, bao nhiêu đơn đã chốt (cột Đơn chốt đếm theo ngày chốt nên có cả đơn chia từ trước)">{r.assignedHidden ? '—' : pct(closeRateOf(r, ms.rateBase))}{!r.assignedHidden && closeRateBase(r, ms.rateBase) > 0 && <span className="block text-[11px] font-normal text-ink-3">{vi.format(closeRateTop(r, ms.rateBase))}/{vi.format(closeRateBase(r, ms.rateBase))} đã chốt</span>}</td>
+                          <td className={`n ${r.assignedHidden ? '' : rateTextClass(closeRateOf(r, ms.rateBase))}`} title="Trong số chia, bao nhiêu đơn đã chốt (cột Đơn chốt đếm theo ngày tạo đơn nên có thể khác số đơn chia)">{r.assignedHidden ? '—' : pct(closeRateOf(r, ms.rateBase))}{!r.assignedHidden && closeRateBase(r, ms.rateBase) > 0 && <span className="block text-[11px] font-normal text-ink-3">{vi.format(closeRateTop(r, ms.rateBase))}/{vi.format(closeRateBase(r, ms.rateBase))} đã chốt</span>}</td>
                           <td className="n mut text-xs"><span className="inline-flex items-center gap-1.5">{pct(r.prevRate)}{closeRateOf(r, ms.rateBase) !== null && r.prevRate !== null && <DeltaPill value={(closeRateOf(r, ms.rateBase) ?? 0) - r.prevRate} suffix=" điểm" />}</span></td>
                         </>}
                         <td className="n">{r.averageOrder ? money(r.averageOrder) : '—'}</td>
@@ -479,7 +479,7 @@ export function CompareView() {
           <Definitions items={[
             `Hoàn thành mục tiêu = doanh thu đơn chốt so với mục tiêu tháng đã đặt trong Cấu hình (chưa đặt thì dùng tỷ lệ chốt so với ${TARGET}%).`,
             `Nhận xét dựa trên trung vị đội ngũ và mục tiêu tham chiếu ${TARGET}%: Hiệu suất cao = tỷ lệ ≥ mục tiêu với lượng đơn chia từ trung vị trở lên; Cần hỗ trợ = ≥ 10 đơn chia nhưng tỷ lệ dưới 80% trung vị; Cân bằng data = nhận nhiều hơn 150% trung vị mà tỷ lệ dưới trung vị.`,
-            'Tỷ lệ chốt = trong số đơn chia trong kỳ, bao nhiêu đơn đã chốt (không vượt 100%). Cột Đơn chốt đếm theo ngày chốt (như Pancake) nên có cả đơn chia từ trước. Đơn chốt = đơn đã xác nhận trở đi, không tính hủy/xóa; doanh thu sau giảm giá và quà.',
+            'Tỷ lệ chốt = trong số đơn chia trong kỳ, bao nhiêu đơn đã chốt (không vượt 100%). Cột Đơn chốt đếm theo ngày tạo đơn (từ 27/11/2026) nên có thể khác số đơn chia. Đơn chốt = đơn đã xác nhận trở đi, không tính hủy/xóa; doanh thu sau giảm giá và quà.',
             'Ô tìm tên chỉ lọc bảng chi tiết; thẻ số, biểu đồ và file xuất theo lựa chọn so sánh (tối đa 8 người).',
           ]} />
         </>

@@ -1,29 +1,35 @@
 // "Số tham chiếu Pancake": các ô như màn Thống kê của Pancake POS (Tổng cộng / Online / Bán tại quầy,
 // Doanh số, Doanh thu, Lợi nhuận, Đơn chốt, GTTB, SL sản phẩm, SP trung bình, hàng hoàn).
 // Ưu tiên lấy thẳng từ Pancake (/analytics/sale); POS nào gọi lỗi thì tự tính từ đơn đã đồng bộ theo đúng
-// công thức Pancake (đơn chốt = xác nhận trở đi, xếp theo ngày xác nhận lần đầu). Không phụ thuộc "Cách tính".
+// công thức Pancake. Từ 27/11/2026 cả hai lọc theo NGÀY TẠO ĐƠN (Pancake: success_record=inserted_at; web: đơn chốt trở đi xếp theo
+// ngày tạo, revenueDate) để ô "Doanh thu công ty" bằng tổng doanh thu theo ngày tạo trên web. Không phụ thuộc "Cách tính".
 import { env } from 'cloudflare:workers';
 import { PANCAKE_BASE } from '@/lib/pancake/pancake';
 import { todayVn, vnRangeUtc } from '@/lib/shared/report-time';
-import { CLOSED, NET } from '@/lib/reports/stats';
+import { CLOSED, NET, revenueDate, revenueStatsReady } from '@/lib/reports/stats';
 
 import { emptyRefBlock as empty, emptyRefPart as emptyPart, type RefBlock, type RefPart, type RefPos } from '@/lib/pancake/pancake-ref-types';
 export type { RefBlock, RefPart, RefPos };
 const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : Number(v) || 0);
 
 // ---- Tự tính từ D1 ----
-// Đọc bảng tổng hợp theo ngày (stats_daily, cột closed_* theo ngày chốt, từ 08/10/2026 có tính Chờ xác nhận nên có thể cao hơn Pancake) — nhẹ.
+// Đọc bảng tổng hợp theo ngày (stats_daily, cột closed_* theo ngày tạo đơn, có tính Chờ xác nhận nên có thể cao hơn Pancake) — nhẹ.
+// Bảng chưa dựng lại theo ngày tạo (revenueStatsReady chưa bật) thì cả kỳ đọc đơn gốc, không trộn hai cách tính.
 // Bảng này không tách Online / Bán tại quầy, không có giá vốn và hàng hoàn theo ngày hoàn: các ô đó chỉ có khi lấy được từ Pancake.
 // endUtc: kỳ so sánh cắt ở cùng giờ hiện tại (anh Vũ 06/11/2026, như Tổng quan): ngày đủ đọc bảng tổng hợp, ngày cuối đọc đơn gốc tới giờ cắt.
 async function webPart(posIds: string[], start: string, end: string, endUtc: string | null = null): Promise<Map<string, RefPart>> {
   const ph = posIds.map(() => '?').join(',');
+  const ready = await revenueStatsReady(env.DB);
   const daily = `SELECT pos_id, closed_orders, closed_gross, closed_net, closed_quantity FROM stats_daily WHERE pos_id IN (${ph}) AND day>=? AND day${endUtc ? '<' : '<='}?`;
   const lastDay = `SELECT pos_id, 1 AS closed_orders, COALESCE(current_total,0) AS closed_gross, ${NET} AS closed_net,
       (SELECT COALESCE(SUM(quantity),0) FROM raw_pos_order_items i WHERE i.order_id=o.id AND i.is_bonus=0) AS closed_quantity
-    FROM raw_pos_orders o WHERE pos_id IN (${ph}) AND first_closed_at>=? AND first_closed_at<? AND ${CLOSED}`;
+    FROM raw_pos_orders o WHERE pos_id IN (${ph}) AND ${revenueDate()}>=? AND ${revenueDate()}<? AND ${CLOSED}`;
+  const range = vnRangeUtc(start, end);
+  const source = ready ? `${daily}${endUtc ? ` UNION ALL ${lastDay}` : ''}` : lastDay;
+  const binds = ready ? [...posIds, start, end, ...(endUtc ? [...posIds, vnRangeUtc(end, end).startUtc, endUtc] : [])] : [...posIds, range.startUtc, endUtc ?? range.endUtc];
   const rows = await env.DB.prepare(`SELECT pos_id, SUM(closed_orders) AS orders, SUM(closed_gross) AS sales, SUM(closed_net) AS revenue, SUM(closed_quantity) AS quantity
-    FROM (${daily}${endUtc ? ` UNION ALL ${lastDay}` : ''}) GROUP BY pos_id`)
-    .bind(...posIds, start, end, ...(endUtc ? [...posIds, vnRangeUtc(end, end).startUtc, endUtc] : []))
+    FROM (${source}) GROUP BY pos_id`)
+    .bind(...binds)
     .all<{ pos_id: string; orders: number; sales: number; revenue: number; quantity: number }>();
   const out = new Map<string, RefPart>(posIds.map((id) => [id, { ...emptyPart(), split: false, hasReturned: false }]));
   for (const r of rows.results) {
@@ -61,7 +67,9 @@ async function analytics(limited: Limiter, shopId: string, start: string, end: s
   url.searchParams.set('since', startUtc);
   url.searchParams.set('until', new Date(Date.parse(endUtc) - 1000).toISOString());
   url.searchParams.set('success_status', '1');
-  url.searchParams.set('success_record', 'updated_at');
+  // Đơn thành công lọc theo ngày tạo đơn như web (27/11/2026; trước là updated_at = ngày xác nhận). CẦN ĐỐI CHIẾU khi lên web:
+  // ô này phải bằng "Tổng cộng" trên Pancake khi chọn lọc theo thời gian tạo đơn. Pancake trả lỗi thì POS đó dùng số web tự tính.
+  url.searchParams.set('success_record', 'inserted_at');
   url.searchParams.set('returned_record', 'updated_at');
   for (const f of FIELDS) url.searchParams.append('select_fields[]', f);
   for (const [key, values] of Object.entries(filter ?? {})) for (const v of values) url.searchParams.append(`filter[${key}][]`, v);

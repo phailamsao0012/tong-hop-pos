@@ -70,9 +70,9 @@ void test('seller-product table gives the same numbers as the raw order queries'
     for (const r of rows) { const k = `${r.day as string}|${productLine((r.name as string | null) ?? '')}`; const v = m.get(k) ?? [0, 0]; v[0] += Number(r.qty); v[1] += Number(r.net); m.set(k, v); }
     return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   };
-  const trendRaw = raw.prepare(`SELECT ${dayExpr('o.first_closed_at')} AS day, i.name, COALESCE(SUM(i.quantity),0) AS qty, COALESCE(SUM(i.line_total),0) AS net
+  const trendRaw = raw.prepare(`SELECT ${dayExpr('o.created_at')} AS day, i.name, COALESCE(SUM(i.quantity),0) AS qty, COALESCE(SUM(i.line_total),0) AS net
     FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
-    WHERE o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.${CLOSED} AND i.is_bonus=0 AND i.quantity>0 GROUP BY 1, 2`).all(...posIds, startUtc, endUtc);
+    WHERE o.pos_id IN (${ph}) AND o.created_at>=? AND o.created_at<? AND o.${CLOSED} AND i.is_bonus=0 AND i.quantity>0 GROUP BY 1, 2`).all(...posIds, startUtc, endUtc);
   const trendPre = raw.prepare(`SELECT day, name, SUM(sale_quantity) AS qty, SUM(sale_total) AS net FROM stats_daily_seller_product
     WHERE pos_id IN (${ph}) AND day>=? AND day<=? GROUP BY day, name HAVING SUM(sale_quantity)>0`).all(...posIds, first, end);
   assert.ok(trendRaw.length > 10);
@@ -96,13 +96,13 @@ void test('seller-product table gives the same numbers as the raw order queries'
   }
 
   // stats_daily_product (cộng từ bảng mới) đúng như câu cũ trên đơn gốc.
-  const oldProduct = raw.prepare(`SELECT ${dayExpr('o.first_closed_at')} AS day, COALESCE(i.product_id,'') AS product_id, MAX(i.name) AS name,
+  const oldProduct = raw.prepare(`SELECT ${dayExpr('o.created_at')} AS day, COALESCE(i.product_id,'') AS product_id, MAX(i.name) AS name,
       COUNT(DISTINCT i.order_id) AS orders, SUM(i.quantity) AS quantity, SUM(i.line_total) AS total,
       SUM(CASE WHEN i.is_bonus=0 THEN i.quantity ELSE 0 END) AS closed_quantity, SUM(i.line_total) AS closed_total,
       SUM(CASE WHEN o.status_code IN (3,16) THEN i.quantity ELSE 0 END) AS delivered_quantity,
       SUM(CASE WHEN o.status_code IN (3,16) THEN i.line_total ELSE 0 END) AS delivered_total, SUM(i.returned_count) AS returned_quantity
     FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
-    WHERE o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.${CLOSED} GROUP BY o.pos_id, 1, 2 ORDER BY o.pos_id, 1, 2`).all(...posIds, startUtc, endUtc);
+    WHERE o.pos_id IN (${ph}) AND o.created_at>=? AND o.created_at<? AND o.${CLOSED} GROUP BY o.pos_id, 1, 2 ORDER BY o.pos_id, 1, 2`).all(...posIds, startUtc, endUtc);
   const stored = raw.prepare(`SELECT day, product_id, name, ${PRODUCT_COLUMNS.join(',')} FROM stats_daily_product WHERE pos_id IN (${ph}) AND day>=? AND day<=? ORDER BY pos_id, day, product_id`).all(...posIds, first, end);
   assert.deepEqual(norm(stored), norm(oldProduct));
 

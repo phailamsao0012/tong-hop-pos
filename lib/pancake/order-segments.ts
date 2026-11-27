@@ -1,5 +1,5 @@
 import { addDays, vnDayStartUtc } from '@/lib/shared/report-time';
-import { CLOSED, NET, STAT_COLUMNS, STATUS_GROUPS, dayExpr } from '@/lib/reports/stats';
+import { CLOSED, NET, STAT_COLUMNS, STATUS_GROUPS, dayExpr, revenueDate } from '@/lib/reports/stats';
 import { countedFilter, teamFilter, type HrUnit, type Team } from '@/lib/teams/team';
 import { parseStatus, statusSql, type StatusFilter } from '@/lib/pancake/order-status';
 
@@ -36,8 +36,8 @@ export function parseOrderFilters(p: URLSearchParams, team: Team): OrderFilters 
   };
 }
 export const EMPTY_ORDER_FILTERS: OrderFilters = { productSegment: 'all', orderOrigin: 'all', marketerId: '', status: parseStatus(null) };
-/** Cột ngày của "đơn chốt": mặc định ngày xác nhận lần đầu; khi chọn trạng thái khác, đơn chưa từng xác nhận lấy ngày tạo. */
-export const closedDate = (f: OrderFilters, alias = '') => f.status.isDefault ? `${alias}first_closed_at` : `COALESCE(${alias}first_closed_at,${alias}created_at)`;
+/** Cột ngày của "đơn chốt" / doanh thu: ngày TẠO đơn (revenueDate, anh Vũ 27/11/2026), mọi trạng thái lọc. Giữ tham số f để nơi gọi không đổi. */
+export const closedDate = (_f: OrderFilters, alias = '') => revenueDate(alias);
 export const closedWhere = (f: OrderFilters, alias = '') => f.status.isDefault ? `${alias}${CLOSED}` : statusSql(f.status, `${alias}status_code`);
 // The Marketer field, not arbitrary order tags, determines the CSKH acquisition source.
 export const marketerValue = (alias = 'o') => `NULLIF(TRIM(${alias}.marketer_id),'')`;
@@ -98,6 +98,8 @@ export function segmentedStats(posIds: string[], startUtc: string, endUtc: strin
   const closed: Record<string, string> = {
     closed_orders: '1', closed_gross: gross, closed_discount: `${gross}-${NET}`, closed_net: NET,
     closed_shipping_fee: 'COALESCE(shipping_fee,0)',
+    received_orders: `CASE WHEN status_code IN (${STATUS_GROUPS.delivered.join(',')}) THEN 1 ELSE 0 END`,
+    received_net: `CASE WHEN status_code IN (${STATUS_GROUPS.delivered.join(',')}) THEN ${NET} ELSE 0 END`,
     closed_quantity: '(SELECT COALESCE(SUM(quantity),0) FROM raw_pos_order_items i WHERE i.order_id=o.id AND i.is_bonus=0)',
   };
   const project = (expressions: Record<string, string>) => STAT_COLUMNS.map(c => `(${expressions[c] ?? '0'}) AS ${c}`).join(',');

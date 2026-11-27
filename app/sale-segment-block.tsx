@@ -53,7 +53,7 @@ export function SaleSegmentBlock({ q, periodLabel }: { q: string; periodLabel: s
   const loading = segs.some((s) => !reports[s]);
   const others = otherProducts(reports.khac);
   return (
-    <ChartCard icon={Pill} title={segs.map((k) => LABEL[k]).join(segs.length > 2 ? ', ' : ' và ')} subtitle={`${periodLabel} · đơn chốt theo ngày chốt · bấm tiêu đề cột để xếp`}>
+    <ChartCard icon={Pill} title={segs.map((k) => LABEL[k]).join(segs.length > 2 ? ', ' : ' và ')} subtitle={`${periodLabel} · đơn chốt theo ngày tạo đơn · bấm tiêu đề cột để xếp`}>
       <div className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(min(100%,15rem),1fr))]">
         {segs.map((seg) => {
           const r = reports[seg], cur = r?.current.total, prev = r?.compare?.total;

@@ -1,14 +1,15 @@
 // Số cho báo cáo tổng quan gửi sếp (lib/zalo/boss-report.ts). Mọi POS. Đọc lại từ đơn gốc như trang Điều hành, không dùng số AI.
 // - Tổng công ty và bảng POS: chỉ đơn của người bán được tính (hậu tố SALE / CSKH / MKT, người được bật Vẫn tính, người đã xếp team) — luật số 1.
 // - KPI bộ phận = cộng KPI doanh thu từng tài khoản, xếp bộ phận theo HẬU TỐ TÊN như doanh thu (không theo web nhân sự).
-// - Doanh thu Sale / CSKH: đơn người bán thuộc bộ phận chốt (theo ngày chốt đầu), "đã chốt là chốt" (không trừ hủy / hoàn về sau),
-//   cùng cách KPI ngày ở Tổng quan (lib/kpi/kpi-day-report.ts).
+// - Doanh thu Sale / CSKH: đơn người bán thuộc bộ phận đã chốt, "đã chốt là chốt" (không trừ hủy / hoàn về sau), xếp theo NGÀY TẠO đơn
+//   (anh Vũ 27/11/2026, trước là ngày chốt đầu); chỉ tính đơn đã chốt trước giờ cắt để vẽ lúc nào cũng ra cùng số. Cùng cách KPI ngày (lib/kpi/kpi-day-report.ts).
 // - MKT: DT New, chi phí, số đưa về (SĐT khác nhau) theo trang Chi phí & ROAS (lib/reports/mkt-analytics.ts), cả số lớn lẫn KPI.
 // - Tỉ lệ chốt: đơn lên trong khoảng giờ báo cáo đã chốt (lần đầu) trước giờ cắt ÷ đơn lên trong khoảng đó, đếm từ đơn gốc (16/11/2026).
 // - Hoàn / hủy: trên đơn đi (đã vào Đang đóng hàng), đơn xác nhận từ đầu tháng.
 import { env } from 'cloudflare:workers';
 import { POS } from '@/lib/shared/report-model';
 import { addDays, vnRangeUtc } from '@/lib/shared/report-time';
+import { revenueDate } from '@/lib/reports/stats';
 import { COUNTED_STAFF, teamSubquery } from '@/lib/teams/team';
 import { WEB_TEAMS_KEY, parseWebTeams } from '@/lib/teams/web-teams';
 import { mktAnalytics } from '@/lib/reports/mkt-analytics';
@@ -43,17 +44,23 @@ export async function bossReportData(sendDay: string, hour: string, morning: boo
   const cut = morning ? dayR.endUtc : iso(slotEnd), prevCut = morning ? prevR.endUtc : iso(slotEnd - 86400000);
   const from = prevR.startUtc < monthR.startUtc ? prevR.startUtc : monthR.startUtc;
   const sale = teamSubquery('sale')!, cskh = teamSubquery('cskh')!;
-  const sums = (at: string) => `COALESCE(SUM(CASE WHEN ${at}>=? AND ${at}<? THEN ${NET} END),0) AS today_net, SUM(CASE WHEN ${at}>=? AND ${at}<? THEN 1 ELSE 0 END) AS today_orders,
-      COALESCE(SUM(CASE WHEN ${at}>=? AND ${at}<? THEN ${NET} END),0) AS month_net, COALESCE(SUM(CASE WHEN ${at}>=? AND ${at}<? THEN ${NET} END),0) AS prev_net`;
-  // Thứ tự đúng các dấu ? trong sums(): today_net, today_orders, month_net, prev_net (mỗi cái 2).
-  const sumBinds = [dayR.startUtc, cut, dayR.startUtc, cut, monthR.startUtc, cut, prevR.startUtc, prevCut];
+  // Mỗi ô: đơn tạo trong [từ, tới) và đã chốt lần đầu trước mốc chốt (closedCut). Báo cáo ca: mốc chốt = giờ cắt của ca (chạy lúc 10h vẫn ra
+  // số như lúc 8h). Báo cáo sáng (trọn ngày hôm qua): đơn tạo hôm qua, chốt tới 8h sáng nay vẫn tính cho hôm qua (doanh thu theo ngày tạo).
+  // Hôm qua để so: cùng mốc lùi 1 ngày.
+  const closedCutMs = morning ? Math.min(now, Date.parse(`${sendDay}T08:00:00+07:00`)) : slotEnd;
+  const closedCut = iso(closedCutMs), prevClosedCut = iso(closedCutMs - 86400000);
+  const at = revenueDate('o.');
+  const sums = () => `COALESCE(SUM(CASE WHEN ${at}>=? AND ${at}<? AND o.first_closed_at<? THEN ${NET} END),0) AS today_net, SUM(CASE WHEN ${at}>=? AND ${at}<? AND o.first_closed_at<? THEN 1 ELSE 0 END) AS today_orders,
+      COALESCE(SUM(CASE WHEN ${at}>=? AND ${at}<? AND o.first_closed_at<? THEN ${NET} END),0) AS month_net, COALESCE(SUM(CASE WHEN ${at}>=? AND ${at}<? AND o.first_closed_at<? THEN ${NET} END),0) AS prev_net`;
+  // Thứ tự đúng các dấu ? trong sums(): today_net, today_orders, month_net, prev_net (mỗi cái 3: từ, tới, chốt trước).
+  const sumBinds = [dayR.startUtc, cut, closedCut, dayR.startUtc, cut, closedCut, monthR.startUtc, cut, closedCut, prevR.startUtc, prevCut, prevClosedCut];
   const [bySeller, byPos, ratesToday, ratesPrev, afterPack, teamsRow, targets, kpi2Row, hrTeam, overdue, costRow] = await db.batch([
     db.prepare(`SELECT o.seller_id AS id, CASE WHEN o.seller_id IN ${sale} THEN 'sale' WHEN o.seller_id IN ${cskh} THEN 'cskh' ELSE '' END AS dept,
-        o.pos_id AS pos, (SELECT MAX(name) FROM pos_users p WHERE p.user_id=o.seller_id AND p.name<>'') AS name, ${sums('o.first_closed_at')}
-      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.status_code<>7 GROUP BY o.seller_id, o.pos_id`)
+        o.pos_id AS pos, (SELECT MAX(name) FROM pos_users p WHERE p.user_id=o.seller_id AND p.name<>'') AS name, ${sums()}
+      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND ${at}>=? AND ${at}<? AND o.first_closed_at IS NOT NULL AND o.status_code<>7 GROUP BY o.seller_id, o.pos_id`)
       .bind(...sumBinds, ...posIds, from, cut),
-    db.prepare(`SELECT o.pos_id AS id, ${sums('o.first_closed_at')} FROM raw_pos_orders o
-      WHERE o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.status_code<>7 AND o.seller_id IN ${COUNTED_STAFF} GROUP BY o.pos_id`).bind(...sumBinds, ...posIds, from, cut),
+    db.prepare(`SELECT o.pos_id AS id, ${sums()} FROM raw_pos_orders o
+      WHERE o.pos_id IN (${ph}) AND ${at}>=? AND ${at}<? AND o.first_closed_at IS NOT NULL AND o.status_code<>7 AND o.seller_id IN ${COUNTED_STAFF} GROUP BY o.pos_id`).bind(...sumBinds, ...posIds, from, cut),
     // Tỉ lệ chốt cắt đúng khoảng giờ báo cáo (anh Vũ 16/11/2026): đơn lên trong khoảng [0h, giờ cắt) và đã chốt trước giờ cắt.
     // Trước đây đọc bảng stats_daily (cộng cả ngày tới lúc chạy, theo trạng thái hiện tại) nên vẽ lúc 10h ra số khác lúc 8h, và số ngày
     // đã đóng còn trôi khi đơn đổi trạng thái về sau. Nay đếm từ đơn gốc theo giờ chốt lần đầu ("đã chốt là chốt"): vẽ lúc nào cũng ra cùng số.

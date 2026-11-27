@@ -4,6 +4,7 @@
 // Team = cộng các thành viên. Người tháng trước chưa có doanh thu → dùng tỉ lệ của cả công ty. Phần tính thuần ở goal-share-calc.ts.
 import { env } from 'cloudflare:workers';
 import { vnRangeUtc } from '@/lib/shared/report-time';
+import { revenueDate } from '@/lib/reports/stats';
 import { prevMonthOf, type GoalShare, type ShareAmount } from '@/lib/kpi/goal-share-calc';
 
 export { prevMonthOf, shareOf, type GoalShare, type ShareAmount } from '@/lib/kpi/goal-share-calc';
@@ -31,7 +32,7 @@ export async function goalShare(month: string, posIds: string[]): Promise<GoalSh
   const net = 'COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0))';
   const sel = new Set(posIds);
   const rows = await env.DB.prepare(`SELECT o.seller_id AS s, o.pos_id AS pos, COALESCE(SUM(${net}),0) AS net FROM raw_pos_orders o
-    WHERE o.first_closed_at>=? AND o.first_closed_at<? AND o.status_code<>7 AND NULLIF(o.seller_id,'') IS NOT NULL GROUP BY 1,2`).bind(startUtc, endUtc).all<{ s: string; pos: string; net: number }>();
+    WHERE ${revenueDate('o.')}>=? AND ${revenueDate('o.')}<? AND o.first_closed_at IS NOT NULL AND o.status_code<>7 AND NULLIF(o.seller_id,'') IS NOT NULL GROUP BY 1,2`).bind(startUtc, endUtc).all<{ s: string; pos: string; net: number }>();
   const byUser: Record<string, ShareAmount> = {};
   const company: ShareAmount = { sel: 0, all: 0 };
   for (const r of rows.results) {

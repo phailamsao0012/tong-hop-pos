@@ -182,8 +182,9 @@ export async function badgeBook(db: D1Database, today: string): Promise<BadgeBoo
   const deptStat = (d: 'sale' | 'cskh') => [
     db.prepare(`SELECT seller_id AS id, day, SUM(closed_net) AS net FROM stats_daily WHERE pos_id IN (${ph}) AND seller_id IN ${teamSubquery(d)} GROUP BY 1,2 ORDER BY net DESC LIMIT 1`).bind(...posIds),
     db.prepare(`SELECT seller_id AS id, strftime('%Y-%W', day) AS week, SUM(closed_net) AS net FROM stats_daily WHERE pos_id IN (${ph}) AND seller_id IN ${teamSubquery(d)} GROUP BY 1,2 ORDER BY net DESC LIMIT 1`).bind(...posIds),
-    db.prepare(`SELECT o.seller_id AS id, MAX(${NET}) AS net, substr(MAX(o.first_closed_at),1,10) AS day FROM raw_pos_orders o INDEXED BY idx_raw_orders_pos_closed_status_money
-      WHERE o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.status_code NOT IN (0,6,7) AND o.seller_id IN ${teamSubquery(d)} GROUP BY 1 ORDER BY net DESC LIMIT 1`).bind(...posIds, yearAgo),
+    // Đơn lớn nhất: theo ngày tạo đơn như doanh thu (27/11/2026).
+    db.prepare(`SELECT o.seller_id AS id, MAX(${NET}) AS net, substr(MAX(o.created_at),1,10) AS day FROM raw_pos_orders o
+      WHERE o.pos_id IN (${ph}) AND o.created_at>=? AND o.status_code NOT IN (0,6,7) AND o.seller_id IN ${teamSubquery(d)} GROUP BY 1 ORDER BY net DESC LIMIT 1`).bind(...posIds, yearAgo),
     db.prepare(streakSql('stats_daily', 'seller_id', 'SUM(closed_orders)>0', `seller_id IN ${teamSubquery(d)} AND day>='${yearAgo}'`)).bind(...posIds),
   ];
   const results = await db.batch([

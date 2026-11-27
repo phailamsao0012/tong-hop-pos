@@ -9,7 +9,7 @@ import { MARKETING_TEAMS_KEY, parseMarketingTeams } from '@/lib/teams/marketing-
 import { EMPTY_ORDER_FILTERS, orderFilterSql, type ProductSegment } from '@/lib/pancake/order-segments';
 import { addDays, todayVn, vnRangeUtc } from '@/lib/shared/report-time';
 import { RETURNED_CODES, SENT_CODES } from '@/lib/reports/shipping-lines';
-import { CLOSED, STATUS_GROUPS, dayExpr, sellerProductStatsReady, sentAtReady } from '@/lib/reports/stats';
+import { CLOSED, STATUS_GROUPS, dayExpr, revenueDate, sellerProductStatsReady, sentAtReady } from '@/lib/reports/stats';
 import { mktStatsReady } from '@/lib/reports/stats-mkt';
 import { MKT_STAFF, countedCase, teamSubquery } from '@/lib/teams/team';
 import { TREND_DAYS, buildTrends, type ClosedTrendRow, type CohortRow, type MktTrendRow, type ProductTrendRow } from '@/lib/reports/trends';
@@ -59,14 +59,15 @@ export async function trendsReport(opts: TrendsOpts) {
   const ph = opts.posIds.map(() => '?').join(',');
   const seg = orderFilterSql({ ...EMPTY_ORDER_FILTERS, productSegment: opts.productSegment }, 'all', 'o').sql;
   const sale = teamSubquery('sale'), cskh = teamSubquery('cskh');
-  const closedWhere = `o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.${CLOSED}${seg}`;
+  // Đơn chốt / doanh thu theo ngày tạo đơn (revenueDate, 27/11/2026).
+  const closedWhere = `o.pos_id IN (${ph}) AND ${revenueDate('o.')}>=? AND ${revenueDate('o.')}<? AND o.${CLOSED}${seg}`;
   const binds = [...opts.posIds, startUtc, endUtc];
   // Dòng sản phẩm: không lọc nhóm hàng thì đọc bảng tính sẵn theo ngày chốt (dựng lại mỗi lượt đồng bộ, cùng điều kiện dòng bán);
   // bảng chưa điền đủ lịch sử hoặc có lọc nhóm hàng thì nối đơn gốc với dòng sản phẩm như trước.
   const products = opts.productSegment === 'all' && await sellerProductStatsReady(env.DB)
     ? env.DB.prepare(`SELECT day, name, SUM(sale_quantity) AS qty, SUM(sale_total) AS net FROM stats_daily_seller_product
         WHERE pos_id IN (${ph}) AND day>=? AND day<=? GROUP BY day, name HAVING SUM(sale_quantity)>0`).bind(...opts.posIds, first, end)
-    : env.DB.prepare(`SELECT ${dayExpr('o.first_closed_at')} AS day, i.name, COALESCE(SUM(i.quantity),0) AS qty, COALESCE(SUM(i.line_total),0) AS net
+    : env.DB.prepare(`SELECT ${dayExpr(revenueDate('o.'))} AS day, i.name, COALESCE(SUM(i.quantity),0) AS qty, COALESCE(SUM(i.line_total),0) AS net
         FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
         WHERE ${closedWhere} AND i.is_bonus=0 AND i.quantity>0 GROUP BY 1, 2`).bind(...binds);
   // Số MKT: không lọc nhóm hàng thì đọc bảng tính sẵn theo ngày xác nhận (stats_daily_mkt, anh Vũ 04/11/2026 "ok sửa"; câu đơn gốc
@@ -83,7 +84,7 @@ export async function trendsReport(opts: TrendsOpts) {
   const sentFlag = bySent ? '0' : `CASE WHEN o.status_code IN (${SENT_CODES.join(',')}) THEN 1 ELSE 0 END`;
   const retFlag = `CASE WHEN o.status_code IN (${RETURNED_CODES.join(',')}) THEN 1 ELSE 0 END`;
   const [closed, mkt, productRows, cohort, hr, users, mktTeams, sentRows] = await env.DB.batch([
-    env.DB.prepare(`SELECT ${dayExpr('o.first_closed_at')} AS day, o.seller_id,
+    env.DB.prepare(`SELECT ${dayExpr(revenueDate('o.'))} AS day, o.seller_id,
         CASE WHEN o.seller_id IN ${sale} THEN 'sale' WHEN o.seller_id IN ${cskh} THEN 'cskh' ELSE 'other' END AS team,
         ${sentFlag} AS sent, ${bySent ? '0' : retFlag} AS ret,
         ${countedCase('o.seller_id')} AS counted, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net

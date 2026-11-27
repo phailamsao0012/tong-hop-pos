@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { emptyDb } from './support/d1-sqlite';
-import { STAT_COLUMNS, STATUS_GROUPS, rebuildStats, markDirtyOrder, backfillSegmentMonth, segmentMonths, segmentStatsReady, resetSegmentReadyMemo, checkSegmentStatsNightly, SEGMENT_READY_KEY, SEGMENT_EPOCH, type DirtyBuckets } from '../lib/reports/stats';
+import { SELLER_PRODUCT_EPOCH, STAT_COLUMNS, STATUS_GROUPS, rebuildStats, markDirtyOrder, backfillSegmentMonth, segmentMonths, segmentStatsReady, resetSegmentReadyMemo, checkSegmentStatsNightly, SEGMENT_READY_KEY, SEGMENT_EPOCH, type DirtyBuckets } from '../lib/reports/stats';
 import { EMPTY_ORDER_FILTERS, segmentedStats, segmentKeyExpr, type ProductSegment, type OrderOrigin } from '../lib/pancake/order-segments';
 import { parseStatus } from '../lib/pancake/order-status';
 import { vnRangeUtc } from '../lib/shared/report-time';
@@ -198,7 +198,7 @@ void test('CSKH keeps original product order counts when duplicate item rows dif
   try {
     const options = {posIds:POS,start:START,end:END,team:'cskh' as const};
     const before = await overviewReport(options);
-    raw.prepare('INSERT INTO app_settings(key,value,updated_at) VALUES (?,?,?)').run('stats_seller_product_ready','1',START);
+    raw.prepare('INSERT INTO app_settings(key,value,updated_at) VALUES (?,?,?)').run('stats_seller_product_ready',String(SELLER_PRODUCT_EPOCH),START);
     const statements: string[] = [];
     const observed = new Proxy(db,{get(target,property) {
       if (property === 'prepare') return (sql: string) => { statements.push(sql); return target.prepare(sql); };
@@ -216,7 +216,8 @@ void test('CSKH keeps original product order counts when duplicate item rows dif
 });
 
 void test('segment expression is locked to its epoch', () => {
-  const hashes: Record<number,string> = {1:'9840301b1e415b8049277632905f2861d90d61894374a1813a29cdc6602db18a'};
+  // 2: cách nhóm giữ nguyên, chỉ đổi ngày xếp doanh thu (ngày tạo đơn) và thêm cột received_* (27/11/2026).
+  const hashes: Record<number,string> = {1:'9840301b1e415b8049277632905f2861d90d61894374a1813a29cdc6602db18a',2:'9840301b1e415b8049277632905f2861d90d61894374a1813a29cdc6602db18a'};
   assert.equal(createHash('sha256').update(segmentKeyExpr('o')).digest('hex'),hashes[SEGMENT_EPOCH], '\u0111\u1ed5i quy t\u1eafc nh\u00f3m th\u00ec t\u0103ng SEGMENT_EPOCH v\u00e0 c\u1eadp nh\u1eadt b\u0103m');
 });
 

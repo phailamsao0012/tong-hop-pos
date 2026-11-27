@@ -96,7 +96,7 @@ export const teamList = (teams: TeamRow[]) => {
   const outside = teams.find((t) => t.name === 'Ngoài team'), rest = teams.filter((t) => t !== outside);
   return outside ? [...rest.slice(0, MAX_TEAMS - 1), outside] : rest.slice(0, MAX_TEAMS);
 };
-const FOOT1 = `So hôm qua: cùng khoảng giờ hôm qua (báo cáo trọn ngày: trọn ngày trước), xanh là nhiều hơn, đỏ là ít hơn, hôm qua bằng 0 ghi "–". Đơn: đơn chốt của nhân viên Sale / CSKH tại POS đó (đơn tài khoản MKT tự chốt không nằm ở đây). TL chốt Sale: đơn lên trong khoảng giờ đã chốt ÷ đơn lên. Số new: số điện thoại mới chia cho Sale; TL chốt MKT = đơn New chốt ÷ số new. Chi phí "–": team chưa có chi phí trên sheet. Đỏ: chốt dưới ${BOSS_CLOSE_RED}%. Đã chốt là chốt (ngày chốt đơn).`;
+const FOOT1 = `So hôm qua: cùng khoảng giờ hôm qua (báo cáo trọn ngày: trọn ngày trước), xanh là nhiều hơn, đỏ là ít hơn, hôm qua bằng 0 ghi "–". Đơn: đơn chốt của nhân viên Sale / CSKH tại POS đó (đơn tài khoản MKT tự chốt không nằm ở đây). TL chốt Sale: đơn lên trong khoảng giờ đã chốt ÷ đơn lên. Số new: số điện thoại mới chia cho Sale; TL chốt MKT = đơn New chốt ÷ số new. Chi phí "–": team chưa có chi phí trên sheet. Đỏ: chốt dưới ${BOSS_CLOSE_RED}%. Doanh thu theo ngày tạo đơn; đã chốt là chốt (đơn tạo hôm trước, chốt sáng nay trước 8h vẫn tính cho hôm trước).`;
 
 export function bossImageHeight(img: BossImage) {
   const d = img.data;

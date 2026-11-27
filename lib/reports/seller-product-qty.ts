@@ -1,7 +1,8 @@
 // Số lượng sản phẩm bán theo từng người bán (anh Vũ 07/11/2026: "các sale - cskh tháng này bán bao nhiêu số lượng sản phẩm,
-// để cân đo nên bán gì"). Đếm hộp / chai trên đơn chốt trong kỳ (từ Chờ xác nhận trở đi, theo ngày chốt, không tính hủy / xóa),
+// để cân đo nên bán gì"). Đếm hộp / chai trên đơn chốt trong kỳ (từ Chờ xác nhận trở đi, theo ngày tạo đơn, không tính hủy / xóa),
 // bỏ quà tặng, cùng phạm vi trang Sản phẩm (lib/reports/products-report.ts). Gom theo dòng sản phẩm (lib/reports/mkt-product-split.ts).
 import { lineCaseSql, type LineKey } from '@/lib/reports/mkt-product-split';
+import { revenueDate } from '@/lib/reports/stats';
 
 export type QtyBySeller = Record<string, Partial<Record<LineKey, number>>>;
 
@@ -9,7 +10,7 @@ export function sellerQtySql(posIds: string[], startUtc: string, endUtc: string)
   const ph = posIds.map(() => '?').join(',');
   const sql = `SELECT o.seller_id AS seller_id, ${lineCaseSql('i.name')} AS line, SUM(i.quantity) AS qty
     FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
-    WHERE o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.status_code NOT IN (0,6,7)
+    WHERE o.pos_id IN (${ph}) AND ${revenueDate('o.')}>=? AND ${revenueDate('o.')}<? AND o.status_code NOT IN (0,6,7)
       AND NULLIF(o.seller_id,'') IS NOT NULL AND i.is_bonus=0 AND i.quantity>0 AND TRIM(i.name)<>'' AND LOWER(TRIM(i.name)) NOT LIKE 'quà tặng%'
     GROUP BY 1,2`;
   return { sql, binds: [...posIds, startUtc, endUtc] };

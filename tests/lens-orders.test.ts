@@ -49,7 +49,7 @@ void test('lens-orders: team + không thuộc team = tổng; bảng từng ngư�
       const part = await request<OverviewReport>(overview, p);
       parts.push(part);
       const section = await request<Sections>(sections, p); sectionParts.push(section);
-      const { results } = await scoped.prepare(`SELECT seller_id,COUNT(*) AS n,SUM(net_total) AS net FROM raw_pos_orders WHERE pos_id=? AND first_closed_at>=? AND first_closed_at<? AND status_code NOT IN (0,6,7) GROUP BY seller_id`).bind(POS[0].id, '2026-10-15T17:00:00', '2026-10-16T17:00:00').all<{ seller_id: string; n: number; net: number }>();
+      const { results } = await scoped.prepare(`SELECT seller_id,COUNT(*) AS n,SUM(net_total) AS net FROM raw_pos_orders WHERE pos_id=? AND created_at>=? AND created_at<? AND status_code NOT IN (0,6,7) GROUP BY seller_id`).bind(POS[0].id, '2026-10-15T17:00:00', '2026-10-16T17:00:00').all<{ seller_id: string; n: number; net: number }>();
       for (const employee of part.current.byEmployee) {
         const expected = results.find((r) => r.seller_id === employee.sellerId);
         assert.equal(employee.closedNet, expected?.net ?? 0);

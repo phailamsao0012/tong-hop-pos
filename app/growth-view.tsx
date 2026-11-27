@@ -80,7 +80,7 @@ export function GrowthView({ navDept }: { navDept?: string }) {
             'Ngày vào': 'Lấy theo thứ tự: sửa tay ở trang này, web nhân sự, ngày tạo tài khoản Pancake, ngày có đơn đầu tiên trong khoảng xem.',
             'Số đo': dept === 'vandon' ? 'Vận đơn: số đơn mỗi người xác nhận (theo ngày xác nhận), không tính người Sale / CSKH / MKT tự xác nhận.'
               : dept === 'mkt' ? 'Marketing: doanh số đơn đã xác nhận của từng marketer, theo ngày xác nhận, như thẻ xu hướng trang Marketing.'
-              : `${GROWTH_DEPT_LABELS[dept]}: doanh số đơn chốt theo ngày chốt, chỉ người có hậu tố ${dept === 'sale' ? 'SALE' : 'CSKH'}, như thẻ xu hướng ở Tổng quan.`,
+              : `${GROWTH_DEPT_LABELS[dept]}: doanh số đơn chốt theo ngày tạo đơn, chỉ người có hậu tố ${dept === 'sale' ? 'SALE' : 'CSKH'}, như thẻ xu hướng ở Tổng quan.`,
             'So sánh': 'Chỉ so với người cùng bộ phận. Cùng thâm niên và Cùng đợt vào chỉ tính người vào trong 1 năm gần nhất và đã làm đủ số ngày đó.',
             'Khoảng xem': 'Một năm gần nhất. Người vào trước đó được tính từ đầu khoảng xem.',
           }} />

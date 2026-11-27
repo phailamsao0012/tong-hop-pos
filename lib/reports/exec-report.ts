@@ -1,7 +1,7 @@
 // Tách khỏi app/api/reports/exec/route.ts (cải tổ B4, 05/11/2026): chỉ dời chỗ, câu SQL và số liệu giữ nguyên.
 import { env } from 'cloudflare:workers';
 import { addDays, compareWindow, todayVn, vnRangeUtc } from '@/lib/shared/report-time';
-import { CLOSED, NET } from '@/lib/reports/stats';
+import { CLOSED, NET, revenueDate } from '@/lib/reports/stats';
 import { MKT_STAFF, countedFilter, teamFilter } from '@/lib/teams/team';
 import { mktClosedStatus } from '@/lib/reports/mkt-closed';
 
@@ -32,7 +32,8 @@ export async function execReport(posIds: string[], asked: string) {
   const stat = (extra: string, from: string, to: string) =>
     env.DB.prepare(`SELECT COALESCE(SUM(closed_orders),0) AS n, COALESCE(SUM(closed_net),0) AS net FROM stats_daily WHERE ${statsWhere}${extra}`).bind(...posIds, from, to);
   // Tổng chỉ người bán được tính; Sale / CSKH đã lọc trong teamFilter, Số MKT lọc theo Marketer (không theo người bán) như các màn khác.
-  const base = `pos_id IN (${ph}) AND ${CLOSED} AND first_closed_at>=? AND first_closed_at<?`;
+  // Doanh thu theo ngày tạo đơn (revenueDate, 27/11/2026), cùng bảng stats_daily.
+  const base = `pos_id IN (${ph}) AND ${CLOSED} AND ${revenueDate()}>=? AND ${revenueDate()}<?`;
   const SELLER = countedFilter('seller_id');
   const raw = (extra: string, r: { startUtc: string; endUtc: string }) =>
     env.DB.prepare(`SELECT COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders WHERE ${base}${extra}`).bind(...posIds, r.startUtc, r.endUtc);

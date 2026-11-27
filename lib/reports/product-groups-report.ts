@@ -17,7 +17,7 @@ import {
 } from '@/lib/reports/product-groups';
 import { POS } from '@/lib/shared/report-model';
 import { vnRangeUtc } from '@/lib/shared/report-time';
-import { CLOSED } from '@/lib/reports/stats';
+import { CLOSED, revenueDate } from '@/lib/reports/stats';
 import { teamFilter, type HrUnit, type Team } from '@/lib/teams/team';
 import { PACKED_SQL, WH_CONFIRMED_SQL } from '@/lib/reports/van-don';
 
@@ -56,9 +56,8 @@ export async function productGroupsBody(user: { role: Role }, p: URLSearchParams
   const status = parseStatus(p.get('status'));
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const ph = posIds.map(() => '?').join(',');
-  const cdate = status.isDefault
-    ? 'o.first_closed_at'
-    : 'COALESCE(o.first_closed_at,o.created_at)';
+  // Đơn chốt / doanh thu / DT đã nhận theo ngày tạo đơn (revenueDate, 27/11/2026), mọi trạng thái lọc.
+  const cdate = revenueDate('o.');
   const cwhere = status.isDefault
     ? `o.${CLOSED}`
     : statusSql(status, 'o.status_code');

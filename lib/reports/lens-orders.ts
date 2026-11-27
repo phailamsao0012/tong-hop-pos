@@ -20,15 +20,18 @@ function toMetrics(row: Row | null, customers?: { all: number; closed: number })
     key, { orders: n(`${key}_orders`), net: n(`${key}_net`) },
   ])) as Record<GroupKey, { orders: number; net: number }>;
   const closedOrders = n('closed_orders');
-  // Tỷ lệ chốt không vượt 100% (29/09/2026): tử số là đơn của CHÍNH mẫu số đã chốt, không phải đơn chốt theo ngày chốt
-  // (có cả đơn chia / tạo từ trước). Đơn tạo trong kỳ đã chốt = đang ở trạng thái xác nhận trở đi (không mới, không hủy).
-  const createdClosedOrders = groups.confirmed.orders + groups.shipping.orders + groups.delivered.orders + groups.returned.orders;
+  // Tỷ lệ chốt không vượt 100% (29/09/2026): tử số là đơn của CHÍNH mẫu số đã chốt. Từ 27/11/2026 đơn chốt đã theo ngày tạo đơn
+  // nên tử số chính là đơn chốt (đơn tạo trong kỳ, nay ở Chờ xác nhận trở đi, không mới / hủy / xoá).
+  const createdClosedOrders = closedOrders;
+  // Doanh thu đã nhận: trong các đơn tính doanh thu, đơn đang ở Đã nhận / Đã thu tiền (luôn ≤ doanh thu).
+  const receivedNet = n('received_net');
   const assignedClosedOrders = n('assigned_closed_orders');
   return {
     orders: n('orders'), deletedOrders: n('deleted_orders'), gross: n('gross'), discount: n('discount'), net: n('net'),
     shippingFee: n('shipping_fee'), cod: n('cod'), customers: customers?.all ?? null,
     closedOrders, closedGross: n('closed_gross'), closedDiscount: n('closed_discount'), closedNet: n('closed_net'),
     closedShippingFee: n('closed_shipping_fee'), closedCustomers: customers?.closed ?? null, closedQuantity: n('closed_quantity'),
+    receivedOrders: n('received_orders'), receivedNet, receivedShare: n('closed_net') ? receivedNet / n('closed_net') * 100 : null,
     assignedOrders: n('assigned_orders'), assignedHidden: false, createdClosedOrders, assignedClosedOrders,
     closeRate: n('orders') ? createdClosedOrders / n('orders') * 100 : null,
     assignedCloseRate: n('assigned_orders') ? assignedClosedOrders / n('assigned_orders') * 100 : null,
@@ -73,7 +76,7 @@ async function periodReport(
     const useRaw = filtered;
     return { bind: (...args: (string | number)[]) => db.prepare((useRaw ? totals.sql : '') + sql).bind(...(useRaw ? totals.binds : []), ...args) };
   };
-  // Số khách: SĐT khác nhau của đơn tạo trong kỳ (all) và của đơn chốt trong kỳ theo ngày chốt (closed).
+  // Số khách: SĐT khác nhau của đơn tạo trong kỳ (all) và của đơn chốt tạo trong kỳ (closed).
   const customerWhere = `pos_id IN (${posPlaceholders}) AND phone IS NOT NULL AND phone<>'' AND status_code<>7${employeeFilter}${rawFilter.sql}`;
   const customerBinds = [...posIds, ...employeeIds, ...rawFilter.binds];
   const [total, byPos, series, byEmployee, byEmployeePos, byProduct, customers, closedCustomers, employeeSeries, recon] = await db.batch([

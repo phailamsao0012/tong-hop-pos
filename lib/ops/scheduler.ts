@@ -30,7 +30,9 @@ export const D1_DAILY_WRITE_LIMIT = 1_200_000;
 const BLOCK_EPOCH = 6;
 const WEBHOOK_ORIGIN = 'https://tonghopposmegatech.io.vn';
 // Tăng số này khi đổi cách tính stats_daily để dựng lại toàn bộ từ đơn đã lưu.
-const STATS_EPOCH = 7; // 7: đơn chốt tính từ Chờ xác nhận, theo first_closed_at (08/10/2026)
+// 8: doanh thu / đơn chốt theo ngày tạo đơn + cột received_* (27/11/2026). Đổi cùng SEGMENT_EPOCH / SELLER_PRODUCT_EPOCH (lib/reports/stats.ts):
+// cờ nhóm sản phẩm chỉ bật sau khi stats_daily dựng lại xong, nơi đọc dùng cờ đó (revenueStatsReady) để biết bảng đã theo cách mới.
+const STATS_EPOCH = 8;
 const CUSTOMER_EPOCH = 7; // 7: đơn chốt của khách tính cả Chờ xác nhận (08/10/2026)
 
 type State = {

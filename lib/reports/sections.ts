@@ -1,8 +1,8 @@
 // Tổng quan 4 mục (anh Vũ 08/10/2026): Sale, CSKH, MKT, Vận đơn trên đầu trang Tổng quan POS.
 // Truy vấn trả hai bảng gộp theo (nhóm người bán, đơn có Marketer hay không); hàm dưới đây ráp thành 4 mục.
 export type SellerTeam = 'sale' | 'cskh' | 'other';
-/** Đơn chốt trong kỳ (theo ngày chốt) và trạng thái vận chuyển hiện tại. */
-export type ClosedAgg = { team: SellerTeam; mkt: number; closed: number; net: number; sent: number; sent_net: number; returned: number; returned_net: number };
+/** Đơn chốt trong kỳ (theo ngày tạo đơn), trong đó đã nhận (received), và trạng thái vận chuyển hiện tại. */
+export type ClosedAgg = { team: SellerTeam; mkt: number; closed: number; net: number; received?: number; received_net?: number; sent: number; sent_net: number; returned: number; returned_net: number };
 /** Đơn tạo trong kỳ (cohort): bao nhiêu đơn nay đã chốt (từ Chờ XN), đã xác nhận (MKT); mẫu số của tỷ lệ chốt. */
 export type CohortAgg = { team: SellerTeam; mkt: number; created: number; closed_now: number; confirmed_now: number };
 /** Đơn MKT đã xác nhận trong kỳ (theo ngày xác nhận lần đầu): MKT tính chốt = đã xác nhận trên Pancake. */
@@ -15,7 +15,11 @@ export function buildSections(closed: ClosedAgg[], cohort: CohortAgg[], mktConfi
   const sum = <T,>(rows: T[], pick: (r: T) => number) => rows.reduce((a, r) => a + Number(pick(r) ?? 0), 0);
   const of = (team?: SellerTeam, mkt?: boolean) => closed.filter((r) => (!team || r.team === team) && (mkt === undefined || !!Number(r.mkt) === mkt));
   const coh = (team?: SellerTeam, mkt?: boolean) => cohort.filter((r) => (!team || r.team === team) && (mkt === undefined || !!Number(r.mkt) === mkt));
-  const money = (rows: ClosedAgg[]) => ({ orders: sum(rows, (r) => r.closed), net: sum(rows, (r) => r.net) });
+  // receivedNet: DT đã nhận trong cùng các đơn (≤ net); receivedShare: % trên doanh thu.
+  const money = (rows: ClosedAgg[]) => {
+    const net = sum(rows, (r) => r.net), receivedNet = sum(rows, (r) => r.received_net ?? 0);
+    return { orders: sum(rows, (r) => r.closed), net, receivedOrders: sum(rows, (r) => r.received ?? 0), receivedNet, receivedShare: ratio(receivedNet, net) };
+  };
   const rate = (rows: CohortAgg[]) => ({ created: sum(rows, (r) => r.created), closedNow: sum(rows, (r) => r.closed_now), rate: ratio(sum(rows, (r) => r.closed_now), sum(rows, (r) => r.created)) });
   const ship = (rows: ClosedAgg[]): Ship => {
     const orders = sum(rows, (r) => r.sent), net = sum(rows, (r) => r.sent_net), returned = sum(rows, (r) => r.returned), returnedNet = sum(rows, (r) => r.returned_net);

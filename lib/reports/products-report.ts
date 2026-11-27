@@ -4,7 +4,7 @@
 import { env } from 'cloudflare:workers';
 import { groupsOf } from '@/lib/reports/product-groups';
 import { compareWindow, comparePeriod, vnRangeUtc } from '@/lib/shared/report-time';
-import { dayExpr } from '@/lib/reports/stats';
+import { dayExpr, revenueDate } from '@/lib/reports/stats';
 
 type Row = { name: string; orders: number; qty: number; ret_qty: number; revenue: number };
 
@@ -14,7 +14,7 @@ async function aggregate(posIds: string[], start: string, end: string, cutoffUtc
   const res = await env.DB.prepare(`SELECT TRIM(i.name) AS name, COUNT(DISTINCT o.id) AS orders, SUM(i.quantity) AS qty,
       SUM(CASE WHEN o.status_code IN (4,5,15) THEN i.quantity ELSE MIN(i.returned_count, i.quantity) END) AS ret_qty, SUM(i.line_total) AS revenue
     FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
-    WHERE o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.status_code NOT IN (0,6,7)
+    WHERE o.pos_id IN (${ph}) AND ${revenueDate('o.')}>=? AND ${revenueDate('o.')}<? AND o.status_code NOT IN (0,6,7)
       AND i.is_bonus=0 AND i.quantity>0 AND TRIM(i.name)<>'' AND TRIM(i.name) NOT LIKE 'quà tặng%'
     GROUP BY 1`).bind(...posIds, startUtc, endUtc).all<Row>();
   return res.results;
@@ -39,9 +39,9 @@ export async function productsReport(opts: { posIds: string[]; start: string; en
   const top = rows.slice(0, 8).map((r) => r.name);
   const { startUtc, endUtc } = vnRangeUtc(opts.start, opts.end);
   const ph = opts.posIds.map(() => '?').join(',');
-  const series = top.length ? (await env.DB.prepare(`SELECT TRIM(i.name) AS name, ${dayExpr('o.first_closed_at')} AS day, SUM(i.line_total) AS revenue, SUM(i.quantity) AS qty
+  const series = top.length ? (await env.DB.prepare(`SELECT TRIM(i.name) AS name, ${dayExpr(revenueDate('o.'))} AS day, SUM(i.line_total) AS revenue, SUM(i.quantity) AS qty
       FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
-      WHERE o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.status_code NOT IN (0,6,7)
+      WHERE o.pos_id IN (${ph}) AND ${revenueDate('o.')}>=? AND ${revenueDate('o.')}<? AND o.status_code NOT IN (0,6,7)
         AND i.is_bonus=0 AND i.quantity>0 AND TRIM(i.name) IN (${top.map(() => '?').join(',')})
       GROUP BY 1,2 ORDER BY 2`).bind(...opts.posIds, startUtc, endUtc, ...top).all<{ name: string; day: string; revenue: number; qty: number }>()).results : [];
   const groups = new Map<string, { revenue: number; qty: number; prevRevenue: number }>();

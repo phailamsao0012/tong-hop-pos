@@ -6,7 +6,7 @@ import { env } from 'cloudflare:workers';
 import { MAIN_LABELS, groupsOf, itemNames } from '@/lib/reports/product-groups';
 import { POS } from '@/lib/shared/report-model';
 import { vnRangeUtc } from '@/lib/shared/report-time';
-import { CLOSED, NET } from '@/lib/reports/stats';
+import { CLOSED, NET, revenueDate } from '@/lib/reports/stats';
 import { teamFilter } from '@/lib/teams/team';
 
 // Đơn của CSKH = đơn do nhân viên CSKH lên (người bán), không theo NV chăm sóc (anh Vũ 21/10/2026 "cần con số đúng").
@@ -20,7 +20,7 @@ export async function cskhAnalytics(opts: { posIds: string[]; start: string; end
   const db = env.DB;
   const { startUtc, endUtc } = vnRangeUtc(opts.start, opts.end);
   const ph = opts.posIds.map(() => '?').join(',');
-  const inRange = `o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.${CLOSED}`;
+  const inRange = `o.pos_id IN (${ph}) AND ${revenueDate('o.')}>=? AND ${revenueDate('o.')}<? AND o.${CLOSED}`;
   // Tính cả đơn không có SĐT để ô tổng khớp Tổng quan CSKH (anh Vũ 06/11/2026); đơn đó không có lịch sử khách, coi là lần mua đầu.
   const net = NET.replace(/net_total|current_total|total_discount/g, (c) => `o.${c}`);
   const [period, saleAgg, names] = await db.batch([

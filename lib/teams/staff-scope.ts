@@ -3,7 +3,7 @@ import { MENTOR_SQL } from '@/lib/teams/hr-teams';
 import { maskPhone } from '@/lib/bot/bot-guard-core';
 import { maskPhonesIn } from '@/lib/ops/audit';
 import { DATE_RE, todayVn, vnRangeUtc } from '@/lib/shared/report-time';
-import { CLOSED } from '@/lib/reports/stats';
+import { CLOSED, revenueDate } from '@/lib/reports/stats';
 import { COUNTED_STAFF, WORKING, teamFilter, webTeamMembers } from '@/lib/teams/team';
 import { WEB_TEAM_ID } from '@/lib/teams/web-teams';
 import { POS } from '@/lib/shared/report-model';
@@ -60,7 +60,7 @@ export function mentorOrdersQuery(posIds: string[], ids: string[], start: string
   return {
     sql: `SELECT o.id,o.source_order_id,o.pos_id,o.customer_id,o.phone,o.customer_name,o.seller_id,o.care_id,o.first_closed_at,o.status_code,COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0)) AS net
       FROM raw_pos_orders o INDEXED BY idx_raw_orders_pos_closed_status_money
-      WHERE o.pos_id IN (${ph(posIds)}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.${CLOSED} AND o.seller_id IN ${COUNTED_STAFF}${filter.sql}`,
+      WHERE o.pos_id IN (${ph(posIds)}) AND ${revenueDate('o.')}>=? AND ${revenueDate('o.')}<? AND o.${CLOSED} AND o.seller_id IN ${COUNTED_STAFF}${filter.sql}`,
     binds: [...posIds, range.startUtc, range.endUtc, ...filter.binds],
   };
 }

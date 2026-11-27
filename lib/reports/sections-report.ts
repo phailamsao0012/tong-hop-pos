@@ -8,16 +8,19 @@ import { parseTeam } from '@/lib/teams/team';
 import { vnRangeUtc } from '@/lib/shared/report-time';
 import { MKT_STAFF, teamSubquery } from '@/lib/teams/team';
 import { buildSections, type ClosedAgg, type CohortAgg, type MktAgg } from '@/lib/reports/sections';
-import { CLOSED, sentAtReady } from '@/lib/reports/stats';
+import { CLOSED, STATUS_GROUPS, revenueDate, sentAtReady } from '@/lib/reports/stats';
 import { isSegment, EMPTY_ORDER_FILTERS, orderFilterSql } from '@/lib/pancake/order-segments';
 import { RETURNED_CODES, SENT_CODES } from '@/lib/reports/shipping-lines';
 import { mktSummary, newSplitSql, type NewSplit } from '@/lib/ops/ad-costs';
 import { mktClosedSql } from '@/lib/reports/mkt-closed';
 
 // Tổng quan 4 mục (Sale / CSKH / MKT / Vận đơn), xem lib/sections.ts. Nhóm theo người bán trên đơn (bộ phận Sale / CSKH);
-// MKT = đơn có Marketer. Đơn chốt Sale / CSKH = từ Chờ xác nhận trở đi theo ngày chốt (cùng Tổng quan POS); MKT chốt = đã xác nhận.
+// MKT = đơn có Marketer. Đơn chốt Sale / CSKH = từ Chờ xác nhận trở đi, xếp theo ngày tạo đơn (revenueDate, cùng Tổng quan POS, 27/11/2026);
+// MKT chốt = đã xác nhận.
 const NET = 'COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0))';
-const IS_CLOSED = `o.first_closed_at IS NOT NULL AND o.${CLOSED}`;
+const IS_CLOSED = `o.${CLOSED}`;
+// Doanh thu đã nhận: trong các đơn tính doanh thu, đơn đang ở Đã nhận / Đã thu tiền.
+const RECEIVED = `o.status_code IN (${STATUS_GROUPS.delivered.join(',')})`;
 // Đơn MKT đã chốt, kể cả hủy / hoàn sau đó (lib/reports/mkt-closed.ts, anh Vũ 24/11/2026).
 const IS_CONFIRMED = mktClosedSql('o');
 
@@ -44,9 +47,10 @@ export async function sectionsReport(p: URLSearchParams, posIds: string[], start
   const [[closed, cohort, sync, mktRows], summary, sentRows] = await Promise.all([
     db.batch([
       db.prepare(`SELECT ${team} AS team, ${mkt} AS mkt, COUNT(*) AS closed, COALESCE(SUM(${NET}),0) AS net,
+          SUM(CASE WHEN ${RECEIVED} THEN 1 ELSE 0 END) AS received, COALESCE(SUM(CASE WHEN ${RECEIVED} THEN ${NET} END),0) AS received_net,
           SUM(CASE WHEN ${sent} THEN 1 ELSE 0 END) AS sent, COALESCE(SUM(CASE WHEN ${sent} THEN ${NET} END),0) AS sent_net,
           SUM(CASE WHEN ${returned} THEN 1 ELSE 0 END) AS returned, COALESCE(SUM(CASE WHEN ${returned} THEN ${NET} END),0) AS returned_net
-        FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND ${IS_CLOSED}${seg} GROUP BY 1, 2`).bind(...posIds, startUtc, endUtc),
+        FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND ${revenueDate('o.')}>=? AND ${revenueDate('o.')}<? AND ${IS_CLOSED}${seg} GROUP BY 1, 2`).bind(...posIds, startUtc, endUtc),
       db.prepare(`SELECT ${team} AS team, ${mkt} AS mkt, COUNT(*) AS created, SUM(CASE WHEN ${IS_CLOSED}${seg} THEN 1 ELSE 0 END) AS closed_now, SUM(CASE WHEN ${IS_CONFIRMED}${seg} THEN 1 ELSE 0 END) AS confirmed_now
         FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.created_at>=? AND o.created_at<? AND o.status_code<>7 GROUP BY 1, 2`).bind(...posIds, startUtc, endUtc),
       db.prepare(`SELECT MAX(last_sync_at) AS at FROM pos_shops WHERE id IN (${ph})`).bind(...posIds),
@@ -56,7 +60,7 @@ export async function sectionsReport(p: URLSearchParams, posIds: string[], start
     whole ? lens
       ? mktAnalytics({ posIds, start, end, team: parseTeam(p.get('team')), teamId: lens.id, db: mktDb }).then(({ current }) => ({ ...current, hasCost: current.cost > 0 }))
       : mktSummary({ posIds, start, end, team: parseTeam(p.get('team')) }) : Promise.resolve(null),
-    bySent ? db.prepare(`SELECT ${team} AS team, ${mkt} AS mkt, 0 AS closed, 0 AS net, COUNT(*) AS sent, COALESCE(SUM(${NET}),0) AS sent_net,
+    bySent ? db.prepare(`SELECT ${team} AS team, ${mkt} AS mkt, 0 AS closed, 0 AS net, 0 AS received, 0 AS received_net, COUNT(*) AS sent, COALESCE(SUM(${NET}),0) AS sent_net,
         SUM(CASE WHEN ${returned} THEN 1 ELSE 0 END) AS returned, COALESCE(SUM(CASE WHEN ${returned} THEN ${NET} END),0) AS returned_net
       FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_sent_at IS NOT NULL AND o.first_sent_at>=? AND o.first_sent_at<? AND ${sent}${seg} GROUP BY 1, 2`).bind(...posIds, startUtc, endUtc).all<ClosedAgg>() : Promise.resolve(null),
   ]);
@@ -78,8 +82,8 @@ export async function sectionsReport(p: URLSearchParams, posIds: string[], start
     period: { start, end }, productSegment, sentBasis: bySent ? 'sent' : 'closed', syncedAt: (sync.results[0] as { at?: string | null } | undefined)?.at ?? null,
     ...sections,
     definitions: {
-      'Sale': 'Đơn có người bán thuộc bộ phận Sale. Đơn chốt = từ Chờ xác nhận trở đi; đơn chốt, doanh thu theo ngày chốt. Tỷ lệ chốt = đơn tạo trong kỳ của Sale nay đã chốt ÷ đơn tạo trong kỳ của Sale.',
-      'CSKH': 'Đơn có người bán thuộc bộ phận CSKH. Tự upsell = đơn không có Marketer; Từ MKT = đơn có Marketer (khách MKT đưa về).',
+      'Sale': 'Đơn có người bán thuộc bộ phận Sale. Đơn chốt = từ Chờ xác nhận trở đi; đơn chốt, doanh thu theo ngày tạo đơn (đơn tạo hôm trước, chốt hôm sau tính cho ngày tạo). DT đã nhận = trong các đơn đó, đơn đang ở Đã nhận / Đã thu tiền. Tỷ lệ chốt = đơn tạo trong kỳ của Sale nay đã chốt ÷ đơn tạo trong kỳ của Sale.',
+      'CSKH': 'Đơn có người bán thuộc bộ phận CSKH. Doanh thu theo ngày tạo đơn; DT đã nhận = trong các đơn đó, đơn đang ở Đã nhận / Đã thu tiền. Tự upsell = đơn không có Marketer; Từ MKT = đơn có Marketer (khách MKT đưa về).',
       'MKT': 'Đơn có Marketer. Chốt = đã xác nhận trên Pancake, doanh thu theo ngày xác nhận lần đầu. Tỷ lệ chốt = đơn MKT tạo trong kỳ nay đã xác nhận ÷ đơn MKT tạo trong kỳ. Doanh thu chỉ tính Marketer được tính doanh số (tên có hậu tố MKT…). Số về = SĐT khác nhau trên đơn tạo trong kỳ của từng Marketer. Chi phí = số nhập ở trang Chi phí & ROAS (tay, Excel hoặc Google Sheet nối sẵn), tính cho mọi POS; chi phí / số giữ nguyên; CP/đơn New và ROAS theo đơn New (Sale chốt), chỉ tính Marketer đã có chi phí, giống trang Chi phí & ROAS.',
       'Vận đơn': bySent
         ? 'Đơn chuyển đi = đơn giao cho đơn vị vận chuyển lần đầu trong kỳ, theo ngày gửi hàng (đã gửi, đã nhận, đã thu tiền, hoàn); doanh số chuyển đi = tiền hàng của các đơn đó, tính riêng, không cộng vào tổng tiền công ty; hoàn = đang hoàn, hoàn một phần, đã hoàn, trong chính các đơn gửi trong kỳ. Tỷ lệ hoàn theo đơn và theo giá trị; kỳ mới tỷ lệ còn thấp vì đơn chưa kịp hoàn.'

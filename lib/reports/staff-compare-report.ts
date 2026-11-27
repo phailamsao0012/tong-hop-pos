@@ -1,7 +1,7 @@
 // Tách khỏi app/api/reports/staff-compare/route.ts (cải tổ B4, 05/11/2026): chỉ dời chỗ, câu SQL và số liệu giữ nguyên.
 import { parseStatus, statusSql } from '@/lib/pancake/order-status';
 import { VN_OFFSET_HOURS, compareWindow, daysBetween, vnRangeUtc } from '@/lib/shared/report-time';
-import { CLOSED } from '@/lib/reports/stats';
+import { CLOSED, revenueDate } from '@/lib/reports/stats';
 import { teamFilter, type HrUnit, type Team } from '@/lib/teams/team';
 import { buildCompareChart } from '@/lib/reports/compare-chart';
 
@@ -14,7 +14,7 @@ const NET = 'COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_d
 /** Thân JSON (chuỗi) cho một bộ lọc đã kiểm; `db` theo lens MKT nếu có. Route giữ phần nhớ 3 phút. */
 export async function staffCompareBody(p: URLSearchParams, start: string, end: string, modeParam: string, range: { start: string; end: string }, posIds: string[], db: D1Database, team: Team, unit: HrUnit | null) {
   const status = parseStatus(p.get('status'));
-  const cdate = status.isDefault ? 'o.first_closed_at' : 'COALESCE(o.first_closed_at,o.created_at)';
+  const cdate = revenueDate('o.'); // theo ngày tạo đơn (27/11/2026), mọi trạng thái lọc
   const cwhere = status.isDefault ? `o.${CLOSED}` : statusSql(status, 'o.status_code');
   const staffCol = p.get('by') === 'care' ? "COALESCE(NULLIF(o.care_id,''),o.seller_id)" : 'o.seller_id';
   const tag = (p.get('tag') ?? '').trim().slice(0, 120);
