@@ -12,8 +12,10 @@ import { usePeriod } from './period-store';
 import { PeriodFields, PosChips } from './overview-view';
 import { PosBadge } from './pos-badge';
 import { useApi } from './use-api';
-import { Th, EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonTable, StatusChip, TableWrap, Toolbar, dt, money, pct, posName, short, toast, vi } from './ui-kit';
+import { Th, EmptyState, ErrorBox, FoldBlock, KpiCard, PageHeader, SegmentedControl, SkeletonTable, StatusChip, TableWrap, Toolbar, dt, money, pct, posName, short, toast, vi } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { KPI_TIGHT, PageHeadMoi, WhySheet, tileGrid, type WhySpec } from './trang-moi';
 
 type Role = 'seller' | 'marketer';
 type Note = { text: string; by: string; at: string };
@@ -80,7 +82,9 @@ function OrdersOf({ p, start, end, posIds }: { p: Person; start: string; end: st
   );
 }
 
-export function UncountedView() {
+export function UncountedView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới, tắt thì y như cũ. */ uiMoi?: boolean } = {}) {
+  // Giao diện mới: khung "Vì sao ra số này" đang mở (null = đóng).
+  const [why, setWhy] = useState<WhySpec | null>(null);
   const period = usePeriod();
   const { start, end } = period;
   const [posIds, setPosIds] = usePosIds();
@@ -115,14 +119,105 @@ export function UncountedView() {
     ]), 'Theo POS');
     saveXlsx(XLSX, wb, `doanh-thu-ngoai-hau-to-${start}-${end}.xlsx`);
   };
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  const exportBtn = () => (
+        <Button onClick={() => void exportExcel()} disabled={!data}><FileSpreadsheet size={14} />Xuất Excel</Button>
+  );
+  const periodBar = () => (
+      <Toolbar>
+        <PeriodFields preset={period.preset} start={start} end={end} onPreset={period.setPreset} onStart={period.setStart} onEnd={period.setEnd} />
+      </Toolbar>
+  );
+  const extraCard = (data: Data) => (
+          <section className="card p-4 text-[12.5px] text-ink-2">
+            <h2 className="mb-1 text-[13.5px] font-semibold text-ink">Đang vẫn tính dù tên không có hậu tố</h2>
+            <p className="flex flex-wrap gap-1.5">{data.extra.map((p) => <span key={p.id} className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5">{p.name}
+              {data.canEdit && <button type="button" className="tap cursor-pointer text-ink-3 hover:text-bad" aria-label={`Bỏ tính ${p.name}`} disabled={busy === p.id} onClick={() => void count(p.id, p.name, false)}>×</button>}</span>)}</p>
+          </section>
+  );
+  // [hết khối chung]
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trên xuống: đầu trang (PageHeadMoi: chọn kỳ; Excel; POS) → một hàng 4 ô số (bấm mở "Vì sao ra số này") → bảng chính Theo người
+  // (nút Xem đơn mở danh sách đơn GIỮA màn thay cho dòng xổ trong bảng) → "Đang vẫn tính dù tên không có hậu tố" thu gọn.
+  // Trang không có tỷ lệ chốt / hoàn / hủy nên không có dải "Cần xem".
+  if (uiMoi) {
+    const posLabel = posIds.length <= 3 ? posIds.map(posName).join(', ') : `${vi.format(posIds.length)} POS`;
+    const scope = `${dt(`${start}T00:00:00+07:00`)} – ${dt(`${end}T00:00:00+07:00`)} · ${posLabel} · đơn của người không có MKT, CSKH, SALE trong tên Pancake`;
+    const openP = open ? rows.find((p) => `${p.role}:${p.id}` === open) ?? null : null;
+    const people = new Set(rows.map((p) => p.id)).size;
+    return (
+      <div className="min-w-0 space-y-4">
+        <PageHeadMoi title="Doanh thu ngoài hậu tố" scope={scope} hint="Không vào doanh số, liệt kê để tìm nguyên nhân" tools={periodBar()} right={exportBtn()}
+          pos={<PosChips posIds={posIds} onChange={setPosIds} />} />
+        {error && !data && <ErrorBox error={error} onRetry={reload} />}
+        {data && <>
+          <div className={tileGrid(4)}>
+            <KpiCard icon={UserX} tone="orange" label="Số người" className={KPI_TIGHT} value={vi.format(people)} note={`${vi.format(data.sellers.length)} người bán · ${vi.format(data.marketers.length)} Marketer`}
+              onClick={() => setWhy({ title: 'Số người', value: `${vi.format(people)} người`, scope, rows: [{ label: ROLE_LABEL.seller, value: vi.format(data.sellers.length) }, { label: ROLE_LABEL.marketer, value: vi.format(data.marketers.length) }], definition: data.rule })} />
+            <KpiCard icon={ShoppingCart} tone="blue" label="Đơn chốt của người bán" className={KPI_TIGHT} value={vi.format(sellerOrders)} note={`${pct(data.total.orders ? sellerOrders / data.total.orders * 100 : null)} tổng đơn chốt kỳ này`}
+              onClick={() => setWhy({ title: 'Đơn chốt của người bán', value: `${vi.format(sellerOrders)} đơn`, scope, rows: [{ label: 'Tổng đơn chốt kỳ này', value: vi.format(data.total.orders) }, { label: 'Tỷ trọng', value: pct(data.total.orders ? sellerOrders / data.total.orders * 100 : null), strong: true }], definition: 'Người bán theo ngày chốt đơn.' })} />
+            <KpiCard icon={Wallet} tone="red" label="Doanh thu không tính" className={KPI_TIGHT} value={`${short(sellerNet)} ₫`} note={`${pct(data.total.net ? sellerNet / data.total.net * 100 : null)} doanh thu đơn chốt`}
+              onClick={() => setWhy({ title: 'Doanh thu không tính', value: money(sellerNet), scope, rows: [{ label: 'Doanh thu đơn chốt kỳ này', value: money(data.total.net) }, { label: 'Tỷ trọng', value: pct(data.total.net ? sellerNet / data.total.net * 100 : null), strong: true }, { label: 'Marketer (theo ngày xác nhận)', value: money(mktNet) }], definition: data.rule })} />
+            <KpiCard icon={Check} tone="green" label="Đã ghi nguyên nhân" className={KPI_TIGHT} value={`${vi.format(noted)} / ${vi.format(rows.length)}`} note="Ghi ở cột Nguyên nhân, lưu khi rời ô"
+              onClick={() => setWhy({ title: 'Đã ghi nguyên nhân', value: `${vi.format(noted)} / ${vi.format(rows.length)}`, scope, definition: 'Số dòng đã có ghi chú ở cột Nguyên nhân trên số dòng đang hiện (theo vai trò đang chọn).' })} />
+          </div>
+          <section className="card flex flex-col gap-3 p-4">
+            <header className="flex flex-wrap items-center justify-between gap-2">
+              <div><h2 className="text-base font-semibold text-ink">Theo người</h2><p className="text-[12px] text-ink-3">{data.rule} Ai sót hậu tố thì sửa tên trên Pancake (lần đồng bộ sau tự tính){data.canEdit ? ', hoặc bấm Vẫn tính' : ''}.</p></div>
+              <SegmentedControl<'all' | Role> size="sm" ariaLabel="Vai trò trên đơn" value={role} onChange={setRole}
+                options={[{ value: 'all', label: 'Tất cả' }, { value: 'seller', label: ROLE_LABEL.seller }, { value: 'marketer', label: ROLE_LABEL.marketer }]} />
+            </header>
+            {!rows.length ? <EmptyState text="Kỳ này không có đơn nào của người không có hậu tố." /> : (
+              <TableWrap minWidth={900}>
+                <table className="tbl">
+                  <thead><tr><Th>Tên trên Pancake · vai trò</Th><Th>POS</Th><Th className="n">Đơn</Th><Th className="n">Doanh thu</Th><Th>Gần nhất</Th><Th>Nguyên nhân</Th><Th><span className="sr-only">Thao tác</span></Th></tr></thead>
+                  <tbody>{rows.map((p) => {
+                    const k = `${p.role}:${p.id}`;
+                    return (
+                        <tr key={k}>
+                          <td><span className="block font-medium">{p.name}{p.hrStatus === 'da_nghi' && <span className="ml-1 text-[11px] font-normal text-ink-3">(đã nghỉ)</span>}</span>
+                            <span className="block text-[11px] text-ink-3">{ROLE_LABEL[p.role]} · {p.department ?? 'chưa có bộ phận'}{p.hrTeam ? ` · ${HR_TEAM[p.hrTeam] ?? p.hrTeam}` : ''}</span></td>
+                          <td className="text-xs"><span className="flex min-w-[150px] flex-wrap gap-1">{p.byPos.map((b) => <span key={b.posId} className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-1.5 py-px" title={`${posName(b.posId)}: ${vi.format(b.orders)} đơn · ${money(b.net)}`}><PosBadge posId={b.posId} size={13} />{vi.format(b.orders)}</span>)}</span></td>
+                          <td className="n">{vi.format(p.orders)}</td>
+                          <td className="n">{money(p.net)}</td>
+                          <td className="num text-xs">{dt(p.lastAt, true)}</td>
+                          <td><NoteCell p={p} onSaved={reload} /></td>
+                          <td className="whitespace-nowrap">
+                            <button type="button" className="btn sm" aria-haspopup="dialog" onClick={() => setOpen(k)}>Xem đơn<ExternalLink size={12} aria-hidden="true" /></button>
+                            {data.canEdit && <button type="button" className={`btn sm ml-1 ${busy === p.id ? 'is-busy' : ''}`} disabled={busy === p.id} onClick={() => void count(p.id, p.name, true)} title="Tính doanh số người này dù tên không có hậu tố">Vẫn tính</button>}
+                          </td>
+                        </tr>
+                    );
+                  })}</tbody>
+                </table>
+              </TableWrap>
+            )}
+          </section>
+          {data.extra.length > 0 && (
+            <FoldBlock icon={Check} title="Đang vẫn tính dù tên không có hậu tố" summary={`${vi.format(data.extra.length)} người`} storageKey="ui-moi:uncounted:extra">
+              {extraCard(data)}
+            </FoldBlock>
+          )}
+        </>}
+        {!data && !error && <SkeletonTable rows={6} cols={8} />}
+        <Sheet open={!!openP} onOpenChange={(o) => { if (!o) setOpen(null); }}>
+          <SheetContent className="gap-0 overflow-y-auto p-4 sm:max-w-4xl">
+            <SheetTitle className="pr-10">Đơn của {openP?.name ?? ''}</SheetTitle>
+            {openP && <div className="mt-3 min-w-0"><OrdersOf p={openP} start={start} end={end} posIds={posIds} /></div>}
+          </SheetContent>
+        </Sheet>
+        <WhySheet spec={why} onClose={() => setWhy(null)} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
       <PageHeader eyebrow={`${dt(`${start}T00:00:00+07:00`)} – ${dt(`${end}T00:00:00+07:00`)}`} title="Doanh thu ngoài hậu tố"
         subtitle="Đơn của người không có MKT, CSKH, SALE trong tên Pancake: không vào doanh số, liệt kê để tìm nguyên nhân"
-        actions={<Button onClick={() => void exportExcel()} disabled={!data}><FileSpreadsheet size={14} />Xuất Excel</Button>} />
-      <Toolbar>
-        <PeriodFields preset={period.preset} start={start} end={end} onPreset={period.setPreset} onStart={period.setStart} onEnd={period.setEnd} />
-      </Toolbar>
+        actions={exportBtn()} />
+      {periodBar()}
       <PosChips posIds={posIds} onChange={setPosIds} />
       {error && !data && <ErrorBox error={error} onRetry={reload} />}
       {data && <>
@@ -167,13 +262,7 @@ export function UncountedView() {
             </TableWrap>
           )}
         </section>
-        {data.extra.length > 0 && (
-          <section className="card p-4 text-[12.5px] text-ink-2">
-            <h2 className="mb-1 text-[13.5px] font-semibold text-ink">Đang vẫn tính dù tên không có hậu tố</h2>
-            <p className="flex flex-wrap gap-1.5">{data.extra.map((p) => <span key={p.id} className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5">{p.name}
-              {data.canEdit && <button type="button" className="tap cursor-pointer text-ink-3 hover:text-bad" aria-label={`Bỏ tính ${p.name}`} disabled={busy === p.id} onClick={() => void count(p.id, p.name, false)}>×</button>}</span>)}</p>
-          </section>
-        )}
+        {data.extra.length > 0 && extraCard(data)}
       </>}
       {!data && !error && <SkeletonTable rows={6} cols={8} />}
     </div>

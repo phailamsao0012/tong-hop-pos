@@ -1776,7 +1776,7 @@ export default function Dashboard({ user, initialView, demo = false, uiMoi = fal
           {!gated && view === 'sale-analytics' && <SaleAnalyticsView uiMoi={uiMoi} />}
           {!gated && view === 'sale-quality' && <SaleQualityView uiMoi={uiMoi} />}
           {!gated && view === 'mkt-roas' && <MktRoasView owner={user.role === 'owner'} uiMoi={uiMoi} />}
-          {!gated && view === 'uncounted' && <UncountedView />}
+          {!gated && view === 'uncounted' && <UncountedView uiMoi={uiMoi} />}
           {!gated && view === 'customer360' && <Customer360View uiMoi={uiMoi} />}
           {!gated && view === 'products' && <ProductsView uiMoi={uiMoi} />}
           {!gated && view === 'marketing' && <MarketingView uiMoi={uiMoi} onManageTeams={isOwner(user) ? () => openSettings('team') : undefined} onOpenRoas={canView(user, 'mkt-roas') ? () => goTo('mkt-roas') : undefined} />}
