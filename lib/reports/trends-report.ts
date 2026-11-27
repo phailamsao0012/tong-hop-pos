@@ -22,7 +22,7 @@ const GROUP_CASE = `CASE ${Object.entries(STATUS_GROUPS).map(([k, codes]) => `WH
 export const TRENDS_DEFINITIONS = {
   'Cửa sổ': '10 tuần đến ngày cuối kỳ đang chọn (luôn đủ 10 tuần kể cả khi xem "Hôm nay"). Nền xanh nhạt là kỳ đang chọn. Tuần và % tăng giảm tính đến ngày đủ gần nhất (hôm nay chưa hết ngày thì đến hôm qua).',
   'Tăng / giảm': 'Tuần gần nhất so với trung bình 4 tuần trước đó. Lệch dưới 3% là đi ngang.',
-  'Bộ phận': 'Sale, CSKH: doanh thu đơn chốt theo ngày chốt. MKT: doanh thu đơn có Marketer đã xác nhận, theo ngày xác nhận. Vận đơn: đơn chuyển đi và doanh số chuyển đi, theo ngày Sale / CSKH đưa đơn sang (ngày gần đây thấp hơn vì đơn chưa kịp chuyển đi).',
+  'Bộ phận': 'Sale, CSKH: doanh thu đơn chốt theo ngày tạo đơn. MKT: doanh thu đơn có Marketer đã xác nhận, theo ngày tạo đơn. Vận đơn: đơn chuyển đi và doanh số chuyển đi, theo ngày Sale / CSKH đưa đơn sang (ngày gần đây thấp hơn vì đơn chưa kịp chuyển đi).',
   'Team': 'Sale / CSKH theo team của người bán trên web nhân sự; MKT theo team Marketing đã xếp ở trang Marketing.',
   'Sản phẩm': 'Tiền dòng sản phẩm (sau giảm giá dòng, không tính quà) trên đơn chốt, gộp theo loại: Oxy, SK + GK, Gentadox, Vita Plus, Mega Green, Khác. Số lượng là số sản phẩm bán.',
   'Trạng thái theo ngày tạo': 'Đơn tạo mỗi ngày trong 14 ngày gần nhất, chia theo trạng thái hiện tại. Ngày cũ còn nhiều đơn chưa xong là có đơn bị kẹt.',
@@ -75,8 +75,8 @@ export async function trendsReport(opts: TrendsOpts) {
   const mktQuery = opts.productSegment === 'all' && await mktStatsReady(env.DB)
     ? env.DB.prepare(`SELECT day, marketer_id, SUM(orders) AS n, SUM(net) AS net FROM stats_daily_mkt
         WHERE pos_id IN (${ph}) AND day>=? AND day<=? AND marketer_id IN ${MKT_STAFF} GROUP BY 1, 2`).bind(...opts.posIds, first, end)
-    : env.DB.prepare(`SELECT ${dayExpr('o.first_confirmed_at')} AS day, o.marketer_id, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net
-      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND ${mktClosedStatus('o.status_code')}
+    : env.DB.prepare(`SELECT ${dayExpr(revenueDate('o.'))} AS day, o.marketer_id, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net
+      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.created_at>=? AND o.created_at<? AND o.first_confirmed_at IS NOT NULL AND ${mktClosedStatus('o.status_code')}
         AND NULLIF(TRIM(o.marketer_id),'') IS NOT NULL AND o.marketer_id IN ${MKT_STAFF}${seg} GROUP BY 1, 2`).bind(...binds);
   // Vận đơn theo ngày gửi hàng (anh Vũ 10/10/2026) khi đã điền đủ giờ gửi đơn cũ: đơn đi lấy riêng theo first_sent_at (dòng counted=0 chỉ cộng vào
   // Vận đơn), đơn chốt không còn cờ đi / hoàn. Chưa đủ thì như cũ: đơn đi trong các đơn chốt theo ngày chốt.

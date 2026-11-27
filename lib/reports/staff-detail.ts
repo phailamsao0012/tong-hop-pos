@@ -37,6 +37,6 @@ export function noteBatches(rows: { pos_id: string; customer_id: string | null }
 export const definitions = {
   created: 'Đơn tạo: đơn có người bán là nhân viên này, tạo trong kỳ, trừ đơn đã xóa.',
   assigned: 'Đơn chia: đơn được giao cho nhân viên này trong kỳ (theo giờ chia), trừ đơn đã xóa.',
-  closed: 'Đã chốt: đơn đang ở Chờ xác nhận trở đi (kể cả hoàn). Chưa chốt: đơn còn Mới hoặc đã hủy. Ô Đơn chốt ở trên tính theo ngày chốt, nên có cả đơn tạo hoặc chia từ trước kỳ.',
+  closed: 'Đã chốt: đơn đang ở Chờ xác nhận trở đi (kể cả hoàn). Chưa chốt: đơn còn Mới hoặc đã hủy. Ô Đơn chốt ở trên tính theo ngày tạo đơn.',
   reasons: 'Lý do lấy từ thẻ đơn trên Pancake (Không nghe máy, Hẹn gọi lại, Chưa tiếp cận, Giá đắt…). Đơn không có thẻ lý do nhưng có ghi chú đơn xếp vào "Có ghi chú đơn, chưa gắn thẻ lý do"; không có cả hai là "Chưa ghi lý do". Ghi chú khách gần nhất hiện kèm từng đơn để xem thêm.',
 };

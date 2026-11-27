@@ -1,6 +1,6 @@
 // Phân tích CSKH (kế hoạch quản trị, giai đoạn 3a · 26/09/2026): khách của CSKH mua lần thứ mấy, đi từ nhóm sản phẩm nào sang nhóm nào,
 // mua bao nhiêu nhóm khác nhau, doanh thu có chia đều giữa các nhân viên không, GTTB CSKH so với Sale.
-// Phạm vi: đơn chốt trong kỳ (từ Chờ xác nhận trở đi, theo ngày chốt) của nhân viên CSKH (NV chăm sóc trên đơn, trống thì người bán).
+// Phạm vi: đơn chốt trong kỳ (từ Chờ xác nhận trở đi, theo ngày tạo đơn) của nhân viên CSKH (NV chăm sóc trên đơn, trống thì người bán).
 // Lịch sử khách = mọi đơn đã xác nhận trở đi (không tính mới / chờ, hủy, xóa) của cùng SĐT trên cả 6 POS tính tới hết kỳ.
 import { env } from 'cloudflare:workers';
 import { MAIN_LABELS, groupsOf, itemNames } from '@/lib/reports/product-groups';

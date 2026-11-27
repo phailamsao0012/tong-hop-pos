@@ -252,7 +252,7 @@ async function buildLensReport(database: D1Database, options: OverviewOptions, l
       quantity: 'SL bán thực = tổng số lượng sản phẩm trong đơn chốt. Số khách = số SĐT khác nhau có đơn chốt.',
       segments: 'Combo Oxytetra + Bổ đậm đặc: mọi đơn POS Oxytetra (POS này chỉ bán combo đó). Các POS khác: Kháng sinh: đơn có sản phẩm Gentadox hoặc Detox không phải quà tặng; riêng POS Siêu Vô Gạo tính thêm Oxy + Bổ huyết và Bio Nano Shield. SK GK: đơn có SK, GK hoặc Godkill (hay gắn nhãn SK + GK) mà không có kháng sinh. Khác: mọi đơn còn lại. Mỗi đơn chỉ thuộc một nhóm nên ba nhóm cộng lại bằng tổng. Doanh thu là toàn bộ đơn thuộc nhóm.',
       origin: 'Chỉ áp dụng CSKH: không có Marketer = tự ups; có Marketer = từ MKT. Lọc nguồn và người MKT áp dụng đồng thời cho mọi chỉ số, bảng, biểu đồ và kỳ so sánh trong báo cáo.',
-      overviewRate: 'Tỷ lệ chốt tổng quan = đơn chốt trong kỳ ÷ đơn tạo mới trong kỳ. Hai số dùng ngày chốt và ngày tạo tương ứng; có thể vượt 100% khi chốt đơn cũ. Không có đơn tạo mới thì tỷ lệ để trống.',
+      overviewRate: 'Tỷ lệ chốt tổng quan = đơn tạo trong kỳ đã chốt ÷ đơn tạo mới trong kỳ (cả hai theo ngày tạo đơn, không vượt 100%). Không có đơn tạo mới thì tỷ lệ để trống.',
       rate: 'Tỷ lệ chốt nhân viên = đơn chốt trong kỳ ÷ đơn chia trong kỳ (đơn được giao cho nhân viên đó theo thời điểm giao người bán).',
       groups: 'Mới: 0,17 · Đã xác nhận/đang xử lý: 1,8,9,11,12,13,20 · Đang giao: 2 · Giao thành công: 3,16 · Hoàn: 4,5,15 · Hủy: 6 · Xóa: 7.',
     },

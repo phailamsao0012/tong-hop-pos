@@ -6,7 +6,7 @@ import { parseStatus, statusSql } from '@/lib/pancake/order-status';
 import { GROUP_BASES, GROUP_DIMS, groupsOf, itemNames, parseGroupOptions, sortGroups } from '@/lib/reports/product-groups';
 import { POS } from '@/lib/shared/report-model';
 import { vnRangeUtc } from '@/lib/shared/report-time';
-import { CLOSED } from '@/lib/reports/stats';
+import { CLOSED, revenueDate } from '@/lib/reports/stats';
 import { teamFilter, type HrUnit } from '@/lib/teams/team';
 
 // Khách của CSKH bắt nguồn từ đâu (yêu cầu 25/09/2026): với các khách mà mỗi nhân viên CSKH có đơn trong kỳ,
@@ -23,7 +23,7 @@ export async function cskhOriginReport(user: { role: Role }, p: URLSearchParams,
   const status = parseStatus(p.get('status'));
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const staffCol = 'seller_id'; // đơn do nhân viên CSKH lên (anh Vũ 21/10/2026)
-  const cdate = status.isDefault ? 'first_closed_at' : 'COALESCE(first_closed_at,created_at)';
+  const cdate = revenueDate(); // theo ngày tạo đơn (27/11/2026), mọi trạng thái lọc
   const cwhere = status.isDefault ? CLOSED : statusSql(status);
   const db = env.DB;
   const [own, names] = await db.batch([

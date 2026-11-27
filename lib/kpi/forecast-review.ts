@@ -8,6 +8,7 @@ import { baselineOf, decompose, personExpected, type Parts } from '@/lib/kpi/for
 import { readForecast, type Forecast } from '@/lib/kpi/forecast-run';
 import { addSpend, budgetLeft, CLAUDE_MODEL, claudeClient, claudeMode, costUsd, takeReviewSlot, usageOf, type ClaudeUsage } from '@/lib/ai/claude';
 import { fakeAnswer } from '@/lib/demo/fake-claude';
+import { statsDailySource } from '@/lib/pancake/order-segments';
 
 type Person = Parts & { id: string };
 type Expected = { id: string; assigned: number | null; closed: number | null; net: number | null };
@@ -41,7 +42,8 @@ export function accuracy(points: Forecast['points'], actual: number) {
   });
 }
 async function readPeople(db: D1Database, start: string, end: string): Promise<Person[]> {
-  const rows = await db.prepare(`SELECT COALESCE(seller_id,'') AS id,SUM(assigned_orders) AS assigned,SUM(closed_orders) AS closed,SUM(closed_net) AS net FROM stats_daily WHERE pos_id IN (${POS.map(() => '?').join(',')}) AND day>=? AND day<=?${countedFilter('seller_id')} GROUP BY COALESCE(seller_id,'') ORDER BY id`).bind(...POS.map(p => p.id), start, end).all<Person>();
+  const src = await statsDailySource(db, POS.map((p) => p.id), start, end); // bảng đang dựng lại theo ngày tạo: đọc đơn gốc
+  const rows = await db.prepare(`${src.sql}SELECT COALESCE(seller_id,'') AS id,SUM(assigned_orders) AS assigned,SUM(closed_orders) AS closed,SUM(closed_net) AS net FROM stats_daily WHERE pos_id IN (${POS.map(() => '?').join(',')}) AND day>=? AND day<=?${countedFilter('seller_id')} GROUP BY COALESCE(seller_id,'') ORDER BY id`).bind(...src.binds, ...POS.map(p => p.id), start, end).all<Person>();
   return rows.results.map(p => ({ id: p.id, assigned: Number(p.assigned), closed: Number(p.closed), net: Number(p.net) }));
 }
 async function company(start: string, end: string) {

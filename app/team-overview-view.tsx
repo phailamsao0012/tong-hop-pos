@@ -24,7 +24,7 @@ import {
 } from '@/lib/reports/metrics';
 import { useMetricSettings } from './metric-settings';
 import { useMemo, useState } from 'react';
-import { takeNavHint } from './nav-focus';
+import { setNavHint, takeNavHint } from './nav-focus';
 import { SEGMENT_HINT, segmentFromHint } from '@/lib/shared/drill-hint';
 import { PRODUCT_SEGMENTS } from '@/lib/pancake/order-segments';
 import { PosTile } from './pos-badge';
@@ -380,6 +380,23 @@ export function TeamOverviewView({
                 report.definitions.revenue,
                 money(cur.closedNet),
                 prev ? money(prev.closedNet) : undefined,
+              )}
+            />
+            {/* DT đã nhận (anh Vũ 27/11/2026): trong các đơn tính doanh thu, đơn đang ở Đã nhận / Đã thu tiền. Bấm mở danh sách đơn Giao thành công,
+                giữ kỳ, POS và bộ phận đang chọn (trang Đơn nguồn đọc cùng kho lọc). */}
+            <KpiCard
+              id={`${team}-received`}
+              icon={ICON.revenue}
+              tone="lime"
+              label="DT đã nhận"
+              value={shortMoney(cur.receivedNet ?? cur.groups.delivered.net)}
+              delta={prev ? delta(cur.receivedNet ?? cur.groups.delivered.net, prev.receivedNet ?? prev.groups.delivered.net) : undefined}
+              note={`${pct(cur.closedNet ? (cur.receivedNet ?? cur.groups.delivered.net) / cur.closedNet * 100 : null, 0)} doanh thu · ${vi.format(cur.receivedOrders ?? cur.groups.delivered.orders)} đơn đã nhận`}
+              onClick={() => { setNavHint({ 'raw.group': 'delivered' }); onNavigate('raw-orders'); }}
+              tooltip={tip(
+                'Trong các đơn tính doanh thu (cùng kỳ theo ngày tạo đơn, cùng bộ lọc), tổng tiền đơn đang ở Đã nhận / Đã thu tiền. Luôn không vượt doanh thu. Bấm để xem danh sách đơn.',
+                money(cur.receivedNet ?? cur.groups.delivered.net),
+                prev ? money(prev.receivedNet ?? prev.groups.delivered.net) : undefined,
               )}
             />
             <KpiCard

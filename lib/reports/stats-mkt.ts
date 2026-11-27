@@ -1,5 +1,5 @@
 // Số MKT tính sẵn theo ngày (anh Vũ 04/11/2026 "ok sửa"): stats_daily_mkt (migration 0050) giữ số đơn và doanh số theo
-// (POS, ngày xác nhận giờ VN, Marketer, người bán) cho đơn từ Đã xác nhận trở đi (không Mới, Chờ xác nhận, Hủy, Đã xóa).
+// (POS, ngày TẠO đơn giờ VN — từ 27/11/2026, trước là ngày xác nhận —, Marketer, người bán) cho đơn MKT đã chốt (lib/reports/mkt-closed.ts).
 // Xu hướng và Điều hành đọc bảng nhỏ này thay vì quét đơn gốc theo first_confirmed_at: số đo D1 04/11 cho thấy câu đó 4–8 giây mỗi lần,
 // làm các khối khác của Điều hành chờ quá giờ ("Không tải được"). Lọc người được tính / team Sale làm lúc đọc nên đổi team không cần dựng lại.
 import { addDays, vnDayStartUtc } from '@/lib/shared/report-time';
@@ -11,12 +11,13 @@ type Row = Record<string, string | number | null>;
 export const MKT_COLUMNS = ['orders', 'net'] as const;
 /** Đơn MKT được tính: đã xác nhận (Đã xác nhận trở đi) và có Marketer; giống điều kiện cũ của Xu hướng / Hiệu quả MKT. */
 export const MKT_CONFIRMED =
-  `${mktClosedStatus('status_code')} AND NULLIF(TRIM(marketer_id),'') IS NOT NULL`;
+  `first_confirmed_at IS NOT NULL AND ${mktClosedStatus('status_code')} AND NULLIF(TRIM(marketer_id),'') IS NOT NULL`;
 const NET =
   'COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0))';
-export const mktSql = `SELECT date(datetime(first_confirmed_at,'+7 hours')) AS day, marketer_id, COALESCE(seller_id,'') AS seller_id,
+// Doanh thu MKT theo ngày tạo đơn (anh Vũ 27/11/2026, cùng revenueDate trong lib/reports/stats.ts; không import để tránh vòng import).
+export const mktSql = `SELECT date(datetime(created_at,'+7 hours')) AS day, marketer_id, COALESCE(seller_id,'') AS seller_id,
     COUNT(*) AS orders, COALESCE(SUM(${NET}),0) AS net
-  FROM raw_pos_orders WHERE pos_id=? AND first_confirmed_at>=? AND first_confirmed_at<? AND ${MKT_CONFIRMED} GROUP BY 1, 2, 3`;
+  FROM raw_pos_orders WHERE pos_id=? AND created_at>=? AND created_at<? AND ${MKT_CONFIRMED} GROUP BY 1, 2, 3`;
 export const mktExisting = `SELECT id, ${MKT_COLUMNS.join(',')} FROM stats_daily_mkt WHERE pos_id=? AND day>=? AND day<=?`;
 
 const DDL = [
@@ -110,7 +111,7 @@ export async function buildMktMonth(
 
 /** Khóa app_settings: tháng cũ đã điền xong (giá trị = MKT_EPOCH). Chưa xong thì nơi đọc quét đơn gốc như cũ. */
 export const MKT_READY_KEY = 'stats_mkt_ready';
-export const MKT_EPOCH = 1;
+export const MKT_EPOCH = 2; // 2: theo ngày tạo đơn (27/11/2026)
 let ready = { value: false, at: 0 };
 /** Nhớ 60 giây mỗi isolate. */
 export async function mktStatsReady(db: D1Database) {

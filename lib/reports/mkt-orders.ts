@@ -14,9 +14,9 @@ export function mktOrdersSql(opts: { posIds: string[]; marketerIds: string[]; ki
   const sellers = teamSubquery(opts.kind === 'new' ? 'sale' : 'cskh');
   return {
     sql: `SELECT o.id, o.source_order_id, o.pos_id, o.phone, o.first_confirmed_at, o.status_code, o.marketer_id, o.seller_id, ${net} AS net
-      FROM raw_pos_orders o WHERE o.pos_id IN (${ph(opts.posIds)}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<?
+      FROM raw_pos_orders o WHERE o.pos_id IN (${ph(opts.posIds)}) AND o.created_at>=? AND o.created_at<? AND o.first_confirmed_at IS NOT NULL
       AND ${mktClosedStatus('o.status_code')} AND NULLIF(TRIM(o.marketer_id),'') IN (${ph(opts.marketerIds)}) AND o.marketer_id IN ${MKT_STAFF}
-      AND o.seller_id IN ${sellers} ORDER BY o.first_confirmed_at DESC, o.id DESC LIMIT ${MKT_ORDER_LIMIT + 1}`,
+      AND o.seller_id IN ${sellers} ORDER BY o.created_at DESC, o.id DESC LIMIT ${MKT_ORDER_LIMIT + 1}`,
     binds: [...opts.posIds, opts.startUtc, opts.endUtc, ...opts.marketerIds],
   };
 }

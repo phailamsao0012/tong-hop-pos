@@ -49,7 +49,7 @@ void test('báo cáo sếp: số về, đơn New, TL chốt Marketing lấy đú
   await loginAs(raw, 'owner');
   const { GET } = await import('../app/api/reports/marketing/route');
   const { bossReportData } = await import('../lib/zalo/boss-data');
-  const params = new URLSearchParams({ start: '2026-10-16', end: '2026-10-16', posIds: POS.map((p) => p.id).join(','), basis: 'confirmed', stage: 'confirmed', team: 'all' });
+  const params = new URLSearchParams({ start: '2026-10-16', end: '2026-10-16', posIds: POS.map((p) => p.id).join(','), basis: 'created', stage: 'confirmed', team: 'all' });
   type Web = { summary: { createdNewPhones: number }; byTeam: { marketingTeamName: string; createdNewPhones: number; newConfirmed: number }[] };
   const web = await (await GET(new Request(`http://local/api/reports/marketing?${params}`))).json() as Web;
   const d = await bossReportData('2026-10-17', '08', true, Date.parse('2026-10-17T01:00:00Z'), db);

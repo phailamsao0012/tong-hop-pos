@@ -61,7 +61,7 @@ export function trendQueries(posIds: string[], start: string, end: string, fromS
     { sql: `SELECT ${mk} AS m, date(MIN(o.created_at), '+7 hours') AS day FROM ${src.orders} o WHERE ${scope} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7 AND ${mk} IS NOT NULL AND o.phone IS NOT NULL${leadSellerFilter('o.seller_id', team)}${notSan('o.marketer_id')} GROUP BY 1,o.phone`, binds: [...posIds, range.startUtc, range.endUtc] },
     fromStats
       ? { sql: `SELECT NULLIF(TRIM(s.marketer_id),'') AS m, s.day, SUM(s.orders) AS newOrders, SUM(s.net) AS newNet FROM stats_daily_mkt s WHERE s.pos_id IN (${ph}) AND s.day>=? AND s.day<=? AND s.marketer_id IN ${MKT_STAFF} AND s.seller_id IN ${teamSubquery('sale')} GROUP BY 1,2`, binds: [...posIds, start, end] }
-      : { sql: `SELECT ${mk} AS m, date(o.first_confirmed_at, '+7 hours') AS day, COUNT(*) AS newOrders, SUM(${net}) AS newNet FROM ${src.orders} o WHERE ${scope} AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND ${mktClosedStatus('o.status_code')} AND ${mk} IS NOT NULL AND o.marketer_id IN ${MKT_STAFF} AND o.seller_id IN ${teamSubquery('sale')} GROUP BY 1,2`, binds: [...posIds, range.startUtc, range.endUtc] },
+      : { sql: `SELECT ${mk} AS m, date(o.created_at, '+7 hours') AS day, COUNT(*) AS newOrders, SUM(${net}) AS newNet FROM ${src.orders} o WHERE ${scope} AND o.created_at>=? AND o.created_at<? AND o.first_confirmed_at IS NOT NULL AND ${mktClosedStatus('o.status_code')} AND ${mk} IS NOT NULL AND o.marketer_id IN ${MKT_STAFF} AND o.seller_id IN ${teamSubquery('sale')} GROUP BY 1,2`, binds: [...posIds, range.startUtc, range.endUtc] },
   ];
 }
 /** source: nguồn đọc (mặc định chọn theo kỳ, lib/reports/mkt-source.ts); test truyền thẳng để so hai nguồn. */

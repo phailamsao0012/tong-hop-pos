@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { env } from 'cloudflare:workers';
 import { demoWorld } from './support/d1-sqlite';
-import { rebuildStats, resetSegmentReadyMemo, SEGMENT_READY_KEY, SEGMENT_EPOCH, revenueDate } from '../lib/reports/stats';
+import { rebuildStats, resetSegmentReadyMemo, SEGMENT_READY_KEY, SEGMENT_READY_VALUE, revenueDate } from '../lib/reports/stats';
 import { closedDate, EMPTY_ORDER_FILTERS } from '../lib/pancake/order-segments';
 import { teamSubquery } from '../lib/teams/team';
 import { overviewReport } from '../lib/reports/overview-report';
@@ -35,7 +35,7 @@ async function addLateClosed(raw: DatabaseSync, db: D1Database, seller: { id: st
 const sorted = (c: Awaited<ReturnType<typeof overviewReport>>['current']) => Object.fromEntries(Object.entries(c).map(([k, v]) => [k, Array.isArray(v) ? v.map((x) => JSON.stringify(x)).sort() : v]));
 const overview = (pos: string, day: string) => overviewReport({ posIds: [pos], start: day, end: day });
 const setReady = (raw: DatabaseSync) => {
-  raw.prepare('INSERT INTO app_settings(key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(SEGMENT_READY_KEY, String(SEGMENT_EPOCH), D30);
+  raw.prepare('INSERT INTO app_settings(key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(SEGMENT_READY_KEY, SEGMENT_READY_VALUE, D30);
   resetSegmentReadyMemo();
 };
 
@@ -121,4 +121,50 @@ void test('KPI ngày: "Đã đạt" tháng 9 có đơn tạo 30/09 chốt 01/10,
     now = vn('2026-10-01T10:00:00');
     assert.equal(await achieved(), oct0, 'tháng 10 không đổi');
   } finally { raw.close(); }
+});
+
+void test('MKT: DT New theo ngày tạo đơn (đơn tạo 30/09, xác nhận 01/10 tính cho 30/09); Marketing: DT đã nhận ≤ doanh thu', async () => {
+  const { raw, db } = await world();
+  try {
+    const { MKT_STAFF } = await import('../lib/teams/team');
+    const { mktAnalytics } = await import('../lib/reports/mkt-analytics');
+    const { marketingOverview } = await import('../lib/reports/marketing-overview');
+    const pick = raw.prepare(`SELECT marketer_id AS m, seller_id AS s, pos_id AS pos FROM raw_pos_orders WHERE marketer_id IN ${MKT_STAFF} AND seller_id IN ${teamSubquery('sale')} LIMIT 1`).get() as { m: string; s: string; pos: string } | undefined;
+    assert.ok(pick, 'thế giới demo có đơn MKT do Sale chốt');
+    const newNet = async (day: string) => (await mktAnalytics({ posIds: [pick.pos], start: day, end: day, db })).current.newNet;
+    const b30 = await newNet(D30), b01 = await newNet(D01);
+    raw.prepare(`INSERT INTO raw_pos_orders (id,pos_id,shop_id,source_order_id,fetched_at,created_at,first_closed_at,first_confirmed_at,seller_assigned_at,
+      seller_id,marketer_id,tags_json,status_code,current_total,total_discount,net_total,shipping_fee,cod,phone)
+      VALUES ('test-mkt-late','${pick.pos}','demo','test-mkt-late','2026-10-02T00:00:00','2026-09-30T16:30:00','2026-10-01T00:00:00','2026-10-01T00:00:00','2026-09-30T16:30:00',
+      ?,?,'[]',3,?,0,?,0,?,'0900000001')`).run(pick.s, pick.m, AMOUNT, AMOUNT, AMOUNT);
+    assert.equal(await newNet(D30) - b30, AMOUNT, 'DT New 30/09 có đơn mới');
+    assert.equal(await newNet(D01), b01, 'ngày xác nhận 01/10 không đổi');
+    const m = await marketingOverview({ role: 'owner' } as never, new URLSearchParams({ stage: 'confirmed', team: 'all' }), [pick.pos], D30, D01, null);
+    assert.equal(m!.basis, 'created', 'mặc định theo ngày tạo đơn');
+    for (const r of [m!.summary, ...m!.byMarketer, ...m!.byTeam]) {
+      assert.ok(r.receivedNet <= r.net, 'DT đã nhận ≤ doanh thu theo mốc');
+      assert.ok(r.newReceivedNet <= r.newNet, 'DT đã nhận New ≤ DT chốt New');
+    }
+    assert.ok(m!.summary.newReceivedNet >= AMOUNT, 'đơn Đã nhận vào DT đã nhận');
+  } finally { raw.close(); }
+});
+
+void test('statsDailySource: bảng chưa sẵn sàng thì đọc bảng ảo từ đơn gốc, ra đúng số bảng tính sẵn; sẵn sàng thì đọc bảng thật', async () => {
+  const { raw, db } = await world();
+  try {
+    const { statsDailySource } = await import('../lib/pancake/order-segments');
+    const { POS } = await import('../lib/shared/report-model');
+    const { countedFilter } = await import('../lib/teams/team');
+    const posIds = POS.map((p) => p.id), ph = posIds.map(() => '?').join(',');
+    const sql = `SELECT pos_id, day, seller_id, SUM(closed_orders) AS c, SUM(closed_net) AS net, SUM(received_net) AS rec, SUM(orders) AS o FROM stats_daily
+      WHERE pos_id IN (${ph}) AND day>=? AND day<=?${countedFilter('seller_id')} GROUP BY 1,2,3 ORDER BY 1,2,3`;
+    const src = await statsDailySource(db, posIds, D30, D01);
+    assert.match(src.sql, /segment_orders/);
+    const virtual = raw.prepare(src.sql + sql).all(...src.binds, ...posIds, D30, D01);
+    const table = raw.prepare(sql).all(...posIds, D30, D01);
+    assert.ok(table.length > 0);
+    assert.deepEqual(virtual, table);
+    setReady(raw);
+    assert.deepEqual(await statsDailySource(db, posIds, D30, D01), { sql: '', binds: [] });
+  } finally { resetSegmentReadyMemo(); raw.close(); }
 });

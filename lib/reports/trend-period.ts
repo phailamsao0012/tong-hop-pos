@@ -89,17 +89,17 @@ export function periodCard(points: TrendPoint[], opts: TrendOptions, profile: Pr
 }
 
 /** Cột thời gian của chuỗi xu hướng theo bộ phận. */
-const trendColumn = (dept: TrendDept, bySent: boolean) => dept === 'mkt' ? 'first_confirmed_at' : dept === 'vandon' ? (bySent ? 'first_sent_at' : 'first_closed_at') : REVENUE_AT;
+const trendColumn = (dept: TrendDept, bySent: boolean) => dept === 'vandon' ? (bySent ? 'first_sent_at' : 'first_closed_at') : REVENUE_AT;
 /** Khoảng thời gian có bind, mỗi nhánh dùng chỉ mục thời gian tương ứng. */
 /** byDay: gom theo ngày (hour luôn 0) kèm số đơn n, cho trang Tăng trưởng nhân viên.
  * src: nguồn đọc (lib/reports/mkt-source.ts). Chỉ nhánh mkt đổi bảng (bảng gọn, không INDEXED BY); sale, cskh, vận đơn luôn đọc bảng gốc, câu giữ nguyên. */
 export function trendQuery(dept: TrendDept, posIds: string[], startUtc: string, endUtc: string, scopeSql: string, scopeBinds: string[], bySent: boolean, byDay = false, src: MktSource = RAW_SOURCE) {
-  // Sale / CSKH: doanh thu theo ngày (giờ) tạo đơn (REVENUE_AT, 27/11/2026); MKT theo ngày xác nhận; Vận đơn theo ngày gửi / ngày chốt như cũ.
+  // Sale / CSKH / MKT: doanh thu theo ngày (giờ) tạo đơn (REVENUE_AT, 27/11/2026); Vận đơn theo ngày gửi / ngày chốt như cũ.
   const column = trendColumn(dept, bySent);
   // Ngày tạo: để SQLite tự chọn chỉ mục (pos_id, created_at…), không ép INDEXED BY (thiếu chỉ mục thì câu lỗi hẳn).
   const index = column === REVENUE_AT ? '' : ` INDEXED BY idx_raw_orders_pos_${column === 'first_sent_at' ? 'sent' : dept === 'mkt' ? 'confirmed' : 'closed'}_status_money`;
   const person = dept === 'mkt' ? 'marketer_id' : 'seller_id';
-  const condition = dept === 'mkt' ? `${mktClosedStatus('o.status_code')} AND o.marketer_id IN ${MKT_STAFF}` : dept === 'vandon' ? `o.status_code IN (${SENT_CODES.join(',')})${bySent ? '' : ` AND o.${CLOSED}`}` : `o.${CLOSED}${teamFilter('o.seller_id', dept)}`;
+  const condition = dept === 'mkt' ? `o.first_confirmed_at IS NOT NULL AND ${mktClosedStatus('o.status_code')} AND o.marketer_id IN ${MKT_STAFF}` : dept === 'vandon' ? `o.status_code IN (${SENT_CODES.join(',')})${bySent ? '' : ` AND o.${CLOSED}`}` : `o.${CLOSED}${teamFilter('o.seller_id', dept)}`;
   const sql = `SELECT date(o.${column},'+7 hours') AS day, ${byDay ? '0' : `CAST(strftime('%H',o.${column},'+7 hours') AS INTEGER)`} AS hour, COALESCE(o.${person},'') AS id,
     ${dept === 'vandon' ? 'COUNT(*)' : 'SUM(COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0)))'} AS value${byDay ? ', COUNT(*) AS n' : ''}
     FROM ${trendTable(dept, src)} o${dept === 'mkt' && src.slim ? '' : index} WHERE o.pos_id IN (${posIds.map(() => '?').join(',')}) AND o.${column} IS NOT NULL AND o.${column}>=? AND o.${column}<? AND ${condition}${scopeSql} GROUP BY ${byDay ? '1,3' : '1,2,3'}`;

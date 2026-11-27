@@ -141,7 +141,7 @@ export async function staffProfile(db: D1Database, id: string, today: string, pi
     products: products.results.map((p) => ({ name: p.name, quantity: Number(p.quantity), total: Number(p.total) })), productsMonth: month,
     definitions: {
       scope: `Số 24 tháng gần nhất, cộng ${posSel.length ? 'các POS đang chọn' : 'mọi POS'}, đọc từ bảng tính sẵn theo ngày. Huy hiệu tính trên mọi POS.`,
-      revenue: dept === 'mkt' ? 'Doanh số MKT = doanh thu đơn xác nhận do marketer này mang về, theo ngày xác nhận.' : 'Doanh số = doanh thu đơn chốt của người bán, theo ngày chốt (cùng cách Tổng quan).',
+      revenue: dept === 'mkt' ? 'Doanh số MKT = doanh thu đơn xác nhận do marketer này mang về, theo ngày tạo đơn.' : 'Doanh số = doanh thu đơn chốt của người bán, theo ngày tạo đơn (cùng cách Tổng quan).',
       rate: 'Tỷ lệ chốt = đơn lên trong tháng đã chốt ÷ đơn lên trong tháng. Tháng tốt nhất về tỷ lệ chỉ xét tháng có từ 30 đơn lên.',
       rank: `Hạng = thứ tự doanh số tháng trong cả bộ phận, trên cùng các POS đang tính. Lọt top = hạng 1 tới ${TOP}.`,
       joined: 'Ngày vào làm: sửa tay → web nhân sự → ngày tạo tài khoản Pancake → ngày có đơn đầu tiên.',

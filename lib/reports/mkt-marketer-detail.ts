@@ -42,11 +42,12 @@ export async function marketerDetail(marketerId: string, posIds: string[], start
   const closedQ = (s: string, e: string, group: string) => {
     const r = vnRangeUtc(s, e);
     return env.DB.prepare(`SELECT ${group ? `${group},` : ''} ${closedCols} FROM raw_pos_orders o
-      WHERE ${base} AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,7)${group ? ` GROUP BY ${groupCols(group)}` : ''}`).bind(...posIds, marketerId, r.startUtc, r.endUtc);
+      WHERE ${base} AND o.created_at>=? AND o.created_at<? AND o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,7)${group ? ` GROUP BY ${groupCols(group)}` : ''}`).bind(...posIds, marketerId, r.startUtc, r.endUtc);
   };
   const costQ = (s: string, e: string) => env.DB.prepare(`SELECT COALESCE(SUM(amount),0) AS cost FROM ${adCostSource(posIds, s, e)} WHERE marketer_id=? AND day>=? AND day<=?`).bind(marketerId, s, e);
   const dayLead = "date(o.created_at,'+7 hours') AS day";
-  const dayClosed = "date(o.first_confirmed_at,'+7 hours') AS day";
+// Đơn MKT đã chốt xếp theo ngày tạo đơn (anh Vũ 27/11/2026, trước là ngày xác nhận đầu).
+  const dayClosed = "date(o.created_at,'+7 hours') AS day";
   const [lc, cc, lp, cp, costC, costP, lSale, cSale, lDay, cDay, names] = await env.DB.batch([
     leadQ(start, end, ''), closedQ(start, end, ''), leadQ(prev.start, prev.end, ''), closedQ(prev.start, prev.end, ''), costQ(start, end), costQ(prev.start, prev.end),
     leadQ(start, end, "o.pos_id AS pos, COALESCE(o.seller_id,'') AS sid"), closedQ(start, end, `o.pos_id AS pos, COALESCE(${CLOSER_SQL},'') AS sid`),

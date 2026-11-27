@@ -1,5 +1,5 @@
 // Trang Sản phẩm (kế hoạch quản trị, giai đoạn 4b · 26/09/2026): sản phẩm bán chạy, so kỳ trước, hoàn theo sản phẩm, xu hướng theo ngày.
-// Phạm vi: dòng sản phẩm (không tính quà tặng) của đơn chốt trong kỳ (từ Chờ xác nhận trở đi, theo ngày chốt, không tính hủy / xóa).
+// Phạm vi: dòng sản phẩm (không tính quà tặng) của đơn chốt trong kỳ (từ Chờ xác nhận trở đi, theo ngày tạo đơn, không tính hủy / xóa).
 // Tiền hàng = (giá bán lẻ − giảm từng sản phẩm) × số lượng, trước giảm giá cả đơn, nên cộng lại có thể lớn hơn doanh thu đơn.
 import { env } from 'cloudflare:workers';
 import { groupsOf } from '@/lib/reports/product-groups';

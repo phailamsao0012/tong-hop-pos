@@ -1,5 +1,5 @@
 import { maybeSlimFillNightly } from '@/lib/reports/mkt-slim-fill';
-import { SEGMENT_EPOCH, SEGMENT_READY_KEY, backfillSegmentMonth, segmentMonths, checkSegmentStatsNightly } from '@/lib/reports/stats';
+import { SEGMENT_EPOCH, SEGMENT_READY_KEY, SEGMENT_READY_VALUE, backfillSegmentMonth, segmentMonths, checkSegmentStatsNightly } from '@/lib/reports/stats';
 import { backfillMarketerIds } from '@/lib/teams/marketer-ids';
 import { backfillCallsCoverage } from '@/lib/reports/calls-coverage';
 import { addUsage, cycleSummary, observeD1, type UsageDay } from '@/lib/ops/d1-usage';
@@ -254,7 +254,7 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
       }
       if (!s.segmentPending.length) {
         const r = await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at WHERE app_settings.value IS NOT excluded.value')
-          .bind(SEGMENT_READY_KEY, String(SEGMENT_EPOCH), new Date().toISOString()).run();
+          .bind(SEGMENT_READY_KEY, SEGMENT_READY_VALUE, new Date().toISOString()).run();
         writes += Number(r.meta?.rows_written ?? 0);
       }
     }

@@ -8,6 +8,7 @@
 import { addDays } from '@/lib/shared/report-time';
 import { cancelRateOf } from '@/lib/reports/metrics';
 import { profileBasics, type ProfileDept } from '@/lib/reports/staff-profile';
+import { statsDailySource } from '@/lib/pancake/order-segments';
 
 export type PeriodSums = { net: number; closedOrders: number; orders: number; createdClosed: number; cancelled: number; deleted: number };
 export type PeriodCard = { key: 'net' | 'closed' | 'rate' | 'cancel' | 'aov' | 'days'; label: string; value: number | null; prev: number | null; kind: 'money' | 'count' | 'pct' };
@@ -53,9 +54,10 @@ export async function staffProfilePeriod(db: D1Database, id: string, start: stri
         .bind(...posIds, s, e, id).first<{ net: number; orders: number }>();
       return { ...ZERO, net: Number(r?.net ?? 0), closedOrders: Number(r?.orders ?? 0), orders: Number(r?.orders ?? 0), createdClosed: Number(r?.orders ?? 0) };
     }
-    const r = await db.prepare(`SELECT COALESCE(SUM(closed_net),0) AS net, COALESCE(SUM(closed_orders),0) AS closed, COALESCE(SUM(orders),0) AS orders,
+    const src = await statsDailySource(db, posIds, s, e); // bảng đang dựng lại theo ngày tạo: đọc đơn gốc
+    const r = await db.prepare(`${src.sql}SELECT COALESCE(SUM(closed_net),0) AS net, COALESCE(SUM(closed_orders),0) AS closed, COALESCE(SUM(orders),0) AS orders,
         COALESCE(SUM(${CREATED_CLOSED}),0) AS cc, COALESCE(SUM(cancelled_orders),0) AS cancelled, COALESCE(SUM(deleted_orders),0) AS deleted
-      FROM stats_daily WHERE pos_id IN (${ph}) AND day>=? AND day<=? AND seller_id=?`).bind(...posIds, s, e, id)
+      FROM stats_daily WHERE pos_id IN (${ph}) AND day>=? AND day<=? AND seller_id=?`).bind(...src.binds, ...posIds, s, e, id)
       .first<{ net: number; closed: number; orders: number; cc: number; cancelled: number; deleted: number }>();
     return { net: Number(r?.net ?? 0), closedOrders: Number(r?.closed ?? 0), orders: Number(r?.orders ?? 0), createdClosed: Number(r?.cc ?? 0), cancelled: Number(r?.cancelled ?? 0), deleted: Number(r?.deleted ?? 0) };
   };

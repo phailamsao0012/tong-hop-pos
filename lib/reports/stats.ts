@@ -398,6 +398,9 @@ export async function ensureSegmentSchema(db: D1Database) {
 
 export const SEGMENT_READY_KEY = 'stats_segment_epoch';
 export const SEGMENT_EPOCH = 2; // 2: doanh thu theo ngày tạo đơn + cột received_* (27/11/2026)
+/** Giá trị cờ ready của bảng nhóm = cũng là cờ "bảng tính sẵn đã theo ngày tạo đơn" (revenueStatsReady). Luôn suy từ SEGMENT_EPOCH, không
+ *  viết số: khi gộp nhánh khác cũng tăng SEGMENT_EPOCH (vd nhánh thẻ sản phẩm đặt 2) thì chỉ cần tăng lên số kế tiếp (3), mọi nơi theo. */
+export const SEGMENT_READY_VALUE = String(SEGMENT_EPOCH);
 /** Chưa điền đủ lịch sử luôn đọc đường cũ; nhớ cờ 60 giây mỗi isolate. */
 let segmentReady = { value: false, at: 0 };
 export async function segmentStatsReady(db: D1Database) {
@@ -405,7 +408,7 @@ export async function segmentStatsReady(db: D1Database) {
   let value = false;
   try {
     const r = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(SEGMENT_READY_KEY).first<{ value: string }>();
-    value = r?.value === String(SEGMENT_EPOCH);
+    value = r?.value === SEGMENT_READY_VALUE;
   } catch { value = false; }
   segmentReady = { value, at: Date.now() };
   return value;

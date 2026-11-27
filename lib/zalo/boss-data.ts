@@ -162,15 +162,16 @@ export async function bossReportData(sendDay: string, hour: string, morning: boo
   // MKT: chi phí, DT New theo trang Chi phí & ROAS (mktAnalytics); SỐ VỀ, ĐƠN NEW, TL CHỐT theo đúng trang Marketing trên web (marketingOverview,
   // anh Vũ 16/11/2026: "những số này nên lấy trên web"): số về = SĐT khác nhau trên đơn chia Sale (không cộng trùng theo marketer),
   // TL chốt = đơn New ÷ số về, không lẫn đơn CSKH. Kết quả trang Marketing giữ 60 giây nên web vừa tính thì báo cáo dùng lại.
-  const mo = (start: string, end: string, until = cut) => marketingOverview({ role: 'owner' } as never, new URLSearchParams({ basis: 'confirmed', stage: 'confirmed', team: 'all', until }), posIds, start, end, null);
+  const mo = (start: string, end: string, until = cut) => marketingOverview({ role: 'owner' } as never, new URLSearchParams({ basis: 'created', stage: 'confirmed', team: 'all', until }), posIds, start, end, null);
   const prevDay = addDays(day, -1);
   const [mToday, mMonth, wToday, wMonth, mPrev, wPrev] = await Promise.all([
-    mktAnalytics({ posIds, start: day, end: day, db, untilUtc: cut }),
-    day === monthStart ? null : mktAnalytics({ posIds, start: monthStart, end: day, db, untilUtc: cut }),
+    // DT New theo ngày tạo đơn (27/11/2026), đơn đã xác nhận trước mốc chốt như Sale / CSKH.
+    mktAnalytics({ posIds, start: day, end: day, db, untilUtc: cut, closedUntilUtc: closedCut }),
+    day === monthStart ? null : mktAnalytics({ posIds, start: monthStart, end: day, db, untilUtc: cut, closedUntilUtc: closedCut }),
     mo(day, day),
     day === monthStart ? null : mo(monthStart, day),
     // So hôm qua (mẫu rút gọn 17/11/2026): cùng khoảng giờ hôm qua, báo cáo trọn ngày thì trọn ngày trước.
-    mktAnalytics({ posIds, start: prevDay, end: prevDay, db, untilUtc: prevCut }),
+    mktAnalytics({ posIds, start: prevDay, end: prevDay, db, untilUtc: prevCut, closedUntilUtc: prevClosedCut }),
     mo(prevDay, prevDay, prevCut),
   ]);
   type WebTeam = { marketingTeamId: string; createdNewPhones?: number; newConfirmed?: number };

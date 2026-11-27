@@ -7,7 +7,7 @@
 import { env } from 'cloudflare:workers';
 import { DELIVERED_STATUSES } from '@/lib/pancake/pancake';
 import { addDays, vnRangeUtc } from '@/lib/shared/report-time';
-import { CLOSED, dayExpr } from '@/lib/reports/stats';
+import { CLOSED, dayExpr, revenueDate } from '@/lib/reports/stats';
 
 export const LOOKBACK_DAYS = 60;
 export type DeliveredRow = { day: string; name: string; orders: number; qty: number; revenue: number };
@@ -100,15 +100,15 @@ export async function closedDelivered(opts: { posIds: string[]; start: string; e
   const { startUtc, endUtc } = vnRangeUtc(opts.start, opts.end);
   const ph = opts.posIds.map(() => '?').join(',');
   const delivered = `CASE WHEN o.status_code IN (${DELIVERED_STATUSES.join(',')}) THEN o.id END`;
-  // Chỉ mục (pos_id, first_closed_at, status_code, …) cho phần lọc đơn.
-  const where = `o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.${CLOSED}`;
+  // Đơn chốt theo ngày tạo đơn (27/11/2026), cùng cơ sở với Doanh thu / DT đã nhận.
+  const where = `o.pos_id IN (${ph}) AND ${revenueDate('o.')}>=? AND ${revenueDate('o.')}<? AND o.${CLOSED}`;
   const binds = [...opts.posIds, startUtc, endUtc];
   const [items, totals] = await Promise.all([
-    env.DB.prepare(`SELECT ${dayExpr('o.first_closed_at')} AS day, TRIM(i.name) AS name, COUNT(DISTINCT o.id) AS closed, COUNT(DISTINCT ${delivered}) AS delivered
+    env.DB.prepare(`SELECT ${dayExpr(revenueDate('o.'))} AS day, TRIM(i.name) AS name, COUNT(DISTINCT o.id) AS closed, COUNT(DISTINCT ${delivered}) AS delivered
       FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
       WHERE ${where} AND i.is_bonus=0 AND i.quantity>0 AND TRIM(i.name)<>'' AND LOWER(TRIM(i.name)) NOT LIKE 'quà tặng%'
       GROUP BY 1,2`).bind(...binds).all<ClosedRow>(),
-    env.DB.prepare(`SELECT ${dayExpr('o.first_closed_at')} AS day, COUNT(*) AS closed, COUNT(${delivered}) AS delivered FROM raw_pos_orders o WHERE ${where} GROUP BY 1`)
+    env.DB.prepare(`SELECT ${dayExpr(revenueDate('o.'))} AS day, COUNT(*) AS closed, COUNT(${delivered}) AS delivered FROM raw_pos_orders o WHERE ${where} GROUP BY 1`)
       .bind(...binds).all<ClosedDay>(),
   ]);
   const rows = items.results.map((r) => ({ day: String(r.day), name: String(r.name), closed: Number(r.closed), delivered: Number(r.delivered) }));
@@ -116,7 +116,7 @@ export async function closedDelivered(opts: { posIds: string[]; start: string; e
   return {
     period: { start: opts.start, end: opts.end },
     ...pivotClosed(rows, days, rangeDays(opts.start, opts.end)),
-    definition: 'Theo ngày chốt: đơn chốt trong ngày (từ Chờ xác nhận trở đi, bỏ đơn hủy) và trong số đó, đến nay bao nhiêu đơn khách đã nhận (Đã nhận hoặc Đã thu tiền). Ngày gần đây tỷ lệ còn thấp vì đơn đang trên đường. Gộp các POS đang chọn; một đơn nhiều sản phẩm tính ở từng sản phẩm. Bỏ quà tặng.',
+    definition: 'Theo ngày tạo đơn: đơn chốt tạo trong ngày (từ Chờ xác nhận trở đi, bỏ đơn hủy) và trong số đó, đến nay bao nhiêu đơn khách đã nhận (Đã nhận hoặc Đã thu tiền). Ngày gần đây tỷ lệ còn thấp vì đơn đang trên đường. Gộp các POS đang chọn; một đơn nhiều sản phẩm tính ở từng sản phẩm. Bỏ quà tặng.',
   };
 }
 export type ClosedDeliveredReport = Awaited<ReturnType<typeof closedDelivered>>;

@@ -1,5 +1,5 @@
 import { addDays, vnDayStartUtc } from '@/lib/shared/report-time';
-import { CLOSED, NET, STAT_COLUMNS, STATUS_GROUPS, dayExpr, revenueDate } from '@/lib/reports/stats';
+import { CLOSED, NET, STAT_COLUMNS, STATUS_GROUPS, dayExpr, revenueDate, revenueStatsReady } from '@/lib/reports/stats';
 import { countedFilter, teamFilter, type HrUnit, type Team } from '@/lib/teams/team';
 import { parseStatus, statusSql, type StatusFilter } from '@/lib/pancake/order-status';
 
@@ -149,4 +149,18 @@ export function segmentedStats(posIds: string[], startUtc: string, endUtc: strin
     sql: `WITH ${[...(needsRaw ? [rawOrders] : []), daily, ...(withProducts ? [products] : [])].join(', ')} `,
     binds: [...(needsRaw ? rawBinds : []), ...dailyBinds, ...(withProducts ? [startUtc, endUtc] : [])],
   };
+}
+
+/**
+ * Nơi đọc thẳng bảng stats_daily theo (POS, khoảng ngày): trong lúc bảng còn dựng lại theo ngày tạo đơn (revenueStatsReady chưa bật,
+ * sau khi tăng STATS_EPOCH), thay bằng bảng ảo cùng tên `stats_daily` tính từ đơn gốc cho đúng POS và khoảng ngày đó, để không trộn ngày
+ * cũ (ngày chốt) với ngày mới (ngày tạo). Bảng ảo chỉ có người bán được tính doanh số (countedFilter, như mọi số doanh thu) và có thêm cột
+ * marketer_id; một ngày có thể nhiều dòng nên nơi đọc phải SUM / GROUP BY như khi đọc bảng thật.
+ * Dùng: `const src = await statsDailySource(db, posIds, start, end); db.prepare(src.sql + 'SELECT ... FROM stats_daily ...').bind(...src.binds, ...)`.
+ * Câu đọc phải bắt đầu bằng SELECT (không có WITH riêng).
+ */
+export async function statsDailySource(db: D1Database, posIds: string[], start: string, end: string): Promise<{ sql: string; binds: string[] }> {
+  if (await revenueStatsReady(db)) return { sql: '', binds: [] };
+  const v = segmentedStats(posIds, vnDayStartUtc(start), vnDayStartUtc(addDays(end, 1)), 'all', EMPTY_ORDER_FILTERS, [], null, null, { start, end, ready: false, withProducts: false });
+  return { sql: v.sql, binds: v.binds.map(String) };
 }

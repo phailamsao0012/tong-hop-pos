@@ -40,11 +40,13 @@ type Summary = {
   /** Tiền các đơn hoàn / hủy trong phạm vi đang xem, và doanh thu còn lại sau khi trừ. */ refundNet: number; netAfterRefund: number;
   /** Tách theo người bán: New = không thuộc CSKH (Sale chốt khách mới), CSKH = nhân viên CSKH bán. */
   newOrders: number; newNet: number; newAfterRefund: number; cskhOrders: number; cskhNet: number; cskhAfterRefund: number;
+  /** DT đã nhận (27/11/2026): đơn đang ở Đã nhận / Đã thu tiền trong cùng nhóm đơn; New = phần Sale chốt. Số lưu cũ chưa có thì undefined. */ receivedNet?: number; newReceivedNet?: number;
 };
 // Bảng xếp hạng tách New / CSKH (anh Vũ 14/11/2026, ý sếp: "số đơn không được gộp, doanh thu cũng phải tách new và cskh"):
 // Đơn New = đơn chốt do người bán Sale, Đơn CSKH = do người bán CSKH. TL chốt, tỉ lệ đi / hủy / hoàn chỉ tính đơn New (khớp Pancake lọc nhân viên SALE).
 type OutStats = { createdNewPhones: number; newConfirmed: number; cskhConfirmed: number; newPacked: number; newCancelled: number; newReturned: number; shipNet: number; shipAfterRefund: number;
   /** Tiền đơn hủy / hoàn New (25/11/2026); số lưu cũ chưa có thì 0. */ newCancelledNet?: number; newReturnedNet?: number;
+  /** DT đã nhận phần New (27/11/2026). */ newReceivedNet?: number;
   newNet: number; newOrders: number; newAfterRefund: number; cskhNet: number; cskhOrders: number; cskhAfterRefund: number };
 const outRates = (x: OutStats) => ({ close: ratePctCapped(x.newConfirmed, x.createdNewPhones), go: ratePct(x.newPacked, x.newConfirmed), cancel: ratePct(x.newCancelled, x.newConfirmed), ret: ratePct(x.newReturned, x.newConfirmed) });
 const NEW_FIELDS = { createdNewPhones: 0, newConfirmed: 0, cskhConfirmed: 0, newPacked: 0, newCancelled: 0, newReturned: 0, newCancelledNet: 0, newReturnedNet: 0, shipNet: 0, shipAfterRefund: 0 };
@@ -110,7 +112,8 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
   const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
   const team = useTeam();
-  const [basis, setBasis] = useState<Basis>('confirmed');
+  // Mặc định theo ngày tạo đơn (anh Vũ 27/11/2026: doanh thu MKT theo ngày tạo); vẫn chọn được theo ngày xác nhận.
+  const [basis, setBasis] = useState<Basis>('created');
   const [stage, setStage] = useState<Stage>('confirmed');
   const [rankStage, setRankStage] = useState<RankStage>('confirmed');
   const [otherStages, setOtherStages] = useState(false);
@@ -306,7 +309,7 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
       <td className="n font-semibold"><NumDetail spec={closedPhonesDetail(x, ctx)} more={split === undefined ? undefined : () => <ProductSplitHover url={productUrl} marketerId={split} field="phones"><span className="text-[11px] font-semibold text-primary">Tách theo sản phẩm ›</span></ProductSplitHover>}>{vi.format(x.createdNewClosedPhones ?? 0)}</NumDetail></td>
       <td className="n">{vi.format(x.newConfirmed)}</td>
       <td className={`n ${closeRateClass(r.close)}`} title={`${vi.format(x.newConfirmed)} đơn New / ${vi.format(x.createdNewPhones)} SĐT chia cho Sale`}>{r.close === null ? '—' : pct(r.close)}</td>
-      <td className="n"><NumDetail spec={newNetDetail(x, ctx)}>{money(x.newNet)}</NumDetail>{sub(`sau hoàn hủy ${shortMoney(x.newAfterRefund)}`, `${vi.format(x.newOrders)} đơn · sau hoàn hủy ${money(x.newAfterRefund)}`)}</td>
+      <td className="n"><NumDetail spec={newNetDetail(x, ctx)}>{money(x.newNet)}</NumDetail>{sub(`sau hoàn hủy ${shortMoney(x.newAfterRefund)}`, `${vi.format(x.newOrders)} đơn · sau hoàn hủy ${money(x.newAfterRefund)}`)}{x.newReceivedNet !== undefined && sub(`đã nhận ${shortMoney(x.newReceivedNet)} · ${pct(x.newNet ? x.newReceivedNet / x.newNet * 100 : null, 0)}`, 'DT đã nhận: trong các đơn New đã chốt, đơn đang ở Đã nhận / Đã thu tiền')}</td>
       <td className="n">{vi.format(x.cskhConfirmed)}</td>
       <td className="n">{money(x.cskhNet)}{sub(`sau hoàn hủy ${shortMoney(x.cskhAfterRefund)}`, `${vi.format(x.cskhOrders)} đơn · sau hoàn hủy ${money(x.cskhAfterRefund)}`)}</td>
     </>;
@@ -432,7 +435,7 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
         <span className="text-xs text-ink-3">Page, bài viết và mã quảng cáo chưa có trường chuẩn cho toàn bộ lịch sử đơn.</span>
         <button type="button" className="rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink-2 hover:bg-surface-2" onClick={() => {
           setMarketingTeamId('__all'); setMarketerId('__all'); setSellerId('__all'); setCareId('__all'); setProductKey('__all');
-          setSource('__all'); setStage('confirmed'); setBasis('confirmed'); setRankStage('confirmed'); setOtherStages(false);
+          setSource('__all'); setStage('confirmed'); setBasis('created'); setRankStage('confirmed'); setOtherStages(false);
         }}>Xóa bộ lọc</button>
       </Toolbar>
 
@@ -443,6 +446,7 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
           <KpiCard icon={Phone} tone="blue" label="SĐT trên đơn" value={vi.format(s.phones)} note="SĐT duy nhất · không phải tổng lead" tooltip="Chỉ đếm số điện thoại xuất hiện trên đơn Pancake của marketer." />
           <KpiCard id="mkt-rate" icon={CheckCircle2} tone="teal" label="Tỷ lệ xác nhận" value={pct(s.confirmationRate)} note={`${vi.format(s.confirmedOrders)} / ${vi.format(s.createdOrders)} đơn`} />
           <KpiCard id="mkt-revenue" icon={ICON.revenue} tone="lime" label="Doanh thu theo mốc" value={shortMoney(s.net)} note={`AOV ${money(s.averageOrder)}`} />
+          {s.receivedNet !== undefined && <KpiCard icon={ICON.revenue} tone="green" label="DT đã nhận" value={shortMoney(s.receivedNet)} note={`${pct(s.net ? s.receivedNet / s.net * 100 : null, 0)} doanh thu theo mốc`} tooltip="Trong các đơn của ô Doanh thu theo mốc, tổng tiền đơn đang ở Đã nhận / Đã thu tiền." />}
           <KpiCard icon={ICON.revenue} tone="blue" label="Doanh thu / SĐT" value={money(s.revenuePerPhone)} note="Trên số điện thoại có đơn theo mốc" />
           <KpiCard icon={Truck} tone="orange" label="Đã cho ĐVVC" value={vi.format(s.shippedOrders)} note={`${pct(s.shippingRate)} trên đơn xác nhận`} />
           <KpiCard icon={PackageCheck} tone="purple" label="Đã nhận / thu tiền" value={vi.format(s.deliveredOrders)} note={`${pct(s.deliveryRate)} trên đơn đã gửi`} />

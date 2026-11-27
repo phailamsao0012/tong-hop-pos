@@ -2,7 +2,7 @@
 // Đã đạt:
 // - Sale / CSKH: doanh thu đơn do người bán thuộc bộ phận chốt (chờ xác nhận trở đi), theo NGÀY TẠO đơn (27/11/2026), cùng cách khối Sale / CSKH Tổng quan,
 //   nhưng KHÔNG trừ đơn hủy / hoàn về sau ("đã chốt là chốt"); chỉ bỏ đơn xoá.
-// - MKT: DT New = đơn có Marketer được tính, người bán thuộc Sale, theo ngày xác nhận đầu; không trừ hủy / hoàn.
+// - MKT: DT New = đơn có Marketer được tính, người bán thuộc Sale, đã xác nhận, theo ngày tạo đơn (27/11/2026); không trừ hủy / hoàn.
 // Chỉ tính các POS đang chọn (quy tắc POS là lớp tính đầu tiên).
 import { env } from 'cloudflare:workers';
 import { MKT_STAFF, teamSubquery } from '@/lib/teams/team';
@@ -28,7 +28,7 @@ export async function kpiDayReport(posIds: string[]): Promise<KpiDayReport> {
     env.DB.prepare("SELECT ref_id, revenue FROM targets WHERE month=? AND scope='dept_pos'").bind(month),
     sumBy(`o.first_closed_at IS NOT NULL AND o.status_code<>7 AND o.seller_id IN ${teamSubquery('sale')}`, revenueDate('o.')),
     sumBy(`o.first_closed_at IS NOT NULL AND o.status_code<>7 AND o.seller_id IN ${teamSubquery('cskh')}`, revenueDate('o.')),
-    sumBy(`o.status_code NOT IN (0,17,7) AND NULLIF(TRIM(o.marketer_id),'') IS NOT NULL AND o.marketer_id IN ${MKT_STAFF} AND o.seller_id IN ${teamSubquery('sale')}`, 'o.first_confirmed_at'),
+    sumBy(`o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,7) AND NULLIF(TRIM(o.marketer_id),'') IS NOT NULL AND o.marketer_id IN ${MKT_STAFF} AND o.seller_id IN ${teamSubquery('sale')}`, revenueDate('o.')),
     env.DB.prepare('SELECT value FROM app_settings WHERE key=?').bind(`target_emp_pos:${month}`),
     env.DB.prepare("SELECT pos_user_id AS id, team FROM hr_pos_team WHERE team IN ('sale','cskh')"),
   ]);

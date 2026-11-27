@@ -21,7 +21,7 @@ export function DeliveredProductsBlock({ start, end, posIds }: { start: string; 
   const closed = basis === 'closed' && data && 'other' in data ? data as ClosedDeliveredReport : null;
   const delivered = basis === 'delivered' && data && !('other' in data) ? data as DeliveredProductsReport : null;
   const ready = closed ?? delivered;
-  const subtitle = closed ? `Đã giao ${vi.format(closed.total.delivered)} / chốt ${vi.format(closed.total.closed)} đơn · ${rate(closed.total)} · theo ngày chốt, gộp ${posIds.length} POS`
+  const subtitle = closed ? `Đã giao ${vi.format(closed.total.delivered)} / chốt ${vi.format(closed.total.closed)} đơn · ${rate(closed.total)} · theo ngày tạo đơn, gộp ${posIds.length} POS`
     : delivered ? `${vi.format(delivered.total.orders)} đơn · ${shortMoney(delivered.total.net)} · gộp ${posIds.length} POS đang chọn` : 'Xếp theo ngày khách nhận hàng';
   return (
     <ChartCard icon={PackageCheck} title="Đơn khách đã nhận · từng ngày theo sản phẩm" subtitle={subtitle} info={ready?.definition} loading={loading && !!ready} action={seg}>

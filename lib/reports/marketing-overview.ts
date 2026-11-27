@@ -27,6 +27,7 @@ type AggregateRow = {
   orders: number; phones: number; gross: number; net: number;
   confirmed: number; shipped: number; delivered: number; returned: number; cancelled: number; refund_net: number;
   cskh_orders: number; cskh_net: number; cskh_refund_net: number; sale_orders: number; sale_net: number; sale_refund_net: number; sale_phones: number; sale_closed_phones?: number;
+  /** DT đã nhận (27/11/2026): trong cùng nhóm đơn, đơn đang ở Đã nhận / Đã thu tiền; sale_ = phần New. */ received_net?: number; sale_received_net?: number;
 };
 type MarketerRow = AggregateRow & { marketer_id: string };
 type MarketingTeamRow = AggregateRow & { marketing_team_id: string };
@@ -44,6 +45,8 @@ const aggregate = (r?: Partial<AggregateRow>) => ({
   newOrders: num(r?.sale_orders), newNet: num(r?.sale_net), newAfterRefund: num(r?.sale_net) - num(r?.sale_refund_net),
   /** SĐT trên đơn chia cho Sale (mẫu số TL chốt New). */ newPhones: num(r?.sale_phones),
   /** Trong đó SĐT đã chốt: có ít nhất một đơn đã chốt (kể cả hủy sau đó), như dòng "Số đã chốt" của khung tách sản phẩm (25/11/2026). */ newClosedPhones: num(r?.sale_closed_phones),
+  /** DT đã nhận: trong cùng các đơn, đơn đang ở Đã nhận / Đã thu tiền (luôn ≤ doanh thu); newReceivedNet = phần New (≤ DT chốt New). */
+  receivedNet: num(r?.received_net), newReceivedNet: num(r?.sale_received_net),
 });
 
 type Lens = Exclude<Awaited<ReturnType<typeof resolveMktLens>>, Response>;
@@ -131,7 +134,9 @@ export async function marketingOverviewRaw(user: { role: Role }, p: URLSearchPar
     COALESCE(SUM(CASE WHEN o.seller_id IN ${saleSellers} THEN ${NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1')} ELSE 0 END),0) AS sale_net,
     COALESCE(SUM(CASE WHEN o.seller_id IN ${saleSellers} AND o.status_code IN (4,5,15,6) THEN ${NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1')} ELSE 0 END),0) AS sale_refund_net,
     COUNT(DISTINCT CASE WHEN o.seller_id IN ${saleSellers} THEN NULLIF(TRIM(o.phone),'') END) AS sale_phones,
-    COUNT(DISTINCT CASE WHEN o.seller_id IN ${saleSellers} AND ${EVER_CONFIRMED} THEN NULLIF(TRIM(o.phone),'') END) AS sale_closed_phones`;
+    COUNT(DISTINCT CASE WHEN o.seller_id IN ${saleSellers} AND ${EVER_CONFIRMED} THEN NULLIF(TRIM(o.phone),'') END) AS sale_closed_phones,
+    COALESCE(SUM(CASE WHEN o.status_code IN (3,16) THEN ${NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1')} ELSE 0 END),0) AS received_net,
+    COALESCE(SUM(CASE WHEN o.seller_id IN ${saleSellers} AND o.status_code IN (3,16) THEN ${NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1')} ELSE 0 END),0) AS sale_received_net`;
 
   const optionScope = `o.pos_id IN (${ph}) AND ${marketer} IS NOT NULL${marketingTeam.sql}${teamFilter('o.seller_id', team)} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7`;
   const optionBinds = [...posIds, ...marketingTeam.binds, startUtc, endUtc];

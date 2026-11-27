@@ -56,7 +56,7 @@ void test('lens-orders: team + không thuộc team = tổng; bảng từng ngư�
       }
       assert.equal(part.current.byPos.every((r) => r.posId === POS[0].id), true);
       assert.equal(part.current.byEmployee.reduce((n, r) => n + r.closedNet, 0), part.current.total.closedNet);
-      const market = await request<{ summary: { net: number } }>(marketing, new URLSearchParams({ ...Object.fromEntries(p), basis: 'confirmed', stage: 'confirmed' }));
+      const market = await request<{ summary: { net: number } }>(marketing, new URLSearchParams({ ...Object.fromEntries(p), basis: 'created', stage: 'confirmed' }));
       assert.equal(market.summary.net, section.mkt.net);
       const ship = await request<{ departments: unknown[] }>(shipping, p);
       assert.ok(ship);

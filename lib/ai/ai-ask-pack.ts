@@ -5,6 +5,7 @@ import { advisorReasonQuery, classifyReason } from '@/lib/bot/advisor';
 import { POS } from '@/lib/shared/report-model';
 import { STATUS_GROUPS } from '@/lib/reports/stats';
 import { readForecast } from '@/lib/kpi/forecast-run';
+import { statsDailySource } from '@/lib/pancake/order-segments';
 
 const header = 'ma;bo_phan;team;so_chia;chot_tu_so;don_chot;doanh_thu_tr;hoan';
 const money = (n: number | null) => n === null ? 'thieu' : (Number(n) / 1_000_000).toFixed(1);
@@ -14,12 +15,13 @@ type Row = { day: string; ma: string; dept: string; team: string; assigned: numb
 export async function peopleCsv(db: D1Database, start: string, end: string, ids: string[] | null, group: 'ngay' | 'tuan' | 'ca_ky', maxRows?: number) {
   const filter = ids ? ` AND seller_id IN (${ids.map(() => '?').join(',') || 'NULL'})` : '';
   const period = group === 'tuan' ? "date(day,'-' || ((CAST(strftime('%w',day) AS INTEGER)+6)%7) || ' days')" : group === 'ca_ky' ? "'ca_ky'" : 'day';
-  const rows = await db.prepare(`SELECT ${period} AS day,seller_id AS ma,
+  const src = await statsDailySource(db, POS.map((p) => p.id), start, end); // bảng đang dựng lại theo ngày tạo: đọc đơn gốc
+  const rows = await db.prepare(`${src.sql}SELECT ${period} AS day,seller_id AS ma,
     COALESCE((SELECT team FROM hr_pos_team WHERE pos_user_id=seller_id LIMIT 1),'other') AS dept,
     COALESCE((SELECT department_id FROM hr_pos_team WHERE pos_user_id=seller_id LIMIT 1),'') AS team,
     SUM(assigned_orders) AS assigned,SUM(assigned_closed_orders) AS assignedClosed,SUM(closed_orders) AS closed,SUM(closed_net) AS net,SUM(returned_orders) AS returned
     FROM stats_daily WHERE pos_id IN (${POS.map(() => '?').join(',')}) AND day>=? AND day<=? AND seller_id IN ${COUNTED_STAFF}${filter}
-    GROUP BY 1,seller_id ORDER BY 1,seller_id${maxRows ? ` LIMIT ${maxRows + 1}` : ''}`).bind(...POS.map(p => p.id), start, end, ...(ids ?? [])).all<Row>();
+    GROUP BY 1,seller_id ORDER BY 1,seller_id${maxRows ? ` LIMIT ${maxRows + 1}` : ''}`).bind(...src.binds, ...POS.map(p => p.id), start, end, ...(ids ?? [])).all<Row>();
   if (maxRows && rows.results.length > maxRows) throw new Error('Kết quả vượt 3.000 dòng; hãy thu hẹp phạm vi');
   return [`${group === 'tuan' ? 'tuan' : group === 'ngay' ? 'ngay' : 'ky'};${header}`, ...rows.results.map(r => [r.day, code(r.ma), ['sale','cskh','mkt'].includes(r.dept) ? r.dept : 'other', code(r.team), Number(r.assigned), Number(r.assignedClosed), Number(r.closed), money(r.net), Number(r.returned)].join(';'))].join('\n');
 }
