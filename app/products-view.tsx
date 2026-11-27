@@ -13,9 +13,11 @@ import type { ProductsReport } from '@/lib/reports/products-report';
 import { ICON } from './icons';
 import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';
-import { Th, ChartCard, Definitions, DeltaPill, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, delta, dmy, pct, shortMoney, useSort, vi } from './ui-kit';
+import { Th, ChartCard, Definitions, DeltaPill, EmptyState, ErrorBox, FoldBlock, KpiCard, posName, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, delta, dmy, pct, shortMoney, useSort, vi } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
 import { DeliveredProductsBlock } from './delivered-products-block';
+import { BOSS_RETURN_RED, COACH_MIN_BASE } from '@/lib/zalo/boss-report';
+import { CanXemStrip, KPI_RED, KPI_TIGHT, PageHeadMoi, WhySheet, overRet, tileGrid, type CanXemItem, type WhySpec } from './trang-moi';
 
 const GROUP_COLORS: Record<string, string> = { 'Kháng sinh': 'var(--ai-3)', 'Combo': 'var(--ai-5)', 'Khác': 'var(--ink-4)' };
 
@@ -26,7 +28,9 @@ function Spark({ points, color = 'var(--primary)' }: { points: { revenue: number
   return <svg viewBox={`0 0 ${W} ${H}`} className="h-7 w-[110px]" aria-hidden="true"><path d={`${d} L${W},${H} L0,${H} Z`} fill={color} fillOpacity={0.12} /><path d={d} fill="none" stroke={color} strokeWidth={1.8} /></svg>;
 }
 
-export function ProductsView() {
+export function ProductsView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới, tắt thì y như cũ. */ uiMoi?: boolean } = {}) {
+  // Giao diện mới: khung "Vì sao ra số này" đang mở (null = đóng).
+  const [why, setWhy] = useState<WhySpec | null>(null);
   const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
   const [group, setGroup] = useState<string | null>(null);
@@ -50,10 +54,10 @@ export function ProductsView() {
     ]), 'Sản phẩm');
     saveXlsx(XLSX, wb, `san-pham_${start}_${end}.xlsx`);
   };
-  return (
-    <div className="space-y-5">
-      <PageHeader eyebrow={`${periodLabel} · so với ${r ? compareText(r.prevPeriod) : 'kỳ trước'}`} title="Sản phẩm" subtitle="Sản phẩm nào bán chạy, đang lên hay xuống, hoàn nhiều không"
-        actions={<><AiPackButton disabled={!r} pack={() => r && ({
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  // fold: chỉ bố cục mới truyền (thu gọn thẻ); bố cục cũ không truyền nên thẻ y như trước.
+  const headActions = () => (
+        <><AiPackButton disabled={!r} pack={() => r && ({
           page: 'Sản phẩm', period: periodLabel,
           facts: [['Tiền hàng', Math.round(r.total.revenue)], ['Kỳ trước', Math.round(r.total.prevRevenue)], ['Số lượng bán', r.total.qty], ['Số sản phẩm có bán', r.total.products], ['Tỷ lệ hoàn (SL)', pct(r.total.returnRate)]],
           tables: [
@@ -62,23 +66,9 @@ export function ProductsView() {
           ],
           definitions: r.definitions,
           questions: ['Sản phẩm nào đang lên, đang xuống so kỳ trước? Vì sao có thể như vậy?', 'Sản phẩm nào hoàn nhiều bất thường, nên kiểm tra gì?', 'Nên đẩy nhóm nào / sản phẩm nào tháng tới?'],
-        })} /><Button variant="outline" onClick={() => void exportExcel()} disabled={!r}><FileDown size={14} />Xuất Excel</Button></>} />
-      <PeriodToolbar preset={preset} start={start} end={end} loading={loading} onReload={reload}
-        onPreset={setPreset}
-        onStart={setStart} onEnd={setEnd} />
-      <PosChips posIds={posIds} onChange={setPosIds} />
-      {error && !r && <ErrorBox error={error} onRetry={reload} />}
-      {!r && !error && <><SkeletonKpis count={4} className="xl:grid-cols-4" /><SkeletonTable rows={6} cols={6} /></>}
-      {r && (
-        <>
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-            <KpiCard icon={ICON.revenue} tone="teal" label="Tiền hàng" value={shortMoney(r.total.revenue)} delta={delta(r.total.revenue, r.total.prevRevenue)} tooltip={{ period: periodLabel, current: shortMoney(r.total.revenue), previous: shortMoney(r.total.prevRevenue), definition: r.definitions.revenue }} />
-            <KpiCard icon={ICON.products} tone="blue" label="Số lượng bán" value={vi.format(r.total.qty)} note={`${vi.format(r.total.products)} sản phẩm có bán`} tooltip={{ period: periodLabel, current: vi.format(r.total.qty), definition: r.definitions.scope }} />
-            <KpiCard icon={ICON.returned} tone="orange" invert label="Tỷ lệ hoàn (SL)" value={pct(r.total.returnRate)} note={`${vi.format(r.total.returnedQty)} sản phẩm hoàn`} tooltip={{ period: periodLabel, current: pct(r.total.returnRate), definition: r.definitions.returned }} />
-            <KpiCard icon={Layers} tone="purple" label="Nhóm dẫn đầu" value={r.groups[0]?.label ?? '—'} note={r.groups[0] ? `${pct(r.total.revenue ? r.groups[0].revenue / r.total.revenue * 100 : null, 0)} tiền hàng` : ''} tooltip={{ period: periodLabel, definition: r.definitions.group }} />
-          </div>
-          <DeliveredProductsBlock start={start} end={end} posIds={posIds} />
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        })} /><Button variant="outline" onClick={() => void exportExcel()} disabled={!r}><FileDown size={14} />Xuất Excel</Button></>
+  );
+  const topCard = () => (
             <ChartCard icon={BarChart3} title="Bán chạy nhất · tiền hàng" subtitle="Thanh đậm = kỳ này, thanh mờ = kỳ trước cùng số ngày">
               {top.length ? (
                 <ul className="m-0 list-none space-y-2.5 p-0">
@@ -96,6 +86,8 @@ export function ProductsView() {
                 </ul>
               ) : <EmptyState text="Chưa có sản phẩm bán trong kỳ." />}
             </ChartCard>
+  );
+  const sideCards = (r: ProductsReport) => (
             <div className="grid gap-4">
               <ChartCard icon={Layers} title="Theo nhóm" subtitle="Bấm một nhóm để lọc bảng bên dưới" info={r.definitions.group}>
                 <div className="flex h-4 gap-[2px] overflow-hidden rounded-full">{r.groups.map((g) => <i key={g.label} className="block h-full" style={{ width: `${r.total.revenue ? g.revenue / r.total.revenue * 100 : 0}%`, background: GROUP_COLORS[g.label] }} />)}</div>
@@ -116,7 +108,8 @@ export function ProductsView() {
                 </ul>
               </ChartCard>
             </div>
-          </div>
+  );
+  const allCard = (r: ProductsReport) => (
           <ChartCard icon={ICON.products} title={`Tất cả sản phẩm · ${rows.length}${group ? ` · ${group}` : ''}`} subtitle="Bấm tiêu đề cột để sắp xếp · tối đa 300 sản phẩm" info={r.definitions.scope}>
             {rows.length ? (
               <TableWrap minWidth={880} maxHeight="36rem" stickyFirst>
@@ -145,6 +138,79 @@ export function ProductsView() {
               </TableWrap>
             ) : <EmptyState text="Không có sản phẩm." />}
           </ChartCard>
+  );
+  // [hết khối chung]
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trên xuống: đầu trang (PageHeadMoi: Gói AI, Excel; POS) → "Cần xem" (hoàn theo số lượng từ 7%: cả trang rồi từng sản phẩm từ 20 sản phẩm bán)
+  // → một hàng 4 ô số (bấm mở "Vì sao ra số này") → Bán chạy nhất (đậm kỳ này, mờ kỳ trước) → bảng chính Tất cả sản phẩm
+  // → khối phụ thu gọn: Sản phẩm đã giao, Theo nhóm + xu hướng theo ngày, Cách tính.
+  if (uiMoi) {
+    const scope = `${periodLabel} · so với ${r ? compareText(r.prevPeriod) : 'kỳ trước'} · ${posIds.length <= 3 ? posIds.map(posName).join(', ') : `${vi.format(posIds.length)} POS`}${group ? ` · nhóm ${group}` : ''}`;
+    const head = <PageHeadMoi title="Sản phẩm" scope={scope} hint="Sản phẩm nào bán chạy, đang lên hay xuống, hoàn nhiều không"
+      tools={<PeriodToolbar preset={preset} start={start} end={end} loading={loading} onReload={reload} onPreset={setPreset} onStart={setStart} onEnd={setEnd} />}
+      right={headActions()} pos={<PosChips posIds={posIds} onChange={setPosIds} />} />;
+    if (!r) return <div className="min-w-0 space-y-4">{head}{error ? <ErrorBox error={error} onRetry={reload} /> : <SkeletonKpis count={4} className="xl:grid-cols-4" />}</div>;
+    const t = r.total;
+    const whyRet = (who: string, x: { returnRate: number | null; returnedQty: number; qty: number }): WhySpec => ({
+      title: `Hoàn (số lượng) · ${who}`, value: pct(x.returnRate), tone: overRet(x.returnRate) ? 'bad' : undefined, scope, mark: `Đỏ từ ${BOSS_RETURN_RED}%`,
+      rows: [{ label: 'Số lượng hoàn', value: vi.format(x.returnedQty) }, { label: 'Số lượng bán', value: vi.format(x.qty) }, { label: '= Tỷ lệ hoàn', value: pct(x.returnRate), strong: true, tone: overRet(x.returnRate) ? 'bad' : undefined }],
+      definition: r.definitions.returned,
+    });
+    const need: CanXemItem[] = [];
+    if (overRet(t.returnRate)) need.push({ key: 'all', team: true, text: `Cả trang: hoàn ${pct(t.returnRate)}`, onClick: () => setWhy(whyRet('Cả trang', t)) });
+    for (const x of r.rows) if (overRet(x.returnRate) && x.qty >= COACH_MIN_BASE) need.push({ key: x.name, text: `${x.name}: hoàn ${pct(x.returnRate)}`, gap: (x.returnRate ?? 0) - BOSS_RETURN_RED, onClick: () => setWhy(whyRet(x.name, x)) });
+    const k = (s: string) => `ui-moi:products:${s}`;
+    return (
+      <div className="min-w-0 space-y-4">
+        {head}
+        <CanXemStrip items={need} note={`Hoàn theo số lượng từ ${BOSS_RETURN_RED}% (sản phẩm từ ${COACH_MIN_BASE} sản phẩm bán)`} />
+        <div className={tileGrid(4)}>
+          <KpiCard icon={ICON.revenue} tone="teal" label="Tiền hàng trong kỳ" className={KPI_TIGHT} value={shortMoney(t.revenue)} delta={delta(t.revenue, t.prevRevenue)} note={`kỳ trước ${shortMoney(t.prevRevenue)}`}
+            onClick={() => setWhy({ title: 'Tiền hàng', value: shortMoney(t.revenue), scope, previous: shortMoney(t.prevRevenue), rows: r.groups.map((g) => ({ label: g.label, value: `${shortMoney(g.revenue)} · kỳ trước ${shortMoney(g.prevRevenue)}` })), definition: r.definitions.revenue })} />
+          <KpiCard icon={ICON.products} tone="blue" label="Số lượng bán" className={KPI_TIGHT} value={vi.format(t.qty)} note={`${vi.format(t.products)} sản phẩm có bán`}
+            onClick={() => setWhy({ title: 'Số lượng bán', value: vi.format(t.qty), scope, rows: r.rows.slice(0, 10).map((x) => ({ label: x.name, value: vi.format(x.qty) })), definition: r.definitions.scope })} />
+          <KpiCard icon={ICON.returned} tone="orange" invert label="Tỷ lệ hoàn (số lượng)" className={`${KPI_TIGHT} ${overRet(t.returnRate) ? KPI_RED : ''}`} value={pct(t.returnRate)} note={`${vi.format(t.returnedQty)} sản phẩm hoàn · đỏ từ ${BOSS_RETURN_RED}%`}
+            onClick={() => setWhy(whyRet('Cả trang', t))} />
+          <KpiCard icon={Layers} tone="purple" label="Nhóm dẫn đầu" className={KPI_TIGHT} value={r.groups[0]?.label ?? '—'} note={r.groups[0] ? `${pct(t.revenue ? r.groups[0].revenue / t.revenue * 100 : null, 0)} tiền hàng` : ''}
+            onClick={() => setWhy({ title: 'Theo nhóm', value: r.groups[0]?.label ?? '—', scope, rows: r.groups.map((g) => ({ label: g.label, value: `${shortMoney(g.revenue)} · ${pct(t.revenue ? g.revenue / t.revenue * 100 : null, 0)}` })), definition: r.definitions.group })} />
+        </div>
+        {topCard()}
+        {allCard(r)}
+        <div className="grid min-w-0 gap-3">
+          <FoldBlock icon={ICON.products} title="Sản phẩm đã giao" storageKey={k('delivered')}><DeliveredProductsBlock start={start} end={end} posIds={posIds} /></FoldBlock>
+          <FoldBlock icon={Layers} title="Theo nhóm · xu hướng theo ngày" summary={group ? `đang lọc ${group}` : undefined} storageKey={k('groups')}>{sideCards(r)}</FoldBlock>
+          <FoldBlock icon={TrendingUp} title="Cách tính" storageKey={k('defs')}><Definitions items={r.definitions} /></FoldBlock>
+        </div>
+        <WhySheet spec={why} onClose={() => setWhy(null)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <PageHeader eyebrow={`${periodLabel} · so với ${r ? compareText(r.prevPeriod) : 'kỳ trước'}`} title="Sản phẩm" subtitle="Sản phẩm nào bán chạy, đang lên hay xuống, hoàn nhiều không"
+        actions={headActions()} />
+      <PeriodToolbar preset={preset} start={start} end={end} loading={loading} onReload={reload}
+        onPreset={setPreset}
+        onStart={setStart} onEnd={setEnd} />
+      <PosChips posIds={posIds} onChange={setPosIds} />
+      {error && !r && <ErrorBox error={error} onRetry={reload} />}
+      {!r && !error && <><SkeletonKpis count={4} className="xl:grid-cols-4" /><SkeletonTable rows={6} cols={6} /></>}
+      {r && (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+            <KpiCard icon={ICON.revenue} tone="teal" label="Tiền hàng" value={shortMoney(r.total.revenue)} delta={delta(r.total.revenue, r.total.prevRevenue)} tooltip={{ period: periodLabel, current: shortMoney(r.total.revenue), previous: shortMoney(r.total.prevRevenue), definition: r.definitions.revenue }} />
+            <KpiCard icon={ICON.products} tone="blue" label="Số lượng bán" value={vi.format(r.total.qty)} note={`${vi.format(r.total.products)} sản phẩm có bán`} tooltip={{ period: periodLabel, current: vi.format(r.total.qty), definition: r.definitions.scope }} />
+            <KpiCard icon={ICON.returned} tone="orange" invert label="Tỷ lệ hoàn (SL)" value={pct(r.total.returnRate)} note={`${vi.format(r.total.returnedQty)} sản phẩm hoàn`} tooltip={{ period: periodLabel, current: pct(r.total.returnRate), definition: r.definitions.returned }} />
+            <KpiCard icon={Layers} tone="purple" label="Nhóm dẫn đầu" value={r.groups[0]?.label ?? '—'} note={r.groups[0] ? `${pct(r.total.revenue ? r.groups[0].revenue / r.total.revenue * 100 : null, 0)} tiền hàng` : ''} tooltip={{ period: periodLabel, definition: r.definitions.group }} />
+          </div>
+          <DeliveredProductsBlock start={start} end={end} posIds={posIds} />
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+            {topCard()}
+            {sideCards(r)}
+          </div>
+          {allCard(r)}
           <Definitions items={r.definitions} />
         </>
       )}
