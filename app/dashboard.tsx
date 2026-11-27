@@ -1780,7 +1780,7 @@ export default function Dashboard({ user, initialView, demo = false, uiMoi = fal
           {!gated && view === 'customer360' && <Customer360View uiMoi={uiMoi} />}
           {!gated && view === 'products' && <ProductsView uiMoi={uiMoi} />}
           {!gated && view === 'marketing' && <MarketingView uiMoi={uiMoi} onManageTeams={isOwner(user) ? () => openSettings('team') : undefined} onOpenRoas={canView(user, 'mkt-roas') ? () => goTo('mkt-roas') : undefined} />}
-          {!gated && view === 'security' && <SecurityPanel user={user} />}
+          {!gated && view === 'security' && <SecurityPanel user={user} uiMoi={uiMoi} />}
           {!gated && view === 'ai-ask' && isOwner(user) && <AiAskView onNavigate={(v) => goTo(v as View)} />}
           {!gated && workBoss && view === 'giao-viec' && <GiaoViecView uiMoi={uiMoi} />}
           {!gated && workBoss && view === 'giao-viec-chat' && <GiaoViecChatView uiMoi={uiMoi} />}
