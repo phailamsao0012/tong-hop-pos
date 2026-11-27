@@ -172,7 +172,7 @@ export function MktRoasView({ owner = false, uiMoi = false }: { owner?: boolean;
               )}
             </ChartCard>
   );
-  const dailyCard = (fold?: { storageKey: string; summary?: string }) => (
+  const dailyCard = (fold?: { storageKey: string; summary?: string }) => !r ? null : (
             <ChartCard collapse={fold} icon={Wallet} title="Chi phí theo ngày" subtitle="Tổng chi phí đã nhập mỗi ngày trong kỳ">
               {r.daily.length ? (
                 <div className="flex h-40 items-end gap-[3px]" role="img" aria-label="Chi phí theo ngày">
