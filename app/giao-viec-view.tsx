@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState, type SyntheticEvent } from 'react';
-import { Th, toast, PageHeader, Toolbar, SegmentedControl, KpiCard, ChartCard, TableWrap, StatusChip, Avatar, ProgressBar, EmptyState, Definitions, vi, ErrorBox, SkeletonKpis, SkeletonTable } from './ui-kit';
+import { Th, toast, PageHeader, Toolbar, SegmentedControl, KpiCard, ChartCard, TableWrap, StatusChip, Avatar, ProgressBar, EmptyState, Definitions, FoldBlock, vi, ErrorBox, SkeletonKpis, SkeletonTable } from './ui-kit';
 import { ListTodo, AlertTriangle, CircleSlash, CheckCircle2, UsersRound, ClipboardList, UserRound } from 'lucide-react';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Switch } from '@/components/ui/switch';
@@ -10,6 +10,7 @@ import { TaskChip, workDay, workDate, ConfirmWork } from './giao-viec-ui';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { KPI_TIGHT, PageHeadMoi, WhySheet, tileGrid, type WhySpec } from './trang-moi';
 import { STATUS_LABELS, weekOfMonth, taskState, type Contact, type Task, type Status } from '@/lib/zalo/zalo-work';
 
 // fetch được cài qua app/api-fetch.ts tại dashboard.
@@ -27,7 +28,9 @@ const monthEnd = (day: string) => new Date(Date.UTC(Number(day.slice(0, 4)), Num
 export const dayAfter = (day: string, n: number) => new Date(Date.parse(day) + n * 86400000).toISOString().slice(0, 10);
 export function WorkMessage({ text }: { text: string }) { return text ? <output className="block text-sm text-ink-3 break-words">{text}</output> : null; }
 export type WorkData = { tasks: Task[]; contacts: Contact[]; summaries: { leaderId: string; staff: { id: string; name: string; open: number; overdue: number; done: number }[] }[] };
-export function GiaoViecView() {
+export function GiaoViecView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới, tắt thì y như cũ. */ uiMoi?: boolean } = {}) {
+  // Giao diện mới: khung "Vì sao ra số này" đang mở (null = đóng).
+  const [why, setWhy] = useState<WhySpec | null>(null);
   const today = vnToday(), nowTime = vnNowTime(), current = weekOfMonth(today);
   const [month, setMonth] = useState(current.month), [week, setWeek] = useState<number | undefined>(current.week);
   const [data, setData] = useState<WorkData>({ tasks: [], contacts: [], summaries: [] });
@@ -71,20 +74,83 @@ export function GiaoViecView() {
   const rows = base.filter(matches).filter(t => scope === 'all' || (contact(t.assignee_id)?.kind === 'leader' ? 'boss' : 'staff') === scope).sort((a, b) => Number(!open(a)) - Number(!open(b)) || Number(taskState(b, today) === 'overdue') - Number(taskState(a, today) === 'overdue') || (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999'));
   const weeks = Array.from({ length: weekOfMonth(`${month}-${new Date(Number(month.slice(0, 4)), Number(month.slice(5)), 0).getDate()}`).week }, (_, i) => { const w = i + 1; const days = Array.from({ length: 31 }, (_, n) => dayAfter(`${month}-01`, n)).filter(d => d.startsWith(month) && weekOfMonth(d).week === w); return { value: String(w), label: `Tuần ${w}`, title: `${workDay(days[0])}–${workDay(days[days.length - 1])}` }; });
   const monthLabel = `Tháng ${Number(month.slice(5))}/${month.slice(0, 4)}`;
-  return <section className="min-w-0 space-y-4">
-    <PageHeader title="Giao việc" eyebrow={week ? `Tuần ${week} · ${weeks.find(w => w.value === String(week))?.title}` : monthLabel} actions={<button className="btn primary" onClick={() => { setSelected(null); setTitle(''); setDetail(''); setStart(today); setDue(today); setUseTime(false); setStartTime('08:00'); setDueTime('17:00'); setUrgent(false); setAssignee(leaders[0]?.id ?? ''); setCreate(true); }}>+ Giao việc</button>} />
-    <WorkMessage text={message} />{loadError && <ErrorBox error={loadError} />}
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  // fold: chỉ bố cục mới truyền (thu gọn thẻ); bố cục cũ không truyền nên thẻ y như trước.
+  const createBtn = () => (
+    <button className="btn primary" onClick={() => { setSelected(null); setTitle(''); setDetail(''); setStart(today); setDue(today); setUseTime(false); setStartTime('08:00'); setDueTime('17:00'); setUrgent(false); setAssignee(leaders[0]?.id ?? ''); setCreate(true); }}>+ Giao việc</button>
+  );
+  const toolbar = () => (
     <Toolbar><NativeSelect aria-label="Tháng" value={month} onChange={e => { setMonth(e.target.value); setWeek(undefined); }}>{Array.from({ length: 9 }, (_, i) => { const d = new Date(`${current.month}-01T00:00:00Z`); d.setUTCMonth(d.getUTCMonth() + i - 6); const m = d.toISOString().slice(0, 7); return <option key={m} value={m}>Tháng {d.getUTCMonth() + 1}/{d.getUTCFullYear()}</option>; })}</NativeSelect><div className="min-w-0 max-w-full overflow-x-auto"><SegmentedControl size="sm" className="!max-w-none" ariaLabel="Tuần trong tháng" value={week ? String(week) : 'all'} onChange={v => setWeek(v === 'all' ? undefined : Number(v))} options={[...weeks, { value: 'all', label: 'Cả tháng' }]} /></div></Toolbar>
-    {loading ? <><SkeletonKpis /><SkeletonTable /></> : <>
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{([{ key: 'open', label: 'Đang mở', icon: ListTodo, tone: 'blue', count: base.filter(open).length }, { key: 'overdue', label: 'Quá hạn', icon: AlertTriangle, tone: 'red', count: base.filter(t => taskState(t, today, nowTime) === 'overdue').length }, { key: 'chua_xong', label: 'Chưa hoàn thành', icon: CircleSlash, tone: 'orange', count: base.filter(t => t.status === 'chua_xong').length }, { key: 'xong', label: 'Đã hoàn thành', icon: CheckCircle2, tone: 'green', count: base.filter(t => t.status === 'xong').length }] as const).map(k => <KpiCard key={k.key} icon={k.icon} tone={k.tone} label={k.label} value={vi.format(k.count)} active={filter === k.key} onClick={() => setFilter(filter === k.key ? 'all' : k.key)} note={`Việc có hạn trong ${week ? `tuần ${week}` : `tháng ${Number(month.slice(5))}`}`} />)}</div>
-    <ChartCard title="Theo leader" icon={UsersRound} info="Số việc trong kỳ theo hạn. Sếp giao và Giao NV chỉ tính việc đang mở, tách theo người nhận; tiến độ là đã hoàn thành chia tổng việc trong kỳ."><TableWrap><table className="tbl"><thead><tr>{['Leader', 'Sếp giao', 'Giao NV', 'Quá hạn', 'Chưa xong', 'Đã xong', 'Tiến độ'].map(h => <Th key={h}>{h}</Th>)}</tr></thead><tbody>{leaders.map(l => <tr key={l.id} className={`cursor-pointer ${leader === l.id ? 'bg-primary/5' : ''}`} onClick={() => { setLeader(leader === l.id ? '' : l.id); setPerson(''); }}><td><button className="flex items-center gap-2 text-left" aria-pressed={leader === l.id} onClick={e => { e.stopPropagation(); setLeader(leader === l.id ? '' : l.id); setPerson(''); }}><Avatar name={l.name} /><span>{l.name}<small className="block text-ink-3">Team {l.team_name.replace(/^.*?\bTeam\s*/i, '')} · {l.dept === 'sale' ? 'Sale' : l.dept.toUpperCase()}</small></span></button></td>{cells(leaderTasks(l.id))}</tr>)}<tr className="font-semibold"><td>Tổng</td>{cells(data.tasks)}</tr></tbody></table></TableWrap></ChartCard>
+  );
+  const leaderCard = (fold?: { storageKey: string; summary?: string }) => (
+    <ChartCard collapse={fold} title="Theo leader" icon={UsersRound} info="Số việc trong kỳ theo hạn. Sếp giao và Giao NV chỉ tính việc đang mở, tách theo người nhận; tiến độ là đã hoàn thành chia tổng việc trong kỳ."><TableWrap><table className="tbl"><thead><tr>{['Leader', 'Sếp giao', 'Giao NV', 'Quá hạn', 'Chưa xong', 'Đã xong', 'Tiến độ'].map(h => <Th key={h}>{h}</Th>)}</tr></thead><tbody>{leaders.map(l => <tr key={l.id} className={`cursor-pointer ${leader === l.id ? 'bg-primary/5' : ''}`} onClick={() => { setLeader(leader === l.id ? '' : l.id); setPerson(''); }}><td><button className="flex items-center gap-2 text-left" aria-pressed={leader === l.id} onClick={e => { e.stopPropagation(); setLeader(leader === l.id ? '' : l.id); setPerson(''); }}><Avatar name={l.name} /><span>{l.name}<small className="block text-ink-3">Team {l.team_name.replace(/^.*?\bTeam\s*/i, '')} · {l.dept === 'sale' ? 'Sale' : l.dept.toUpperCase()}</small></span></button></td>{cells(leaderTasks(l.id))}</tr>)}<tr className="font-semibold"><td>Tổng</td>{cells(data.tasks)}</tr></tbody></table></TableWrap></ChartCard>
+  );
+  const listCard = () => (
     <ChartCard title="Danh sách việc" icon={ClipboardList} subtitle={`${leader ? name(leader) : 'Tất cả leader'}${filter !== 'all' ? ` · ${{ open: 'Đang mở', overdue: 'Quá hạn', chua_xong: 'Chưa hoàn thành', xong: 'Đã hoàn thành' }[filter]}` : ''}`} action={<div className="flex max-w-full flex-wrap gap-2">{person && <button className="btn sm" onClick={() => setPerson('')}>Nhân viên: {name(person)} ✕</button>}<div className="min-w-0 max-w-full overflow-x-auto"><SegmentedControl size="sm" className="!max-w-none" value={scope} onChange={setScope} options={[{ value: 'all', label: 'Tất cả' }, { value: 'boss', label: 'Sếp giao leader' }, { value: 'staff', label: 'Leader giao nhân viên' }]} /></div></div>}>
       {!rows.length ? <EmptyState text="Không có việc trong kỳ này" /> : <TableWrap><table className="tbl"><thead><tr>{['Mã', 'Việc', 'Người nhận', 'Người giao', 'Thời gian', 'Trạng thái'].map(h => <Th key={h}>{h}</Th>)}</tr></thead><tbody>{rows.map(t => <tr key={t.id} onClick={() => void show(t)} className="cursor-pointer"><td><button className="num font-semibold tap" onClick={e => { e.stopPropagation(); void show(t); }}>V{t.no}</button></td><td><strong>{t.title}</strong> {!!t.urgent && <StatusChip tone="red">Gấp</StatusChip>}<small className={`block ${t.status === 'chua_xong' ? 'text-orange-600' : 'text-ink-3'}`}>{t.status === 'chua_xong' ? `Lý do: ${t.reason}` : t.latest_note}</small></td><td><div className="flex items-center gap-2"><Avatar size="sm" name={name(t.assignee_id)} /><span>{name(t.assignee_id)}<small className="block text-ink-3">{contact(t.assignee_id)?.team_name}</small></span></div></td><td>{name(t.assigner_id)}</td><td className={taskState(t, today, nowTime) === 'overdue' ? 'text-red-600' : 'text-ink-3'}>{t.start_date && t.start_date !== t.due_date ? <>{workDay(t.start_date)}{t.start_time ? ` ${t.start_time}` : ''} → </> : null}{t.due_date ? <>{workDay(t.due_date)}{t.due_time ? ` ${t.due_time}` : ''}{t.due_date === today ? ' · Hôm nay' : t.due_date === dayAfter(today, 1) ? ' · Mai' : ''}</> : 'Không hạn'}{taskState(t, today, nowTime) === 'overdue' && <StatusChip tone="red">Quá hạn</StatusChip>}</td><td><TaskChip status={t.status} /></td></tr>)}</tbody></table></TableWrap>}
     </ChartCard>
-    {leader && <ChartCard title={`Nhân viên của ${name(leader)}`} subtitle="Đang mở, quá hạn: mọi hạn · Xong: tuần hiện tại" icon={UserRound}><TableWrap><table className="tbl"><thead><tr>{['Nhân viên', 'Đang mở', 'Quá hạn', 'Xong tuần này'].map(h => <Th key={h}>{h}</Th>)}</tr></thead><tbody>{data.summaries.find(s => s.leaderId === leader)?.staff.map(s => <tr key={s.id} className={person === s.id ? 'bg-primary/5' : ''} onClick={() => setPerson(person === s.id ? '' : s.id)}><td><button onClick={e => { e.stopPropagation(); setPerson(person === s.id ? '' : s.id); }}>{s.name}</button></td>{[s.open, s.overdue, s.done].map((n, i) => <td key={i} className="text-right tabular-nums">{vi.format(n)}</td>)}</tr>)}</tbody></table></TableWrap></ChartCard>}
-    </>}
+  );
+  const staffCard = (fold?: { storageKey: string; summary?: string }) => (
+    <ChartCard collapse={fold} title={`Nhân viên của ${name(leader)}`} subtitle="Đang mở, quá hạn: mọi hạn · Xong: tuần hiện tại" icon={UserRound}><TableWrap><table className="tbl"><thead><tr>{['Nhân viên', 'Đang mở', 'Quá hạn', 'Xong tuần này'].map(h => <Th key={h}>{h}</Th>)}</tr></thead><tbody>{data.summaries.find(s => s.leaderId === leader)?.staff.map(s => <tr key={s.id} className={person === s.id ? 'bg-primary/5' : ''} onClick={() => setPerson(person === s.id ? '' : s.id)}><td><button onClick={e => { e.stopPropagation(); setPerson(person === s.id ? '' : s.id); }}>{s.name}</button></td>{[s.open, s.overdue, s.done].map((n, i) => <td key={i} className="text-right tabular-nums">{vi.format(n)}</td>)}</tr>)}</tbody></table></TableWrap></ChartCard>
+  );
+  const defsEl = () => (
     <Definitions items={['Quá hạn: đã qua Đến ngày (và giờ, nếu có chọn giờ) mà việc chưa hoàn thành, chưa huỷ.', 'Tuần tính từ thứ Hai; kỳ lọc theo hạn của việc.', 'Tối đa 500 việc; việc đóng chỉ giữ 45 ngày gần nhất.']} />
+  );
+  const sheetEl = () => (
     <Sheet open={create || !!selected} onOpenChange={v => { if (!v) { setCreate(false); setSelected(null); } }}><SheetContent className="overflow-y-auto p-4 sm:max-w-lg"><SheetHeader><SheetTitle>{selected ? `V${selected.no} · ${selected.title}` : 'Giao việc cho leader'}</SheetTitle></SheetHeader>{selected ? <div className="space-y-4"><div className="flex flex-wrap gap-2"><TaskChip status={selected.status} />{taskState(selected, today, nowTime) === 'overdue' && <StatusChip tone="red">Quá hạn</StatusChip>}{!!selected.urgent && <StatusChip tone="red">Gấp</StatusChip>}</div><p className="text-sm text-ink-3">Giao bởi {name(selected.assigner_id)} · lúc {workDate(selected.created_at)}</p><h3 data-ui="sub-title" className="text-xs font-semibold uppercase tracking-wide text-ink-3">Cập nhật trạng thái</h3><NativeSelect aria-label="Trạng thái" value={status} onChange={e => setStatus(e.target.value as Status)}>{Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</NativeSelect>{status === 'chua_xong' && <label htmlFor="task-reason" className="block">Lý do chưa hoàn thành<Input id="task-reason" required value={reason} onChange={e => setReason(e.target.value)} /></label>}<button className="btn primary sm" disabled={busy || status === 'chua_xong' && !reason.trim()} onClick={() => { if (status === 'huy') setCancel(true); else void patch({ status, reason }); }}>Lưu trạng thái</button><Separator /><h3 data-ui="sub-title" className="text-xs font-semibold uppercase tracking-wide text-ink-3">Thông tin việc</h3>{fields}<button className="btn primary sm" disabled={busy} onClick={() => void patch({ title, detail, ...timeBody(), urgent, assigneeId: assignee })}>Lưu thông tin</button><Separator /><h3 data-ui="sub-title" className="text-xs font-semibold uppercase tracking-wide text-ink-3">Ghi chú</h3><Textarea aria-label="Ghi chú" value={note} onChange={e => setNote(e.target.value)} /><button className="btn sm" disabled={busy || !note.trim()} onClick={() => void patch({ note })}>Thêm ghi chú</button><Separator /><h3 data-ui="sub-title" className="text-xs font-semibold uppercase tracking-wide text-ink-3">Lịch sử</h3>{events.map(e => <div key={e.id} className="border-l-2 pl-3 break-words"><p className="text-xs text-ink-3">{workDate(e.created_at)} · {e.name}</p><p>{e.body}</p></div>)}<Separator /><button className="btn sm text-red-600" disabled={busy} onClick={() => setCancel(true)}>Huỷ việc</button></div> : <form className="space-y-4" onSubmit={submit}>{fields}<button className="btn primary" type="submit" disabled={busy || !assignee}>Giao việc và gửi Zalo</button></form>}</SheetContent></Sheet>
+  );
+  const confirmEl = () => (
     <ConfirmWork title="Huỷ việc?" open={cancel} onClose={() => setCancel(false)} busy={busy} onConfirm={() => { setCancel(false); void patch({ status: 'huy' }); }} />
+  );
+  // [hết khối chung]
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trên xuống: đầu trang (PageHeadMoi: chọn tháng / tuần; + Giao việc) → một hàng 4 ô số (bấm mở "Vì sao ra số này", trong khung có nút lọc
+  // danh sách như bấm ô cũ) → bảng chính Danh sách việc (bấm việc mở khung giữa màn như cũ) → khối phụ thu gọn: Theo leader,
+  // Nhân viên của leader đang chọn, Cách tính. Trang không có tỷ lệ chốt / hoàn / hủy nên không có dải "Cần xem".
+  if (uiMoi) {
+    const periodText = week ? `Tuần ${week} · ${weeks.find(w => w.value === String(week))?.title}` : monthLabel;
+    const scope = `${periodText} · việc có hạn trong kỳ · ${leader ? name(leader) : 'tất cả leader'}${person ? ` · ${name(person)}` : ''}`;
+    const k = (s: string) => `ui-moi:giao-viec:${s}`;
+    const tiles = [
+      { key: 'open', label: 'Đang mở', icon: ListTodo, tone: 'blue', count: base.filter(open).length, def: 'Việc chưa hoàn thành, chưa huỷ.' },
+      { key: 'overdue', label: 'Quá hạn', icon: AlertTriangle, tone: 'red', count: base.filter(t => taskState(t, today, nowTime) === 'overdue').length, def: 'Đã qua Đến ngày (và giờ, nếu có chọn giờ) mà việc chưa hoàn thành, chưa huỷ.' },
+      { key: 'chua_xong', label: 'Chưa hoàn thành', icon: CircleSlash, tone: 'orange', count: base.filter(t => t.status === 'chua_xong').length, def: 'Việc người nhận báo chưa hoàn thành (kèm lý do).' },
+      { key: 'xong', label: 'Đã hoàn thành', icon: CheckCircle2, tone: 'green', count: base.filter(t => t.status === 'xong').length, def: 'Việc người nhận báo đã xong.' },
+    ] as const;
+    return <section className="min-w-0 space-y-4">
+      <PageHeadMoi title="Giao việc" scope={scope} tools={toolbar()} right={createBtn()} />
+      <WorkMessage text={message} />{loadError && <ErrorBox error={loadError} />}
+      {loading ? <><SkeletonKpis /><SkeletonTable /></> : <>
+        <div className={tileGrid(4)}>{tiles.map(t => <KpiCard key={t.key} icon={t.icon} tone={t.tone} label={t.label} className={KPI_TIGHT} value={vi.format(t.count)} active={filter === t.key}
+          note={`Việc có hạn trong ${week ? `tuần ${week}` : `tháng ${Number(month.slice(5))}`}`}
+          onClick={() => setWhy({ title: t.label, value: `${vi.format(t.count)} việc`, scope, definition: `${t.def} Kỳ lọc theo hạn của việc; tuần tính từ thứ Hai.`,
+            more: <button type="button" className="btn sm self-start" onClick={() => { setFilter(filter === t.key ? 'all' : t.key); setWhy(null); }}>{filter === t.key ? 'Bỏ lọc danh sách' : 'Lọc danh sách việc theo ô này'}</button> })} />)}</div>
+        {listCard()}
+        <div className="grid min-w-0 gap-3">
+          {leaderCard({ storageKey: k('leaders'), summary: `${vi.format(leaders.length)} leader` })}
+          {leader && staffCard({ storageKey: k('staff') })}
+          <FoldBlock icon={ClipboardList} title="Cách tính" storageKey={k('defs')}>{defsEl()}</FoldBlock>
+        </div>
+      </>}
+      {sheetEl()}
+      {confirmEl()}
+      <WhySheet spec={why} onClose={() => setWhy(null)} />
+    </section>;
+  }
+
+  return <section className="min-w-0 space-y-4">
+    <PageHeader title="Giao việc" eyebrow={week ? `Tuần ${week} · ${weeks.find(w => w.value === String(week))?.title}` : monthLabel} actions={createBtn()} />
+    <WorkMessage text={message} />{loadError && <ErrorBox error={loadError} />}
+    {toolbar()}
+    {loading ? <><SkeletonKpis /><SkeletonTable /></> : <>
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{([{ key: 'open', label: 'Đang mở', icon: ListTodo, tone: 'blue', count: base.filter(open).length }, { key: 'overdue', label: 'Quá hạn', icon: AlertTriangle, tone: 'red', count: base.filter(t => taskState(t, today, nowTime) === 'overdue').length }, { key: 'chua_xong', label: 'Chưa hoàn thành', icon: CircleSlash, tone: 'orange', count: base.filter(t => t.status === 'chua_xong').length }, { key: 'xong', label: 'Đã hoàn thành', icon: CheckCircle2, tone: 'green', count: base.filter(t => t.status === 'xong').length }] as const).map(k => <KpiCard key={k.key} icon={k.icon} tone={k.tone} label={k.label} value={vi.format(k.count)} active={filter === k.key} onClick={() => setFilter(filter === k.key ? 'all' : k.key)} note={`Việc có hạn trong ${week ? `tuần ${week}` : `tháng ${Number(month.slice(5))}`}`} />)}</div>
+    {leaderCard()}
+    {listCard()}
+    {leader && staffCard()}
+    </>}
+    {defsEl()}
+    {sheetEl()}
+    {confirmEl()}
   </section>;
 }

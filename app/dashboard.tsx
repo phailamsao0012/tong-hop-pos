@@ -1782,7 +1782,7 @@ export default function Dashboard({ user, initialView, demo = false, uiMoi = fal
           {!gated && view === 'marketing' && <MarketingView uiMoi={uiMoi} onManageTeams={isOwner(user) ? () => openSettings('team') : undefined} onOpenRoas={canView(user, 'mkt-roas') ? () => goTo('mkt-roas') : undefined} />}
           {!gated && view === 'security' && <SecurityPanel user={user} />}
           {!gated && view === 'ai-ask' && isOwner(user) && <AiAskView onNavigate={(v) => goTo(v as View)} />}
-          {!gated && workBoss && view === 'giao-viec' && <GiaoViecView />}
+          {!gated && workBoss && view === 'giao-viec' && <GiaoViecView uiMoi={uiMoi} />}
           {!gated && workBoss && view === 'giao-viec-chat' && <GiaoViecChatView />}
           {!gated && workBoss && view === 'giao-viec-hop' && <GiaoViecHopView />}
           {!gated && workBoss && view === 'giao-viec-zalo' && <GiaoViecZaloView />}
