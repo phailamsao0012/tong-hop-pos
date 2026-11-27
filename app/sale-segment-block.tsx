@@ -1,6 +1,6 @@
 'use client';
 
-// Thẻ Kháng sinh (Gentadox + Detox), SK GK và Khác ở Tổng quan Sale, kèm từng người bán được bao nhiêu (anh Vũ 29/10/2026
+// Thẻ nhóm đơn (27/11/2026: Gentadox, Combo Oxytetra, Sát trùng…, Doxytylo, Khác; trước đây Kháng sinh, SK GK, Khác) ở Tổng quan Sale, kèm từng người bán được bao nhiêu (anh Vũ 29/10/2026
 // "ở sale tôi cũng muốn có các thẻ gentadox và thẻ sk gk, kháng sinh ấy, để xem mọi người bán được như thế nào";
 // "gentadox + detox là kháng sinh, còn lại là sk gk"; "nếu có loại khác thì báo khác, ghi rõ loại nào";
 // 31/10: Siêu Vô Gạo tính thêm Oxy + Bổ huyết, Bio Nano Shield là kháng sinh).
@@ -8,16 +8,17 @@
 // Mỗi đơn chỉ thuộc một nhóm (lib/order-segments.ts), nên cột Tổng là doanh số thật.
 import { ProfileLink } from './staff-profile-link';
 import { Pill } from 'lucide-react';
-import { closeRateOf, rateTextClass } from '@/lib/reports/metrics';
 import { PRODUCT_SEGMENTS, SEGMENT_KEYS, segmentsFor } from '@/lib/pancake/order-segments';
 import type { OverviewReport } from './overview-view';
-import { useMetricSettings } from './metric-settings';
 import { ChartCard, DeltaPill, EmptyState, SkeletonTable, SortTh, TableWrap, delta, pct, shortMoney, useSort, vi } from './ui-kit';
 import { useApi } from './use-api';
+import { useState } from 'react';
+import { SegmentDetail } from './segment-detail';
 
 type Seg = typeof SEGMENT_KEYS[number];
-const LABEL: Record<Seg, string> = { gentadox: PRODUCT_SEGMENTS.gentadox, skgk: PRODUCT_SEGMENTS.skgk, khac: PRODUCT_SEGMENTS.khac, oxy: PRODUCT_SEGMENTS.oxy };
-const COLOR: Record<Seg, string> = { gentadox: 'var(--primary)', skgk: 'var(--t-blue)', khac: 'var(--t-orange)', oxy: 'var(--t-purple, #6d4bc3)' };
+// Bộ thẻ mới 27/11/2026 (lib/pancake/order-segments.ts): thẻ theo thuốc chính từng POS, bỏ SK GK.
+const LABEL = PRODUCT_SEGMENTS as Record<Seg, string>;
+const COLOR: Record<Seg, string> = { gentadox: 'var(--primary)', oxy: 'var(--t-purple, #6d4bc3)', 'sat-trung': 'var(--t-blue)', doxytylo: 'var(--t-teal, #0f8b8d)', khac: 'var(--t-orange)' };
 type SortKey = 'name' | Seg | `${Seg}N` | 'total';
 const url = (q: string, seg: Seg, segs: Seg[]) => segs.includes(seg) ? `/api/reports/overview?${q}&groupBy=day&compare=previous&productSegment=${seg}` : null;
 
@@ -30,26 +31,33 @@ function otherProducts(r: OverviewReport | null) {
 
 /** q: cùng bộ lọc kỳ / POS / team với các ô khác của trang (không kèm groupBy, compare). */
 export function SaleSegmentBlock({ q, periodLabel }: { q: string; periodLabel: string }) {
-  const ms = useMetricSettings();
   // POS Oxytetra chỉ bán Combo Oxytetra + Bổ đậm đặc (anh Vũ 04/11/2026): chỉ hiện nhóm có trong các POS đang chọn.
-  const segs = segmentsFor((new URLSearchParams(q).get('posIds') ?? '').split(',').filter(Boolean));
+  const posList = (new URLSearchParams(q).get('posIds') ?? '').split(',').filter(Boolean);
+  const segs = segmentsFor(posList);
+  // Mỗi thẻ một lượt gọi overview (thẻ không có ở POS đang chọn thì không gọi). SEGMENT_KEYS cố định nên số hook không đổi.
   const reports: Record<Seg, OverviewReport | null> = {
     gentadox: useApi<OverviewReport>(url(q, 'gentadox', segs)).data,
-    skgk: useApi<OverviewReport>(url(q, 'skgk', segs)).data,
-    khac: useApi<OverviewReport>(url(q, 'khac', segs)).data,
     oxy: useApi<OverviewReport>(url(q, 'oxy', segs)).data,
+    'sat-trung': useApi<OverviewReport>(url(q, 'sat-trung', segs)).data,
+    doxytylo: useApi<OverviewReport>(url(q, 'doxytylo', segs)).data,
+    khac: useApi<OverviewReport>(url(q, 'khac', segs)).data,
   };
   const sort = useSort<SortKey>('total');
+  // Bấm một thẻ: mở khung chi tiết thẻ đó (27/11/2026).
+  const [open, setOpen] = useState<Seg | null>(null);
+  const allNet = segs.reduce((n, k) => n + (reports[k]?.current.total.closedNet ?? 0), 0);
+  // Phần đơn chốt của kỳ (Đầu não 27/11/2026): thay "tỷ lệ chốt" theo thẻ (đơn của thẻ ÷ toàn bộ số chia, tô đỏ dễ hiểu nhầm là chốt kém).
+  const allOrders = segs.reduce((n, k) => n + (reports[k]?.current.total.closedOrders ?? 0), 0);
   const people = new Map<string, { id: string; name: string } & Record<Seg | `${Seg}N`, number>>();
   for (const seg of segs) for (const r of reports[seg]?.current.byEmployee ?? []) {
     if (!r.sellerId) continue;
-    const p = people.get(r.sellerId) ?? { id: r.sellerId, name: r.name, gentadox: 0, skgk: 0, khac: 0, oxy: 0, gentadoxN: 0, skgkN: 0, khacN: 0, oxyN: 0 };
+    const p = people.get(r.sellerId) ?? { id: r.sellerId, name: r.name, ...Object.fromEntries(SEGMENT_KEYS.flatMap((k) => [[k, 0], [`${k}N`, 0]])) } as { id: string; name: string } & Record<Seg | `${Seg}N`, number>;
     p[seg] = r.closedNet; p[`${seg}N`] = r.closedOrders;
     people.set(r.sellerId, p);
   }
-  const total = (r: Record<Seg, number>) => r.gentadox + r.skgk + r.khac + r.oxy;
-  const rows = sort.apply([...people.values()].filter((p) => p.gentadoxN || p.skgkN || p.khacN || p.oxyN), (r, k) => k === 'total' ? total(r) : r[k]);
-  const max = Math.max(1, ...rows.map((r) => Math.max(r.gentadox, r.skgk, r.khac, r.oxy)));
+  const total = (r: Record<Seg, number>) => segs.reduce((n, k) => n + r[k], 0);
+  const rows = sort.apply([...people.values()].filter((p) => segs.some((k) => p[`${k}N`])), (r, k) => k === 'total' ? total(r) : r[k]);
+  const max = Math.max(1, ...rows.map((r) => Math.max(...segs.map((k) => r[k]))));
   const loading = segs.some((s) => !reports[s]);
   const others = otherProducts(reports.khac);
   return (
@@ -59,17 +67,18 @@ export function SaleSegmentBlock({ q, periodLabel }: { q: string; periodLabel: s
           const r = reports[seg], cur = r?.current.total, prev = r?.compare?.total;
           return (
             <div key={seg} className="rounded-xl border border-line p-4" style={{ borderTop: `3px solid ${COLOR[seg]}` }}>
-              <div className="flex items-baseline justify-between gap-2"><strong className="text-ink">{LABEL[seg]}</strong>
+              <div className="flex items-baseline justify-between gap-2"><button type="button" onClick={() => setOpen(seg)} className="text-left font-bold text-ink hover:underline">{LABEL[seg]}</button>
                 {cur && prev && <DeltaPill value={delta(cur.closedNet, prev.closedNet)} label="so kỳ trước" />}</div>
               {!cur ? <div className="mt-3 h-14 animate-pulse rounded-lg bg-surface-2" /> : (
                 <>
                   <div className="mt-2 flex items-baseline gap-2"><strong className="num text-3xl text-ink">{shortMoney(cur.closedNet)}</strong></div>
                   <p className="m-0 mt-1 text-[12.5px] text-ink-2">
-                    <b className="num text-ink">{vi.format(cur.closedOrders)}</b> đơn chốt · tỷ lệ chốt <b className={`num ${rateTextClass(closeRateOf(cur, ms.rateBase)) || 'text-ink'}`}>{pct(closeRateOf(cur, ms.rateBase))}</b> · AOV {shortMoney(cur.averageOrder)}
+                    <b className="num text-ink">{vi.format(cur.closedOrders)}</b> đơn chốt · <b className="num text-ink">{allOrders ? pct(cur.closedOrders / allOrders * 100, 0) : '—'}</b> đơn chốt của kỳ · AOV {shortMoney(cur.averageOrder)}
                   </p>
                   {prev && <p className="m-0 mt-0.5 text-[12px] text-ink-3">Kỳ trước {shortMoney(prev.closedNet)} · {vi.format(prev.closedOrders)} đơn</p>}
                 </>
               )}
+              <button type="button" onClick={() => setOpen(seg)} className="mt-2 text-[12px] font-semibold text-primary hover:underline" aria-label={`Xem chi tiết thẻ ${LABEL[seg]}`}>Xem chi tiết →</button>
             </div>
           );
         })}
@@ -79,6 +88,7 @@ export function SaleSegmentBlock({ q, periodLabel }: { q: string; periodLabel: s
           <span className="font-medium" style={{ color: COLOR.khac }}>Khác gồm:</span>
           {others.slice(0, 10).map(([name, v]) => <span key={name} className="text-ink-2">{name} <b className="num text-ink">{shortMoney(v)}</b></span>)}
           {others.length > 10 && <span className="text-ink-3">và {others.length - 10} sản phẩm nữa</span>}
+          {posList.length !== 1 && <span className="text-[11.5px] text-ink-3">· tính theo POS: sản phẩm không thuộc thẻ riêng của POS bán ra (vd Gentadox bán ở POS ngoài Siêu Vô Gạo) xếp vào Khác</span>}
         </p>
       )}
       <div className="mt-4">
@@ -110,6 +120,7 @@ export function SaleSegmentBlock({ q, periodLabel }: { q: string; periodLabel: s
           </TableWrap>
         )}
       </div>
+      <SegmentDetail seg={open} label={open ? LABEL[open] : ''} color={open ? COLOR[open] : 'var(--primary)'} report={open ? reports[open] : null} allNet={allNet} allOrders={allOrders} q={q} onClose={() => setOpen(null)} />
     </ChartCard>
   );
 }

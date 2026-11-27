@@ -1,4 +1,6 @@
 import { lensOrders } from '@/lib/reports/lens-orders';
+import { segmentCombos } from '@/lib/reports/segment-combos';
+import { longOrNow } from '@/lib/ops/long-response';
 import { resolveMktLens, lensDatabase } from '@/lib/shared/scope-filter';
 import { packedBySeller, packedOrderPage } from '@/lib/reports/sale-packed';
 import { parseOrderFilters } from '@/lib/pancake/order-segments';
@@ -54,6 +56,12 @@ export async function GET(request: Request) {
     const page = Math.min(100000, Math.max(0, Math.floor(Number(params.get('page')) || 0)));
     const rows = await packedOrderPage(db, packedOpts, page);
     return Response.json({ orders: rows.slice(0, 100), more: rows.length > 100 }, { headers: { 'Cache-Control': 'private, no-store' } });
+  }
+  // ?combos=1: combo thực tế (tổ hợp món trong một đơn chốt) của thẻ đang lọc, cho khung chi tiết thẻ (27/11/2026). Cùng phạm vi và quyền
+  // như số overview; kỳ trên 62 ngày tính nền (longOrNow).
+  if (params.get('combos') === '1') {
+    const comboOpts = { posIds: packedOpts.posIds, start, end, team, unit, employeeIds, filters: parseOrderFilters(params, team), limit: 10 };
+    return longOrNow(request, user.userId, start, end, async () => ({ status: 200, body: { combos: await segmentCombos(db, comboOpts) } }));
   }
   const packedStaff = team === 'sale' ? await packedBySeller(db, packedOpts) : undefined;
   const reportOptions = { posIds: requested, start, end, groupBy, employeeIds, compare, team, unit, filters: parseOrderFilters(params, team) };

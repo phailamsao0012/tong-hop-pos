@@ -59,6 +59,8 @@ type State = {
   sentEpoch?: number;
   /** POS đã liệt kê tháng để điền giờ gửi: POS thêm vào giữa chừng phải điền nốt rồi mới bật cờ (QA 10/10/2026). */
   sentPos?: string[];
+  /** Demo: phiên bản thế giới ảo lúc liệt kê việc lần trước; đổi thì liệt kê lại hết (27/11/2026). */
+  demoWorld?: string | null;
   /** Đã đăng ký webhook Telegram cho token này (lưu vài ký tự cuối token để nhận biết token đổi). */
   webhookFor?: string | null;
 };
@@ -347,6 +349,17 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
   private async runOnce(background = false) {
     installDemo();
     const s = await this.state();
+    // Demo đổi thế giới ảo (lib/demo/mode.ts resetWorldIfChanged xoá đơn và số liệu): bỏ mọi việc đã liệt kê và khoá ghi của lần trước
+    // để lượt này kéo lại lịch sử và dựng lại số liệu, kể cả khi file trạng thái hẹn giờ (THP_DO_DB) là bản cũ.
+    if (isDemo()) {
+      const w = await this.env.DB.prepare("SELECT value FROM app_settings WHERE key='demo_world'").first<{ value: string }>().catch(() => null);
+      const world = w?.value ?? null;
+      if (world !== (s.demoWorld ?? null)) {
+        Object.assign(s, { demoWorld: world, lastRunAt: null, backfillPending: null, writesUsed: 0, writeBlockedUntil: null, statsPending: null, customerPending: null,
+          sellerProductPending: null, mktPending: null, segmentPending: null, sentPending: null, sentPos: [] });
+        await this.ctx.storage.put('state', s);
+      }
+    }
     // Demo chỉ đồng bộ nền mỗi 30 phút; nút đồng bộ ngay bỏ qua giới hạn này.
     if (background && isDemo() && s.lastRunAt !== null && Date.now() - s.lastRunAt < 30 * 60000)
       return { backfillPending: !!s.backfillPending, blocked: !!(s.writeBlockedUntil && s.writeBlockedUntil > Date.now()) };

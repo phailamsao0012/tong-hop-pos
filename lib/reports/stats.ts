@@ -379,7 +379,9 @@ export async function ensureSegmentSchema(db: D1Database) {
 }
 
 export const SEGMENT_READY_KEY = 'stats_segment_epoch';
-export const SEGMENT_EPOCH = 1;
+// 2 (27/11/2026): bộ thẻ mới theo thuốc chính, bỏ SK GK (lib/pancake/order-segments.ts). Đổi epoch thì bộ hẹn giờ điền lại cả bảng,
+// trong lúc đó báo cáo đọc đơn gốc (segmentStatsReady = false).
+export const SEGMENT_EPOCH = 2;
 /** Chưa điền đủ lịch sử luôn đọc đường cũ; nhớ cờ 60 giây mỗi isolate. */
 let segmentReady = { value: false, at: 0 };
 export async function segmentStatsReady(db: D1Database) {

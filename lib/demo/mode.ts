@@ -111,7 +111,7 @@ export async function ensureDemoSeed() {
  * Phiên bản dữ liệu ảo: tăng khi đổi cách sinh đơn (lib/demo/world.ts). Khác bản đã nạp thì xóa đơn ảo và số liệu ngày rồi cho đồng bộ
  * kéo lại từ đầu, vì đơn đã nạp không tự đổi lịch sử. Chỉ chạy ở bản demo (D1 riêng, dữ liệu ảo). 2 = thêm team Vận đơn (08/10/2026).
  */
-const WORLD_VERSION = '5'; // R2: thêm đơn hủy sau khi đã vào Đang đóng hàng.
+const WORLD_VERSION = '6'; // 27/11/2026: sản phẩm cho thẻ mới (Doxytylo, Oxytetra, Bencid), bỏ SK + GK khỏi các POS. (5: R2 thêm đơn hủy sau đóng hàng.)
 async function resetWorldIfChanged() {
   const db = env.DB;
   const cur = await db.prepare("SELECT value FROM app_settings WHERE key='demo_world'").first<{ value: string }>();
@@ -123,7 +123,9 @@ async function resetWorldIfChanged() {
     await db.prepare('DELETE FROM raw_pos_orders WHERE pos_id=?').bind(p.id).run();
     await db.batch(['stats_daily', 'stats_daily_product', 'stats_daily_seller_product', 'stats_daily_mkt', 'customer_stats', 'customer_seller_stats'].map((t) => db.prepare(`DELETE FROM ${t} WHERE pos_id=?`).bind(p.id)));
   }
-  await db.prepare('UPDATE pos_shops SET cursor=NULL').run();
+  // Kéo lại từ đầu (Đầu não 27/11/2026: đổi WORLD_VERSION mà file trạng thái hẹn giờ cũ còn mốc nước / con trỏ thì demo không kéo lại đơn):
+  // xoá con trỏ lịch sử, mốc nước đơn vừa sửa, giờ đồng bộ; bộ hẹn giờ thấy demo_world đổi thì liệt kê lại việc dựng số liệu (lib/ops/scheduler.ts).
+  await db.prepare('UPDATE pos_shops SET cursor=NULL, recent_watermark=NULL, recent_cursor=NULL, last_sync_at=NULL, products_synced_at=NULL').run();
   await db.prepare("INSERT INTO app_settings (key,value,updated_at) VALUES ('demo_world',?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at")
     .bind(WORLD_VERSION, new Date().toISOString()).run();
 }
@@ -133,7 +135,7 @@ const yesterdayVn = () => addDay(vnDayOfMs(Date.now()), -1);
 /** Tên cột "Sản phẩm" kiểu sheet CPQC Daily cho từng sản phẩm ảo (viết thường, ngắn như marketer hay ghi). */
 const SHEET_PRODUCT: Record<string, string> = {
   gentadox: 'Gentadox', shield: 'Bio Nano Shield', oxy: 'Oxy bổ huyết', clean: 'Bio Nano Clean', godkill: 'Godkill', skgk: 'SK + GK',
-  megaroot: 'Megaroot', apex: 'Apex', vogao: 'Siêu vỏ gạo', vitc: 'Vitamin C', men: 'Men tiêu hóa',
+  megaroot: 'Megaroot', apex: 'Apex', vogao: 'Siêu vỏ gạo', vitc: 'Vitamin C', men: 'Men tiêu hóa', doxytylo: 'Doxytylo', oxytetra: 'Oxytetra', bencid: 'Bencid',
 };
 
 /** Chi phí quảng cáo ảo theo marketer, sản phẩm và ngày (giống sheet CPQC Daily): số data marketer mang về cho sản phẩm chính của đơn × giá mỗi data (90–140 nghìn).

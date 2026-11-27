@@ -36,7 +36,7 @@ async function fixture() {
 }
 function compare(raw: ReturnType<typeof emptyDb>['raw']) {
   const { startUtc, endUtc } = vnRangeUtc(START, END);
-  for (const productSegment of ['all','gentadox','skgk','khac','oxy'] as ProductSegment[])
+  for (const productSegment of ['all','gentadox','oxy','sat-trung','doxytylo','khac'] as ProductSegment[])
     for (const team of ['all','sale','cskh'] as Team[])
       for (const [orderOrigin, marketerId] of [['all',''],['self',''],['mkt',''],['mkt','demo-mkt']] as [OrderOrigin,string][])
         for (const employees of [[],['care'],['sale','care']]) {
@@ -176,7 +176,7 @@ void test('cutoff at 13:37 VN equals raw events for one day and multiple days ac
     // Refresh precomputed days after moving events.
     await rebuildStats(db,new Map(POS.map(p => [p,new Set([START,'2026-10-01',END])])));
     for (const start of [START, END])
-      for (const productSegment of ['all','gentadox','skgk','khac','oxy'] as ProductSegment[])
+      for (const productSegment of ['all','gentadox','oxy','sat-trung','doxytylo','khac'] as ProductSegment[])
         for (const team of ['all','sale','cskh'] as Team[])
           for (const [orderOrigin,marketerId] of [['all',''],['self',''],['mkt',''],['mkt','demo-mkt']] as [OrderOrigin,string][])
             for (const employees of [[],['care'],['sale','care']]) {
@@ -216,7 +216,7 @@ void test('CSKH keeps original product order counts when duplicate item rows dif
 });
 
 void test('segment expression is locked to its epoch', () => {
-  const hashes: Record<number,string> = {1:'9840301b1e415b8049277632905f2861d90d61894374a1813a29cdc6602db18a'};
+  const hashes: Record<number,string> = {1:'9840301b1e415b8049277632905f2861d90d61894374a1813a29cdc6602db18a',2:'69c5c9ea5f5e3d7b6fd9eeea1ff4f4c8a164d8d5095b5decca2b2eeedc75ed7e'};
   assert.equal(createHash('sha256').update(segmentKeyExpr('o')).digest('hex'),hashes[SEGMENT_EPOCH], '\u0111\u1ed5i quy t\u1eafc nh\u00f3m th\u00ec t\u0103ng SEGMENT_EPOCH v\u00e0 c\u1eadp nh\u1eadt b\u0103m');
 });
 
