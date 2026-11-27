@@ -626,7 +626,9 @@ type Repurchase = {
 };
 type TagRow = { tag: string; orders: number; customers: number; net: number; resaleOrders: number; resaleCustomers: number; resaleNet: number; resaleRate: number | null };
 
-export function RepurchaseView() {
+export function RepurchaseView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới, tắt thì y như cũ. */ uiMoi?: boolean } = {}) {
+  // Giao diện mới: khung "Vì sao ra số này" đang mở (null = đóng).
+  const [why, setWhy] = useState<WhySpec | null>(null);
   const [posIds, setPosIds] = usePosIds();
   const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const team = useTeam();
@@ -682,18 +684,19 @@ export function RepurchaseView() {
   const recSellers = useMemo(() => [...new Set((data?.recent ?? []).map((r) => r.sellerName).filter((n) => n && n !== '—'))].sort((a, b) => a.localeCompare(b, 'vi')), [data]);
   const recRows = useMemo(() => recSort.apply((data?.recent ?? []).filter((r) => (recPos === 'all' || r.posId === recPos) && (recLevel === 'all' || (recLevel === '3' ? r.prior >= 3 : r.prior === Number(recLevel))) && (recSeller === 'all' || r.sellerName === recSeller) && (!recQ || r.phone.includes(recQ))),
     (r, k) => k === 'time' ? r.createdAt : k === 'net' ? r.net : r.prior), [data, recQ, recPos, recLevel, recSeller, recSort.key, recSort.desc]); // eslint-disable-line react-hooks/exhaustive-deps
-  return (
-    <div className="space-y-5">
-      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}${scopeLabel ? ` · ${scopeLabel}` : ''}`} title="Mua lại & Upsell" subtitle={tag ? `Đang xem thẻ "${tag}": mua lại = khách đã có đơn thành công CÙNG thẻ này trước đó; đơn thẻ khác không tính` : 'Đơn mua lại = đơn thành công thứ 2 trở đi của cùng SĐT'}
-        actions={<><StaleChip stale={stale} at={at} loading={loading} error={data ? error : null} onRetry={reload} /><Button disabled={!data} onClick={() => data && exportRows(`mua-lai_${start}_${end}`, [
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  // fold: chỉ bố cục mới truyền (thu gọn thẻ); bố cục cũ không truyền nên thẻ y như trước.
+  const headActions = () => (
+        <><StaleChip stale={stale} at={at} loading={loading} error={data ? error : null} onRetry={reload} /><Button disabled={!data} onClick={() => data && exportRows(`mua-lai_${start}_${end}`, [
           { title: 'Tổng hợp', rows: [['Mức', 'Khách', 'Đơn', 'Doanh thu'], ...data.summary.levels.map((l) => [l.label, l.customers, l.orders, l.net])] },
           { title: 'Cohort', rows: [['Tháng mua đầu', 'Số khách', ...Array.from({ length: maxT }, (_, i) => `T${i}`)], ...data.cohorts.map((c) => [c.month, c.size, ...c.retention.map((v) => v ?? '')])] },
           { title: 'Theo POS', rows: [['POS', ...data.summary.levels.flatMap((l) => [`${l.label} - khách`, `${l.label} - đơn`, `${l.label} - tiền`])], ...data.byPos.map((p) => [p.posName, ...p.levels.flatMap((l) => [l.customers, l.orders, l.net])])] },
           { title: 'Theo nhân viên', rows: [['Nhân viên', 'Khách mua lại', 'Đơn mua lại', 'Doanh thu mua lại', ...data.summary.levels.flatMap((l) => [`${l.label} - khách`, `${l.label} - đơn`, `${l.label} - tiền`])], ...data.byEmployee.map((p) => [p.name, p.repurchase.customers, p.repurchase.orders, p.repurchase.net, ...p.levels.flatMap((l) => [l.customers, l.orders, l.net])])] },
           { title: 'Theo thẻ', rows: [['Thẻ', 'Đơn có thẻ', 'Khách', 'Doanh thu', 'Đơn mua lại', 'Khách mua lại', 'Tỷ lệ mua lại %', 'Doanh thu mua lại'], ...tagRows.map((t) => [t.tag, t.orders, t.customers, t.net, t.resaleOrders, t.resaleCustomers, t.resaleRate ?? '', t.resaleNet])] },
           { title: 'Đơn mua lại gần đây', rows: [['POS', 'SĐT', 'Ngày tạo', 'Lần mua lại', 'Tiền', 'Người bán', 'Thẻ'], ...data.recent.map((r) => [r.posName, r.phone, dt(r.createdAt, true), `Upsell ${r.prior}`, r.net, r.sellerName, (r.tags ?? []).join(', ')])] },
-        ])}>Xuất Excel</Button></>} />
-      <CskhFocusBar />
+        ])}>Xuất Excel</Button></>
+  );
+  const filterBar = () => (
       <Toolbar>
         <PeriodFields preset={preset} start={start} end={end} onPreset={setPreset} onStart={setStart} onEnd={setEnd} />
         <span className="pl-2 text-sm font-semibold text-ink-2">Thẻ</span>
@@ -705,31 +708,8 @@ export function RepurchaseView() {
         <EmployeeSelect value={sellerId} onChange={setSellerId} employees={employees} />
         <Button className="ml-auto" variant="outline" onClick={reload} disabled={loading}>{loading ? 'Đang tải…' : 'Tải lại'}</Button>
       </Toolbar>
-      <PosChips posIds={posIds} onChange={setPosIds} />
-      {error && !data && <ErrorBox error={error} onRetry={reload} />}
-      {loading && !data && (
-        <>
-          <SkeletonKpis count={5} className="xl:grid-cols-5" />
-          <ChartCard icon={TrendingUp} title="Tỷ lệ mua lại theo tháng mua đầu tiên" subtitle="Đang tải…"><SkeletonTable rows={6} cols={8} /></ChartCard>
-        </>
-      )}
-      {data && (
-        <>
-          <div className="grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-5" aria-busy={loading}>
-            <KpiCard icon={Users} tone="green" label={sellerName ? 'Khách NV đã bán thành công' : 'Khách đã mua (trọn đời)'} value={vi.format(data.funnel.once)} countUp rawValue={data.funnel.once}
-              note={sellerName ? `Đơn đã nhận do ${sellerName} đứng tên bán${tag ? ` · thẻ ${tag}` : ''}` : `Đã mua thành công ≥ 1 lần${scopeLabel ? ` · ${scopeLabel}` : ''}`}
-              tooltip={tip(sellerName ? 'Khách NV đã bán thành công' : 'Khách đã mua (trọn đời)', [['Số khách', `${vi.format(data.funnel.once)} khách`]],
-                sellerName ? `Số khách có ít nhất 1 đơn giao thành công (Đã nhận / Đã thu tiền) mà ${sellerName} là NGƯỜI BÁN trên đơn, trọn đời. Khác ô "Khách đã từng mua" ở trang Khách theo nhân viên: ô đó đếm khách được PHÂN CÔNG cho nhân viên trên hồ sơ Pancake, ai bán cũng tính. ${data.definitions.funnel}` : data.definitions.funnel)} />
-            <KpiCard icon={ICON.upsell} tone="teal" label="Khách mua lại (trọn đời)" value={vi.format(data.funnel.twice)} countUp rawValue={data.funnel.twice} note={`Mua từ lần 2 trở lên${scopeLabel ? ` · ${scopeLabel}` : ''}`}
-              tooltip={tip('Khách mua lại (trọn đời)', [['Mua ≥ 2 lần', `${vi.format(data.funnel.twice)} khách`], ['Mua ≥ 3 lần', `${vi.format(data.funnel.thrice)} khách`]], data.definitions.funnel)} />
-            <KpiCard icon={BadgePercent} tone="blue" label="Tỷ lệ mua lại" value={pct(data.funnel.once ? data.funnel.twice / data.funnel.once * 100 : null)} note={`${vi.format(data.funnel.thrice)} khách mua ≥ 3 lần`}
-              tooltip={tip('Tỷ lệ mua lại', [['Mua lại ÷ đã mua', `${vi.format(data.funnel.twice)} / ${vi.format(data.funnel.once)}`], ['Tỷ lệ', pct(data.funnel.once ? data.funnel.twice / data.funnel.once * 100 : null)]], 'Số khách mua thành công từ 2 lần ÷ số khách đã mua thành công ít nhất 1 lần (trọn đời, các POS đã chọn).')} />
-            <KpiCard icon={ICON.revenue} tone="orange" label="Doanh thu mua lại trong kỳ" value={shortMoney(data.summary.repurchase.net)} countUp rawValue={data.summary.repurchase.net} format={shortMoney} note={`${pct(totalNet ? data.summary.repurchase.net / totalNet * 100 : null)} doanh thu đơn thành công trong kỳ`}
-              tooltip={{ period: periodLabel, current: money(data.summary.repurchase.net), previous: money(totalNet), previousLabel: 'Tổng đơn thành công', diff: pct(totalNet ? data.summary.repurchase.net / totalNet * 100 : null), definition: `${data.definitions.basis} ${data.definitions.upsell}` }} />
-            <KpiCard icon={ICON.upsell} tone="purple" label="Đơn mua lại trong kỳ" value={vi.format(data.summary.repurchase.orders)} countUp rawValue={data.summary.repurchase.orders} note={`${vi.format(data.summary.repurchase.customers)} khách · ${vi.format(data.summary.successOrders)} đơn thành công trong kỳ`}
-              tooltip={{ period: periodLabel, current: `${vi.format(data.summary.repurchase.orders)} đơn · ${vi.format(data.summary.repurchase.customers)} khách`, previous: `${vi.format(data.summary.successOrders)} đơn`, previousLabel: 'Đơn thành công trong kỳ', definition: data.definitions.basis }} />
-          </div>
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+  );
+  const cohortCard = (data: Repurchase) => (
             <ChartCard icon={TrendingUp} title="Tỷ lệ mua lại theo tháng mua đầu tiên" subtitle={`Cohort từ 03/2025${scopeLabel ? ` · ${scopeLabel}` : ''}: % khách của mỗi nhóm có đơn thành công ở tháng thứ n kể từ tháng mua đầu (T0)`} info={data.definitions.cohort}>
               {data.cohorts.length ? (
                 <TableWrap minWidth={Math.max(420, 150 + maxT * 52)} stickyFirst>
@@ -754,6 +734,8 @@ export function RepurchaseView() {
               ) : <EmptyState text="Chưa đủ lịch sử để dựng cohort." />}
               {cohortTip.node}
             </ChartCard>
+  );
+  const funnelCard = (data: Repurchase) => (
             <ChartCard icon={Layers} title="Mua lần 1 → lần 2 → lần 3+" subtitle={`Hành trình mua lại của khách (trọn đời, các POS đã chọn${scopeLabel ? ` · ${scopeLabel}` : ''})`} info={data.definitions.funnel}>
               <Funnel steps={[
                 { label: 'Đã mua lần 1', value: data.funnel.once, note: 'khách đã mua thành công', tip: tip('Đã mua lần 1', [['Khách có ≥ 1 đơn thành công', `${vi.format(data.funnel.once)} khách`]], data.definitions.funnel) },
@@ -770,7 +752,8 @@ export function RepurchaseView() {
                 ))}
               </div>
             </ChartCard>
-          </div>
+  );
+  const tagCard = (data: Repurchase) => (
           <ChartCard icon={Tag} title={`Theo thẻ · ${tagRows.length} dòng sản phẩm`} subtitle={`${data.definitions.tag ?? ''} Bấm một dòng để lọc cả trang theo thẻ đó.`}
             action={tag ? <Button size="sm" variant="ghost" onClick={() => setTag('')}>Bỏ lọc thẻ</Button> : undefined}>
             {tagRows.length ? (
@@ -800,7 +783,9 @@ export function RepurchaseView() {
             ) : <EmptyState text="Đơn trong kỳ chưa gắn thẻ dòng sản phẩm nào." />}
             <p className="mt-2 text-xs text-ink-3">Một đơn có nhiều thẻ được tính ở từng thẻ, nên dòng Tổng có thể lớn hơn số đơn thành công trong kỳ.</p>
           </ChartCard>
-          <ChartCard icon={Layers} title="Theo POS" subtitle={data.definitions.upsell}>
+  );
+  const posCard = (data: Repurchase, fold?: { storageKey: string; summary?: string }) => (
+          <ChartCard collapse={fold} icon={Layers} title="Theo POS" subtitle={data.definitions.upsell}>
             <TableWrap minWidth={720}>
               <table className="tbl">
                 <thead><tr><Th>POS</Th>{data.summary.levels.map((l) => <Th key={l.level} className="n">{l.label}</Th>)}<Th className="n">Mua lại (gộp)</Th></tr></thead>
@@ -808,7 +793,9 @@ export function RepurchaseView() {
               </table>
             </TableWrap>
           </ChartCard>
-          <ChartCard icon={UserCheck} title={`Theo nhân viên · ${empRows.length}`} subtitle={`${data.definitions.employee} Bấm tiêu đề cột để sắp xếp.`}
+  );
+  const empCard = (data: Repurchase, fold?: { storageKey: string; summary?: string }) => (
+          <ChartCard collapse={fold} icon={UserCheck} title={`Theo nhân viên · ${empRows.length}`} subtitle={`${data.definitions.employee} Bấm tiêu đề cột để sắp xếp.`}
             action={<div className="flex flex-wrap items-center gap-2">
               <Input className="w-40" placeholder="Tìm tên nhân viên" aria-label="Tìm tên nhân viên" value={empQ} onChange={(e) => setEmpQ(e.target.value)} />
               <Select value={empSort.key} items={EMP_SORT_LABELS} onValueChange={(v) => { empSort.setKey(v as EmpSortKey); empSort.setDesc(v !== 'name'); }}>
@@ -826,8 +813,9 @@ export function RepurchaseView() {
               </TableWrap>
             ) : <EmptyState text="Không có nhân viên khớp bộ lọc." />}
           </ChartCard>
-          <StartFlowCard flow={data.startFlow} dim={dim} basis={basis} onDim={setDim} onBasis={setBasis} />
-          <ChartCard icon={ShoppingBag} title={`Đơn mua lại gần đây · ${recRows.length}`} subtitle={`${data.definitions.basis} Bấm một dòng để mở hồ sơ khách.`}
+  );
+  const recentCard = (data: Repurchase, fold?: { storageKey: string; summary?: string }) => (
+          <ChartCard collapse={fold} icon={ShoppingBag} title={`Đơn mua lại gần đây · ${recRows.length}`} subtitle={`${data.definitions.basis} Bấm một dòng để mở hồ sơ khách.`}
             action={<div className="flex flex-wrap items-center gap-2">
               <Input className="w-36" placeholder="Tìm SĐT" aria-label="Tìm SĐT" value={recQ} onChange={(e) => setRecQ(e.target.value.trim())} />
               <Select value={recPos} items={{ all: 'Mọi POS', ...Object.fromEntries(POS.map((p) => [p.id, p.name])) }} onValueChange={(v) => setRecPos(String(v))}><SelectTrigger className="min-w-32" aria-label="POS"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Mọi POS</SelectItem>{POS.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select>
@@ -844,10 +832,122 @@ export function RepurchaseView() {
             ) : <EmptyState text="Không có đơn khớp bộ lọc." />}
             <p className="mt-2 text-xs text-ink-3">Hiện tối đa 400 đơn mua lại mới nhất trong kỳ; bấm một dòng để mở hồ sơ khách.</p>
           </ChartCard>
+  );
+  const dialogEl = () => (
+      <CustomerDialog detail={detail} loading={detailLoading} error={detailError} onClose={close} onRetry={retry} />
+  );
+  // [hết khối chung]
+  // Mọi khối dùng chung vẽ MỘT lần cho cả hai bố cục (bên trong có hàm đọc ref: tải lại, mở hồ sơ, tooltip cohort; gọi hai chỗ thì react-compiler báo lỗi).
+  const fk = (s: string, summary?: string) => uiMoi ? { storageKey: `ui-moi:repurchase:${s}`, summary } : undefined;
+  const headEl = headActions();
+  const filterEl = filterBar();
+  const cohortEl = data ? cohortCard(data) : null;
+  const funnelEl = data ? funnelCard(data) : null;
+  const tagEl = data ? tagCard(data) : null;
+  const posEl = data ? posCard(data, fk('pos', `${vi.format(data.byPos.length)} POS`)) : null;
+  const empEl = data ? empCard(data, fk('emp', `${vi.format(empRows.length)} nhân viên`)) : null;
+  const recentEl = data ? recentCard(data, fk('recent', `${vi.format(recRows.length)} đơn`)) : null;
+  const dialogNode = dialogEl();
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trên xuống: đầu trang (PageHeadMoi: kỳ, thẻ, nhân viên, Tải lại; StaleChip, Excel; POS) → chọn riêng NV CSKH → một hàng 5 ô số
+  // (bấm mở "Vì sao ra số này") → Cohort + Hành trình mua lại → bảng chính Theo thẻ (bấm dòng lọc cả trang như cũ)
+  // → khối phụ thu gọn: Theo POS, Theo nhân viên, Bắt đầu từ sản phẩm gì, Đơn mua lại gần đây, Cách tính.
+  // Trang không có tỷ lệ chốt Sale / hoàn / hủy nên không có dải "Cần xem".
+  if (uiMoi) {
+    const posLabel = !posIds.length || posIds.length >= POS.length ? 'Tất cả POS' : posIds.length <= 3 ? posIds.map(posName).join(', ') : `${vi.format(posIds.length)} POS`;
+    const scope = `${periodLabel}/${end.slice(0, 4)} · ${posLabel}${scopeLabel ? ` · ${scopeLabel}` : ''} · khách trọn đời, đơn mua lại trong kỳ`;
+    const k = (s: string) => `ui-moi:repurchase:${s}`;
+    const f = data?.funnel;
+    const rate = f?.once ? f.twice / f.once * 100 : null;
+    return (
+      <div className="min-w-0 space-y-4">
+        <PageHeadMoi title="Mua lại & Upsell" scope={scope} hint="Khách mua lại, upsell theo lần mua, cohort theo tháng mua đầu tiên" tools={filterEl} right={headEl}
+          pos={<PosChips posIds={posIds} onChange={setPosIds} />} />
+        <CskhFocusBar />
+        {error && !data && <ErrorBox error={error} onRetry={reload} />}
+        {loading && !data && <SkeletonKpis count={5} className="xl:grid-cols-5" />}
+        {data && f && (
+          <>
+            <div className={`${tileGrid(5)} transition-opacity duration-[var(--dur)]`} aria-busy={loading}>
+              <KpiCard icon={Users} tone="green" label={sellerName ? 'Khách NV đã bán thành công' : 'Khách đã mua (trọn đời)'} className={KPI_TIGHT} value={vi.format(f.once)} countUp rawValue={f.once}
+                note={sellerName ? `Đơn đã nhận do ${sellerName} đứng tên bán` : 'Đã mua thành công ≥ 1 lần'}
+                onClick={() => setWhy({ title: sellerName ? 'Khách NV đã bán thành công' : 'Khách đã mua (trọn đời)', value: `${vi.format(f.once)} khách`, scope,
+                  definition: sellerName ? `Số khách có ít nhất 1 đơn giao thành công (Đã nhận / Đã thu tiền) mà ${sellerName} là NGƯỜI BÁN trên đơn, trọn đời. Khác ô "Khách đã từng mua" ở trang Khách theo nhân viên: ô đó đếm khách được PHÂN CÔNG cho nhân viên trên hồ sơ Pancake, ai bán cũng tính. ${data.definitions.funnel}` : data.definitions.funnel })} />
+              <KpiCard icon={ICON.upsell} tone="teal" label="Khách mua lại (trọn đời)" className={KPI_TIGHT} value={vi.format(f.twice)} countUp rawValue={f.twice} note="Mua từ lần 2 trở lên"
+                onClick={() => setWhy({ title: 'Khách mua lại (trọn đời)', value: `${vi.format(f.twice)} khách`, scope, rows: [{ label: 'Mua ≥ 2 lần', value: vi.format(f.twice) }, { label: 'Mua ≥ 3 lần', value: vi.format(f.thrice) }], definition: data.definitions.funnel })} />
+              <KpiCard icon={BadgePercent} tone="blue" label="Tỷ lệ mua lại" className={KPI_TIGHT} value={pct(rate)} note={`${vi.format(f.thrice)} khách mua ≥ 3 lần`}
+                onClick={() => setWhy({ title: 'Tỷ lệ mua lại', value: pct(rate), scope, rows: [{ label: 'Khách mua lại (≥ 2 lần)', value: vi.format(f.twice) }, { label: 'Khách đã mua (≥ 1 lần)', value: vi.format(f.once) }], definition: 'Số khách mua thành công từ 2 lần ÷ số khách đã mua thành công ít nhất 1 lần (trọn đời, các POS đã chọn).' })} />
+              <KpiCard icon={ICON.revenue} tone="orange" label="Doanh thu mua lại trong kỳ" className={KPI_TIGHT} value={shortMoney(data.summary.repurchase.net)} countUp rawValue={data.summary.repurchase.net} format={shortMoney} note={`${pct(totalNet ? data.summary.repurchase.net / totalNet * 100 : null)} doanh thu đơn thành công`}
+                onClick={() => setWhy({ title: 'Doanh thu mua lại trong kỳ', value: money(data.summary.repurchase.net), scope, rows: [{ label: 'Tổng đơn thành công trong kỳ', value: money(totalNet) }, { label: 'Tỷ trọng mua lại', value: pct(totalNet ? data.summary.repurchase.net / totalNet * 100 : null), strong: true }], definition: `${data.definitions.basis} ${data.definitions.upsell}` })} />
+              <KpiCard icon={ICON.upsell} tone="purple" label="Đơn mua lại trong kỳ" className={KPI_TIGHT} value={vi.format(data.summary.repurchase.orders)} countUp rawValue={data.summary.repurchase.orders} note={`${vi.format(data.summary.repurchase.customers)} khách`}
+                onClick={() => setWhy({ title: 'Đơn mua lại trong kỳ', value: `${vi.format(data.summary.repurchase.orders)} đơn`, scope, rows: [{ label: 'Khách mua lại trong kỳ', value: vi.format(data.summary.repurchase.customers) }, { label: 'Đơn thành công trong kỳ', value: vi.format(data.summary.successOrders) }], definition: data.definitions.basis })} />
+            </div>
+            <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+              {cohortEl}
+              {funnelEl}
+            </div>
+            {tagEl}
+            <div className="grid min-w-0 gap-3">
+              {posEl}
+              {empEl}
+              <FoldBlock icon={Repeat} title="Bắt đầu từ sản phẩm gì" summary="Sản phẩm của đơn thành công đầu tiên → mua tiếp" storageKey={k('start')}>
+                <StartFlowCard flow={data.startFlow} dim={dim} basis={basis} onDim={setDim} onBasis={setBasis} />
+              </FoldBlock>
+              {recentEl}
+              <FoldBlock icon={Layers} title="Cách tính" storageKey={k('defs')}><Definitions items={data.definitions} /></FoldBlock>
+            </div>
+          </>
+        )}
+        {dialogNode}
+        <WhySheet spec={why} onClose={() => setWhy(null)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}${scopeLabel ? ` · ${scopeLabel}` : ''}`} title="Mua lại & Upsell" subtitle={tag ? `Đang xem thẻ "${tag}": mua lại = khách đã có đơn thành công CÙNG thẻ này trước đó; đơn thẻ khác không tính` : 'Đơn mua lại = đơn thành công thứ 2 trở đi của cùng SĐT'}
+        actions={headEl} />
+      <CskhFocusBar />
+      {filterEl}
+      <PosChips posIds={posIds} onChange={setPosIds} />
+      {error && !data && <ErrorBox error={error} onRetry={reload} />}
+      {loading && !data && (
+        <>
+          <SkeletonKpis count={5} className="xl:grid-cols-5" />
+          <ChartCard icon={TrendingUp} title="Tỷ lệ mua lại theo tháng mua đầu tiên" subtitle="Đang tải…"><SkeletonTable rows={6} cols={8} /></ChartCard>
+        </>
+      )}
+      {data && (
+        <>
+          <div className="grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-5" aria-busy={loading}>
+            <KpiCard icon={Users} tone="green" label={sellerName ? 'Khách NV đã bán thành công' : 'Khách đã mua (trọn đời)'} value={vi.format(data.funnel.once)} countUp rawValue={data.funnel.once}
+              note={sellerName ? `Đơn đã nhận do ${sellerName} đứng tên bán${tag ? ` · thẻ ${tag}` : ''}` : `Đã mua thành công ≥ 1 lần${scopeLabel ? ` · ${scopeLabel}` : ''}`}
+              tooltip={tip(sellerName ? 'Khách NV đã bán thành công' : 'Khách đã mua (trọn đời)', [['Số khách', `${vi.format(data.funnel.once)} khách`]],
+                sellerName ? `Số khách có ít nhất 1 đơn giao thành công (Đã nhận / Đã thu tiền) mà ${sellerName} là NGƯỜI BÁN trên đơn, trọn đời. Khác ô "Khách đã từng mua" ở trang Khách theo nhân viên: ô đó đếm khách được PHÂN CÔNG cho nhân viên trên hồ sơ Pancake, ai bán cũng tính. ${data.definitions.funnel}` : data.definitions.funnel)} />
+            <KpiCard icon={ICON.upsell} tone="teal" label="Khách mua lại (trọn đời)" value={vi.format(data.funnel.twice)} countUp rawValue={data.funnel.twice} note={`Mua từ lần 2 trở lên${scopeLabel ? ` · ${scopeLabel}` : ''}`}
+              tooltip={tip('Khách mua lại (trọn đời)', [['Mua ≥ 2 lần', `${vi.format(data.funnel.twice)} khách`], ['Mua ≥ 3 lần', `${vi.format(data.funnel.thrice)} khách`]], data.definitions.funnel)} />
+            <KpiCard icon={BadgePercent} tone="blue" label="Tỷ lệ mua lại" value={pct(data.funnel.once ? data.funnel.twice / data.funnel.once * 100 : null)} note={`${vi.format(data.funnel.thrice)} khách mua ≥ 3 lần`}
+              tooltip={tip('Tỷ lệ mua lại', [['Mua lại ÷ đã mua', `${vi.format(data.funnel.twice)} / ${vi.format(data.funnel.once)}`], ['Tỷ lệ', pct(data.funnel.once ? data.funnel.twice / data.funnel.once * 100 : null)]], 'Số khách mua thành công từ 2 lần ÷ số khách đã mua thành công ít nhất 1 lần (trọn đời, các POS đã chọn).')} />
+            <KpiCard icon={ICON.revenue} tone="orange" label="Doanh thu mua lại trong kỳ" value={shortMoney(data.summary.repurchase.net)} countUp rawValue={data.summary.repurchase.net} format={shortMoney} note={`${pct(totalNet ? data.summary.repurchase.net / totalNet * 100 : null)} doanh thu đơn thành công trong kỳ`}
+              tooltip={{ period: periodLabel, current: money(data.summary.repurchase.net), previous: money(totalNet), previousLabel: 'Tổng đơn thành công', diff: pct(totalNet ? data.summary.repurchase.net / totalNet * 100 : null), definition: `${data.definitions.basis} ${data.definitions.upsell}` }} />
+            <KpiCard icon={ICON.upsell} tone="purple" label="Đơn mua lại trong kỳ" value={vi.format(data.summary.repurchase.orders)} countUp rawValue={data.summary.repurchase.orders} note={`${vi.format(data.summary.repurchase.customers)} khách · ${vi.format(data.summary.successOrders)} đơn thành công trong kỳ`}
+              tooltip={{ period: periodLabel, current: `${vi.format(data.summary.repurchase.orders)} đơn · ${vi.format(data.summary.repurchase.customers)} khách`, previous: `${vi.format(data.summary.successOrders)} đơn`, previousLabel: 'Đơn thành công trong kỳ', definition: data.definitions.basis }} />
+          </div>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+              {cohortEl}
+              {funnelEl}
+          </div>
+          {tagEl}
+          {posEl}
+          {empEl}
+          <StartFlowCard flow={data.startFlow} dim={dim} basis={basis} onDim={setDim} onBasis={setBasis} />
+          {recentEl}
           <Definitions items={data.definitions} />
         </>
       )}
-      <CustomerDialog detail={detail} loading={detailLoading} error={detailError} onClose={close} onRetry={retry} />
+      {dialogNode}
     </div>
   );
 }
