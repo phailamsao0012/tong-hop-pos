@@ -191,7 +191,7 @@ export function ZaloLinkGuide({ open, name, code, demo, onClose }: { open: boole
             {link && !ZALO_BOT_LINK && <p className="mt-1 text-[11px] text-warn">Mã QR ảo để xem cách làm.</p>}
           </div>
         </div>
-        <ol className="m-0 grid list-none grid-cols-1 gap-2.5 p-0 text-[13px] min-[420px]:grid-cols-2 sm:grid-cols-3">
+        <ol className="m-0 grid list-none grid-cols-1 gap-2.5 p-0 text-[13px] min-[26.25rem]:grid-cols-2 sm:grid-cols-3">
           <Step n={1} title="Mở Zalo, bấm nút quét QR"><Screen1 /></Step>
           <Step n={2} title="Quét mã QR ở trên" note="Đang xem trên điện thoại thì bấm thẳng vào mã QR."><Screen2 qr={qr} /></Step>
           <Step n={3} title="Bấm Nhắn tin"><Screen3 /></Step>

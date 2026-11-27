@@ -441,8 +441,8 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
 
       {error && <ErrorBox error={error} onRetry={reload} />}
       {loading && !data ? <SkeletonKpis count={6} /> : s ? <>
-        {/* 8 ô (thêm DT đã nhận, 27/11/2026): 4 cột tới 1899px (2 hàng đủ chỗ), từ 1900px một hàng 8 cột, không ô trống. */}
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 min-[1900px]:grid-cols-8">
+        {/* 8 ô (thêm DT đã nhận, 27/11/2026): 4 cột tới 1899px (2 hàng đủ chỗ), từ 1900px (118.75rem, viết rem để Tailwind xếp đúng sau xl:) một hàng 8 cột, không ô trống. */}
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 min-[118.75rem]:grid-cols-8">
           <KpiCard id="mkt-orders" icon={Megaphone} tone="green" label={STAGES[stage]} value={vi.format(s.orders)} note={BASES[basis]} tooltip="Số đơn có Marketer trên Pancake, theo mốc thời gian và trạng thái đang chọn." />
           <KpiCard icon={Phone} tone="blue" label="SĐT trên đơn" value={vi.format(s.phones)} note="SĐT duy nhất · không phải tổng lead" tooltip="Chỉ đếm số điện thoại xuất hiện trên đơn Pancake của marketer." />
           <KpiCard id="mkt-rate" icon={CheckCircle2} tone="teal" label="Tỷ lệ xác nhận" value={pct(s.confirmationRate)} note={`${vi.format(s.confirmedOrders)} / ${vi.format(s.createdOrders)} đơn`} />
