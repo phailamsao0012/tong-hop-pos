@@ -4,7 +4,9 @@
 // Mọi khoản trong thác nước tính theo ngày TẠO đơn (trạng thái lúc đồng bộ) nên cộng dồn khớp nhau.
 import { usePosIds } from './pos-store';
 import { ICON } from './icons';
-import { METRIC_DEFS, RETURN_BASES, cancelRateOf, closeRateOf, rateTextClass, returnRateOf } from '@/lib/reports/metrics';
+import { METRIC_DEFS, RETURN_BASES, cancelRateOf, closeRateBase, closeRateOf, closeRateTop, rateTextClass, returnRateOf } from '@/lib/reports/metrics';
+import { BOSS_CANCEL_RED, BOSS_CLOSE_RED, BOSS_RETURN_RED, COACH_MIN_BASE } from '@/lib/zalo/boss-report';
+import { CanXemStrip, KPI_RED, KPI_TIGHT, PageHeadMoi, WhySheet, overCancel, overClose, overRet, tileGrid, type CanXemItem, type WhySpec } from './trang-moi';
 import { useMetricSettings } from './metric-settings';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PosBadge } from './pos-badge';
@@ -17,7 +19,7 @@ import { POS } from '@/lib/shared/report-model';
 import { addDays, todayVn } from '@/lib/shared/report-time';
 import { GoalCell, PosChips, type OverviewReport } from './overview-view';
 import { Th,
-  ChartCard, DeltaPill, ErrorBox, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SortTh, STATUS_VARS, StatusChip, TableWrap, Toolbar,
+  ChartCard, DeltaPill, ErrorBox, FoldBlock, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SortTh, STATUS_VARS, StatusChip, TableWrap, Toolbar,
   delta, dmy, dt, money, pct, posColor, posName, posVar, short, shortMoney, toast, useMotionOK, useSort, vi, type TipRows, barRadius,
 } from './ui-kit';
 
@@ -46,7 +48,9 @@ const fmtInt = (n: number) => vi.format(Math.round(n));
 // Cột sắp xếp được của bảng nhân viên.
 type EmpKey = 'name' | 'assignedOrders' | 'closedOrders' | 'closeRate' | 'closedNet' | 'averageOrder' | 'deliveredOrders' | 'deliveredNet' | 'returned';
 
-export function MonthlyView({ onNavigate }: { /** Mở trang khác (bấm cột tuần / tháng mở Tổng quan POS). */ onNavigate?: (view: string) => void } = {}) {
+export function MonthlyView({ onNavigate, uiMoi = false }: { /** Mở trang khác (bấm cột tuần / tháng mở Tổng quan POS). */ onNavigate?: (view: string) => void; /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới, tắt thì y như cũ. */ uiMoi?: boolean } = {}) {
+  // Giao diện mới: khung "Vì sao ra số này" đang mở (null = đóng).
+  const [why, setWhy] = useState<WhySpec | null>(null);
   const ms = useMetricSettings();
   const today = todayVn();
   const team = useTeam();
@@ -201,11 +205,15 @@ export function MonthlyView({ onNavigate }: { /** Mở trang khác (bấm cột 
   const rr = returnRate(cur), rrPrev = returnRate(prev), cr = cancelRate(cur), crPrev = cancelRate(prev);
   const listItem = 'flex items-center justify-between gap-2 rounded-xl border border-line px-3 py-2 transition-colors duration-[var(--dur)] ease-[var(--ease)] hover:bg-surface-2';
 
-  return (
-    <div className="space-y-5">
-      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title="Báo cáo cuối tháng" subtitle="So với tháng trước · số liệu Pancake tại lúc đồng bộ"
-        badge={end < endOfMonth(month, '9999-12-31') ? <StatusChip tone="orange">Tháng chưa kết thúc</StatusChip> : <StatusChip tone="green">Đã khép tháng</StatusChip>}
-        actions={<><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} /><Button variant="outline" onClick={exportSlides} disabled={!report}>Xuất slide</Button><Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button></>} />
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  // fold: chỉ bố cục mới truyền (thu gọn thẻ); bố cục cũ không truyền nên thẻ y như trước.
+  const badgeEl = () => (
+        end < endOfMonth(month, '9999-12-31') ? <StatusChip tone="orange">Tháng chưa kết thúc</StatusChip> : <StatusChip tone="green">Đã khép tháng</StatusChip>
+  );
+  const headActions = () => (
+        <><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} /><Button variant="outline" onClick={exportSlides} disabled={!report}>Xuất slide</Button><Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button></>
+  );
+  const toolbar = () => (
       <Toolbar>
         <span className="px-1 text-[12.5px] font-semibold text-ink-2">Tháng</span>
         <Input type="month" aria-label="Chọn tháng" className="w-auto" value={month} max={today.slice(0, 7)} onChange={(e) => e.target.value && setMonth(e.target.value)} />
@@ -214,6 +222,241 @@ export function MonthlyView({ onNavigate }: { /** Mở trang khác (bấm cột 
           <RotateCcw size={14} className={loading ? 'animate-spin' : ''} aria-hidden="true" />{loading ? 'Đang tải…' : 'Tải lại'}
         </Button>
       </Toolbar>
+  );
+  const flowCard = (cur: Metrics) => (
+            <ChartCard icon={Coins} title="Từ đơn tạo đến giao thành công" subtitle={`Đơn tạo trong ${month.slice(5)}/${month.slice(0, 4)} · triệu đồng`}>
+              {(() => {
+                // Thanh cấu phần: tiền hàng đơn tạo = giao thành công + các khoản chưa thành doanh thu. Đọc được ngay cả khi khoản nhỏ.
+                const total = Math.max(1, cur.net);
+                const parts = [
+                  { key: 'delivered', label: 'Giao thành công', value: cur.groups.delivered.net, color: STATUS_VARS.delivered },
+                  { key: 'shipping', label: 'Chuyển hàng', value: cur.groups.shipping.net, color: STATUS_VARS.shipping },
+                  { key: 'confirmed', label: 'Đã chốt chưa gửi', value: cur.groups.confirmed.net, color: STATUS_VARS.confirmed },
+                  { key: 'new', label: 'Mới', value: cur.groups.new.net, color: STATUS_VARS.new },
+                  { key: 'returned', label: 'Hoàn', value: cur.groups.returned.net, color: STATUS_VARS.returned },
+                  { key: 'cancelled', label: 'Hủy', value: cur.groups.cancelled.net, color: STATUS_VARS.cancelled },
+                ];
+                return (
+                  <div>
+                    <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-3 text-sm"><span className="font-semibold">Tiền hàng đơn tạo <span className="num">{money(cur.net)}</span></span><span className="text-xs text-ink-3">= giao thành công + các khoản còn lại</span></div>
+                    <div className="flex h-8 w-full overflow-hidden rounded-lg bg-surface-3" aria-hidden="true">
+                      {parts.map((p) => p.value > 0 && <div key={p.key} title={`${p.label}: ${money(p.value)} · ${pct(p.value / total * 100)}`} style={{ width: `${Math.max(0.4, p.value / total * 100)}%`, background: p.color }} className="h-full border-r border-surface/70 transition-[filter] duration-[var(--dur)] ease-[var(--ease)] last:border-r-0 hover:brightness-110" />)}
+                    </div>
+                    <ul className="mt-3 grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
+                      {parts.map((p) => (
+                        <li key={p.key} className="flex items-center gap-2">
+                          <span className="inline-block size-2.5 shrink-0 rounded-sm" style={{ background: p.color }} aria-hidden="true" />
+                          <span className="min-w-0 flex-1 truncate">{p.label}</span>
+                          <span className="num whitespace-nowrap">{money(p.value)}</span>
+                          <span className="num w-12 whitespace-nowrap text-right text-xs text-ink-3">{pct(p.value / total * 100)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })()}
+              <p className="mt-2 text-xs text-ink-3">Thanh trên chia tiền hàng đơn tạo thành giao thành công (xanh) và các khoản chưa thành doanh thu; tỷ lệ tính trên tiền hàng đơn tạo.</p>
+            </ChartCard>
+  );
+  const posChartCard = () => (
+            <ChartCard icon={BarChart3} title="Doanh thu theo POS" subtitle="Triệu đồng">
+              <ChartContainer className="h-72 w-full aspect-auto" config={chartConfig}>
+                <BarChart data={posChart} barGap={2} margin={{ top: 22, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
+                  <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} interval={0} tickFormatter={shortPosName} />
+                  <YAxis tickLine={false} axisLine={false} width={44} />
+                  <ChartTooltip cursor={{ fill: 'var(--surface-2)' }} content={<ChartTooltipContent formatter={(value, name) => <span className="flex w-full justify-between gap-4"><span>{chartConfig[String(name) as keyof typeof chartConfig]?.label ?? name}</span><strong className="num">{vi.format(Number(value))} tr</strong></span>} />} />
+                  <ChartLegend content={<ChartLegendContent />} />
+                  <Bar dataKey="closed" fill="var(--color-closed)" radius={barRadius([4, 4, 0, 0])} isAnimationActive={motionOn} />
+                  <Bar dataKey="delivered" radius={barRadius([4, 4, 0, 0])} isAnimationActive={motionOn}>
+                    {posChart.map((p) => <Cell key={p.id} fill={posVar(p.id)} />)}
+                    <LabelList dataKey="delivered" position="top" formatter={(v) => vi.format(Math.round(Number(v)))} fontSize={11} fontWeight={700} fill="var(--ink-2)" className="num" />
+                  </Bar>
+                </BarChart>
+              </ChartContainer>
+            </ChartCard>
+  );
+  const compareEl = () => (
+            <MonthlyCompare month={month} end={end} posIds={posIds} team={team} onOpenRange={onNavigate ? () => onNavigate('overview') : undefined} />
+  );
+  const checkCard = (report: OverviewReport, cur: Metrics, fold?: { storageKey: string; summary?: string }) => (
+            <ChartCard collapse={fold} icon={ClipboardCheck} title="Đối chiếu cuối kỳ" subtitle="Kiểm tra dữ liệu trước khi chốt số">
+              <ul className="space-y-2 text-sm">
+                {report.pos.filter((p) => posIds.includes(p.id)).map((p) => (
+                  <li key={p.id} data-ui="round" className={listItem}>
+                    <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5"><PosBadge posId={p.id} size={16} className="shrink-0" />{p.name}<span className="text-xs text-ink-3">đồng bộ <span className="num">{dt(p.syncedAt, true)}</span></span></span>
+                    {p.lastError ? <StatusChip tone="red"><XCircle size={11} />Lỗi đồng bộ</StatusChip> : !p.connected ? <StatusChip tone="gray">Chưa kết nối</StatusChip> : p.backfillDone ? <StatusChip tone="green"><CheckCircle2 size={11} />Đủ lịch sử</StatusChip> : <StatusChip tone="orange">Đang lấy lịch sử {p.backfillMonth ? `${p.backfillMonth.slice(5)}/${p.backfillMonth.slice(0, 4)}` : ''}</StatusChip>}
+                  </li>
+                ))}
+                <li data-ui="round" className={listItem}><span className="flex items-center gap-2"><Truck size={14} className="text-ink-3" aria-hidden="true" />Đơn đang chuyển hàng chưa có kết quả</span><strong className="num whitespace-nowrap">{vi.format(cur.groups.shipping.orders)} đơn · {shortMoney(cur.groups.shipping.net)}</strong></li>
+                <li data-ui="round" className={listItem}><span className="flex items-center gap-2"><ClipboardCheck size={14} className="text-ink-3" aria-hidden="true" />Đơn mới chưa chốt</span><strong className="num whitespace-nowrap">{vi.format(cur.groups.new.orders)} đơn</strong></li>
+                <li data-ui="round" className={listItem}><span className="flex items-center gap-2"><Undo2 size={14} className="text-ink-3" aria-hidden="true" />Giá trị đơn hoàn</span><strong className="num whitespace-nowrap">{money(cur.groups.returned.net)}</strong></li>
+              </ul>
+              <p className="mt-3 text-xs text-ink-3">Số của tháng chỉ ổn định khi đơn đang giao đã có kết quả và các POS đã lấy đủ lịch sử.</p>
+            </ChartCard>
+  );
+  const posTable = (cur: Metrics) => (
+          <ChartCard icon={PackageCheck} title="Theo POS" subtitle="So với tháng trước">
+            <TableWrap minWidth={1040} stickyFirst>
+              <table className="tbl">
+                <thead><tr><Th>POS</Th><Th className="n">Đơn tạo</Th><Th className="n">Đơn chốt</Th><Th className="n">Doanh thu đơn chốt</Th><Th className="n">Giao TC</Th><Th className="n">Doanh thu giao TC</Th><Th>Tỷ trọng</Th><Th className="n">Hoàn</Th><Th className="n">Hủy</Th><Th>Mục tiêu tháng</Th><Th className="n">So với tháng trước</Th></tr></thead>
+                <tbody>
+                  {byPos.map(({ id, row, prev: p }, i) => (
+                    <tr key={id}>
+                      <td className="font-medium"><span className="num mr-2 inline-block w-4 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span><PosBadge posId={id} size={16} className="mr-2 align-middle" />{posName(id)}</td>
+                      <td className="n">{vi.format(row!.orders)}</td>
+                      <td className="n">{vi.format(row!.closedOrders)}</td>
+                      <td className="n">{money(row!.closedNet)}</td>
+                      <td className="n">{vi.format(row!.groups.delivered.orders)}</td>
+                      <td className="n">{money(row!.groups.delivered.net)}</td>
+                      <td><ProgressBar value={row!.groups.delivered.net} max={cur.groups.delivered.net} width={96} size="sm" color={posVar(id)} className="mr-2" /><span className="num text-xs text-ink-3">{pct(cur.groups.delivered.net ? row!.groups.delivered.net / cur.groups.delivered.net * 100 : null)}</span></td>
+                      <td className="n">{vi.format(row!.groups.returned.orders)} <span className="text-[11px] text-ink-3">({pct(returnRate(row!))})</span></td>
+                      <td className="n">{vi.format(row!.groups.cancelled.orders)} <span className="text-[11px] text-ink-3">({pct(cancelRate(row!))})</span></td>
+                      <td><GoalCell value={row!.closedNet} goal={targets[`pos:${id}`]?.revenue ?? 0} sub={`${money(row!.closedNet)} / ${shortMoney(targets[`pos:${id}`]?.revenue ?? 0)}`} /></td>
+                      <td className="n"><DeltaPill value={delta(row!.groups.delivered.net, p?.groups.delivered.net)} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr><td className="bg-surface-2">Tổng</td><td className="n">{vi.format(cur.orders)}</td><td className="n">{vi.format(cur.closedOrders)}</td><td className="n">{money(cur.closedNet)}</td><td className="n">{vi.format(cur.groups.delivered.orders)}</td><td className="n">{money(cur.groups.delivered.net)}</td><td /><td className="n">{vi.format(cur.groups.returned.orders)}</td><td className="n">{vi.format(cur.groups.cancelled.orders)}</td><td>{goal ? <span className="num text-xs">{pct(cur.closedNet / goal * 100, 0)} · {short(cur.closedNet)} / {shortMoney(goal)}</span> : <span className="text-xs text-ink-4">—</span>}</td><td className="n"><DeltaPill value={delta(cur.groups.delivered.net, prev?.groups.delivered.net)} /></td></tr>
+                </tfoot>
+              </table>
+            </TableWrap>
+          </ChartCard>
+  );
+  const staffCard = (report: OverviewReport, fold?: { storageKey: string; summary?: string }) => (
+          <ChartCard collapse={fold} icon={CheckCircle2} title="Nhân viên" subtitle="Top 30 theo doanh thu giao thành công · bấm tiêu đề cột để sắp xếp">
+            <TableWrap minWidth={team !== 'cskh' ? 1080 : 880} maxHeight="32rem" stickyFirst>
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <SortTh k="name" label="Nhân viên" sort={sort} align="left" /><Th>Bộ phận</Th>
+                    {team !== 'cskh' && <><SortTh k="assignedOrders" label="Đơn chia" sort={sort} /><SortTh k="closedOrders" label="Đơn chốt" sort={sort} /><SortTh k="closeRate" label="Tỷ lệ chốt" sort={sort} /></>}
+                    <SortTh k="closedNet" label="Doanh thu đơn chốt" sort={sort} /><SortTh k="averageOrder" label="GTTB (AOV)" sort={sort} /><SortTh k="deliveredOrders" label="Giao TC" sort={sort} /><SortTh k="deliveredNet" label="Doanh thu giao TC" sort={sort} /><SortTh k="returned" label="Hoàn / Hủy" sort={sort} />
+                    <Th>Mục tiêu tháng</Th><Th className="n">So với tháng trước</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {empRows.map((r, i) => {
+                    const p = report.compare?.byEmployee.find((x) => x.sellerId === r.sellerId);
+                    const t = targets[`employee:${r.sellerId}`];
+                    return (
+                      <tr key={r.sellerId || 'none'}>
+                        <td className="font-medium"><span className="num mr-2 inline-block w-4 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span>{r.name}</td><td className="mut text-xs">{r.department ?? '—'}</td>
+                        {team !== 'cskh' && <><td className="n">{vi.format(r.assignedOrders)}</td><td className="n">{vi.format(r.closedOrders)}</td><td className={`n ${rateTextClass(closeRateOf(r, ms.rateBase))}`}>{pct(closeRateOf(r, ms.rateBase), 2)}</td></>}
+                        <td className="n">{money(r.closedNet)}</td><td className="n">{r.averageOrder ? money(r.averageOrder) : '—'}</td><td className="n">{vi.format(r.groups.delivered.orders)}</td><td className="n">{money(r.groups.delivered.net)}</td>
+                        <td className="n">{vi.format(r.groups.returned.orders)} / {vi.format(r.groups.cancelled.orders)}</td>
+                        <td>{!t?.revenue && !t?.closedOrders ? <span className="text-xs text-ink-4">—</span> : t.revenue
+                          ? <GoalCell value={r.closedNet} goal={t.revenue} sub={`${short(r.closedNet)} / ${shortMoney(t.revenue)}`} />
+                          : <GoalCell value={r.closedOrders} goal={t.closedOrders} sub={`${vi.format(r.closedOrders)} / ${vi.format(t.closedOrders)} đơn`} />}</td>
+                        <td className="n"><DeltaPill value={delta(r.groups.delivered.net, p?.groups.delivered.net)} /></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </TableWrap>
+          </ChartCard>
+  );
+  // [hết khối chung]
+  // Nút đầu trang và thanh chọn tháng vẽ MỘT lần cho cả hai bố cục (bên trong có hàm đọc ref: tải lại).
+  const headEl = headActions();
+  const toolbarEl = toolbar();
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trên xuống: đầu trang (PageHeadMoi: chọn tháng, Tải lại; trạng thái tháng, StaleChip, slide, Excel; POS) → "Cần xem" (cả trang / từng POS /
+  // từng nhân viên: chốt dưới 40%, hoàn từ 7%, hủy từ 5%; người / POS từ 20 đơn ở mẫu số) → một hàng ô số (mục tiêu nếu có + 5 chỉ số, bấm mở
+  // "Vì sao ra số này") → Từ đơn tạo đến giao thành công + Doanh thu theo POS → bảng chính Theo POS
+  // → khối phụ thu gọn: So sánh các tháng, Đối chiếu cuối kỳ, Nhân viên.
+  if (uiMoi) {
+    const posLabel = posIds.length === POS.length ? 'Tất cả POS' : posIds.length <= 3 ? posIds.map(posName).join(', ') : `${vi.format(posIds.length)} POS`;
+    const scope = `${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)} · so với tháng trước · ${posLabel} · số Pancake tại lúc đồng bộ`;
+    const k = (s: string) => `ui-moi:monthly:${s}`;
+    const need: CanXemItem[] = [];
+    const why3 = (kind: 'close' | 'ret' | 'cancel', who: string, m: Metrics): WhySpec => {
+      const v = kind === 'close' ? closeRateOf(m, ms.rateBase) : kind === 'ret' ? returnRateOf(m, ms.returnBase) : cancelRateOf(m);
+      const over = kind === 'close' ? overClose(v) : kind === 'ret' ? overRet(v) : overCancel(v);
+      return {
+        title: `${kind === 'close' ? 'Tỷ lệ chốt' : kind === 'ret' ? 'Hoàn' : 'Hủy'} · ${who}`, value: pct(v), tone: over ? 'bad' : undefined, scope,
+        mark: kind === 'close' ? `Đỏ khi dưới ${BOSS_CLOSE_RED}%` : kind === 'ret' ? `Đỏ từ ${BOSS_RETURN_RED}%` : `Đỏ từ ${BOSS_CANCEL_RED}%`,
+        rows: kind === 'close'
+          ? [{ label: 'Đã chốt (tử số)', value: vi.format(closeRateTop(m, ms.rateBase)) }, { label: 'Mẫu số', value: vi.format(closeRateBase(m, ms.rateBase)) }, { label: '= Tỷ lệ chốt', value: pct(v), strong: true, tone: over ? 'bad' : undefined }]
+          : kind === 'ret'
+            ? [{ label: 'Đơn hoàn', value: vi.format(m.groups.returned.orders) }, { label: 'Giao thành công', value: vi.format(m.groups.delivered.orders) }, { label: 'Đơn chốt', value: vi.format(m.closedOrders) }, { label: '= Tỷ lệ hoàn', value: pct(v), strong: true, tone: over ? 'bad' : undefined }]
+            : [{ label: 'Đơn hủy', value: vi.format(m.groups.cancelled.orders) }, { label: 'Đơn tạo', value: vi.format(m.orders) }, { label: '= Tỷ lệ hủy', value: pct(v), strong: true, tone: over ? 'bad' : undefined }],
+        definition: kind === 'close' ? METRIC_DEFS.rate(ms.rateBase).def : kind === 'ret' ? METRIC_DEFS.returned(ms.returnBase).def : 'Đơn hủy ÷ đơn tạo trong tháng (theo ngày tạo đơn).',
+      };
+    };
+    // Cả trang và từng POS: không xét tỷ lệ chốt (số tháng tính theo ngày tạo đơn); từng nhân viên Sale: chốt / hủy / hoàn.
+    const scan = (key: string, who: string, m: Metrics, team: boolean, close: boolean) => {
+      const c = closeRateOf(m, ms.rateBase), h = returnRateOf(m, ms.returnBase), x = cancelRateOf(m);
+      if (close && overClose(c) && closeRateBase(m, ms.rateBase) >= COACH_MIN_BASE) need.push({ key: `c-${key}`, team, text: `${who}: chốt ${pct(c)}`, gap: BOSS_CLOSE_RED - (c ?? 0), onClick: () => setWhy(why3('close', who, m)) });
+      if (overRet(h) && (team || m.closedOrders >= COACH_MIN_BASE)) need.push({ key: `r-${key}`, team, text: `${who}: hoàn ${pct(h)}`, gap: (h ?? 0) - BOSS_RETURN_RED, onClick: () => setWhy(why3('ret', who, m)) });
+      if (overCancel(x) && (team || m.orders >= COACH_MIN_BASE)) need.push({ key: `x-${key}`, team, text: `${who}: hủy ${pct(x)}`, gap: (x ?? 0) - BOSS_CANCEL_RED, onClick: () => setWhy(why3('cancel', who, m)) });
+    };
+    if (report && cur) {
+      scan('all', 'Cả trang', cur, true, false);
+      if (byPos.length > 1) for (const { id, row } of byPos) if (row) scan(id, posName(id), row, false, false);
+      for (const r of employees) scan(`e-${r.sellerId}`, r.name, r, false, team !== 'cskh');
+    }
+    const prevNote = (v: string) => prev ? `Tháng trước: ${v}` : undefined;
+    const tiles = report && cur ? [
+      goal > 0 && <KpiCard key="goal" icon={ICON.kpi} tone="lime" label="Hoàn thành mục tiêu doanh thu đơn chốt" className={KPI_TIGHT} value={pct(cur.closedNet / goal * 100)} countUp rawValue={cur.closedNet / goal * 100} format={(n) => pct(n)}
+        note={`${shortMoney(cur.closedNet)} / ${shortMoney(goal)}`} progress={{ value: cur.closedNet, max: goal }}
+        onClick={() => setWhy({ title: 'Hoàn thành mục tiêu doanh thu đơn chốt', value: pct(cur.closedNet / goal * 100), scope, rows: [{ label: 'Doanh thu đơn chốt', value: money(cur.closedNet) }, { label: 'Mục tiêu tháng', value: money(goal) }, { label: 'Còn lại', value: money(Math.max(0, goal - cur.closedNet)), strong: true }], definition: 'Doanh thu đơn chốt trong tháng ÷ tổng mục tiêu doanh thu của các POS đang chọn (Cấu hình & kết nối → Mục tiêu tháng).' })} />,
+      goalOrders > 0 && <KpiCard key="goal-orders" icon={ICON.kpi} tone="teal" label="Hoàn thành mục tiêu đơn chốt" className={KPI_TIGHT} value={pct(cur.closedOrders / goalOrders * 100)} countUp rawValue={cur.closedOrders / goalOrders * 100} format={(n) => pct(n)}
+        note={`${vi.format(cur.closedOrders)} / ${vi.format(goalOrders)} đơn`} progress={{ value: cur.closedOrders, max: goalOrders }}
+        onClick={() => setWhy({ title: 'Hoàn thành mục tiêu đơn chốt', value: pct(cur.closedOrders / goalOrders * 100), scope, rows: [{ label: 'Đơn chốt', value: vi.format(cur.closedOrders) }, { label: 'Mục tiêu tháng', value: vi.format(goalOrders) }, { label: 'Còn lại', value: vi.format(Math.max(0, goalOrders - cur.closedOrders)), strong: true }], definition: 'Đơn chốt trong tháng ÷ tổng mục tiêu đơn chốt của các POS đang chọn.' })} />,
+      <KpiCard key="net" icon={ICON.revenue} tone="green" label="Doanh thu giao thành công" className={KPI_TIGHT} value={short(cur.groups.delivered.net)} unit="₫" countUp rawValue={cur.groups.delivered.net} format={short}
+        delta={delta(cur.groups.delivered.net, prev?.groups.delivered.net)} deltaLabel="so tháng trước" note={prevNote(shortMoney(prev?.groups.delivered.net ?? 0))}
+        onClick={() => setWhy({ title: 'Doanh thu giao thành công', value: money(cur.groups.delivered.net), scope, previous: prev ? money(prev.groups.delivered.net) : undefined, rows: weekly.map((w) => ({ label: `${w.label} (${w.sub})`, value: money(w.deliveredNet) })), definition: 'Tiền hàng (sau giảm giá) của đơn tạo trong tháng đang ở trạng thái giao thành công lúc đồng bộ.' })} />,
+      <KpiCard key="orders" icon={PackageCheck} tone="teal" label="Đơn giao thành công" className={KPI_TIGHT} value={vi.format(cur.groups.delivered.orders)} countUp rawValue={cur.groups.delivered.orders} format={fmtInt}
+        delta={delta(cur.groups.delivered.orders, prev?.groups.delivered.orders)} deltaLabel="so tháng trước" note={prevNote(`${vi.format(prev?.groups.delivered.orders ?? 0)} đơn`)}
+        onClick={() => setWhy({ title: 'Đơn giao thành công', value: `${vi.format(cur.groups.delivered.orders)} đơn`, scope, previous: prev ? `${vi.format(prev.groups.delivered.orders)} đơn` : undefined, rows: weekly.map((w) => ({ label: `${w.label} (${w.sub})`, value: vi.format(w.deliveredOrders) })), definition: 'Số đơn tạo trong tháng đang ở trạng thái giao thành công lúc đồng bộ.' })} />,
+      <KpiCard key="aov" icon={ICON.aov} tone="blue" label="GTTB giao thành công" className={KPI_TIGHT} value={cur.deliveredAverage ? short(cur.deliveredAverage) : '—'} unit={cur.deliveredAverage ? '₫' : undefined}
+        delta={cur.deliveredAverage && prev?.deliveredAverage ? delta(cur.deliveredAverage, prev.deliveredAverage) : null} deltaLabel="so tháng trước" note="Doanh thu giao TC ÷ đơn giao TC"
+        onClick={() => setWhy({ title: 'GTTB giao thành công', value: cur.deliveredAverage ? money(cur.deliveredAverage) : '—', scope, previous: prev?.deliveredAverage ? money(prev.deliveredAverage) : undefined, rows: [{ label: 'Doanh thu giao thành công', value: money(cur.groups.delivered.net) }, { label: 'Đơn giao thành công', value: vi.format(cur.groups.delivered.orders) }], definition: 'Doanh thu giao thành công ÷ số đơn giao thành công.' })} />,
+      <KpiCard key="ret" icon={ICON.returned} tone="orange" label="Tỷ lệ hoàn" className={`${KPI_TIGHT} ${overRet(rr) ? KPI_RED : ''}`} value={pct(rr)}
+        delta={rr !== null && rrPrev !== null ? rr - rrPrev : null} deltaLabel="điểm %" invert note={`${vi.format(cur.groups.returned.orders)} đơn hoàn · ${RETURN_BASES[ms.returnBase].short}`}
+        onClick={() => setWhy({ ...why3('ret', 'Cả trang', cur), title: 'Tỷ lệ hoàn', previous: pct(rrPrev) })} />,
+      <KpiCard key="cancel" icon={ICON.cancelled} tone="red" label="Tỷ lệ hủy" className={`${KPI_TIGHT} ${overCancel(cr) ? KPI_RED : ''}`} value={pct(cr)}
+        delta={cr !== null && crPrev !== null ? cr - crPrev : null} deltaLabel="điểm %" invert note={`${vi.format(cur.groups.cancelled.orders)} đơn hủy / ${vi.format(cur.orders)} đơn tạo`}
+        onClick={() => setWhy({ ...why3('cancel', 'Cả trang', cur), title: 'Tỷ lệ hủy', previous: pct(crPrev) })} />,
+    ].filter(Boolean) : [];
+    return (
+      <div className="min-w-0 space-y-4">
+        <PageHeadMoi title="Báo cáo cuối tháng" scope={scope} hint="So với tháng trước · số liệu Pancake tại lúc đồng bộ" tools={toolbarEl}
+          right={<>{badgeEl()}{headEl}</>} pos={<PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />} />
+        {error && !report && <ErrorBox error={error} onRetry={reload} />}
+        {!report && !error && <SkeletonKpis count={5} className="xl:grid-cols-5" />}
+        {report && cur && (
+          <>
+            <CanXemStrip items={need} note={`Mốc: chốt Sale dưới ${BOSS_CLOSE_RED}%, hoàn từ ${BOSS_RETURN_RED}%, hủy từ ${BOSS_CANCEL_RED}% · POS / người từ ${COACH_MIN_BASE} đơn`} />
+            <div className={tileGrid(tiles.length)} aria-busy={loading || undefined}>{tiles}</div>
+            {!goal && !goalOrders && <p className="text-xs text-ink-3">Chưa đặt mục tiêu tháng này. Vào Cấu hình & kết nối → Mục tiêu tháng để đặt.</p>}
+            <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+              {flowCard(cur)}
+              {posChartCard()}
+            </div>
+            {posTable(cur)}
+            <div className="grid min-w-0 gap-3">
+              <FoldBlock icon={BarChart3} title="So sánh các tháng" storageKey={k('compare')}>{compareEl()}</FoldBlock>
+              {checkCard(report, cur, { storageKey: k('check') })}
+              {staffCard(report, { storageKey: k('staff'), summary: `Top ${vi.format(employees.length)}` })}
+            </div>
+          </>
+        )}
+        <WhySheet spec={why} onClose={() => setWhy(null)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title="Báo cáo cuối tháng" subtitle="So với tháng trước · số liệu Pancake tại lúc đồng bộ"
+        badge={badgeEl()}
+        actions={headEl} />
+      {toolbarEl}
       <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
       {error && !report && <ErrorBox error={error} onRetry={reload} />}
       {!report && !error && (
@@ -257,135 +500,18 @@ export function MonthlyView({ onNavigate }: { /** Mở trang khác (bấm cột 
           </div>
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-            <ChartCard icon={Coins} title="Từ đơn tạo đến giao thành công" subtitle={`Đơn tạo trong ${month.slice(5)}/${month.slice(0, 4)} · triệu đồng`}>
-              {(() => {
-                // Thanh cấu phần: tiền hàng đơn tạo = giao thành công + các khoản chưa thành doanh thu. Đọc được ngay cả khi khoản nhỏ.
-                const total = Math.max(1, cur.net);
-                const parts = [
-                  { key: 'delivered', label: 'Giao thành công', value: cur.groups.delivered.net, color: STATUS_VARS.delivered },
-                  { key: 'shipping', label: 'Chuyển hàng', value: cur.groups.shipping.net, color: STATUS_VARS.shipping },
-                  { key: 'confirmed', label: 'Đã chốt chưa gửi', value: cur.groups.confirmed.net, color: STATUS_VARS.confirmed },
-                  { key: 'new', label: 'Mới', value: cur.groups.new.net, color: STATUS_VARS.new },
-                  { key: 'returned', label: 'Hoàn', value: cur.groups.returned.net, color: STATUS_VARS.returned },
-                  { key: 'cancelled', label: 'Hủy', value: cur.groups.cancelled.net, color: STATUS_VARS.cancelled },
-                ];
-                return (
-                  <div>
-                    <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-3 text-sm"><span className="font-semibold">Tiền hàng đơn tạo <span className="num">{money(cur.net)}</span></span><span className="text-xs text-ink-3">= giao thành công + các khoản còn lại</span></div>
-                    <div className="flex h-8 w-full overflow-hidden rounded-lg bg-surface-3" aria-hidden="true">
-                      {parts.map((p) => p.value > 0 && <div key={p.key} title={`${p.label}: ${money(p.value)} · ${pct(p.value / total * 100)}`} style={{ width: `${Math.max(0.4, p.value / total * 100)}%`, background: p.color }} className="h-full border-r border-surface/70 transition-[filter] duration-[var(--dur)] ease-[var(--ease)] last:border-r-0 hover:brightness-110" />)}
-                    </div>
-                    <ul className="mt-3 grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
-                      {parts.map((p) => (
-                        <li key={p.key} className="flex items-center gap-2">
-                          <span className="inline-block size-2.5 shrink-0 rounded-sm" style={{ background: p.color }} aria-hidden="true" />
-                          <span className="min-w-0 flex-1 truncate">{p.label}</span>
-                          <span className="num whitespace-nowrap">{money(p.value)}</span>
-                          <span className="num w-12 whitespace-nowrap text-right text-xs text-ink-3">{pct(p.value / total * 100)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                );
-              })()}
-              <p className="mt-2 text-xs text-ink-3">Thanh trên chia tiền hàng đơn tạo thành giao thành công (xanh) và các khoản chưa thành doanh thu; tỷ lệ tính trên tiền hàng đơn tạo.</p>
-            </ChartCard>
-            <ChartCard icon={BarChart3} title="Doanh thu theo POS" subtitle="Triệu đồng">
-              <ChartContainer className="h-72 w-full aspect-auto" config={chartConfig}>
-                <BarChart data={posChart} barGap={2} margin={{ top: 22, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
-                  <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} interval={0} tickFormatter={shortPosName} />
-                  <YAxis tickLine={false} axisLine={false} width={44} />
-                  <ChartTooltip cursor={{ fill: 'var(--surface-2)' }} content={<ChartTooltipContent formatter={(value, name) => <span className="flex w-full justify-between gap-4"><span>{chartConfig[String(name) as keyof typeof chartConfig]?.label ?? name}</span><strong className="num">{vi.format(Number(value))} tr</strong></span>} />} />
-                  <ChartLegend content={<ChartLegendContent />} />
-                  <Bar dataKey="closed" fill="var(--color-closed)" radius={barRadius([4, 4, 0, 0])} isAnimationActive={motionOn} />
-                  <Bar dataKey="delivered" radius={barRadius([4, 4, 0, 0])} isAnimationActive={motionOn}>
-                    {posChart.map((p) => <Cell key={p.id} fill={posVar(p.id)} />)}
-                    <LabelList dataKey="delivered" position="top" formatter={(v) => vi.format(Math.round(Number(v)))} fontSize={11} fontWeight={700} fill="var(--ink-2)" className="num" />
-                  </Bar>
-                </BarChart>
-              </ChartContainer>
-            </ChartCard>
+            {flowCard(cur)}
+            {posChartCard()}
           </div>
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-            <MonthlyCompare month={month} end={end} posIds={posIds} team={team} onOpenRange={onNavigate ? () => onNavigate('overview') : undefined} />
-            <ChartCard icon={ClipboardCheck} title="Đối chiếu cuối kỳ" subtitle="Kiểm tra dữ liệu trước khi chốt số">
-              <ul className="space-y-2 text-sm">
-                {report.pos.filter((p) => posIds.includes(p.id)).map((p) => (
-                  <li key={p.id} data-ui="round" className={listItem}>
-                    <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5"><PosBadge posId={p.id} size={16} className="shrink-0" />{p.name}<span className="text-xs text-ink-3">đồng bộ <span className="num">{dt(p.syncedAt, true)}</span></span></span>
-                    {p.lastError ? <StatusChip tone="red"><XCircle size={11} />Lỗi đồng bộ</StatusChip> : !p.connected ? <StatusChip tone="gray">Chưa kết nối</StatusChip> : p.backfillDone ? <StatusChip tone="green"><CheckCircle2 size={11} />Đủ lịch sử</StatusChip> : <StatusChip tone="orange">Đang lấy lịch sử {p.backfillMonth ? `${p.backfillMonth.slice(5)}/${p.backfillMonth.slice(0, 4)}` : ''}</StatusChip>}
-                  </li>
-                ))}
-                <li data-ui="round" className={listItem}><span className="flex items-center gap-2"><Truck size={14} className="text-ink-3" aria-hidden="true" />Đơn đang chuyển hàng chưa có kết quả</span><strong className="num whitespace-nowrap">{vi.format(cur.groups.shipping.orders)} đơn · {shortMoney(cur.groups.shipping.net)}</strong></li>
-                <li data-ui="round" className={listItem}><span className="flex items-center gap-2"><ClipboardCheck size={14} className="text-ink-3" aria-hidden="true" />Đơn mới chưa chốt</span><strong className="num whitespace-nowrap">{vi.format(cur.groups.new.orders)} đơn</strong></li>
-                <li data-ui="round" className={listItem}><span className="flex items-center gap-2"><Undo2 size={14} className="text-ink-3" aria-hidden="true" />Giá trị đơn hoàn</span><strong className="num whitespace-nowrap">{money(cur.groups.returned.net)}</strong></li>
-              </ul>
-              <p className="mt-3 text-xs text-ink-3">Số của tháng chỉ ổn định khi đơn đang giao đã có kết quả và các POS đã lấy đủ lịch sử.</p>
-            </ChartCard>
+            {compareEl()}
+            {checkCard(report, cur)}
           </div>
 
-          <ChartCard icon={PackageCheck} title="Theo POS" subtitle="So với tháng trước">
-            <TableWrap minWidth={1040} stickyFirst>
-              <table className="tbl">
-                <thead><tr><Th>POS</Th><Th className="n">Đơn tạo</Th><Th className="n">Đơn chốt</Th><Th className="n">Doanh thu đơn chốt</Th><Th className="n">Giao TC</Th><Th className="n">Doanh thu giao TC</Th><Th>Tỷ trọng</Th><Th className="n">Hoàn</Th><Th className="n">Hủy</Th><Th>Mục tiêu tháng</Th><Th className="n">So với tháng trước</Th></tr></thead>
-                <tbody>
-                  {byPos.map(({ id, row, prev: p }, i) => (
-                    <tr key={id}>
-                      <td className="font-medium"><span className="num mr-2 inline-block w-4 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span><PosBadge posId={id} size={16} className="mr-2 align-middle" />{posName(id)}</td>
-                      <td className="n">{vi.format(row!.orders)}</td>
-                      <td className="n">{vi.format(row!.closedOrders)}</td>
-                      <td className="n">{money(row!.closedNet)}</td>
-                      <td className="n">{vi.format(row!.groups.delivered.orders)}</td>
-                      <td className="n">{money(row!.groups.delivered.net)}</td>
-                      <td><ProgressBar value={row!.groups.delivered.net} max={cur.groups.delivered.net} width={96} size="sm" color={posVar(id)} className="mr-2" /><span className="num text-xs text-ink-3">{pct(cur.groups.delivered.net ? row!.groups.delivered.net / cur.groups.delivered.net * 100 : null)}</span></td>
-                      <td className="n">{vi.format(row!.groups.returned.orders)} <span className="text-[11px] text-ink-3">({pct(returnRate(row!))})</span></td>
-                      <td className="n">{vi.format(row!.groups.cancelled.orders)} <span className="text-[11px] text-ink-3">({pct(cancelRate(row!))})</span></td>
-                      <td><GoalCell value={row!.closedNet} goal={targets[`pos:${id}`]?.revenue ?? 0} sub={`${money(row!.closedNet)} / ${shortMoney(targets[`pos:${id}`]?.revenue ?? 0)}`} /></td>
-                      <td className="n"><DeltaPill value={delta(row!.groups.delivered.net, p?.groups.delivered.net)} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr><td className="bg-surface-2">Tổng</td><td className="n">{vi.format(cur.orders)}</td><td className="n">{vi.format(cur.closedOrders)}</td><td className="n">{money(cur.closedNet)}</td><td className="n">{vi.format(cur.groups.delivered.orders)}</td><td className="n">{money(cur.groups.delivered.net)}</td><td /><td className="n">{vi.format(cur.groups.returned.orders)}</td><td className="n">{vi.format(cur.groups.cancelled.orders)}</td><td>{goal ? <span className="num text-xs">{pct(cur.closedNet / goal * 100, 0)} · {short(cur.closedNet)} / {shortMoney(goal)}</span> : <span className="text-xs text-ink-4">—</span>}</td><td className="n"><DeltaPill value={delta(cur.groups.delivered.net, prev?.groups.delivered.net)} /></td></tr>
-                </tfoot>
-              </table>
-            </TableWrap>
-          </ChartCard>
+          {posTable(cur)}
 
-          <ChartCard icon={CheckCircle2} title="Nhân viên" subtitle="Top 30 theo doanh thu giao thành công · bấm tiêu đề cột để sắp xếp">
-            <TableWrap minWidth={team !== 'cskh' ? 1080 : 880} maxHeight="32rem" stickyFirst>
-              <table className="tbl">
-                <thead>
-                  <tr>
-                    <SortTh k="name" label="Nhân viên" sort={sort} align="left" /><Th>Bộ phận</Th>
-                    {team !== 'cskh' && <><SortTh k="assignedOrders" label="Đơn chia" sort={sort} /><SortTh k="closedOrders" label="Đơn chốt" sort={sort} /><SortTh k="closeRate" label="Tỷ lệ chốt" sort={sort} /></>}
-                    <SortTh k="closedNet" label="Doanh thu đơn chốt" sort={sort} /><SortTh k="averageOrder" label="GTTB (AOV)" sort={sort} /><SortTh k="deliveredOrders" label="Giao TC" sort={sort} /><SortTh k="deliveredNet" label="Doanh thu giao TC" sort={sort} /><SortTh k="returned" label="Hoàn / Hủy" sort={sort} />
-                    <Th>Mục tiêu tháng</Th><Th className="n">So với tháng trước</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {empRows.map((r, i) => {
-                    const p = report.compare?.byEmployee.find((x) => x.sellerId === r.sellerId);
-                    const t = targets[`employee:${r.sellerId}`];
-                    return (
-                      <tr key={r.sellerId || 'none'}>
-                        <td className="font-medium"><span className="num mr-2 inline-block w-4 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span>{r.name}</td><td className="mut text-xs">{r.department ?? '—'}</td>
-                        {team !== 'cskh' && <><td className="n">{vi.format(r.assignedOrders)}</td><td className="n">{vi.format(r.closedOrders)}</td><td className={`n ${rateTextClass(closeRateOf(r, ms.rateBase))}`}>{pct(closeRateOf(r, ms.rateBase), 2)}</td></>}
-                        <td className="n">{money(r.closedNet)}</td><td className="n">{r.averageOrder ? money(r.averageOrder) : '—'}</td><td className="n">{vi.format(r.groups.delivered.orders)}</td><td className="n">{money(r.groups.delivered.net)}</td>
-                        <td className="n">{vi.format(r.groups.returned.orders)} / {vi.format(r.groups.cancelled.orders)}</td>
-                        <td>{!t?.revenue && !t?.closedOrders ? <span className="text-xs text-ink-4">—</span> : t.revenue
-                          ? <GoalCell value={r.closedNet} goal={t.revenue} sub={`${short(r.closedNet)} / ${shortMoney(t.revenue)}`} />
-                          : <GoalCell value={r.closedOrders} goal={t.closedOrders} sub={`${vi.format(r.closedOrders)} / ${vi.format(t.closedOrders)} đơn`} />}</td>
-                        <td className="n"><DeltaPill value={delta(r.groups.delivered.net, p?.groups.delivered.net)} /></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </TableWrap>
-          </ChartCard>
+          {staffCard(report)}
         </>
       )}
     </div>

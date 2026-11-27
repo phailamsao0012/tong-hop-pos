@@ -1758,7 +1758,7 @@ export default function Dashboard({ user, initialView, demo = false, uiMoi = fal
           {!gated && view === 'customers' && <CustomersPage key={searchQuery} initialQ={searchQuery} canExport={canExport(user)} uiMoi={uiMoi} />}
           {!gated && view === 'dormant' && <CustomersView mode="dormant" canExport={canExport(user)} uiMoi={uiMoi} />}
           {!gated && view === 'repurchase' && <RepurchaseView uiMoi={uiMoi} />}
-          {!gated && view === 'monthly' && <MonthlyView onNavigate={(v) => goTo(v as View)} />}
+          {!gated && view === 'monthly' && <MonthlyView onNavigate={(v) => goTo(v as View)} uiMoi={uiMoi} />}
           {!gated && view === 'pipeline' && <PipelineView uiMoi={uiMoi} />}
           {!gated && view === 'van-don' && <VanDonView uiMoi={uiMoi} />}
           {!gated && view === 'calls' && <CallsView canExport={canExport(user)} uiMoi={uiMoi} />}
