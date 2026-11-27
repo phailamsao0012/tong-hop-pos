@@ -26,21 +26,23 @@ export function SegmentDetail({ seg, label, color, report, allNet, q, onClose }:
   const ms = useMetricSettings();
   const combos = useApi<{ combos: SegmentCombo[] }>(seg ? `/api/reports/overview?${q}&productSegment=${seg}&combos=1` : null);
   const cur = report?.current.total, prev = report?.compare?.total;
+  // Lấy mảng ra ngoài useMemo để phụ thuộc đúng thứ đang dùng (react-compiler PreserveManualMemo).
+  const series = report?.current.series, byProduct = report?.current.byProduct;
   const days = useMemo(() => {
     const m = new Map<string, number>();
-    for (const r of report?.current.series ?? []) m.set(r.bucket, (m.get(r.bucket) ?? 0) + r.closedNet);
+    for (const r of series ?? []) m.set(r.bucket, (m.get(r.bucket) ?? 0) + r.closedNet);
     return [...m].sort(([a], [b]) => a.localeCompare(b)).map(([key, net]) => ({ key: key.length === 10 ? `${key.slice(8, 10)}/${key.slice(5, 7)}` : key, net }));
-  }, [report]);
+  }, [series]);
   const products = useMemo(() => {
     const m = new Map<string, { name: string; orders: number; quantity: number; total: number }>();
-    for (const p of report?.current.byProduct ?? []) {
+    for (const p of byProduct ?? []) {
       if (!p.closedQuantity) continue;
       const x = m.get(p.name) ?? { name: p.name, orders: 0, quantity: 0, total: 0 };
       x.orders += p.orders; x.quantity += p.closedQuantity; x.total += p.closedTotal;
       m.set(p.name, x);
     }
     return [...m.values()].sort((a, b) => b.total - a.total);
-  }, [report]);
+  }, [byProduct]);
   const staff = (report?.current.byEmployee ?? []).filter((r) => r.sellerId && r.closedOrders).sort((a, b) => b.closedNet - a.closedNet);
   const tiles = cur ? [
     { label: 'Doanh thu chốt', value: shortMoney(cur.closedNet), d: prev ? delta(cur.closedNet, prev.closedNet) : null },
