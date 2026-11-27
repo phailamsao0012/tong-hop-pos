@@ -327,7 +327,8 @@ export function CallsView({ canExport = false, uiMoi = false }: { canExport?: bo
         <PageHeadMoi title="Cuộc gọi CSKH" scope={scope} hint="Mỗi ghi chú trên hồ sơ khách Pancake = một cuộc gọi" tools={periodBar()} right={headActions()}
           pos={<PosChips posIds={posIds} onChange={setPosIds} />} />
         <CskhFocusBar />
-        {error && !report && <ErrorBox error={error} onRetry={reload} />}
+        {/* Thử lại gọi thẳng refetch của useApi: hàm reload đọc ref (manualRef) nên không truyền thêm chỗ mới (luật react-compiler). */}
+        {error && !report && <ErrorBox error={error} onRetry={refetch} />}
         {!report && !error && <SkeletonKpis count={4} className="xl:grid-cols-4" />}
         {report && (
           <>

@@ -267,7 +267,7 @@ export function SaleAnalyticsView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bậ
               </ul>
             </ChartCard>
   );
-  const rankCard = () => (
+  const rankCard = (r: SaleAnalytics) => (
           <ChartCard icon={Trophy} title={`Xếp hạng · ${staff.length} người`} subtitle={`Màu tỷ lệ chốt data: xanh từ ${RATE_THRESHOLDS.good}%, dưới là đỏ · bấm tiêu đề cột để sắp xếp`} info={r.definitions.scope}>
             {staff.length ? (
               <TableWrap minWidth={960} maxHeight="34rem" stickyFirst>
@@ -365,7 +365,7 @@ export function SaleAnalyticsView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bậ
             onClick={() => setWhy(whyOf('Đội Sale', 'cancel', t))} />
         </div>
         {hourBoard(r)}
-        {rankCard()}
+        {rankCard(r)}
         <div className="grid min-w-0 gap-3">
           {bucketsCard(r, { storageKey: k('buckets'), summary: `trung vị ${duration(t.medianMinutes)}` })}
           <FoldBlock icon={Trophy} title="Cách tính" storageKey={k('defs')}><Definitions items={r.definitions} /></FoldBlock>
@@ -398,7 +398,7 @@ export function SaleAnalyticsView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bậ
           <div className="grid grid-cols-1 gap-4">
             {bucketsCard(r)}
           </div>
-          {rankCard()}
+          {rankCard(r)}
           <Definitions items={r.definitions} />
         </>
       )}

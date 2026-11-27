@@ -298,7 +298,7 @@ export function OriginView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì 
           </>
         )}
         {/* Bấm một số / một dòng: danh sách đơn mở khung giữa màn (bố cục cũ đứng cạnh bảng). */}
-        <Sheet open={!!pick} onOpenChange={(o) => { if (!o) { ctrl.current?.abort(); setPick(null); setList(null); } }}>
+        <Sheet open={!!pick} onOpenChange={(o) => { if (!o) { setPick(null); setList(null); } }}>
           <SheetContent className="overflow-y-auto p-3 sm:max-w-2xl">
             <SheetTitle className="sr-only">Danh sách đơn</SheetTitle>
             {pick && ordersCard()}
