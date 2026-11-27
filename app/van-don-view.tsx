@@ -360,7 +360,7 @@ export function VanDonView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì 
         title: `Tỷ lệ hoàn · ${who}`, value: pct(v), tone: overRet(v) ? 'bad' : undefined, scope, mark: `Đỏ từ ${BOSS_RETURN_RED}%`,
         rows: [{ label: 'Đơn hoàn', value: vi.format(r.returned) }, { label: 'Đơn chuyển đi', value: vi.format(r.sent) }, { label: '= Tỷ lệ hoàn theo đơn', value: pct(v), strong: true, tone: overRet(v) ? 'bad' : undefined },
           { label: 'Theo doanh số chuyển đi', value: pct(share(r.returnedNet, r.sentNet)) }],
-        definition: 'Tỷ lệ hoàn = đơn hoàn ÷ đơn chuyển đi; theo doanh số = giá trị hoàn ÷ doanh số chuyển đi.',
+        definition: 'Tỷ lệ hoàn = đơn hoàn ÷ đơn chuyển đi; theo doanh số chuyển đi = giá trị hoàn ÷ doanh số chuyển đi.',
       };
     };
     const need: CanXemItem[] = [];
@@ -380,7 +380,7 @@ export function VanDonView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì 
           {vdCards(t).map((c) => (
             <KpiCard key={c.key} icon={c.icon} label={c.label} value={vi.format(c.count)} active={card === c.key}
               className={`${KPI_TIGHT} ${c.key === 'returned' && overRet(t.returnRate) ? KPI_RED : ''}`}
-              note={<><span className="block truncate">{shortMoney(c.net)} · {pct(share(c.count, c.prev))} so với {c.base}</span><span className="block truncate">{c.key === 'returned' ? `Theo đơn ${pct(t.returnRate)} · theo doanh số ${pct(t.returnRateNet)}` : `Đang ở bước này: ${vi.format(c.at)}`}</span></>}
+              note={<><span className="block truncate">{shortMoney(c.net)} · {pct(share(c.count, c.prev))} so với {c.base}</span><span className="block truncate">{c.key === 'returned' ? `Theo đơn ${pct(t.returnRate)} · theo doanh số chuyển đi ${pct(t.returnRateNet)}` : `Đang ở bước này: ${vi.format(c.at)}`}</span></>}
               onClick={() => setWhy({
                 title: c.label, value: `${vi.format(c.count)} đơn`, tone: c.key === 'returned' && overRet(t.returnRate) ? 'bad' : undefined, scope,
                 rows: [
