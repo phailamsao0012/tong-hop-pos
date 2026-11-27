@@ -9,6 +9,8 @@ import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { ExternalLink, FileDown, UserCheck, Users, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { KPI_TIGHT, PageHeadMoi, WhySheet, tileGrid, type WhySpec } from './trang-moi';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { POS } from '@/lib/shared/report-model';
 import { PeriodToolbar, PosChips } from './overview-view';
@@ -17,7 +19,7 @@ import { StatusFilter } from './status-filter';
 import { StaffPicker } from './staff-picker';
 import { parseStatus } from '@/lib/pancake/order-status';
 import { StaleChip } from './stale-chip';
-import { Th, ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, dmy, dt, money, pct, scrollToEl, shortMoney, vi, type SortState } from './ui-kit';
+import { Th, ChartCard, Definitions, EmptyState, ErrorBox, FoldBlock, KpiCard, posName, PageHeader, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, dmy, dt, money, pct, scrollToEl, shortMoney, vi, type SortState } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
 
 type Marketer = { marketerId: string; marketerName: string; orders: number; net: number };
@@ -32,7 +34,9 @@ const BASES: Record<Basis, string> = { created: 'Theo ngày lên đơn', confirm
 const BYS = { care: 'Theo NV chăm sóc', seller: 'Theo người bán' } as const;
 const rowKeys = (fn: () => void) => (e: KeyboardEvent<HTMLElement>) => { if (e.target !== e.currentTarget) return; if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } };
 
-export function OriginView() {
+export function OriginView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới, tắt thì y như cũ. */ uiMoi?: boolean } = {}) {
+  // Giao diện mới: khung "Vì sao ra số này" đang mở (null = đóng).
+  const [why, setWhy] = useState<WhySpec | null>(null);
   const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
   const [status, setStatus] = useState('closed');
@@ -119,12 +123,9 @@ export function OriginView() {
     );
   };
 
-  return (
-    <div className="space-y-5">
-      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title="Tự ups & từ MKT"
-        subtitle="Mỗi nhân viên CSKH: bao nhiêu đơn tự lên, bao nhiêu đơn do Marketing đưa về"
-        actions={<><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} /><Button variant="outline" onClick={exportExcel} disabled={!report}><FileDown size={14} />Xuất Excel</Button></>} />
-      <CskhFocusBar />
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  // fold: chỉ bố cục mới truyền (thu gọn thẻ); bố cục cũ không truyền nên thẻ y như trước.
+  const periodBar = () => (
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset}
         onStart={setStart} onEnd={setEnd} loading={loading} onReload={reload}
         extra={
@@ -147,27 +148,8 @@ export function OriginView() {
             )}
           </>
         } />
-      <PosChips posIds={posIds} onChange={setPosIds} />
-      {error && !report && <ErrorBox error={error} onRetry={reload} />}
-      {!report && !error && (
-        <>
-          <SkeletonKpis count={4} className="xl:grid-cols-4" />
-          <ChartCard icon={Users} title="Theo nhân viên" subtitle="Đang tải…"><SkeletonTable rows={6} cols={7} /></ChartCard>
-        </>
-      )}
-      {report && (
-        <>
-          <div className="grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-4" aria-busy={loading}>
-            <KpiCard icon={UserCheck} tone="green" label="Đơn tự ups" value={vi.format(tot.self)} countUp rawValue={tot.self} note={`${shortMoney(tot.selfNet)} · ${pct(all ? tot.self / all * 100 : null, 0)} tổng`}
-              tooltip={{ period: periodLabel, current: `${vi.format(tot.self)} đơn · ${money(tot.selfNet)}`, definition: report.definitions.origin }} />
-            <KpiCard icon={ICON.marketing} tone="blue" label="Đơn từ MKT" value={vi.format(tot.mkt)} countUp rawValue={tot.mkt} note={`${shortMoney(tot.mktNet)} · ${pct(all ? tot.mkt / all * 100 : null, 0)} tổng`}
-              tooltip={{ period: periodLabel, current: `${vi.format(tot.mkt)} đơn · ${money(tot.mktNet)}`, definition: report.definitions.origin }} />
-            <KpiCard icon={Wallet} tone="teal" label={`Tổng đơn · ${statusLabel.toLowerCase()}`} value={vi.format(all)} countUp rawValue={all} note={`${shortMoney(tot.selfNet + tot.mktNet)} · ${rows.length} nhân viên`}
-              tooltip={{ period: periodLabel, current: `${vi.format(all)} đơn`, definition: report.definitions.status }} />
-            <KpiCard icon={Users} tone="purple" label="Tỷ lệ tự ups" value={pct(all ? tot.self / all * 100 : null)} note={BASES[basis]} progress={all ? { value: tot.self, max: all } : undefined}
-              tooltip={{ period: periodLabel, current: `${vi.format(tot.self)} / ${vi.format(all)} đơn`, definition: 'Đơn tự ups ÷ tổng đơn (tự ups + từ MKT) của nhóm đang lọc.' }} />
-          </div>
-          <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1fr)_28rem]">
+  );
+  const staffCard = (report: Report) => (
             <ChartCard icon={Users} title={`${BYS[by]} · ${rows.length} người`} subtitle="Bấm số Tự ups / Từ MKT / Tổng để xem đúng các đơn đó · bấm tiêu đề cột để sắp xếp" info={report.definitions.staff}>
               {rows.length ? (
                 <TableWrap maxHeight="40rem" minWidth={760 + labels.length * 90} stickyFirst>
@@ -226,7 +208,8 @@ export function OriginView() {
                 <span className="inline-flex items-center gap-1"><i className="inline-block size-2 rounded-full bg-[var(--st-confirmed)]" />Từ MKT</span>
               </p>
             </ChartCard>
-            <div id="origin-orders">
+  );
+  const ordersCard = () => (
               <ChartCard icon={ExternalLink} title={pick ? `${pick.name} · ${pick.group ?? (pick.origin === 'self' ? 'Tự ups' : pick.origin === 'mkt' ? 'Từ MKT' : 'Tất cả')}` : 'Danh sách đơn'}
                 subtitle={pick ? `${statusLabel} · ${periodLabel}${list ? ` · ${vi.format(list.length)} đơn` : ''}` : 'Bấm một con số trong bảng để xem các đơn cấu thành'}>
                 {!pick && <EmptyState text="Chưa chọn nhân viên." />}
@@ -277,6 +260,86 @@ export function OriginView() {
                   </ul>
                 ) : <EmptyState text="Không có đơn." />)}
               </ChartCard>
+  );
+  // [hết khối chung]
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trên xuống: đầu trang (PageHeadMoi: chọn kỳ + trạng thái, ngày tính, NV trên đơn, chọn người, bộ phận; Excel; POS) → chọn riêng một NV CSKH
+  // → một hàng 4 ô số (bấm mở "Vì sao ra số này") → bảng chính theo nhân viên → bấm số / dòng: danh sách đơn mở khung giữa màn
+  // → Cách tính thu gọn. Trang không có tỷ lệ chốt / hoàn / hủy nên không có dải "Cần xem".
+  if (uiMoi) {
+    const scope = `${periodLabel} · ${posIds.length <= 3 ? posIds.map(posName).join(', ') : `${vi.format(posIds.length)} POS`} · ${statusLabel.toLowerCase()} · ${BASES[basis].toLowerCase()} · ${BYS[by].toLowerCase()}${focus ? ` · riêng ${focus.name}` : ''}`;
+    const selfShare = all ? tot.self / all * 100 : null;
+    const perStaff = (key: 'self' | 'mkt' | 'total') => [...rows].sort((a, b) => b[key] - a[key]).slice(0, 10).map((s) => ({ label: s.name, value: `${vi.format(s[key])} đơn` }));
+    return (
+      <div className="min-w-0 space-y-4">
+        <PageHeadMoi title="Tự ups & từ MKT" scope={scope} hint="Mỗi nhân viên CSKH: bao nhiêu đơn tự lên, bao nhiêu đơn do Marketing đưa về" tools={periodBar()}
+          right={<><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} /><Button variant="outline" onClick={exportExcel} disabled={!report}><FileDown size={14} />Xuất Excel</Button></>}
+          pos={<PosChips posIds={posIds} onChange={setPosIds} />} />
+        <CskhFocusBar />
+        {error && !report && <ErrorBox error={error} onRetry={reload} />}
+        {!report && !error && <SkeletonKpis count={4} className="xl:grid-cols-4" />}
+        {report && (
+          <>
+            <div className={tileGrid(4)} aria-busy={loading}>
+              <KpiCard icon={UserCheck} tone="green" label="Đơn tự ups" className={KPI_TIGHT} value={vi.format(tot.self)} note={`${shortMoney(tot.selfNet)} · đơn không có Marketer`}
+                onClick={() => setWhy({ title: 'Đơn tự ups', value: `${vi.format(tot.self)} đơn · ${money(tot.selfNet)}`, scope, rows: perStaff('self'), definition: report.definitions.origin })} />
+              <KpiCard icon={ICON.marketing} tone="blue" label="Đơn từ MKT" className={KPI_TIGHT} value={vi.format(tot.mkt)} note={`${shortMoney(tot.mktNet)} · đơn có Marketer`}
+                onClick={() => setWhy({ title: 'Đơn từ MKT', value: `${vi.format(tot.mkt)} đơn · ${money(tot.mktNet)}`, scope, rows: perStaff('mkt'), definition: report.definitions.origin })} />
+              <KpiCard icon={Wallet} tone="teal" label={`Tổng đơn · ${statusLabel.toLowerCase()}`} className={KPI_TIGHT} value={vi.format(all)} note={`${shortMoney(tot.selfNet + tot.mktNet)} · ${vi.format(rows.length)} người`}
+                onClick={() => setWhy({ title: `Tổng đơn · ${statusLabel.toLowerCase()}`, value: `${vi.format(all)} đơn`, scope, rows: perStaff('total'), definition: report.definitions.status })} />
+              <KpiCard icon={Users} tone="purple" label="Tỷ lệ tự ups" className={KPI_TIGHT} value={pct(selfShare)} note={BASES[basis]} progress={all ? { value: tot.self, max: all } : undefined}
+                onClick={() => setWhy({ title: 'Tỷ lệ tự ups', value: pct(selfShare), scope,
+                  rows: [{ label: 'Đơn tự ups', value: vi.format(tot.self) }, { label: 'Tổng đơn (tự ups + từ MKT)', value: vi.format(all) }, { label: '= Tỷ lệ tự ups', value: pct(selfShare), strong: true }],
+                  definition: 'Đơn tự ups ÷ tổng đơn (tự ups + từ MKT) của những người đang xem.' })} />
+            </div>
+            {staffCard(report)}
+            <FoldBlock icon={ExternalLink} title="Cách tính" storageKey="ui-moi:origin:defs"><Definitions items={report.definitions} /></FoldBlock>
+          </>
+        )}
+        {/* Bấm một số / một dòng: danh sách đơn mở khung giữa màn (bố cục cũ đứng cạnh bảng). */}
+        <Sheet open={!!pick} onOpenChange={(o) => { if (!o) { ctrl.current?.abort(); setPick(null); setList(null); } }}>
+          <SheetContent className="overflow-y-auto p-3 sm:max-w-2xl">
+            <SheetTitle className="sr-only">Danh sách đơn</SheetTitle>
+            {pick && ordersCard()}
+          </SheetContent>
+        </Sheet>
+        <WhySheet spec={why} onClose={() => setWhy(null)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title="Tự ups & từ MKT"
+        subtitle="Mỗi nhân viên CSKH: bao nhiêu đơn tự lên, bao nhiêu đơn do Marketing đưa về"
+        actions={<><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} /><Button variant="outline" onClick={exportExcel} disabled={!report}><FileDown size={14} />Xuất Excel</Button></>} />
+      <CskhFocusBar />
+      {periodBar()}
+      <PosChips posIds={posIds} onChange={setPosIds} />
+      {error && !report && <ErrorBox error={error} onRetry={reload} />}
+      {!report && !error && (
+        <>
+          <SkeletonKpis count={4} className="xl:grid-cols-4" />
+          <ChartCard icon={Users} title="Theo nhân viên" subtitle="Đang tải…"><SkeletonTable rows={6} cols={7} /></ChartCard>
+        </>
+      )}
+      {report && (
+        <>
+          <div className="grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-4" aria-busy={loading}>
+            <KpiCard icon={UserCheck} tone="green" label="Đơn tự ups" value={vi.format(tot.self)} countUp rawValue={tot.self} note={`${shortMoney(tot.selfNet)} · ${pct(all ? tot.self / all * 100 : null, 0)} tổng`}
+              tooltip={{ period: periodLabel, current: `${vi.format(tot.self)} đơn · ${money(tot.selfNet)}`, definition: report.definitions.origin }} />
+            <KpiCard icon={ICON.marketing} tone="blue" label="Đơn từ MKT" value={vi.format(tot.mkt)} countUp rawValue={tot.mkt} note={`${shortMoney(tot.mktNet)} · ${pct(all ? tot.mkt / all * 100 : null, 0)} tổng`}
+              tooltip={{ period: periodLabel, current: `${vi.format(tot.mkt)} đơn · ${money(tot.mktNet)}`, definition: report.definitions.origin }} />
+            <KpiCard icon={Wallet} tone="teal" label={`Tổng đơn · ${statusLabel.toLowerCase()}`} value={vi.format(all)} countUp rawValue={all} note={`${shortMoney(tot.selfNet + tot.mktNet)} · ${rows.length} nhân viên`}
+              tooltip={{ period: periodLabel, current: `${vi.format(all)} đơn`, definition: report.definitions.status }} />
+            <KpiCard icon={Users} tone="purple" label="Tỷ lệ tự ups" value={pct(all ? tot.self / all * 100 : null)} note={BASES[basis]} progress={all ? { value: tot.self, max: all } : undefined}
+              tooltip={{ period: periodLabel, current: `${vi.format(tot.self)} / ${vi.format(all)} đơn`, definition: 'Đơn tự ups ÷ tổng đơn (tự ups + từ MKT) của nhóm đang lọc.' }} />
+          </div>
+          <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1fr)_28rem]">
+            {staffCard(report)}
+            <div id="origin-orders">
+              {ordersCard()}
             </div>
           </div>
           <Definitions items={report.definitions} />

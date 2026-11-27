@@ -1762,7 +1762,7 @@ export default function Dashboard({ user, initialView, demo = false, uiMoi = fal
           {!gated && view === 'pipeline' && <PipelineView />}
           {!gated && view === 'van-don' && <VanDonView />}
           {!gated && view === 'calls' && <CallsView canExport={canExport(user)} />}
-          {!gated && view === 'origin' && <OriginView />}
+          {!gated && view === 'origin' && <OriginView uiMoi={uiMoi} />}
           {!gated && view === 'cskh-overview' && <TeamOverviewView key="cskh" team="cskh" kpi={canView(user, 'cskh-kpi')} uiMoi={uiMoi} onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
           {!gated && view === 'sale-overview' && <TeamOverviewView key="sale" team="sale" uiMoi={uiMoi} onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
           {/* Bỏ hẳn Việc của tôi (anh Vũ 31/10/2026: "xóa hẳn ngay cái việc của tôi"): khối này đọc D1 nhiều nhất kỳ 17/10. */}
