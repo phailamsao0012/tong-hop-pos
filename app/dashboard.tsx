@@ -1770,8 +1770,8 @@ export default function Dashboard({ user, initialView, demo = false, uiMoi = fal
           {!gated && view === 'care' && <CareView />}
           {!gated && view === 'cskh-kpi' && canView(user, 'cskh-kpi') && <CskhKpiView />}
           {!gated && view === 'sale-kpi' && canView(user, 'sale-kpi') && <SaleKpiView />}
-          {!gated && view === 'sale-teams' && <TeamGroupsView key="sale" team="sale" owner={isOwner(user)} />}
-          {!gated && view === 'cskh-teams' && <TeamGroupsView key="cskh" team="cskh" owner={isOwner(user)} />}
+          {!gated && view === 'sale-teams' && <TeamGroupsView key="sale" team="sale" owner={isOwner(user)} uiMoi={uiMoi} />}
+          {!gated && view === 'cskh-teams' && <TeamGroupsView key="cskh" team="cskh" owner={isOwner(user)} uiMoi={uiMoi} />}
           {!gated && view === 'cskh-analytics' && <CskhAnalyticsView />}
           {!gated && view === 'sale-analytics' && <SaleAnalyticsView />}
           {!gated && view === 'sale-quality' && <SaleQualityView />}

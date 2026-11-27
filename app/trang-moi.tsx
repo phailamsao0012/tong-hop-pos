@@ -7,6 +7,43 @@
 import { useState, type ReactNode } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { BOSS_CANCEL_RED, BOSS_CLOSE_RED, BOSS_RETURN_RED } from '@/lib/zalo/boss-report';
+
+/** Đầu trang kiểu mới: tên trang + một dòng phạm vi (kỳ, POS, cách tính), chọn kỳ, hàng POS và nút phụ chung một hàng; màn hẹp tự xuống hàng.
+ *  `tools` / `pos` là chính PeriodToolbar / PosChips của trang (không dựng bản mới). */
+export function PageHeadMoi({ title, hint, scope, tools, pos, right }: { title: string; hint?: string; scope: string; tools?: ReactNode; pos?: ReactNode; right?: ReactNode }) {
+  return (
+    <header className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
+      <div className="min-w-0 flex-[1_1_16rem]">
+        <h1 className="ph-title display text-lg font-semibold leading-tight tracking-[-.02em] text-ink sm:text-xl" title={hint}>{title}</h1>
+        <p className="mt-0.5 line-clamp-2 text-[12px] text-ink-3" title={scope}>{scope}</p>
+      </div>
+      {tools && <div className="min-w-0 max-w-full flex-[0_1_auto]">{tools}</div>}
+      {pos && <div className="min-w-0 flex-[1_1_14rem] empty:hidden">{pos}</div>}
+      {right && <div className="flex min-w-0 flex-wrap items-center gap-2">{right}</div>}
+    </header>
+  );
+}
+
+/** Lưới một hàng ô số không để ô trống: số cột chia hết số ô ở mọi bề rộng (điện thoại 2 cột; ô lẻ cuối giãn hai cột). */
+const TILE_GRID: Record<number, string> = {
+  1: 'grid-cols-1',
+  2: 'grid-cols-2',
+  3: 'grid-cols-1 sm:grid-cols-3',
+  4: 'grid-cols-2 xl:grid-cols-4',
+  5: 'grid-cols-2 lg:grid-cols-5 max-lg:[&>:last-child]:col-span-2',
+  6: 'grid-cols-2 sm:grid-cols-3 xl:grid-cols-6',
+  7: 'grid-cols-2 lg:grid-cols-7 max-lg:[&>:last-child]:col-span-2',
+  8: 'grid-cols-2 sm:grid-cols-4 2xl:grid-cols-8',
+};
+export const tileGrid = (n: number) => `grid min-w-0 gap-3 ${TILE_GRID[n] ?? 'grid-cols-[repeat(auto-fit,minmax(min(100%,13rem),1fr))]'}`;
+
+/** Vượt mốc tô đỏ (mốc chung ở lib/zalo/boss-report.ts, như ảnh Zalo sếp): chốt Sale dưới 40%, hoàn từ 7%, hủy từ 5%. */
+export const overClose = (r: number | null | undefined) => r != null && r < BOSS_CLOSE_RED;
+export const overRet = (r: number | null | undefined) => r != null && r >= BOSS_RETURN_RED;
+export const overCancel = (r: number | null | undefined) => r != null && r >= BOSS_CANCEL_RED;
+/** Lớp tô đỏ số trong KpiCard khi vượt mốc. */
+export const KPI_RED = '[&_.val]:!text-bad';
 
 export type WhyRow = { label: string; value: string; tone?: 'bad' | 'good'; strong?: boolean };
 export type WhySpec = {

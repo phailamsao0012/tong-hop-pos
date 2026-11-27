@@ -6,7 +6,9 @@
 import { StaffName } from './staff-name';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Building2, ChevronDown, ChevronRight, Crown, ExternalLink, Save, Target, Trophy, Users, UsersRound, Wallet } from 'lucide-react';
-import { closeRateOf, closeRateOfMany, type RateBase } from '@/lib/reports/metrics';
+import { closeRateOf, closeRateOfMany, type RateBase, METRIC_DEFS, RATE_BASES, closeRateBase, closeRateTop } from '@/lib/reports/metrics';
+import { BOSS_CLOSE_RED, COACH_MIN_BASE } from '@/lib/zalo/boss-report';
+import { CanXemStrip, PageHeadMoi, WhySheet, overClose, tileGrid, type CanXemItem, type WhySpec } from './trang-moi';
 import { parseRate } from '@/lib/kpi/kpi-pace';
 import { POS } from '@/lib/shared/report-model';
 import { Button } from '@/components/ui/button';
@@ -29,7 +31,7 @@ import { daysInMonth, fetchTargets, parseMoney, type TargetItem } from './target
 import { KpiInlineEditor } from './kpi-inline-editor';
 import { officeLabel, officeList } from '@/lib/teams/web-teams';
 import { Th,
-  ChartCard, EmptyState, ErrorBox, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, delta, dmy, pct, shortMoney, toast, useSort, vi,
+  ChartCard, EmptyState, ErrorBox, FoldBlock, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, delta, dmy, pct, shortMoney, toast, useSort, vi,
 } from './ui-kit';
 
 type Dept = 'sale' | 'cskh';
@@ -92,7 +94,7 @@ function buildRows(allTeams: HrTeamGroup[], cur: Emp[], prev: Emp[] | null, care
   }).filter((r) => r.people.some((p) => p.active) || r.cur.closed || r.cur.orders);
 }
 
-export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) {
+export function TeamGroupsView({ team, owner, uiMoi = false }: { team: Dept; owner: boolean; /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới, tắt thì y như cũ. */ uiMoi?: boolean }) {
   // Quy tắc POS (anh Vũ 12/11/2026): số đã đạt / thực đạt tính trên POS đang chọn.
   const [kpiPos] = usePosIds();
   const kpiMonth = todayVn().slice(0, 7);
@@ -164,6 +166,8 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
     : k === 'data' ? r.care.assigned : k === 'need' ? r.care.need : k === 'today' ? r.care.notedToday : k === 'own' ? r.care.ownNet
     : r.selling ? r.cur.revenue / r.selling : null) : [], [rows, sort, ms.rateBase]);
   const [open, setOpen] = useState<string | null>(null);
+  // Giao diện mới: khung "Vì sao ra số này" đang mở (null = đóng).
+  const [why, setWhy] = useState<WhySpec | null>(null);
   useEffect(() => { if (unit) setOpen(unitIds(unit.id)[0]); }, [unit]);
   const teamsOnly = rows?.filter((r) => r.id !== 'none' && r.id !== UNLINKED) ?? [];
   const best = [...teamsOnly].sort((a, b) => b.cur.revenue - a.cur.revenue)[0];
@@ -176,20 +180,10 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
     <td className="r num">{shortMoney(c.ownNet)}{of?.ownNet ? <span className="block text-[11px] text-ink-3">{pct(c.ownNet / of.ownNet * 100, 0)} team</span> : null}</td>
   </> : null;
 
-  return (
-    <div className="space-y-5">
-      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title={`${LABEL[team]} theo team`}
-        subtitle={`So sánh các team ${LABEL[team]} theo chi nhánh: doanh thu, đơn chốt, tỷ lệ chốt, doanh thu mỗi người${isCare ? ', data đang cầm, cần note, doanh thu tự chốt' : ''}. Tạo team và xếp người bên web nhân sự.`}
-        actions={<span className="flex flex-wrap items-center gap-2">
-          <a href={`${CRM_URL}/?view=org`} target="_blank" rel="noreferrer" title="Web nhân sự: Danh mục → thêm Team (chọn phòng và văn phòng), rồi ở Sơ đồ tổ chức kéo thả người vào team"
-            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-line bg-surface px-3 text-[13px] font-medium hover:bg-surface-2"><UsersRound size={14} />Tạo team / xếp người<ExternalLink size={12} className="text-ink-3" /></a>
-          <StaleChip stale={api.stale} at={api.at} loading={api.loading} error={report ? api.error : null} onRetry={api.reload} />
-        </span>} />
-      <PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset} onStart={setStart} onEnd={setEnd} loading={api.loading} onReload={api.reload} extra={<GlobalStatusFilter size="md" />} />
-      <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
-      {offices.length > 1 && <SegmentedControl ariaLabel="Chi nhánh" value={curBranch} onChange={setBranch} options={[{ value: ALL, label: 'Mọi chi nhánh' }, ...offices.map((o) => ({ value: o, label: o, icon: Building2 }))]} />}
-      {error && !rows && <ErrorBox error={error} onRetry={() => { api.reload(); teamsApi.reload(); }} />}
-      {(() => {
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  // fold: chỉ bố cục mới truyền (thu gọn thẻ); bố cục cũ không truyền nên thẻ y như trước.
+  const unlinkedNote = (/*{}*/) => (
+      (() => {
         // Tài khoản có đơn trong kỳ mà chưa gắn hồ sơ nhân sự: số của họ không vào team nào, nhắc ngay đầu trang để gắn (10/10/2026).
         const unlinked = allRows?.find((r) => r.id === UNLINKED);
         return unlinked && curBranch === ALL ? (
@@ -199,21 +193,10 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
             <a href={CRM_URL} target="_blank" rel="noreferrer" className="font-medium text-primary underline-offset-2 hover:underline">Mở web nhân sự</a>
           </p>
         ) : null;
-      })()}
-      {teamsApi.data && !teamsApi.data.linked && <ErrorBox error="Chưa có dữ liệu team từ web nhân sự. Kiểm tra Cấu hình → Liên kết web nhân sự." />}
-      {!rows && !error && <><SkeletonKpis count={4} /><ChartCard title="Các team" subtitle="Đang tải…"><SkeletonTable rows={5} cols={7} /></ChartCard></>}
-      {rows && (
-        <>
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-            <KpiCard icon={UsersRound} tone="blue" label="Số team" value={vi.format(teamsOnly.length)} note={`${vi.format(teamsOnly.reduce((n, r) => n + r.people.filter((p) => p.active).length, 0))} người đang làm trong team`} />
-            <KpiCard icon={Wallet} tone="green" label={`Doanh thu ${LABEL[team]}`} value={shortMoney(total)} note="Cộng các team trong kỳ"
-              delta={rows.every((r) => r.prev) ? delta(total, rows.reduce((s, r) => s + (r.prev?.revenue ?? 0), 0)) ?? undefined : undefined} />
-            <KpiCard icon={Trophy} tone="orange" label="Team dẫn đầu" value={best ? best.name : '—'} note={best ? `${shortMoney(best.cur.revenue)}${total ? ` · ${pct(best.cur.revenue / total * 100, 0)} bộ phận` : ''}` : 'Chưa có số liệu'} />
-            <KpiCard icon={Users} tone={loose ? 'red' : 'gray'} label="Chưa vào team" value={vi.format(loose)} note={loose ? 'Xếp team bên web nhân sự để tính đúng' : 'Mọi người đã có team'} />
-          </div>
-
-          {curBranch === ALL && branches.length > 1 && (
-            <ChartCard icon={Building2} title="So sánh chi nhánh" subtitle="Cộng các team thuộc từng chi nhánh (văn phòng của team bên web nhân sự) · bấm để lọc">
+      })()
+  );
+  const branchCard = (fold?: { storageKey: string; summary?: string }) => (
+            <ChartCard collapse={fold} icon={Building2} title="So sánh chi nhánh" subtitle="Cộng các team thuộc từng chi nhánh (văn phòng của team bên web nhân sự) · bấm để lọc">
               <TableWrap minWidth={isCare ? 860 : 620}>
                 <table className="tbl w-full">
                   <thead><tr><Th className="text-left">Chi nhánh</Th><Th className="r">Team</Th><Th className="r">Người có đơn</Th><Th className="r">Doanh thu</Th><Th className="r">% bộ phận</Th><Th className="r">Đơn chốt</Th><Th className="r">DT / người</Th>
@@ -238,8 +221,8 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
                 </table>
               </TableWrap>
             </ChartCard>
-          )}
-
+  );
+  const teamsCard = () => (
           <ChartCard icon={UsersRound} title="So sánh các team" subtitle={`Bấm vào team để xem từng người · ${dmy(start)} – ${dmy(end)}`}>
             {shown.length ? (
               <TableWrap minWidth={isCare ? 1180 : 860} stickyFirst>
@@ -313,6 +296,120 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
               </TableWrap>
             ) : <EmptyState text="Chưa có team nào có số liệu trong kỳ này." />}
           </ChartCard>
+  );
+  // [hết khối chung]
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trên xuống: đầu trang một hàng → chi nhánh → nhắc chưa gắn hồ sơ → "Cần xem" (team Sale chốt dưới 40%) → một hàng 4 ô số
+  // (bấm mở "Vì sao ra số này") → bảng chính So sánh các team → khối phụ thu gọn (So sánh chi nhánh, KPI tháng theo team).
+  if (uiMoi) {
+    const scope = [`${dmy(start)} – ${dmy(end)}`, posIds.length <= 3 ? posIds.map((id) => POS.find((p) => p.id === id)?.name ?? id).join(', ') : `${vi.format(posIds.length)} POS`,
+      curBranch === ALL ? 'mọi chi nhánh' : curBranch, 'team theo web nhân sự', ...(team === 'sale' ? [`tỷ lệ chốt = ${RATE_BASES[ms.rateBase].short}`] : [])].join(' · ');
+    const inp = (s: Sum) => ({ orders: s.orders, closedOrders: s.closed, assignedOrders: s.assigned, assignedClosedOrders: s.assignedClosed, createdClosedOrders: s.createdClosed, assignedHidden: s.assignedHidden });
+    const base = (s: Sum) => closeRateBase(inp(s), ms.rateBase);
+    const prevTotal = rows && rows.every((r) => r.prev) ? rows.reduce((s, r) => s + (r.prev?.revenue ?? 0), 0) : null;
+    const whyTeamRate = (r: Row): WhySpec => {
+      const v = rate(r.cur, ms.rateBase);
+      return {
+        title: `Tỷ lệ chốt · ${r.name}`, value: pct(v), tone: overClose(v) ? 'bad' : undefined, scope,
+        previous: r.prev ? pct(rate(r.prev, ms.rateBase)) : undefined, mark: `Đỏ khi dưới ${BOSS_CLOSE_RED}%`,
+        rows: [
+          { label: 'Đã chốt (tử số)', value: vi.format(closeRateTop(inp(r.cur), ms.rateBase)) },
+          { label: `${ms.rateBase === 'assigned' ? 'Đơn được chia' : 'Đơn lên'} (mẫu số)`, value: vi.format(base(r.cur)) },
+          { label: '= Tỷ lệ chốt', value: pct(v), strong: true, tone: overClose(v) ? 'bad' : undefined },
+          { label: 'Người có đơn / người trong team', value: `${vi.format(r.selling)} / ${vi.format(r.people.filter((p) => p.active).length)}` },
+        ],
+        definition: METRIC_DEFS.rate(ms.rateBase).def + ' Cộng tử số, mẫu số của người trong team.',
+      };
+    };
+    const need: CanXemItem[] = team === 'sale' ? teamsOnly
+      .filter((r) => overClose(rate(r.cur, ms.rateBase)) && base(r.cur) >= COACH_MIN_BASE)
+      .sort((a, b) => (rate(a.cur, ms.rateBase) ?? 0) - (rate(b.cur, ms.rateBase) ?? 0))
+      .map((r) => ({ key: r.id, text: `${r.name}: chốt ${pct(rate(r.cur, ms.rateBase))}`, onClick: () => setWhy(whyTeamRate(r)) })) : [];
+    const k = (s: string) => `ui-moi:${team}-teams:${s}`;
+    return (
+      <div className="min-w-0 space-y-4">
+        <PageHeadMoi title={`${LABEL[team]} theo team`} scope={scope}
+          hint={`So sánh các team ${LABEL[team]} theo chi nhánh. Tạo team và xếp người bên web nhân sự.`}
+          tools={<PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset} onStart={setStart} onEnd={setEnd} loading={api.loading} onReload={api.reload} extra={<GlobalStatusFilter size="md" />} />}
+          pos={<PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />}
+          right={<>
+            <a href={`${CRM_URL}/?view=org`} target="_blank" rel="noreferrer" title="Web nhân sự: Danh mục → thêm Team (chọn phòng và văn phòng), rồi ở Sơ đồ tổ chức kéo thả người vào team"
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-line bg-surface px-3 text-[13px] font-medium hover:bg-surface-2"><UsersRound size={14} />Tạo team / xếp người<ExternalLink size={12} className="text-ink-3" /></a>
+            <StaleChip stale={api.stale} at={api.at} loading={api.loading} error={report ? api.error : null} onRetry={api.reload} />
+          </>} />
+        {offices.length > 1 && <SegmentedControl ariaLabel="Chi nhánh" value={curBranch} onChange={setBranch} options={[{ value: ALL, label: 'Mọi chi nhánh' }, ...offices.map((o) => ({ value: o, label: o, icon: Building2 }))]} />}
+        {error && !rows && <ErrorBox error={error} onRetry={() => { api.reload(); teamsApi.reload(); }} />}
+        {unlinkedNote()}
+        {teamsApi.data && !teamsApi.data.linked && <ErrorBox error="Chưa có dữ liệu team từ web nhân sự. Kiểm tra Cấu hình → Liên kết web nhân sự." />}
+        {!rows && !error && <SkeletonKpis count={4} />}
+        {rows && (
+          <>
+            <CanXemStrip items={need} note={`Team từ ${COACH_MIN_BASE} đơn ở mẫu số, chốt dưới ${BOSS_CLOSE_RED}% · bấm để xem vì sao`} />
+            <div className={tileGrid(4)}>
+              <KpiCard icon={UsersRound} tone="blue" label="Số team" value={vi.format(teamsOnly.length)} note={`${vi.format(teamsOnly.reduce((n, r) => n + r.people.filter((p) => p.active).length, 0))} người đang làm trong team`}
+                onClick={() => setWhy({ title: 'Số team', value: vi.format(teamsOnly.length), scope,
+                  rows: teamsOnly.map((r) => ({ label: r.name, value: `${vi.format(r.people.filter((p) => p.active).length)} người` })),
+                  definition: 'Team, Leader, Trưởng phòng lấy từ web nhân sự; chỉ đếm team còn người đang làm hoặc có đơn trong kỳ, ở chi nhánh và POS đang chọn.' })} />
+              <KpiCard icon={Wallet} tone="green" label={`Doanh thu ${LABEL[team]} · các team`} value={shortMoney(total)} note="Cộng các team trong kỳ"
+                delta={prevTotal !== null ? delta(total, prevTotal) ?? undefined : undefined}
+                onClick={() => setWhy({ title: `Doanh thu ${LABEL[team]} các team`, value: shortMoney(total), scope, previous: prevTotal !== null ? shortMoney(prevTotal) : undefined,
+                  rows: [...(rows ?? [])].sort((a, b) => b.cur.revenue - a.cur.revenue).map((r) => ({ label: r.name, value: `${shortMoney(r.cur.revenue)}${total ? ` · ${pct(r.cur.revenue / total * 100, 0)}` : ''}` })),
+                  definition: 'Doanh thu đơn chốt của từng người trong team (cùng báo cáo Tổng quan bộ phận), cộng theo team; người có đơn mà chưa gắn hồ sơ nhân sự nằm ở dòng riêng.' })} />
+              <KpiCard icon={Trophy} tone="orange" label="Team dẫn đầu doanh thu" value={best ? best.name : '—'} note={best ? `${shortMoney(best.cur.revenue)}${total ? ` · ${pct(best.cur.revenue / total * 100, 0)} bộ phận` : ''}` : 'Chưa có số liệu'}
+                onClick={best ? () => setWhy({ title: 'Team dẫn đầu', value: best.name, scope,
+                  rows: [{ label: 'Doanh thu', value: shortMoney(best.cur.revenue) }, { label: 'Đơn chốt', value: vi.format(best.cur.closed) }, { label: 'GTTB', value: shortMoney(aov(best.cur)) },
+                    ...(team === 'sale' ? [{ label: 'Tỷ lệ chốt', value: pct(rate(best.cur, ms.rateBase)), tone: overClose(rate(best.cur, ms.rateBase)) ? 'bad' as const : undefined }] : []),
+                    { label: 'Phần của bộ phận', value: total ? pct(best.cur.revenue / total * 100, 0) : '—' }],
+                  definition: 'Team có doanh thu đơn chốt cao nhất trong kỳ (không tính dòng chưa vào team / chưa gắn hồ sơ).' }) : undefined} />
+              <KpiCard icon={Users} tone={loose ? 'red' : 'gray'} label="Chưa vào team" value={vi.format(loose)} note={loose ? 'Xếp team bên web nhân sự để tính đúng' : 'Mọi người đã có team'}
+                onClick={() => setWhy({ title: 'Chưa vào team', value: vi.format(loose), scope,
+                  rows: (rows ?? []).filter((r) => r.id === 'none' || r.id === UNLINKED).flatMap((r) => r.people.filter((p) => p.active).map((p) => ({ label: p.name, value: r.name }))),
+                  definition: 'Người đang làm nằm thẳng ở phòng (chưa xếp team) hoặc tài khoản POS có đơn mà chưa gắn hồ sơ bên web nhân sự.' })} />
+            </div>
+            {teamsCard()}
+            <div className="grid min-w-0 gap-3">
+              {curBranch === ALL && branches.length > 1 && branchCard({ storageKey: k('branch'), summary: `${vi.format(branches.length)} chi nhánh` })}
+              {owner && <FoldBlock icon={Target} title={`KPI tháng theo team ${LABEL[team]}`} storageKey={k('kpi')}><TeamKpi team={team} teams={teamsOnly} /></FoldBlock>}
+            </div>
+          </>
+        )}
+        <WhySheet spec={why} onClose={() => setWhy(null)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title={`${LABEL[team]} theo team`}
+        subtitle={`So sánh các team ${LABEL[team]} theo chi nhánh: doanh thu, đơn chốt, tỷ lệ chốt, doanh thu mỗi người${isCare ? ', data đang cầm, cần note, doanh thu tự chốt' : ''}. Tạo team và xếp người bên web nhân sự.`}
+        actions={<span className="flex flex-wrap items-center gap-2">
+          <a href={`${CRM_URL}/?view=org`} target="_blank" rel="noreferrer" title="Web nhân sự: Danh mục → thêm Team (chọn phòng và văn phòng), rồi ở Sơ đồ tổ chức kéo thả người vào team"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-line bg-surface px-3 text-[13px] font-medium hover:bg-surface-2"><UsersRound size={14} />Tạo team / xếp người<ExternalLink size={12} className="text-ink-3" /></a>
+          <StaleChip stale={api.stale} at={api.at} loading={api.loading} error={report ? api.error : null} onRetry={api.reload} />
+        </span>} />
+      <PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset} onStart={setStart} onEnd={setEnd} loading={api.loading} onReload={api.reload} extra={<GlobalStatusFilter size="md" />} />
+      <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
+      {offices.length > 1 && <SegmentedControl ariaLabel="Chi nhánh" value={curBranch} onChange={setBranch} options={[{ value: ALL, label: 'Mọi chi nhánh' }, ...offices.map((o) => ({ value: o, label: o, icon: Building2 }))]} />}
+      {error && !rows && <ErrorBox error={error} onRetry={() => { api.reload(); teamsApi.reload(); }} />}
+      {unlinkedNote()}
+      {teamsApi.data && !teamsApi.data.linked && <ErrorBox error="Chưa có dữ liệu team từ web nhân sự. Kiểm tra Cấu hình → Liên kết web nhân sự." />}
+      {!rows && !error && <><SkeletonKpis count={4} /><ChartCard title="Các team" subtitle="Đang tải…"><SkeletonTable rows={5} cols={7} /></ChartCard></>}
+      {rows && (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+            <KpiCard icon={UsersRound} tone="blue" label="Số team" value={vi.format(teamsOnly.length)} note={`${vi.format(teamsOnly.reduce((n, r) => n + r.people.filter((p) => p.active).length, 0))} người đang làm trong team`} />
+            <KpiCard icon={Wallet} tone="green" label={`Doanh thu ${LABEL[team]}`} value={shortMoney(total)} note="Cộng các team trong kỳ"
+              delta={rows.every((r) => r.prev) ? delta(total, rows.reduce((s, r) => s + (r.prev?.revenue ?? 0), 0)) ?? undefined : undefined} />
+            <KpiCard icon={Trophy} tone="orange" label="Team dẫn đầu" value={best ? best.name : '—'} note={best ? `${shortMoney(best.cur.revenue)}${total ? ` · ${pct(best.cur.revenue / total * 100, 0)} bộ phận` : ''}` : 'Chưa có số liệu'} />
+            <KpiCard icon={Users} tone={loose ? 'red' : 'gray'} label="Chưa vào team" value={vi.format(loose)} note={loose ? 'Xếp team bên web nhân sự để tính đúng' : 'Mọi người đã có team'} />
+          </div>
+
+          {curBranch === ALL && branches.length > 1 && (
+            branchCard()
+          )}
+
+          {teamsCard()}
           {owner && <TeamKpi team={team} teams={teamsOnly} />}
         </>
       )}
