@@ -702,7 +702,9 @@ export function TeamOverviewView({
               end={end}
               posIds={posIds}
               team="cskh"
-              by="care"
+              // Bảng gộp CSKH (Đầu não 27/11/2026): MỌI cột theo người bán, cùng nguồn ô Doanh thu đầu trang (trước đây cột riêng theo NV chăm sóc
+              // nên một dòng có Tiền khách trả lớn hơn Doanh thu). Muốn quay về NV chăm sóc: đặt lại by="care" và bỏ common.
+              by="seller"
               focusId={focusId}
               rates={staffRates}
               common={overviewStaffCommon(report.current.byEmployee, undefined, ms.rateBase, cur?.closedNet ?? 0)}
@@ -710,8 +712,8 @@ export function TeamOverviewView({
               onCompare={() => onNavigate('compare')}
               title="Đơn theo nhóm sản phẩm · từng nhân viên CSKH"
               plainTitle="Từng nhân viên CSKH"
-              plainSubtitle="Doanh thu, Đơn chốt, Giá trị đơn: theo người bán, cùng số ô Doanh thu đầu trang · các cột khác: theo NV chăm sóc trên đơn (trống thì người bán) · bấm số để xem từng đơn"
-              subtitle="Doanh thu, Đơn chốt, Giá trị đơn: theo người bán, cùng số ô Doanh thu đầu trang · cột thẻ đơn: theo NV chăm sóc trên đơn (trống thì người bán), xếp theo sản phẩm của CHÍNH đơn đó · bấm số để xem từng đơn"
+              plainSubtitle="Đơn chốt trong kỳ của từng nhân viên CSKH theo người bán trên đơn, cùng số ô Doanh thu đầu trang · bấm số để xem từng đơn"
+              subtitle="Đơn chốt trong kỳ của từng nhân viên CSKH theo người bán trên đơn, cùng số ô Doanh thu đầu trang; cột thẻ đơn xếp theo sản phẩm của CHÍNH đơn đó · bấm số để xem từng đơn"
             /></LazyBlock>
           )}
           {team === 'cskh' && !mktLens && (

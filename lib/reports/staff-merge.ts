@@ -4,7 +4,7 @@
 // (rateBase, closeRateOf). Cột riêng của bảng nhóm sản phẩm (thẻ đơn, đang đóng hàng, đã nhận…) giữ nguồn product-groups như cũ.
 // CSKH (sửa 27/11/2026 sau kiểm cloud: tổng bảng 3,51 tỷ ≠ ô đầu trang 2,11 tỷ, tỷ trọng 167%): bảng nhóm sản phẩm gán đơn theo NV chăm sóc
 // (trống thì người bán), nên kéo cả đơn Sale bán mà CSKH chăm sóc; ô đầu trang tính theo người bán thuộc bộ phận. Nay CSKH cũng lấy số chung
-// (Doanh thu, Đơn chốt, Giá trị đơn, tỷ trọng) từ báo cáo tổng quan như Sale; cột thẻ đơn vẫn theo NV chăm sóc (ghi ở tiêu đề bảng).
+// (Doanh thu, Đơn chốt, Giá trị đơn, tỷ trọng) từ báo cáo tổng quan như Sale; bảng gộp CSKH đọc bảng nhóm sản phẩm theo người bán (by=seller) nên mọi cột cùng một nhóm đơn.
 // Người có ở báo cáo tổng quan mà không có ở bảng nhóm sản phẩm vẫn có một dòng (staffRowsWithCommon), để dòng Tổng = ô đầu trang.
 import { closeRateBase, closeRateOf, closeRateTop, type RateBase } from '@/lib/reports/metrics';
 
