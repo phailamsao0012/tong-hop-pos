@@ -17,11 +17,13 @@ import { ICON } from './icons';
 import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';
 import { SheetCostLink } from './sheet-cost-link';
-import { Th, ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, dmy, money, pct, shortMoney, toast, useSort, vi } from './ui-kit';
+import { Th, ChartCard, Definitions, EmptyState, ErrorBox, FoldBlock, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, dmy, money, pct, shortMoney, toast, useSort, vi } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
 import { SegmentHintNote } from './segment-hint-note';
 import { NumDetail } from './num-detail';
 import { mktCellDetail, type MktCell, type MktNumbers } from '@/lib/shared/num-detail';
+import { BOSS_CLOSE_RED, BOSS_RETURN_RED, COACH_MIN_BASE } from '@/lib/zalo/boss-report';
+import { CanXemStrip, KPI_TIGHT, PageHeadMoi, WhySheet, overClose, overRet, tileGrid, type CanXemItem, type WhySpec } from './trang-moi';
 
 type Roas = Awaited<ReturnType<typeof roasReport>>;
 type Draft = { day: string; marketerId: string; amount: number; campaign?: string; note?: string };
@@ -39,7 +41,9 @@ function excelDay(v: unknown): string | null {
   return null;
 }
 
-export function MktRoasView({ owner = false }: { owner?: boolean }) {
+export function MktRoasView({ owner = false, uiMoi = false }: { owner?: boolean; /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới, tắt thì y như cũ. */ uiMoi?: boolean }) {
+  // Giao diện mới: khung "Vì sao ra số này" đang mở (null = đóng).
+  const [why, setWhy] = useState<WhySpec | null>(null);
   const today = todayVn();
   const team = useTeam();
   const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
@@ -116,38 +120,29 @@ export function MktRoasView({ owner = false }: { owner?: boolean }) {
     setPreview({ rows: out, errors });
   };
 
-  return (
-    <div className="space-y-5">
-      <PageHeader eyebrow={periodLabel} title="Chi phí & ROAS" subtitle="Nhập chi phí quảng cáo theo marketer (tay hoặc Excel), web tự ghép với số và đơn chốt để ra ROAS"
-        actions={<AiPackButton disabled={!r} pack={() => r && ({
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  // fold: chỉ bố cục mới truyền (thu gọn thẻ); bố cục cũ không truyền nên thẻ y như trước.
+  const aiPack = () => (
+        <AiPackButton disabled={!r} pack={() => r && ({
           page: 'Chi phí & ROAS Marketing', period: periodLabel,
           facts: [['Chi phí đã nhập', Math.round(r.total.cost)], ['Doanh thu từ số MKT', Math.round(r.total.net)], ['ROAS (marketer đã nhập chi phí)', roasText(r.total.roas)], ['Chi phí / số', r.total.costPerLead === null ? null : Math.round(r.total.costPerLead)], ['Chi phí / đơn chốt', r.total.costPerClosed === null ? null : Math.round(r.total.costPerClosed)], ['Số', r.total.phones], ['Đơn chốt', r.total.closed]],
           tables: [{ title: 'Theo marketer (— = chưa nhập chi phí)', staffCol: 0, columns: ['Marketer', 'Chi phí', 'Doanh thu', 'ROAS', 'Số', 'Chi phí/số', 'Đơn chốt', 'Chi phí/đơn', 'Chốt số', 'Hoàn'], rows: r.rows.map((x) => [x.name, x.cost ? Math.round(x.cost) : null, Math.round(x.net), roasText(x.roas), x.phones, x.costPerLead === null ? null : Math.round(x.costPerLead), x.closed, x.costPerClosed === null ? null : Math.round(x.costPerClosed), pct(x.closeRate), pct(x.returnRate)]) }],
           definitions: r.definitions,
           questions: ['Marketer nào có ROAS và chất lượng số tốt nhất, nên tăng ngân sách cho ai?', 'Ai đang đốt chi phí mà số chốt kém? Có thể do đâu?', 'Chi phí / đơn chốt bao nhiêu là hợp lý so với GTTB?', 'Những marketer chưa nhập chi phí: cần làm gì để so được?'],
-        })} />} />
+        })} />
+  );
+  const periodBar = () => (
       <PeriodToolbar preset={preset} start={start} end={end} loading={loading} onReload={reload}
         onPreset={setPreset}
         onStart={setStart} onEnd={setEnd} />
-      <PosChips posIds={posIds} onChange={setPosIds} />
-      <SegmentHintNote />
-      {error && !r && <ErrorBox error={error} onRetry={reload} />}
-      {posIds.length < POS.length && <p className="notice m-0 text-[12.5px]">Đang xem {posIds.length}/{POS.length} POS: chi phí mỗi marketer mỗi ngày được chia theo tỉ lệ số điện thoại marketer đó về từng POS trong ngày (marketer chỉ chạy một POS thì chi phí về đúng POS đó). Chọn "Tất cả" POS để xem chi phí gốc.</p>}
-      {!r && !error && <><SkeletonKpis count={5} /><SkeletonTable rows={5} cols={6} /></>}
-      {r && (
-        <>
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
-            <KpiCard icon={Wallet} tone="orange" label="Chi phí đã nhập" value={shortMoney(r.total.cost)} note={`${vi.format(r.entries.length)} dòng trong kỳ`} tooltip={{ period: periodLabel, current: money(r.total.cost), definition: r.definitions.cost }} />
-            <KpiCard icon={ICON.revenue} tone="teal" label="Doanh thu MKT" value={shortMoney(r.total.net)} note={`${vi.format(r.total.closed)} đơn chốt`} tooltip={{ period: periodLabel, current: money(r.total.net), definition: r.definitions.roas }} />
-            <KpiCard icon={ICON.rate} tone="green" label="ROAS" value={roasText(r.total.roas)} note={team === 'cskh' ? 'Chi phí QC tính cho đơn New, xem nút Sale' : r.total.covered.marketers ? `Trên ${r.total.covered.marketers} marketer đã nhập chi phí` : 'Chưa nhập chi phí'} tooltip={{ period: periodLabel, current: roasText(r.total.roas), definition: r.definitions.roas }} />
-            <KpiCard icon={ICON.customers} tone="blue" label="Chi phí / số" value={shortMoney(r.total.costPerLead)} note={`${vi.format(r.total.covered.phones)} số của marketer đã nhập`} tooltip={{ period: periodLabel, current: money(r.total.costPerLead), definition: r.definitions.leads }} />
-            <KpiCard icon={ICON.closed} tone="purple" label="Chi phí / đơn New" value={shortMoney(r.total.costPerClosed)} note={team === 'cskh' ? 'Chi phí QC tính cho đơn New, xem nút Sale' : `${vi.format(r.total.covered.closed)} đơn New của marketer đã nhập`} tooltip={{ period: periodLabel, current: money(r.total.costPerClosed), definition: r.definitions.roas }} />
-          </div>
-
-          {team === 'all' && <p className="text-xs text-ink-3" title="Chi phí QC chỉ so với đơn New do Sale chốt; giữ phạm vi marketer có chi phí">New {shortMoney(r.total.newNet)} · CSKH {shortMoney(r.total.cskhNet)} · Khác {shortMoney(r.total.otherNet)} · ROAS và CP/đơn theo đơn New</p>}
-          <SheetCostLink owner={owner} onChanged={reload} />
-
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+  );
+  const posNote = (/*{}*/) => (
+      posIds.length < POS.length && <p className="notice m-0 text-[12.5px]">Đang xem {posIds.length}/{POS.length} POS: chi phí mỗi marketer mỗi ngày được chia theo tỉ lệ số điện thoại marketer đó về từng POS trong ngày (marketer chỉ chạy một POS thì chi phí về đúng POS đó). Chọn "Tất cả" POS để xem chi phí gốc.</p>
+  );
+  const newNote = (/*{}*/r: Roas) => (
+          team === 'all' && <p className="text-xs text-ink-3" title="Chi phí QC chỉ so với đơn New do Sale chốt; giữ phạm vi marketer có chi phí">New {shortMoney(r.total.newNet)} · CSKH {shortMoney(r.total.cskhNet)} · Khác {shortMoney(r.total.otherNet)} · ROAS và CP/đơn theo đơn New</p>
+  );
+  const entryCard = (r: Roas) => (
             <ChartCard icon={Plus} title="Nhập chi phí" subtitle="Nhập từng dòng, hoặc tải file mẫu, điền rồi tải lên">
               <div className="grid gap-2 sm:grid-cols-[9rem_minmax(0,1fr)_9rem]">
                 <Input id="cost-day" type="date" value={form.day} onChange={(e) => setForm({ ...form, day: e.target.value })} aria-label="Ngày" />
@@ -176,7 +171,9 @@ export function MktRoasView({ owner = false }: { owner?: boolean }) {
                 </div>
               )}
             </ChartCard>
-            <ChartCard icon={Wallet} title="Chi phí theo ngày" subtitle="Tổng chi phí đã nhập mỗi ngày trong kỳ">
+  );
+  const dailyCard = (fold?: { storageKey: string; summary?: string }) => (
+            <ChartCard collapse={fold} icon={Wallet} title="Chi phí theo ngày" subtitle="Tổng chi phí đã nhập mỗi ngày trong kỳ">
               {r.daily.length ? (
                 <div className="flex h-40 items-end gap-[3px]" role="img" aria-label="Chi phí theo ngày">
                   {days.map((d) => <span key={d.day} title={`${dmy(d.day)}: ${money(d.amount)}`} className={`min-w-[3px] flex-1 rounded-t-sm ${d.amount ? 'bg-[var(--warn)]' : 'bg-surface-2'}`} style={{ height: `${d.amount ? Math.max(3, d.amount / dailyMax * 100) : 2}%` }} />)}
@@ -184,8 +181,8 @@ export function MktRoasView({ owner = false }: { owner?: boolean }) {
               ) : <EmptyState text="Chưa nhập chi phí nào trong kỳ." />}
               {r.daily.length > 0 && <div className="mt-1 flex justify-between text-[11px] text-ink-3"><span>{dmy(start)}</span><span>{dmy(end)}</span></div>}
             </ChartCard>
-          </div>
-
+  );
+  const roasCard = (r: Roas) => (
           <ChartCard icon={ICON.marketing} title={`ROAS theo marketer · ${rows.length} người`} subtitle="Bấm tiêu đề cột để sắp xếp · marketer chưa nhập chi phí hiện —" info={r.definitions.quality}>
             {rows.length ? (
               <TableWrap minWidth={980} maxHeight="32rem" stickyFirst>
@@ -226,8 +223,9 @@ export function MktRoasView({ owner = false }: { owner?: boolean }) {
             ) : <EmptyState text="Chưa có đơn nào có marketer trong kỳ." />}
             {!!r.unmatchedSheet?.length && <p className="mt-2 text-[12px] text-ink-3">Tên trên sheet chưa ghép với POS (không cộng vào chi phí, ROAS): {r.unmatchedSheet.map((u) => `${u.name} ${shortMoney(u.cost)}`).join(', ')}. Ghép tên với tài khoản POS để tính chi phí cho đúng người.</p>}
           </ChartCard>
-
-          <ChartCard icon={Wallet} title={`Các dòng chi phí · ${r.entries.length}`} subtitle="Mới nhất trước · xóa dòng nhập sai rồi nhập lại">
+  );
+  const entriesCard = (r: Roas, fold?: { storageKey: string; summary?: string }) => (
+          <ChartCard collapse={fold} icon={Wallet} title={`Các dòng chi phí · ${r.entries.length}`} subtitle="Mới nhất trước · xóa dòng nhập sai rồi nhập lại">
             {r.entries.length ? (
               <TableWrap minWidth={640} maxHeight="24rem">
                 <table className="tbl text-[12.5px]">
@@ -245,6 +243,95 @@ export function MktRoasView({ owner = false }: { owner?: boolean }) {
               </TableWrap>
             ) : <EmptyState text="Chưa có dòng chi phí nào trong kỳ." />}
           </ChartCard>
+  );
+  // [hết khối chung]
+  // Khối Nhập chi phí dùng fileRef: dựng một lần, cả hai bố cục dùng chung phần tử này (luật react-compiler).
+  const entryEl = r ? entryCard(r) : null;
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trên xuống: đầu trang (PageHeadMoi: chọn kỳ; Gói AI; POS) → nhắc lọc nhóm đơn / chia chi phí theo POS → "Cần xem" (marketer chốt số dưới 40%,
+  // hoàn từ 7%, từ 20 số / đơn) → một hàng 5 ô số (bấm mở "Vì sao ra số này") → bảng chính ROAS theo marketer → Nhập chi phí + nối sheet
+  // → khối phụ thu gọn: Chi phí theo ngày, Các dòng chi phí, Cách tính.
+  if (uiMoi) {
+    const scope = `${periodLabel} · ${posIds.length >= POS.length ? 'mọi POS' : `${posIds.length}/${POS.length} POS`} · ROAS = doanh thu từ số MKT ÷ chi phí đã nhập`;
+    const head = <PageHeadMoi title="Chi phí & ROAS" scope={scope} hint="Nhập chi phí quảng cáo theo marketer (tay hoặc Excel), web tự ghép với số và đơn chốt để ra ROAS"
+      tools={periodBar()} right={aiPack()} pos={<PosChips posIds={posIds} onChange={setPosIds} />} />;
+    if (!r) return <div className="min-w-0 space-y-4">{head}{error ? <ErrorBox error={error} onRetry={reload} /> : <SkeletonKpis count={5} className="lg:grid-cols-5" />}</div>;
+    const t = r.total;
+    const need: CanXemItem[] = [];
+    for (const x of rows) {
+      if (overClose(x.closeRate) && x.orders >= COACH_MIN_BASE) need.push({ key: `c-${x.marketerId}`, text: `${x.name}: chốt số ${pct(x.closeRate)}`, gap: BOSS_CLOSE_RED - (x.closeRate ?? 0),
+        onClick: () => setWhy({ title: `Chốt số · ${x.name}`, value: pct(x.closeRate), tone: 'bad', scope, mark: `Đỏ khi dưới ${BOSS_CLOSE_RED}%`,
+          rows: [{ label: 'Đơn tạo trong kỳ đã chốt', value: vi.format(x.closedLeads) }, { label: 'Đơn tạo trong kỳ', value: vi.format(x.orders) }], definition: 'Chốt số = đơn tạo trong kỳ nay đã chốt ÷ đơn tạo trong kỳ (không vượt 100%).' }) });
+      if (overRet(x.returnRate) && x.closed >= COACH_MIN_BASE) need.push({ key: `r-${x.marketerId}`, text: `${x.name}: hoàn ${pct(x.returnRate)}`, gap: (x.returnRate ?? 0) - BOSS_RETURN_RED,
+        onClick: () => setWhy({ title: `Hoàn · ${x.name}`, value: pct(x.returnRate), tone: 'bad', scope, mark: `Đỏ từ ${BOSS_RETURN_RED}%`,
+          rows: [{ label: 'Đơn hoàn', value: vi.format(x.returned) }, { label: 'Đơn chốt', value: vi.format(x.closed) }], definition: 'Hoàn = đơn hoàn ÷ đơn chốt của marketer.' }) });
+    }
+    const topBy = (key: 'cost' | 'net') => [...rows].sort((a, b) => b[key] - a[key]).slice(0, 10).map((x) => ({ label: x.name, value: shortMoney(x[key]) }));
+    const k = (s: string) => `ui-moi:mkt-roas:${s}`;
+    return (
+      <div className="min-w-0 space-y-4">
+        {head}
+        <SegmentHintNote />
+        {posNote()}
+        <CanXemStrip items={need} note={`Marketer chốt số dưới ${BOSS_CLOSE_RED}%, hoàn từ ${BOSS_RETURN_RED}% (từ ${COACH_MIN_BASE} số / đơn)`} />
+        <div className={tileGrid(5)}>
+          <KpiCard icon={Wallet} tone="orange" label="Chi phí đã nhập" className={KPI_TIGHT} value={shortMoney(t.cost)} note={`${vi.format(r.entries.length)} dòng trong kỳ`}
+            onClick={() => setWhy({ title: 'Chi phí đã nhập', value: money(t.cost), scope, rows: topBy('cost'), definition: r.definitions.cost })} />
+          <KpiCard icon={ICON.revenue} tone="teal" label="Doanh thu MKT" className={KPI_TIGHT} value={shortMoney(t.net)} note={`${vi.format(t.closed)} đơn chốt`}
+            onClick={() => setWhy({ title: 'Doanh thu MKT', value: money(t.net), scope, rows: topBy('net'), definition: r.definitions.roas })} />
+          <KpiCard icon={ICON.rate} tone="green" label="ROAS" className={KPI_TIGHT} value={roasText(t.roas)} note={team === 'cskh' ? 'Chi phí QC tính cho đơn New, xem nút Sale' : t.covered.marketers ? `Trên ${t.covered.marketers} marketer đã nhập chi phí` : 'Chưa nhập chi phí'}
+            onClick={() => setWhy({ title: 'ROAS', value: roasText(t.roas), scope, rows: [{ label: 'Chi phí đã nhập', value: money(t.cost) }, { label: 'Marketer đã nhập chi phí', value: vi.format(t.covered.marketers) }], definition: r.definitions.roas })} />
+          <KpiCard icon={ICON.customers} tone="blue" label="Chi phí / số" className={KPI_TIGHT} value={shortMoney(t.costPerLead)} note={`${vi.format(t.covered.phones)} số của marketer đã nhập`}
+            onClick={() => setWhy({ title: 'Chi phí / số', value: money(t.costPerLead), scope, rows: [{ label: 'Chi phí đã nhập', value: money(t.cost) }, { label: 'Số của marketer đã nhập', value: vi.format(t.covered.phones) }], definition: r.definitions.leads })} />
+          <KpiCard icon={ICON.closed} tone="purple" label="Chi phí / đơn New" className={KPI_TIGHT} value={shortMoney(t.costPerClosed)} note={team === 'cskh' ? 'Chi phí QC tính cho đơn New, xem nút Sale' : `${vi.format(t.covered.closed)} đơn New của marketer đã nhập`}
+            onClick={() => setWhy({ title: 'Chi phí / đơn New', value: money(t.costPerClosed), scope, rows: [{ label: 'Chi phí đã nhập', value: money(t.cost) }, { label: 'Đơn New của marketer đã nhập', value: vi.format(t.covered.closed) }], definition: r.definitions.roas })} />
+        </div>
+        {newNote(r)}
+        {roasCard(r)}
+        {entryEl}
+        <SheetCostLink owner={owner} onChanged={reload} />
+        <div className="grid min-w-0 gap-3">
+          {dailyCard({ storageKey: k('daily') })}
+          {entriesCard(r, { storageKey: k('entries'), summary: `${vi.format(r.entries.length)} dòng` })}
+          <FoldBlock icon={Wallet} title="Cách tính" storageKey={k('defs')}><Definitions items={r.definitions} /></FoldBlock>
+        </div>
+        <WhySheet spec={why} onClose={() => setWhy(null)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <PageHeader eyebrow={periodLabel} title="Chi phí & ROAS" subtitle="Nhập chi phí quảng cáo theo marketer (tay hoặc Excel), web tự ghép với số và đơn chốt để ra ROAS"
+        actions={aiPack()} />
+      {periodBar()}
+      <PosChips posIds={posIds} onChange={setPosIds} />
+      <SegmentHintNote />
+      {error && !r && <ErrorBox error={error} onRetry={reload} />}
+      {posNote()}
+      {!r && !error && <><SkeletonKpis count={5} /><SkeletonTable rows={5} cols={6} /></>}
+      {r && (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
+            <KpiCard icon={Wallet} tone="orange" label="Chi phí đã nhập" value={shortMoney(r.total.cost)} note={`${vi.format(r.entries.length)} dòng trong kỳ`} tooltip={{ period: periodLabel, current: money(r.total.cost), definition: r.definitions.cost }} />
+            <KpiCard icon={ICON.revenue} tone="teal" label="Doanh thu MKT" value={shortMoney(r.total.net)} note={`${vi.format(r.total.closed)} đơn chốt`} tooltip={{ period: periodLabel, current: money(r.total.net), definition: r.definitions.roas }} />
+            <KpiCard icon={ICON.rate} tone="green" label="ROAS" value={roasText(r.total.roas)} note={team === 'cskh' ? 'Chi phí QC tính cho đơn New, xem nút Sale' : r.total.covered.marketers ? `Trên ${r.total.covered.marketers} marketer đã nhập chi phí` : 'Chưa nhập chi phí'} tooltip={{ period: periodLabel, current: roasText(r.total.roas), definition: r.definitions.roas }} />
+            <KpiCard icon={ICON.customers} tone="blue" label="Chi phí / số" value={shortMoney(r.total.costPerLead)} note={`${vi.format(r.total.covered.phones)} số của marketer đã nhập`} tooltip={{ period: periodLabel, current: money(r.total.costPerLead), definition: r.definitions.leads }} />
+            <KpiCard icon={ICON.closed} tone="purple" label="Chi phí / đơn New" value={shortMoney(r.total.costPerClosed)} note={team === 'cskh' ? 'Chi phí QC tính cho đơn New, xem nút Sale' : `${vi.format(r.total.covered.closed)} đơn New của marketer đã nhập`} tooltip={{ period: periodLabel, current: money(r.total.costPerClosed), definition: r.definitions.roas }} />
+          </div>
+
+          {newNote(r)}
+          <SheetCostLink owner={owner} onChanged={reload} />
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+            {entryEl}
+            {dailyCard()}
+          </div>
+
+          {roasCard(r)}
+
+          {entriesCard(r)}
           <Definitions items={r.definitions} />
         </>
       )}

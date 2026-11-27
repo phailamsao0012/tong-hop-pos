@@ -1775,7 +1775,7 @@ export default function Dashboard({ user, initialView, demo = false, uiMoi = fal
           {!gated && view === 'cskh-analytics' && <CskhAnalyticsView uiMoi={uiMoi} />}
           {!gated && view === 'sale-analytics' && <SaleAnalyticsView uiMoi={uiMoi} />}
           {!gated && view === 'sale-quality' && <SaleQualityView uiMoi={uiMoi} />}
-          {!gated && view === 'mkt-roas' && <MktRoasView owner={user.role === 'owner'} />}
+          {!gated && view === 'mkt-roas' && <MktRoasView owner={user.role === 'owner'} uiMoi={uiMoi} />}
           {!gated && view === 'uncounted' && <UncountedView />}
           {!gated && view === 'customer360' && <Customer360View />}
           {!gated && view === 'products' && <ProductsView uiMoi={uiMoi} />}
