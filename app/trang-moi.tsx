@@ -9,21 +9,47 @@ import { AlertTriangle } from 'lucide-react';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { BOSS_CANCEL_RED, BOSS_CLOSE_RED, BOSS_RETURN_RED } from '@/lib/zalo/boss-report';
 
-/** Đầu trang kiểu mới: tên trang + một dòng phạm vi (kỳ, POS, cách tính), chọn kỳ, hàng POS và nút phụ chung một hàng; màn hẹp tự xuống hàng.
- *  `tools` / `pos` là chính PeriodToolbar / PosChips của trang (không dựng bản mới). */
+/** Đầu trang kiểu mới: tên trang + một dòng phạm vi (kỳ, POS, cách tính), chọn kỳ, nút phụ, hàng POS; màn hẹp tự xuống hàng.
+ *  `tools` / `pos` là chính PeriodToolbar / PosChips của trang (không dựng bản mới).
+ *  Hàng POS (sửa 27/11/2026, máy đám mây thấy ở 1600 / 1920 hàng POS chung dòng bị cắt, chỉ thấy 2/6 POS): ô bọc không co (rộng đúng
+ *  bằng cả hàng chip), nên chỉ đứng chung dòng khi đủ chỗ (màn ~2560), thiếu chỗ thì tự xuống dòng riêng; không cắt, không cuộn ngang trang.
+ *  Màn hẹp hơn cả hàng chip (điện thoại) thì chip tự xuống hàng trong ô (bỏ cuộn ngang của .posrow kiểu mới).
+ *  Khối tên + phạm vi tối thiểu 28rem: thiếu chỗ thì nằm riêng một dòng để dòng phạm vi giãn hết bề ngang. */
 export function PageHeadMoi({ title, hint, scope, tools, pos, right }: { title: string; hint?: string; scope: string; tools?: ReactNode; pos?: ReactNode; right?: ReactNode }) {
   return (
     <header className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
-      <div className="min-w-0 flex-[1_1_16rem]">
+      <div className="min-w-0 flex-[1_1_28rem]">
         <h1 className="ph-title display text-lg font-semibold leading-tight tracking-[-.02em] text-ink sm:text-xl" title={hint}>{title}</h1>
         <p className="mt-0.5 line-clamp-2 text-[12px] text-ink-3" title={scope}>{scope}</p>
       </div>
       {tools && <div className="min-w-0 max-w-full flex-[0_1_auto]">{tools}</div>}
-      {pos && <div className="min-w-0 flex-[1_1_14rem] empty:hidden">{pos}</div>}
       {right && <div className="flex min-w-0 flex-wrap items-center gap-2">{right}</div>}
+      {pos && <div className="max-w-full flex-[1_0_auto] empty:hidden [&_.posrow]:!flex-wrap [&_.posrow]:!overflow-visible">{pos}</div>}
     </header>
   );
 }
+
+/** Đường nhỏ kỳ này (đậm) / kỳ trước (xám nét đứt) cho ô số, cao 28px; điểm vượt mốc chấm đỏ. Dùng số theo ngày trang đã tải. */
+export function DuoSpark({ cur, prev, bad }: { cur: (number | null)[]; prev?: (number | null)[]; bad?: (v: number | null) => boolean }) {
+  if (cur.length < 2) return null;
+  const all = [...cur, ...(prev ?? [])].filter((v): v is number => v != null && Number.isFinite(v));
+  const max = Math.max(1e-9, ...all), min = Math.min(0, ...all);
+  const n = Math.max(cur.length, prev?.length ?? 0);
+  const x = (i: number) => n === 1 ? 50 : 2 + i * 96 / (n - 1), y = (v: number) => 26 - (v - min) / (max - min || 1) * 23;
+  const path = (vs: (number | null)[]) => vs.map((v, i) => v == null ? '' : `${i && vs[i - 1] != null ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  return (
+    <span className="relative block h-7 w-full" title="Đường đậm: kỳ này · nét xám: kỳ trước cùng thứ tự ngày">
+      <svg viewBox="0 0 100 28" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" aria-label="Đường đậm: kỳ này; nét xám: kỳ trước">
+        {prev && <path d={path(prev)} fill="none" stroke="var(--ink-4)" strokeWidth="1.2" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />}
+        <path d={path(cur)} fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      </svg>
+      {bad && cur.map((v, i) => v != null && bad(v) ? <i key={i} className="absolute size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-bad" style={{ left: `${x(i)}%`, top: `${y(v) / 28 * 100}%` }} /> : null)}
+    </span>
+  );
+}
+
+/** Lớp cho KpiCard trong hàng ô số kiểu mới: bỏ chiều cao tối thiểu 56px của chỗ biểu đồ để mọi ô thấp gọn (~150–170px) và bằng nhau. */
+export const KPI_TIGHT = '[&>span.mt-1]:!min-h-0';
 
 /** Lưới một hàng ô số không để ô trống: số cột chia hết số ô ở mọi bề rộng (điện thoại 2 cột; ô lẻ cuối giãn hai cột). */
 const TILE_GRID: Record<number, string> = {
@@ -97,20 +123,41 @@ export function WhySheet({ spec, onClose }: { spec: WhySpec | null; onClose: () 
   );
 }
 
-export type CanXemItem = { key: string; text: string; onClick?: () => void };
+/** Một việc cần xem. `team`: số cả đội / cả trang (luôn đứng trước); `gap`: vượt mốc bao nhiêu (điểm %), lớn hơn là nặng hơn. */
+export type CanXemItem = { key: string; text: string; onClick?: () => void; team?: boolean; gap?: number };
 
-/** Dải "Cần xem": không có số nào vượt mốc thì không hiện gì. */
-export function CanXemStrip({ items, note }: { items: CanXemItem[]; note?: string }) {
+/** Dải "Cần xem": không có số nào vượt mốc thì không hiện gì.
+ *  Gọn một dòng (sửa 27/11/2026, Sale từng hiện 14 nhãn): tối đa 4 nhãn, số cả đội trước rồi tới mục vượt mốc nặng nhất;
+ *  còn lại gom vào chip "+N mục khác", bấm mở khung giữa màn liệt kê đủ (bấm một mục mở "Vì sao ra số này" của mục đó). Nhãn dài thì cắt "…". */
+export function CanXemStrip({ items, note, max = 4 }: { items: CanXemItem[]; note?: string; max?: number }) {
+  const [all, setAll] = useState(false);
   if (!items.length) return null;
+  const sorted = [...items].sort((a, b) => Number(!!b.team) - Number(!!a.team) || (a.team && b.team ? 0 : (b.gap ?? 0) - (a.gap ?? 0)));
+  const shown = sorted.length > max ? sorted.slice(0, max - 1) : sorted;
+  const rest = sorted.length - shown.length;
+  const chip = 'tap inline-flex min-w-0 shrink items-center rounded-full px-3 py-1 text-left text-[12.5px] font-semibold';
   return (
-    <section aria-label="Cần xem" className="card flex min-w-0 flex-wrap items-center gap-2 px-4 py-3">
-      <span className="inline-flex shrink-0 items-center gap-1.5 text-[13px] font-semibold text-ink"><AlertTriangle size={15} className="text-bad" aria-hidden="true" />Cần xem</span>
-      {items.map((i) => (
-        <button key={i.key} type="button" onClick={i.onClick} className="tap inline-flex max-w-full items-center rounded-full bg-bad-bg px-3 py-1 text-left text-[12.5px] font-semibold text-bad">
+    <section aria-label="Cần xem" className="card flex min-w-0 flex-nowrap items-center gap-2 overflow-hidden px-4 py-3">
+      <span className="inline-flex shrink-0 items-center gap-1.5 text-[13px] font-semibold text-ink" title={note}><AlertTriangle size={15} className="text-bad" aria-hidden="true" />Cần xem</span>
+      {shown.map((i) => (
+        <button key={i.key} type="button" onClick={i.onClick} title={i.text} className={`${chip} max-w-[22rem] bg-bad-bg text-bad`}>
           <span className="min-w-0 truncate">{i.text}</span>
         </button>
       ))}
-      {note && <span className="text-[11.5px] text-ink-3">{note}</span>}
+      {rest > 0 && (
+        <button type="button" onClick={() => setAll(true)} className={`${chip} shrink-0 border border-line bg-surface text-ink-2`}>+{rest} mục khác</button>
+      )}
+      {note && <span className="ml-auto hidden min-w-0 shrink truncate text-[11.5px] text-ink-3 2xl:inline" title={note}>{note}</span>}
+      <WhySheet onClose={() => setAll(false)} spec={all ? {
+        title: 'Cần xem', value: `${sorted.length} mục vượt mốc`, scope: note ?? 'Số vượt mốc trong phạm vi đang chọn',
+        more: (
+          <ul className="flex min-w-0 flex-col gap-1.5">
+            {sorted.map((i) => (
+              <li key={i.key}><button type="button" className={`${chip} max-w-full bg-bad-bg text-bad`} onClick={() => { setAll(false); i.onClick?.(); }}><span className="min-w-0 truncate">{i.text}</span></button></li>
+            ))}
+          </ul>
+        ),
+      } : null} />
     </section>
   );
 }

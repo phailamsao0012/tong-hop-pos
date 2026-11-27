@@ -27,7 +27,7 @@ import {
   RETURN_BASES,
 } from '@/lib/reports/metrics';
 import { BOSS_CANCEL_RED, BOSS_CLOSE_RED, BOSS_RETURN_RED, COACH_MIN_BASE } from '@/lib/zalo/boss-report';
-import { CanXemStrip, WhySheet, type CanXemItem, type WhySpec } from './trang-moi';
+import { CanXemStrip, DuoSpark, KPI_RED, KPI_TIGHT, PageHeadMoi, WhySheet, type CanXemItem, type WhySpec } from './trang-moi';
 import { useMetricSettings } from './metric-settings';
 import { useMemo, useState } from 'react';
 import { takeNavHint } from './nav-focus';
@@ -764,15 +764,15 @@ export function TeamOverviewView({
         ...(many ? report.current.byPos.map((p) => ({ key: p.posId, who: posName(p.posId), m: p as Metrics, pm: (report.compare?.byPos.find((x) => x.posId === p.posId) ?? null) as Metrics | null, pos: true })) : []),
       ];
       for (const s of scopes) {
-        const add = (kind: 'close' | 'ret' | 'cancel', text: string) => need.push({ key: `${kind}-${s.key}`, text, onClick: () => setWhy(whyRate(kind, s.m, s.who, s.pm)) });
+        const add = (kind: 'close' | 'ret' | 'cancel', text: string, gap: number) => need.push({ key: `${kind}-${s.key}`, text, team: !s.pos, gap, onClick: () => setWhy(whyRate(kind, s.m, s.who, s.pm)) });
         if (team === 'sale') {
           const r = closeRateOf(s.m, ms.rateBase);
-          if (overClose(r) && (!s.pos || closeRateBase(s.m, ms.rateBase) >= COACH_MIN_BASE)) add('close', `${s.who}: chốt ${pct(r)}`);
+          if (overClose(r) && (!s.pos || closeRateBase(s.m, ms.rateBase) >= COACH_MIN_BASE)) add('close', `${s.who}: chốt ${pct(r)}`, BOSS_CLOSE_RED - (r ?? 0));
         }
         const rr = returnRate(s.m);
-        if (overRet(rr) && (!s.pos || s.m.closedOrders >= COACH_MIN_BASE)) add('ret', `${s.who}: hoàn ${pct(rr)}`);
+        if (overRet(rr) && (!s.pos || s.m.closedOrders >= COACH_MIN_BASE)) add('ret', `${s.who}: hoàn ${pct(rr)}`, (rr ?? 0) - BOSS_RETURN_RED);
         const cr = cancelRate(s.m);
-        if (overCancel(cr) && (!s.pos || s.m.orders >= COACH_MIN_BASE)) add('cancel', `${s.who}: hủy ${pct(cr)}`);
+        if (overCancel(cr) && (!s.pos || s.m.orders >= COACH_MIN_BASE)) add('cancel', `${s.who}: hủy ${pct(cr)}`, (cr ?? 0) - BOSS_CANCEL_RED);
       }
     }
     // Theo ngày: kỳ này đặt cạnh ngày cùng thứ tự của kỳ trước (như biểu đồ trong ô số). Doanh thu triệu ₫ làm tròn như biểu đồ cũ.
@@ -782,38 +782,38 @@ export function TeamOverviewView({
       return [...m].sort((a, b) => a[0].localeCompare(b[0]));
     };
     const sumOf = (rs: Rep['current']['series'], f: (r: Rep['current']['series'][number]) => number) => rs.reduce((t, r) => t + f(r), 0);
-    const rateDay = (rs: Rep['current']['series']) => {
-      const r = team === 'sale'
-        ? closeRateOfMany(rs, ms.rateBase)
-        : cancelRateOf({ orders: sumOf(rs, (x) => x.orders), closedOrders: sumOf(rs, (x) => x.closedOrders), deletedOrders: sumOf(rs, (x) => x.deletedOrders ?? 0), groups: { cancelled: { orders: sumOf(rs, (x) => x.groups.cancelled.orders) } } });
-      return r == null ? null : Math.round(r * 10) / 10;
-    };
+    // Cộng số của một ngày (mọi POS) rồi tính tỷ lệ bằng đúng các hàm của ô số (closeRateOfMany / cancelRateOf / returnRateOf).
+    const dayIn = (rs: Rep['current']['series']) => ({ orders: sumOf(rs, (x) => x.orders), closedOrders: sumOf(rs, (x) => x.closedOrders), deletedOrders: sumOf(rs, (x) => x.deletedOrders ?? 0),
+      groups: { cancelled: { orders: sumOf(rs, (x) => x.groups.cancelled.orders) }, returned: { orders: sumOf(rs, (x) => x.groups.returned.orders) }, shipping: { orders: sumOf(rs, (x) => x.groups.shipping.orders) }, delivered: { orders: sumOf(rs, (x) => x.groups.delivered.orders) } } });
+    const r1 = (r: number | null) => r == null ? null : Math.round(r * 10) / 10;
+    const closeDay = (rs: Rep['current']['series']) => r1(closeRateOfMany(rs, ms.rateBase));
+    const cancelDay = (rs: Rep['current']['series']) => r1(cancelRateOf(dayIn(rs)));
+    const retDay = (rs: Rep['current']['series']) => r1(returnRateOf(dayIn(rs), ms.returnBase));
+    const rateDay = (rs: Rep['current']['series']) => team === 'sale' ? closeDay(rs) : cancelDay(rs);
     const curDays = groupDays(report?.current.series ?? []), prevDays = groupDays(report?.compare?.series ?? []);
     const dayRows = curDays.map(([day, rs], i) => {
       const p = prevDays[i]?.[1];
-      return { day, netM: Math.round(sumOf(rs, (x) => x.closedNet) / 1e5) / 10, prevM: p ? Math.round(sumOf(p, (x) => x.closedNet) / 1e5) / 10 : null, rate: rateDay(rs), prevRate: p ? rateDay(p) : null };
+      const net = sumOf(rs, (x) => x.closedNet), n = sumOf(rs, (x) => x.closedOrders), pNet = p ? sumOf(p, (x) => x.closedNet) : null, pN = p ? sumOf(p, (x) => x.closedOrders) : null;
+      return { day, netM: Math.round(net / 1e5) / 10, prevM: pNet == null ? null : Math.round(pNet / 1e5) / 10, rate: rateDay(rs), prevRate: p ? rateDay(p) : null,
+        net, prevNet: pNet, orders: n, prevOrders: pN, aov: n ? net / n : null, prevAov: pN ? (pNet ?? 0) / pN : null,
+        close: closeDay(rs), prevClose: p ? closeDay(p) : null, cancel: cancelDay(rs), prevCancel: p ? cancelDay(p) : null, ret: retDay(rs), prevRet: p ? retDay(p) : null };
     });
     const rateChart = team === 'sale'
       ? { title: 'Tỷ lệ chốt Sale theo ngày', mark: BOSS_CLOSE_RED, over: overClose, note: `cột đỏ khi dưới ${BOSS_CLOSE_RED}% · ${RATE_BASES[ms.rateBase].short}` }
       : { title: 'Tỷ lệ hủy CSKH theo ngày', mark: BOSS_CANCEL_RED, over: overCancel, note: `cột đỏ từ ${BOSS_CANCEL_RED}% · đơn hủy ÷ đơn lên` };
-    const red = '[&_.val]:!text-bad';
+    const red = KPI_RED;
+    // Ô số bằng nhau, thấp gọn (sửa 27/11/2026): mọi ô có đường nhỏ kỳ này / kỳ trước từ số theo ngày đã tải (DuoSpark).
+    const spark = (a: (number | null)[], b: (number | null)[], bad?: (v: number | null) => boolean) => <DuoSpark cur={a} prev={report?.compare ? b : undefined} bad={bad} />;
     const k = (s: string) => `ui-moi:${team}-overview:${s}`;
 
     return (
       <div className="min-w-0 space-y-4">
-        {/* 1. Đầu trang: tên, một dòng phạm vi, chọn kỳ và hàng POS chung một hàng (màn hẹp tự xuống hàng). */}
-        <header className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
-          <div className="min-w-0 flex-[1_1_16rem]">
-            <h1 className="ph-title display text-lg font-semibold leading-tight tracking-[-.02em] text-ink sm:text-xl" title={SUB[team]}>{title}</h1>
-            <p className="mt-0.5 line-clamp-2 text-[12px] text-ink-3" title={scope}>{scope}</p>
-          </div>
-          <div className="min-w-0 max-w-full flex-[0_1_auto]">
-            <PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset} onStart={setStart} onEnd={setEnd}
-              loading={api.loading} onReload={api.reload} extra={<GlobalStatusFilter size="md" />} />
-          </div>
-          <div className="min-w-0 flex-[1_1_14rem] empty:hidden"><PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} /></div>
-          <StaleChip stale={api.stale} at={api.at} loading={api.loading} error={report ? api.error : null} onRetry={api.reload} />
-        </header>
+        {/* 1. Đầu trang (PageHeadMoi): tên, dòng phạm vi, chọn kỳ; hàng POS chỉ chung dòng khi đủ chỗ, thiếu chỗ xuống dòng riêng. */}
+        <PageHeadMoi title={title} hint={SUB[team]} scope={scope}
+          tools={<PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset} onStart={setStart} onEnd={setEnd}
+            loading={api.loading} onReload={api.reload} extra={<GlobalStatusFilter size="md" />} />}
+          right={<StaleChip stale={api.stale} at={api.at} loading={api.loading} error={report ? api.error : null} onRetry={api.reload} />}
+          pos={<PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />} />
         {segment && (
           <output className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-primary/40 bg-tint px-3 py-2 text-[13px] text-ink">
             <span>Đang lọc nhóm đơn <b>{PRODUCT_SEGMENTS[segment]}</b> như ở Tổng quan POS: ô số, biểu đồ và bảng nhân viên tính theo nhóm này; các khối khác vẫn tính mọi nhóm.</span>
@@ -830,7 +830,8 @@ export function TeamOverviewView({
 
             {/* 3. Một hàng 6 ô số: điện thoại 2 cột, máy tính bảng 3 cột, từ 1280px đủ 6 ô một hàng (không ô trống). */}
             <div className="stagger grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6" aria-busy={api.loading}>
-              <KpiCard id={`${team}-revenue`} icon={ICON.revenue} tone="green" label={`Doanh thu ${name}`}
+              <KpiCard id={`${team}-revenue`} icon={ICON.revenue} tone="green" label={`Doanh thu ${name}`} className={KPI_TIGHT}
+                chart={spark(dayRows.map((d) => d.net), dayRows.map((d) => d.prevNet))}
                 value={shortMoney(cur.closedNet)} countUp rawValue={cur.closedNet} format={shortMoney}
                 delta={prev ? delta(cur.closedNet, prev.closedNet) : undefined}
                 note={`Đơn chốt · ${statusNote}${forecast ? ` · dự báo cuối tháng ${shortMoney(forecast.revenue)}` : ''}`}
@@ -850,11 +851,11 @@ export function TeamOverviewView({
                     </div>
                   ) : undefined,
                 })} />
-              <KpiCard id={`${team}-closed`} icon={ICON.closed} tone="blue" label={`Đơn chốt ${name}`}
+              <KpiCard id={`${team}-closed`} icon={ICON.closed} tone="blue" label={`Đơn chốt ${name}`} className={KPI_TIGHT}
                 value={vi.format(cur.closedOrders)} countUp rawValue={cur.closedOrders}
                 delta={prev ? delta(cur.closedOrders, prev.closedOrders) : undefined}
                 note={`${vi.format(cur.closedCustomers ?? 0)} khách · ${vi.format(cur.closedQuantity)} sản phẩm`}
-                chart={(() => { const s = daily((_, n) => n); return s?.length ? <PeriodBars series={s} unit="orders" kind="cum" periodEnd={end} fill /> : undefined; })()}
+                chart={spark(dayRows.map((d) => d.orders), dayRows.map((d) => d.prevOrders))}
                 onClick={() => setWhy({
                   title: `Đơn chốt ${name}`, value: `${vi.format(cur.closedOrders)} đơn`, scope, previous: prev ? `${vi.format(prev.closedOrders)} đơn` : undefined,
                   rows: [
@@ -867,11 +868,11 @@ export function TeamOverviewView({
                   ],
                   definition: report.definitions.closed,
                 })} />
-              <KpiCard id={`${team}-aov`} icon={ICON.aov} tone="teal" label={`AOV ${name}`}
+              <KpiCard id={`${team}-aov`} icon={ICON.aov} tone="teal" label={`AOV ${name}`} className={KPI_TIGHT}
                 value={shortMoney(cur.averageOrder)}
                 delta={prev?.averageOrder && cur.averageOrder ? delta(cur.averageOrder, prev.averageOrder) : undefined}
                 note={`Giao thành công TB ${shortMoney(cur.deliveredAverage)}`}
-                chart={(() => { const s = daily((net, n) => n ? net / n : 0); return s && s.length > 1 ? <PeriodBars series={s} unit="money" kind="line" fill /> : undefined; })()}
+                chart={spark(dayRows.map((d) => d.aov), dayRows.map((d) => d.prevAov))}
                 onClick={() => setWhy({
                   title: `AOV ${name}`, value: money(cur.averageOrder), scope, previous: prev ? money(prev.averageOrder) : undefined,
                   rows: [
@@ -885,14 +886,15 @@ export function TeamOverviewView({
               {team === 'sale' ? (() => {
                 const r = closeRateOf(cur, ms.rateBase), pr = prev ? closeRateOf(prev, ms.rateBase) : null, den = closeRateBase(cur, ms.rateBase);
                 return (
-                  <KpiCard id={`${team}-rate`} icon={ICON.rate} tone="purple" label="Tỷ lệ chốt Sale" className={overClose(r) ? red : ''}
+                  <KpiCard id={`${team}-rate`} icon={ICON.rate} tone="purple" label="Tỷ lệ chốt Sale" className={`${KPI_TIGHT} ${overClose(r) ? red : ''}`}
+                    chart={spark(dayRows.map((d) => d.close), dayRows.map((d) => d.prevClose), overClose)}
                     value={pct(r)} delta={r != null && pr != null ? r - pr : undefined} deltaLabel="điểm so kỳ trước"
                     note={`${vi.format(closeRateTop(cur, ms.rateBase))} đã chốt / ${vi.format(den)} ${ms.rateBase === 'assigned' ? 'đơn được chia' : 'đơn lên'}`}
                     progress={den ? { value: closeRateTop(cur, ms.rateBase), max: den } : undefined}
                     onClick={() => setWhy(whyRate('close', cur, 'Đội Sale', prev))} />
                 );
               })() : (
-                <KpiCard id="cskh-origin" icon={UserCheck} tone="green" label="Tự upsell CSKH"
+                <KpiCard id="cskh-origin" icon={UserCheck} tone="green" label="Tự upsell CSKH" className={KPI_TIGHT}
                   value={vi.format(self.n)} unit="đơn" note={`${shortMoney(self.net)} · từ MKT ${vi.format(mkt.n)} đơn`}
                   chart={<OriginShare n={self.n} net={self.net} totalN={self.n + mkt.n} totalNet={self.net + mkt.net} tone="var(--t-green)" />}
                   onClick={() => setWhy({
@@ -906,12 +908,16 @@ export function TeamOverviewView({
                     more: <button type="button" className="btn sm self-start" onClick={() => { setWhy(null); onNavigate('origin'); }}>Mở trang Nguồn đơn<ArrowRight size={13} /></button>,
                   })} />
               )}
-              <KpiCard icon={ICON.cancelled} tone="red" label={`Hủy ${name}`} className={overCancel(cancelRate(cur)) ? red : ''}
+              <KpiCard icon={ICON.cancelled} tone="red" label={`Hủy ${name}`} className={`${KPI_TIGHT} ${overCancel(cancelRate(cur)) ? red : ''}`}
                 value={pct(cancelRate(cur))} invert
+                delta={(() => { const a = cancelRate(cur), b = prev ? cancelRate(prev) : null; return a != null && b != null ? a - b : undefined; })()} deltaLabel="điểm so kỳ trước"
+                chart={spark(dayRows.map((d) => d.cancel), dayRows.map((d) => d.prevCancel), overCancel)}
                 note={`÷ đơn lên · ${vi.format(cur.groups.cancelled.orders)} đơn · ${shortMoney(cur.groups.cancelled.net)}`}
                 onClick={() => setWhy(whyRate('cancel', cur, `Đội ${name}`, prev))} />
-              <KpiCard icon={ICON.returned} tone="orange" label={`Hoàn ${name}`} className={overRet(returnRate(cur)) ? red : ''}
+              <KpiCard icon={ICON.returned} tone="orange" label={`Hoàn ${name}`} className={`${KPI_TIGHT} ${overRet(returnRate(cur)) ? red : ''}`}
                 value={pct(returnRate(cur))} invert
+                delta={(() => { const a = returnRate(cur), b = prev ? returnRate(prev) : null; return a != null && b != null ? a - b : undefined; })()} deltaLabel="điểm so kỳ trước"
+                chart={spark(dayRows.map((d) => d.ret), dayRows.map((d) => d.prevRet), overRet)}
                 note={`${RETURN_BASES[ms.returnBase].short} · ${vi.format(cur.groups.returned.orders)} đơn`}
                 onClick={() => setWhy(whyRate('ret', cur, `Đội ${name}`, prev))} />
             </div>
