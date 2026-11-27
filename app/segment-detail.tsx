@@ -50,7 +50,7 @@ export function SegmentDetail({ seg, label, color, report, allNet, allOrders = 0
   ] : [];
   return (
     <Sheet open={!!seg} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <SheetContent className="overflow-y-auto data-[side=right]:w-full data-[side=right]:max-w-full data-[side=right]:sm:max-w-3xl">
+      <SheetContent className="overflow-y-auto sm:max-w-3xl">
         <SheetHeader className="pr-12">
           <SheetTitle><span className="mr-2 inline-block size-2.5 rounded-full align-middle" style={{ background: color }} aria-hidden="true" />{label}</SheetTitle>
           <SheetDescription>Đơn chốt theo ngày chốt, cùng kỳ, POS và bộ lọc đang xem · so với kỳ liền trước</SheetDescription>
