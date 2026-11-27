@@ -86,7 +86,7 @@ export function MarketerDetailSheet({ marketerId, onClose, posIds, page, saleTea
   };
   return (
     <Sheet open={!!marketerId} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <SheetContent className="overflow-y-auto data-[side=right]:w-full data-[side=right]:max-w-full data-[side=right]:sm:max-w-4xl">
+      <SheetContent className="overflow-y-auto sm:max-w-4xl">
         <SheetHeader className="pr-12">
           <SheetTitle className="flex flex-wrap items-center gap-2">{data?.name ?? 'Chi tiết marketer'}{marketerId && <ProfileLink id={marketerId} name={data?.name ?? ''} className="rounded-md border border-line px-2 py-0.5 text-[12px] font-medium text-primary">Hồ sơ</ProfileLink>}</SheetTitle>
           <SheetDescription>{`Kỳ ${r.start === r.end ? r.start.split('-').reverse().join('/') : `${r.start.split('-').reverse().join('/')} – ${r.end.split('-').reverse().join('/')}`} · POS đang chọn · đã chốt là chốt`}</SheetDescription>
