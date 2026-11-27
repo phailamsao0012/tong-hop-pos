@@ -705,12 +705,13 @@ export function TeamOverviewView({
               by="care"
               focusId={focusId}
               rates={staffRates}
+              common={overviewStaffCommon(report.current.byEmployee, undefined, ms.rateBase, cur?.closedNet ?? 0)}
               deptNet={cur?.closedNet ?? 0}
               onCompare={() => onNavigate('compare')}
               title="Đơn theo nhóm sản phẩm · từng nhân viên CSKH"
               plainTitle="Từng nhân viên CSKH"
-              plainSubtitle="Đơn chốt trong kỳ của từng người (NV chăm sóc trên đơn, trống thì người bán) · so cùng kỳ chọn ngay dưới · bấm số để xem từng đơn"
-              subtitle="Đơn chốt trong kỳ của từng người (NV chăm sóc trên đơn, trống thì người bán), xếp theo sản phẩm của CHÍNH đơn đó · một đơn có cả hai loại tính ở cả hai nhóm · bấm số để xem từng đơn"
+              plainSubtitle="Doanh thu, Đơn chốt, Giá trị đơn: theo người bán, cùng số ô Doanh thu đầu trang · các cột khác: theo NV chăm sóc trên đơn (trống thì người bán) · bấm số để xem từng đơn"
+              subtitle="Doanh thu, Đơn chốt, Giá trị đơn: theo người bán, cùng số ô Doanh thu đầu trang · cột thẻ đơn: theo NV chăm sóc trên đơn (trống thì người bán), xếp theo sản phẩm của CHÍNH đơn đó · bấm số để xem từng đơn"
             /></LazyBlock>
           )}
           {team === 'cskh' && !mktLens && (

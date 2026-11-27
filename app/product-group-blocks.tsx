@@ -4,7 +4,7 @@
 // Người xem chọn cách chia: nhóm chính (Kháng sinh · Combo · Khác, nhận diện theo nhãn / sản phẩm / cả hai), từng nhãn, từng sản phẩm.
 import { StaffName } from './staff-name';
 import type { ReactNode } from 'react';
-import { groupStaffCommon, staffCommonTotal, type StaffCommon } from '@/lib/reports/staff-merge';
+import { groupStaffCommon, staffCommonTotal, staffRowsWithCommon, type StaffCommon } from '@/lib/reports/staff-merge';
 import { returnTone } from '@/lib/shared/return-tone';
 import {
   useEffect,
@@ -535,6 +535,11 @@ export const useTagPref = (team: string) =>
     TAG_PREFS,
   );
 
+/** Bảng nhân viên gộp (27/11/2026, kiểm cloud màn 2560: 11 cột thẻ đơn làm bảng rộng 2771 trong khung 2222, có thanh kéo ngang):
+ *  cột thẻ đơn mặc định ẨN ở cả Sale và CSKH, nút "Hiện cột thẻ đơn" bật lại (nhớ trên máy). Thẻ KPI đầu trang vẫn theo useTagPref. */
+export const useMergedTagPref = (team: string) =>
+  usePref<(typeof TAG_PREFS)[number]>(`thp_tags_bang_${team}`, 'hide', TAG_PREFS);
+
 export function RateCells({ v }: { v?: { ret: number | null; returned: number; cancel: number | null; cancelled: number } }) {
   return <>
     <td className={`n font-semibold ${toneCls(v?.ret ?? null)}`}>{v ? <>{pct(v.ret)}<span className="block text-[11px] font-normal text-ink-3">{vi.format(v.returned)} đơn hoàn</span></> : '—'}</td>
@@ -578,7 +583,8 @@ export function SaleGroupBlock({
   /** Ô DT đóng hàng trở đi (Sale): sellerId null = dòng Tổng. */ renderPacked?: (sellerId: string | null, net: number | undefined) => ReactNode;
   /** Nút So sánh nhân viên ở đầu bảng. */ onCompare?: () => void;
 }) {
-  const [tagPref, setTagPref] = useTagPref(team);
+  const [oldPref, setOldPref] = useTagPref(team), [mergedPref, setMergedPref] = useMergedTagPref(team);
+  const [tagPref, setTagPref] = common ? [mergedPref, setMergedPref] : [oldPref, setOldPref];
   const showTags = tagPref === 'show';
   const [dim, setDim] = useState<GroupDim>('tag'); // mặc định theo từng thẻ đơn, không gộp "Khác" (29/09/2026)
   const [basis, setBasis] = useState<GroupBasis>('both');
@@ -757,7 +763,10 @@ export function SaleGroupBlock({
         );
   const rows = useMemo(
     () =>
-      [...(r?.staff ?? [])].sort((a, b) => {
+      staffRowsWithCommon(r?.staff ?? [], common, (sellerId, name) => ({
+        sellerId, name, department: null, byGroup: {}, closed: 0, closedNet: 0, created: 0, createdClosed: 0, packed: 0, confirmedNotPacked: 0,
+        cancelledBeforePack: 0, selfConfirmed: 0, unknownConfirmer: 0, waiting: 0, waitingUnconfirmed: 0, closeRate: null, aov: null, packedRate: null,
+      }), staffIds).sort((a, b) => {
         const v = (x: typeof a) =>
           sort.key === 'closedNet'
             ? view(x).closedNet
@@ -785,7 +794,7 @@ export function SaleGroupBlock({
           : (v(a) ?? -1) - (v(b) ?? -1);
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [r, sort.key, sort.desc, metric, cmpDeltas, rates, common, deptNet],
+    [r, sort.key, sort.desc, metric, cmpDeltas, rates, common, deptNet, staffIds],
   );
   const pickCls = (sid: string, g: string | null, packed = false) =>
     `num rounded-md px-1.5 py-0.5 hover:bg-tint-2 ${pick?.staffId === sid && pick.group === g && !!pick.packed === packed ? 'bg-tint-2 font-semibold' : ''}`;

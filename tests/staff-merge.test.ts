@@ -40,3 +40,34 @@ void test('CSKH: số chung lấy từ bảng nhóm sản phẩm, không có t�
   assert.equal(c.share, 50);
   assert.equal(c.rate, null);
 });
+
+void test('người chỉ có ở báo cáo tổng quan vẫn có một dòng (cột riêng rỗng); đang chọn người thì chỉ thêm người được chọn', async () => {
+  const { staffRowsWithCommon } = await import('../lib/reports/staff-merge');
+  const m = overviewStaffCommon([{ ...A, name: 'Người A' }, { ...B, name: 'Người B' }], undefined, 'created', dept.closedNet);
+  const blank = (sellerId: string, name: string) => ({ sellerId, name, closedNet: 0 });
+  const rows = staffRowsWithCommon([{ sellerId: 'a', name: 'Người A', closedNet: 9 }, { sellerId: 'x', name: 'Người X', closedNet: 3 }], m, blank);
+  assert.deepEqual(rows.map((r) => [r.sellerId, r.onlyCommon ?? false]), [['a', false], ['x', false], ['b', true]]);
+  assert.equal(rows[2].name, 'Người B');
+  const total = staffCommonTotal(rows.map((r) => m.get(r.sellerId)).filter((x) => !!x), dept.closedNet);
+  assert.equal(total.closedNet, dept.closedNet, 'dòng Tổng = ô đầu trang dù bảng nhóm sản phẩm thiếu người');
+  assert.deepEqual(staffRowsWithCommon([], m, blank, ['a']).map((r) => r.sellerId), ['a']);
+  assert.equal(staffRowsWithCommon([{ sellerId: 'a', name: '', closedNet: 0 }], undefined, blank).length, 1, 'không có số chung: giữ nguyên');
+});
+
+void test('CSKH (số ảo): dòng Tổng bảng gộp = ô Doanh thu CSKH đầu trang, tỷ trọng không quá 100%', async () => {
+  const { demoWorld } = await import('./support/d1-sqlite');
+  const { overviewReport } = await import('../lib/reports/overview-report');
+  const { POS } = await import('../lib/shared/report-model');
+  const { raw } = await demoWorld(['2026-10-14', '2026-10-15'], Date.parse('2026-10-16T03:00:00Z'));
+  try {
+    for (const team of ['cskh', 'sale'] as const) {
+      const r = await overviewReport({ posIds: POS.map((p) => p.id), start: '2026-10-14', end: '2026-10-15', team });
+      const deptNet = r.current.total.closedNet;
+      assert.ok(deptNet > 0, `${team}: có số`);
+      const m = overviewStaffCommon(r.current.byEmployee, undefined, 'created', deptNet);
+      const total = staffCommonTotal([...m.values()], deptNet);
+      assert.equal(Math.round(total.closedNet), Math.round(deptNet), `${team}: tổng bảng = ô đầu trang`);
+      assert.ok((total.share ?? 0) <= 100.0001, `${team}: tỷ trọng ${total.share}`);
+    }
+  } finally { raw.close(); }
+});
