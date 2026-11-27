@@ -18,9 +18,12 @@ import { StaleChip } from './stale-chip';
 import { useApi } from './use-api';
 import { TrendNotes } from './overview-trends';
 import { takeNavHint } from './nav-focus';
-import { Th, ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, dmy, money, pct, shortMoney, toast, useSort, vi } from './ui-kit';
+import { Th, ChartCard, Definitions, EmptyState, ErrorBox, FoldBlock, KpiCard, posName, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, dmy, money, pct, shortMoney, toast, useSort, vi } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
 import { SegmentHintNote } from './segment-hint-note';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { BOSS_RETURN_RED, COACH_MIN_BASE } from '@/lib/zalo/boss-report';
+import { CanXemStrip, PageHeadMoi, WhySheet, overRet, tileGrid, type CanXemItem, type WhySpec } from './trang-moi';
 
 type Count = { label: string; n: number };
 type Report = VdReport & { period: { start: string; end: string }; syncedAt: string | null;
@@ -210,7 +213,9 @@ function ReturnBreakdown({ t, period, bySent, estimated = 0 }: { t: VdLine; peri
   );
 }
 
-export function VanDonView() {
+export function VanDonView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới, tắt thì y như cũ. */ uiMoi?: boolean } = {}) {
+  // Giao diện mới: khung "Vì sao ra số này" đang mở (null = đóng).
+  const [why, setWhy] = useState<WhySpec | null>(null);
   const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
   // Mở từ bảng Vận đơn ở Tổng quan POS thì xem sẵn theo bộ phận (nav-focus.ts).
@@ -261,23 +266,14 @@ export function VanDonView() {
     } catch { toast('Không xuất được file Excel.', { kind: 'error' }); }
   }
 
-  return (
-    <div className="space-y-5">
-      <PageHeader eyebrow={period} title="Vận đơn" subtitle="Gọi xác nhận, chuyển đơn đi và hàng hoàn: do người lên đơn hay do người xác nhận"
-        badge={<StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} />}
-        actions={<Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button>} />
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  // fold: chỉ bố cục mới truyền (thu gọn thẻ); bố cục cũ không truyền nên thẻ y như trước.
+  const periodBar = () => (
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset} onStart={setStart} onEnd={setEnd} loading={loading} onReload={reload}
         extra={<><span className="px-1 text-xs font-semibold text-ink-2">Xem theo</span><SegmentedControl<Level> ariaLabel="Xem theo" size="sm" value={level} onChange={setLevel} options={LEVELS} /></>} />
-      <PosChips posIds={posIds} onChange={setPosIds} />
-      <SegmentHintNote />
-      {!mktLens && <TrendNotes depts={['vandon']} />}
-      {error && !report && <ErrorBox error={error} onRetry={reload} />}
-      {!report && !error && <><SkeletonKpis count={5} className="xl:grid-cols-5" /><SkeletonTable rows={8} /></>}
-      {report && t && (
-        <>
-          <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5" aria-busy={loading || undefined}>
-            {/* Ngoại lệ tên thẻ do anh đặt trong plan A3 ngày 17/10/2026. */}
-            {[
+  );
+  const tilesInner = (/*{}*/t: Report['total']) => (
+            [
               { key: 'confirmed', label: 'Đơn chốt', icon: BadgeCheck, count: t.confirmed, net: t.confirmedNet, at: t.atConfirmed, prev: t.closed, base: 'đơn vào Chờ xác nhận', definition: 'Đơn vào Chờ xác nhận trong kỳ đã qua Đã xác nhận, kể cả hủy sau đó. Doanh số chuyển đi là tổng giá trị các đơn này.' },
               { key: 'packed', label: 'Đơn xác nhận', icon: BadgeCheck, count: t.packed, net: t.packedNet, at: t.atPacked, prev: t.confirmed, base: 'Đơn chốt', definition: 'Đơn vào Chờ xác nhận trong kỳ đã qua Đang đóng hàng, kể cả hủy sau đóng hàng. Doanh số chuyển đi là tổng giá trị các đơn này.' },
               { key: 'sent', label: 'Đơn chuyển', icon: Send, count: t.sent, net: t.sentNet, at: t.atSent, prev: t.packed, base: 'Đơn xác nhận', definition: bySent ? 'Đơn giao ĐVVC lần đầu trong kỳ, theo ngày gửi hàng; khác nhóm hai thẻ trước nên tỷ lệ có thể vượt 100%. Doanh số chuyển đi là tổng giá trị các đơn này.' : 'Đã giao ĐVVC trong các đơn vào Chờ xác nhận trong kỳ. Doanh số chuyển đi là tổng giá trị các đơn này.' },
@@ -288,38 +284,41 @@ export function VanDonView() {
               <span className="block">{pct(share(c.count, c.prev))} so với {c.base}</span>
               <span className="block">Đang nằm ở bước này: {vi.format(c.at)}</span>
               {c.key === 'returned' && <><span className="block">Theo đơn: {pct(t.returnRate)} · hoàn ÷ đơn chuyển</span><span className="block">Theo doanh số chuyển đi: {pct(t.returnRateNet)} · giá trị hoàn ÷ doanh số chuyển đi</span></>}
-            </>} />)}
-          </div>
-          <AdvisorPanel dept="vandon" />
+            </>} />)
+  );
+  const waitNote = (t: Report['total']) => (
           <p className="text-xs text-ink-3"><button type="button" className="underline tap" onClick={() => openCard('waiting')}>Còn chờ xác nhận {vi.format(t.waiting)}</button> · <button type="button" className="underline tap" onClick={() => openCard('failed')}>Không xác nhận được {vi.format(t.failed)}</button></p>
-          {card && <ChartCard title="Danh sách đơn tính ra số đã chọn" subtitle={period}>
+  );
+  const drillCard = (/*{}*/) => (
+          card && <ChartCard title="Danh sách đơn tính ra số đã chọn" subtitle={period}>
             <Button onClick={() => setCard(null)}>Đóng</Button>
             {drill.error ? <ErrorBox error={drill.error} onRetry={drill.reload} /> : !drill.data ? <SkeletonTable rows={5} /> : <>
               <TableWrap><table className="tbl"><thead><tr><Th>Mã đơn</Th><Th>Trạng thái</Th><th>Doanh số chuyển đi</th></tr></thead><tbody>{drill.data.orders.map((o) => <tr key={o.id}><td>{o.orderId}</td><td>{STATUS_NAMES[o.status] ?? 'Chưa rõ'}</td><td>{money(o.net)}</td></tr>)}</tbody></table></TableWrap>
               {!drill.data.orders.length && <EmptyState text="Không có đơn" />}
               <Button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 100))}>Trước</Button><Button disabled={!drill.data.more} onClick={() => setOffset(offset + 100)}>Tiếp</Button>
             </>}
-          </ChartCard>}
-
-          <ReturnBreakdown t={t} period={period} bySent={bySent} estimated={report?.sentEstimated} />
-
-          {(['Sale', 'CSKH'] as const).map((d) => (
+          </ChartCard>
+  );
+  const deptCards = (/*{}*/report: Report) => (
+          (['Sale', 'CSKH'] as const).map((d) => (
             <ChartCard key={d} id={`vd-dept-${d.toLowerCase()}`} icon={Undo2} title={`${d} · đơn chuyển đi và đơn hoàn theo người`}
               subtitle={`Đơn vào Chờ xác nhận ${period} từ người thuộc bộ phận ${d}, xét trạng thái hiện tại. Bấm tiêu đề cột để sắp xếp.`}>
               <DeptShipTable rows={report.sellers.filter((r) => r.dept === d)} />
             </ChartCard>
-          ))}
-
-          <VanDonCarriersCard start={start} end={end} posIds={posIds} />
+          ))
+  );
+  const sellersCard = () => (
           <ChartCard id="vd-sellers" icon={ShoppingCart} title="Phía lên đơn (Sale, CSKH)" subtitle="Hoàn cao và nhiều đơn không xác nhận được ở người lên đơn là dấu hiệu lên đơn kém." info={report.definitions['Người lên đơn']}>
             <LineTable rows={sellers} cols={SELLER_COLS} level={level} first={first} />
           </ChartCard>
-
-          <ChartCard icon={BadgeCheck} title="Phía xác nhận (Vận đơn)" subtitle="Hoàn cao ở đơn một người đã xác nhận là dấu hiệu gọi xác nhận kém." info={report.definitions['Người xác nhận']}>
+  );
+  const confirmCard = (report: Report, fold?: { storageKey: string; summary?: string }) => (
+          <ChartCard collapse={fold} icon={BadgeCheck} title="Phía xác nhận (Vận đơn)" subtitle="Hoàn cao ở đơn một người đã xác nhận là dấu hiệu gọi xác nhận kém." info={report.definitions['Người xác nhận']}>
             <LineTable rows={confirmers} cols={CONFIRMER_COLS} level={level} first={first} />
           </ChartCard>
-
-          <ChartCard icon={PhoneOff} title="Lý do không xác nhận được" subtitle={`${vi.format(t.failed)} đơn bị hủy khi đang Chờ xác nhận`} info={report.definitions['Không xác nhận được']}>
+  );
+  const reasonsCard = (report: Report, t: Report['total'], fold?: { storageKey: string; summary?: string }) => (
+          <ChartCard collapse={fold} icon={PhoneOff} title="Lý do không xác nhận được" subtitle={`${vi.format(t.failed)} đơn bị hủy khi đang Chờ xác nhận`} info={report.definitions['Không xác nhận được']}>
             {report.reasons.length ? (
               <ul className="space-y-2.5">
                 {report.reasons.map((r) => (
@@ -338,6 +337,97 @@ export function VanDonView() {
               </div>
             )}
           </ChartCard>
+  );
+  // [hết khối chung]
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trên xuống: đầu trang (PageHeadMoi: chọn kỳ + Xem theo; StaleChip, Excel; POS) → nhắc lọc nhóm đơn → "Cần xem" (hoàn ÷ đơn chuyển từ 7%:
+  // cả trang, rồi người lên đơn / người xác nhận từ 20 đơn chuyển) → một hàng 5 ô số (bấm mở danh sách đơn tính ra số đó, khung giữa màn)
+  // → còn chờ / không xác nhận được → hoàn theo bước → bảng chính Phía lên đơn → khối phụ thu gọn: Sale / CSKH theo người, đơn vị vận chuyển,
+  // Phía xác nhận, Lý do không xác nhận được, xu hướng, gợi ý, Cách tính.
+  if (uiMoi) {
+    const scope = `${period} · ${posIds.length <= 3 ? posIds.map(posName).join(', ') : `${vi.format(posIds.length)} POS`}${unit ? ` · team ${unit.name}` : ''} · đơn chuyển đi ${bySent ? 'theo ngày gửi hàng' : 'trong các đơn vào Chờ xác nhận'}`;
+    const head = <PageHeadMoi title="Vận đơn" scope={scope} hint="Gọi xác nhận, chuyển đơn đi và hàng hoàn: do người lên đơn hay do người xác nhận" tools={periodBar()}
+      right={<><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} /><Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button></>}
+      pos={<PosChips posIds={posIds} onChange={setPosIds} />} />;
+    if (!report || !t) return <div className="min-w-0 space-y-4">{head}{error ? <ErrorBox error={error} onRetry={reload} /> : <SkeletonKpis count={5} className="lg:grid-cols-5" />}</div>;
+    const whyRet = (who: string, r: { returned: number; sent: number; returnedNet: number; sentNet: number }): WhySpec => {
+      const v = share(r.returned, r.sent);
+      return {
+        title: `Tỷ lệ hoàn · ${who}`, value: pct(v), tone: overRet(v) ? 'bad' : undefined, scope, mark: `Đỏ từ ${BOSS_RETURN_RED}%`,
+        rows: [{ label: 'Đơn hoàn', value: vi.format(r.returned) }, { label: 'Đơn chuyển đi', value: vi.format(r.sent) }, { label: '= Tỷ lệ hoàn theo đơn', value: pct(v), strong: true, tone: overRet(v) ? 'bad' : undefined },
+          { label: 'Theo doanh số chuyển đi', value: pct(share(r.returnedNet, r.sentNet)) }],
+        definition: 'Tỷ lệ hoàn = đơn hoàn ÷ đơn chuyển đi; theo doanh số = giá trị hoàn ÷ doanh số chuyển đi.',
+      };
+    };
+    const need: CanXemItem[] = [];
+    if (overRet(share(t.returned, t.sent))) need.push({ key: 'all', team: true, text: `Cả trang: hoàn ${pct(share(t.returned, t.sent))}`, onClick: () => setWhy(whyRet('Cả trang', t)) });
+    for (const [side, list] of [['lên đơn', report.sellers], ['xác nhận', report.confirmers]] as const) for (const r of list) {
+      const v = share(r.returned, r.sent);
+      if (overRet(v) && r.sent >= COACH_MIN_BASE) need.push({ key: `${side}-${r.label}`, text: `${r.label} (${side}): hoàn ${pct(v)}`, gap: (v ?? 0) - BOSS_RETURN_RED, onClick: () => setWhy(whyRet(`${r.label} · ${side}`, r)) });
+    }
+    const k = (s: string) => `ui-moi:van-don:${s}`;
+    return (
+      <div className="min-w-0 space-y-4">
+        {head}
+        <SegmentHintNote />
+        <CanXemStrip items={need} note={`Hoàn ÷ đơn chuyển từ ${BOSS_RETURN_RED}% · người từ ${COACH_MIN_BASE} đơn chuyển`} />
+        <div className={tileGrid(5)} aria-busy={loading || undefined}>{tilesInner(t)}</div>
+        {waitNote(t)}
+        <ReturnBreakdown t={t} period={period} bySent={bySent} estimated={report?.sentEstimated} />
+        {sellersCard()}
+        <div className="grid min-w-0 gap-3">
+          <FoldBlock icon={Undo2} title="Sale, CSKH · đơn chuyển đi và đơn hoàn theo người" storageKey={k('dept')}><div className="grid min-w-0 gap-4">{deptCards(report)}</div></FoldBlock>
+          <FoldBlock icon={Send} title="Đơn vị vận chuyển" storageKey={k('carriers')}><VanDonCarriersCard start={start} end={end} posIds={posIds} /></FoldBlock>
+          {confirmCard(report, { storageKey: k('confirm') })}
+          {reasonsCard(report, t, { storageKey: k('reasons'), summary: `${vi.format(t.failed)} đơn` })}
+          {!mktLens && <FoldBlock icon={ShoppingCart} title="Xu hướng" storageKey={k('trend')}><TrendNotes depts={['vandon']} /></FoldBlock>}
+          <FoldBlock icon={BadgeCheck} title="Gợi ý" storageKey={k('advisor')}><AdvisorPanel dept="vandon" /></FoldBlock>
+          <FoldBlock icon={BadgeCheck} title="Cách tính" storageKey={k('defs')}><Definitions items={Object.entries(report.definitions).map(([term, def]) => `${term}: ${def}`)} /></FoldBlock>
+        </div>
+        {/* Bấm một ô số: danh sách đơn tính ra số đó mở khung giữa màn (bố cục cũ hiện dưới hàng ô số). */}
+        <Sheet open={!!card} onOpenChange={(o) => { if (!o) setCard(null); }}>
+          <SheetContent className="overflow-y-auto p-3 sm:max-w-3xl">
+            <SheetTitle className="sr-only">Danh sách đơn tính ra số đã chọn</SheetTitle>
+            {drillCard()}
+          </SheetContent>
+        </Sheet>
+        <WhySheet spec={why} onClose={() => setWhy(null)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <PageHeader eyebrow={period} title="Vận đơn" subtitle="Gọi xác nhận, chuyển đơn đi và hàng hoàn: do người lên đơn hay do người xác nhận"
+        badge={<StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} />}
+        actions={<Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button>} />
+      {periodBar()}
+      <PosChips posIds={posIds} onChange={setPosIds} />
+      <SegmentHintNote />
+      {!mktLens && <TrendNotes depts={['vandon']} />}
+      {error && !report && <ErrorBox error={error} onRetry={reload} />}
+      {!report && !error && <><SkeletonKpis count={5} className="xl:grid-cols-5" /><SkeletonTable rows={8} /></>}
+      {report && t && (
+        <>
+          <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5" aria-busy={loading || undefined}>
+            {/* Ngoại lệ tên thẻ do anh đặt trong plan A3 ngày 17/10/2026. */}
+            {tilesInner(t)}
+          </div>
+          <AdvisorPanel dept="vandon" />
+          {waitNote(t)}
+          {drillCard()}
+
+          <ReturnBreakdown t={t} period={period} bySent={bySent} estimated={report?.sentEstimated} />
+
+          {deptCards(report)}
+
+          <VanDonCarriersCard start={start} end={end} posIds={posIds} />
+          {sellersCard()}
+
+          {confirmCard(report)}
+
+          {reasonsCard(report, t)}
 
           <Definitions items={Object.entries(report.definitions).map(([term, def]) => `${term}: ${def}`)} />
         </>
