@@ -1774,7 +1774,7 @@ export default function Dashboard({ user, initialView, demo = false, uiMoi = fal
           {!gated && view === 'cskh-teams' && <TeamGroupsView key="cskh" team="cskh" owner={isOwner(user)} uiMoi={uiMoi} />}
           {!gated && view === 'cskh-analytics' && <CskhAnalyticsView />}
           {!gated && view === 'sale-analytics' && <SaleAnalyticsView uiMoi={uiMoi} />}
-          {!gated && view === 'sale-quality' && <SaleQualityView />}
+          {!gated && view === 'sale-quality' && <SaleQualityView uiMoi={uiMoi} />}
           {!gated && view === 'mkt-roas' && <MktRoasView owner={user.role === 'owner'} />}
           {!gated && view === 'uncounted' && <UncountedView />}
           {!gated && view === 'customer360' && <Customer360View />}

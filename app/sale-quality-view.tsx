@@ -4,7 +4,10 @@
 // Sale "chốt láo" thường hoàn nhiều và khách gần như không quay lại; Sale tốt thì CSKH upsell dễ, khách mua lại đều.
 import { usePosIds } from './pos-store';
 import { AiPackButton } from './ai-pack';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactElement } from 'react';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { BOSS_RETURN_RED, COACH_MIN_BASE } from '@/lib/zalo/boss-report';
+import { CanXemStrip, KPI_RED, KPI_TIGHT, PageHeadMoi, WhySheet, overRet, tileGrid, type CanXemItem, type WhySpec } from './trang-moi';
 import { usePeriod } from './period-store';
 import { PRESETS, isPreset } from '@/lib/shared/periods';
 import { HeartHandshake, Repeat, Timer, UserCheck } from 'lucide-react';
@@ -15,13 +18,15 @@ import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';
 import { LadderMembers, LadderTable, ladderExtras, type LadderLine, type LadderPick } from './ladder-table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Th, ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, ThinkingLine, dmy, money, pct, shortMoney, useSort, vi } from './ui-kit';
+import { Th, ChartCard, Definitions, EmptyState, ErrorBox, FoldBlock, KpiCard, posName, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, ThinkingLine, dmy, money, pct, shortMoney, useSort, vi } from './ui-kit';
 
 type Row = SaleQuality['staff'][number];
 const days = (d: number | null) => d === null ? '—' : d < 1 ? 'dưới 1 ngày' : `${vi.format(Math.round(d))} ngày`;
 const tagText = (t: { tag: string; count: number }[]) => t.map((x) => `${x.tag} ${vi.format(x.count)}`).join(' · ') || '—';
 
-export function SaleQualityView() {
+export function SaleQualityView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới, tắt thì y như cũ. */ uiMoi?: boolean } = {}) {
+  // Giao diện mới: khung "Vì sao ra số này" đang mở (null = đóng).
+  const [why, setWhy] = useState<WhySpec | null>(null);
   // Kỳ theo bộ lọc ngày chung của web (yêu cầu 30/09/2026), không còn chọn riêng từng tháng.
   const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
@@ -41,37 +46,22 @@ export function SaleQualityView() {
   };
   const range = start === end ? dmy(start) : `${dmy(start)}–${dmy(end)}`;
   const label = isPreset(preset) && preset !== 'custom' ? `${PRESETS[preset]} (${range})` : range;
-  return (
-    <div className="space-y-5">
-      <PageHeader eyebrow={`${label} · theo dõi tới hôm nay`} title="Chất lượng khách của Sale"
-        subtitle="Sale chốt cho khách nào, sản phẩm gì, và khách có quay lại mua qua CSKH không — Sale tốt thì khách ít hoàn và CSKH upsell dễ"
-        actions={<AiPackButton disabled={!r} pack={() => r && ({
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  // fold: chỉ bố cục mới truyền (thu gọn thẻ); bố cục cũ không truyền nên thẻ y như trước.
+  const aiPack = () => (
+        <AiPackButton disabled={!r} pack={() => r && ({
           page: 'Chất lượng khách của Sale', period: label,
           facts: [['Khách Sale chốt', r.total.customers], ['Đủ 30 ngày theo dõi', r.total.mature], ['Mua lại qua CSKH (đủ 30 ngày)', pct(r.total.repeatRateMature)], ['Đơn CSKH từ khách Sale', r.total.cskhOrders], ['Doanh thu CSKH từ khách Sale', Math.round(r.total.cskhNet)], ['Tỷ lệ hoàn đơn Sale', pct(r.total.returnRate)]],
           tables: [{ title: 'Từng Sale', staffCol: 0, columns: ['Sale', 'Khách', 'Đủ 30 ngày', 'Hoàn', 'Mua lại qua CSKH (đủ 30 ngày)', 'Đơn CSKH', 'Doanh thu CSKH', 'DT CSKH / khách', 'Ngày tới lần mua lại', 'Sale chốt gì', 'Khách mua lại gì'],
             rows: r.staff.map((s) => [s.name, s.customers, s.mature, pct(s.returnRate), pct(s.repeatRateMature), s.cskhOrders, Math.round(s.cskhNet), s.cskhNetPerCustomer === null ? null : Math.round(s.cskhNetPerCustomer), days(s.avgDaysToRepeat), tagText(s.saleTags), tagText(s.repeatTags)]) }],
           definitions: r.definitions,
           questions: ['Sale nào có khách quay lại qua CSKH thấp bất thường so với mặt bằng — dấu hiệu chốt ép / tư vấn sai?', 'Sản phẩm Sale chốt nào dẫn tới khách mua lại nhiều nhất?', 'Có Sale nào vừa hoàn cao vừa ít khách quay lại không?', 'CSKH nên ưu tiên chăm nhóm khách của Sale nào?'],
-        })} />} />
-      <PeriodToolbar preset={preset} start={start} end={end} loading={loading} onReload={reload}
-        onPreset={(v) => { setPreset(v); setPick(null); }} onStart={(v) => { setStart(v); setPick(null); }} onEnd={(v) => { setEnd(v); setPick(null); }} />
-      <PosChips posIds={posIds} onChange={(v) => { setPosIds(v); setPick(null); }} />
-      {error && !r && <ErrorBox error={error} onRetry={reload} />}
-      {!r && !error && <><SkeletonKpis count={4} className="xl:grid-cols-4" /><ChartCard title="Từng Sale" subtitle="Đang tải…"><ThinkingLine /><SkeletonTable rows={6} cols={8} /></ChartCard></>}
-      {r && t && (
-        <>
-          {r.followDays < 45 && <p className="notice m-0 text-[12.5px]">Khách của {label} mới được theo dõi {vi.format(r.followDays)} ngày — nhiều khách chưa tới lúc mua lại. So sánh giữa các Sale nên dựa vào cột "đủ {r.matureDays} ngày", hoặc chọn kỳ sớm hơn (ví dụ Tháng trước).</p>}
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-            <KpiCard icon={UserCheck} tone="blue" label="Khách Sale chốt" value={vi.format(t.customers)} note={`${vi.format(t.saleOrders)} đơn Sale · ${vi.format(t.mature)} khách đủ ${r.matureDays} ngày`}
-              tooltip={{ period: label, current: `${vi.format(t.customers)} khách`, definition: r.definitions.cohort }} />
-            <KpiCard icon={Repeat} tone="green" label="Mua lại qua CSKH" value={pct(t.repeatRateMature)} note={`${vi.format(t.repeatMature)}/${vi.format(t.mature)} khách đủ ${r.matureDays} ngày · tất cả ${pct(t.repeatRate)}`}
-              progress={t.repeatRateMature === null ? undefined : { value: t.repeatRateMature, max: 100 }} tooltip={{ period: label, current: pct(t.repeatRateMature), rows: [['Tất cả khách', `${vi.format(t.repeat)}/${vi.format(t.customers)} (${pct(t.repeatRate)})`], ['Quay lại qua Sale', `${vi.format(t.saleAgain)} khách`]], definition: `${r.definitions.repeat} ${r.definitions.mature}` }} />
-            <KpiCard icon={HeartHandshake} tone="teal" label="Doanh thu CSKH từ khách Sale" value={shortMoney(t.cskhNet)} note={`${vi.format(t.cskhOrders)} đơn · ${shortMoney(t.cskhNetPerCustomer)} / khách Sale · ${t.ordersPerRepeater === null ? '—' : t.ordersPerRepeater.toFixed(1).replace('.', ',')} đơn / khách mua lại`}
-              tooltip={{ period: label, current: money(t.cskhNet), rows: [['Khách mua lại gì', tagText(t.repeatTags)]], definition: r.definitions.repeat }} />
-            <KpiCard icon={ICON.returned} tone="orange" invert label="Hoàn đơn Sale · quay lại sau" value={pct(t.returnRate)} note={`${vi.format(t.returned)} đơn hoàn · lần mua lại đầu sau ${days(t.avgDaysToRepeat)}`}
-              tooltip={{ period: label, current: pct(t.returnRate), rows: [['Ngày tới lần mua lại đầu (TB)', days(t.avgDaysToRepeat)]], definition: r.definitions.returnRate }} />
-          </div>
-
+        })} />
+  );
+  const followNote = (/*{}*/r: SaleQuality) => (
+          r.followDays < 45 && <p className="notice m-0 text-[12.5px]">Khách của {label} mới được theo dõi {vi.format(r.followDays)} ngày — nhiều khách chưa tới lúc mua lại. So sánh giữa các Sale nên dựa vào cột "đủ {r.matureDays} ngày", hoặc chọn kỳ sớm hơn (ví dụ Tháng trước).</p>
+  );
+  const staffCard = (r: SaleQuality, t: SaleQuality['total']) => (
           <ChartCard icon={Timer} title="Từng Sale" subtitle={`Bấm một dòng để xem từng khách · "Cần xem" = tỷ lệ mua lại (đủ ${r.matureDays} ngày) dưới một nửa mặt bằng hoặc hoàn cao bất thường`}>
             {!staff.length ? <EmptyState text="Chưa có khách Sale chốt trong kỳ này." /> : (
               <TableWrap minWidth={1180} maxHeight="36rem" stickyFirst>
@@ -120,8 +110,8 @@ export function SaleQualityView() {
               </TableWrap>
             )}
           </ChartCard>
-
-          {pick && (
+  );
+  const pickCard = (pick: { id: string; name: string }) => (
             <ChartCard icon={UserCheck} title={`Khách của ${pick.name}`} subtitle={`${label} · đơn gốc Sale chốt và các lần khách mua lại sau đó (xếp theo doanh thu CSKH)`}
               more={{ label: 'Đóng', onClick: () => setPick(null) }}>
               {detail.error ? <ErrorBox error={detail.error} onRetry={detail.reload} /> : !detail.data?.list ? <SkeletonTable rows={6} cols={6} /> : !detail.data.list.length ? <EmptyState text="Không có khách." /> : (
@@ -143,6 +133,104 @@ export function SaleQualityView() {
                 </TableWrap>
               )}
             </ChartCard>
+  );
+  // [hết khối chung]
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trên xuống: đầu trang (PageHeadMoi) → nhắc mới theo dõi ít ngày → "Cần xem" (hoàn từ 7%; Sale bị cờ "Cần xem" của bảng)
+  // → một hàng 4 ô số (bấm mở "Vì sao ra số này") → bảng chính Từng Sale (bấm dòng mở khung giữa màn danh sách khách)
+  // → khối phụ thu gọn: T0/T1/T2 theo nhóm sản phẩm, mua tiếp theo tháng, Cách tính.
+  if (uiMoi) {
+    const scope = `${label} · theo dõi tới hôm nay · ${posIds.length <= 3 ? posIds.map(posName).join(', ') : `${vi.format(posIds.length)} POS`} · khách Sale chốt trong kỳ, mua lại qua CSKH`;
+    const head = <PageHeadMoi title="Chất lượng khách của Sale" scope={scope}
+      hint="Sale chốt cho khách nào, sản phẩm gì, và khách có quay lại mua qua CSKH không — Sale tốt thì khách ít hoàn và CSKH upsell dễ"
+      tools={<PeriodToolbar preset={preset} start={start} end={end} loading={loading} onReload={reload}
+        onPreset={(v) => { setPreset(v); setPick(null); }} onStart={(v) => { setStart(v); setPick(null); }} onEnd={(v) => { setEnd(v); setPick(null); }} />}
+      right={aiPack()} pos={<PosChips posIds={posIds} onChange={(v) => { setPosIds(v); setPick(null); }} />} />;
+    if (!r || !t) return <div className="min-w-0 space-y-4">{head}{error ? <ErrorBox error={error} onRetry={reload} /> : <SkeletonKpis count={4} className="xl:grid-cols-4" />}</div>;
+    const whyRet = (who: string, m: { returnRate: number | null; returned: number; saleOrders: number }): WhySpec => ({
+      title: `Hoàn đơn Sale · ${who}`, value: pct(m.returnRate), tone: overRet(m.returnRate) ? 'bad' : undefined, scope, mark: `Đỏ từ ${BOSS_RETURN_RED}%`,
+      rows: [{ label: 'Đơn hoàn', value: vi.format(m.returned) }, { label: 'Đơn Sale chốt', value: vi.format(m.saleOrders) }, { label: '= Tỷ lệ hoàn', value: pct(m.returnRate), strong: true, tone: overRet(m.returnRate) ? 'bad' : undefined }],
+      definition: r.definitions.returnRate,
+    });
+    const need: CanXemItem[] = [];
+    if (overRet(t.returnRate)) need.push({ key: 'all-ret', team: true, text: `Đội Sale: hoàn ${pct(t.returnRate)}`, onClick: () => setWhy(whyRet('Đội Sale', t)) });
+    for (const s of r.staff) {
+      if (overRet(s.returnRate) && s.saleOrders >= COACH_MIN_BASE) need.push({ key: `r-${s.staffId}`, text: `${s.name}: hoàn ${pct(s.returnRate)}`, gap: (s.returnRate ?? 0) - BOSS_RETURN_RED, onClick: () => setWhy(whyRet(s.name, s)) });
+      else if ((flag(s) as ReactElement<{ tone?: string }> | null)?.props.tone === 'red') need.push({ key: `q-${s.staffId}`, text: `${s.name}: khách ít quay lại (${pct(s.repeatRateMature)})`, gap: 0, onClick: () => setPick({ id: s.staffId, name: s.name }) });
+    }
+    const k = (s: string) => `ui-moi:sale-quality:${s}`;
+    return (
+      <div className="min-w-0 space-y-4">
+        {head}
+        {followNote(r)}
+        <CanXemStrip items={need} note={`Hoàn từ ${BOSS_RETURN_RED}% (Sale từ ${COACH_MIN_BASE} đơn) · khách ít quay lại = mua lại (đủ ${r.matureDays} ngày) dưới một nửa mặt bằng`} />
+        <div className={tileGrid(4)}>
+          <KpiCard icon={UserCheck} tone="blue" label="Khách Sale chốt trong kỳ" className={KPI_TIGHT} value={vi.format(t.customers)} note={`${vi.format(t.saleOrders)} đơn Sale · ${vi.format(t.mature)} khách đủ ${r.matureDays} ngày`}
+            onClick={() => setWhy({ title: 'Khách Sale chốt', value: `${vi.format(t.customers)} khách`, scope,
+              rows: [{ label: 'Đơn Sale', value: vi.format(t.saleOrders) }, { label: `Khách đủ ${r.matureDays} ngày theo dõi`, value: vi.format(t.mature) }, { label: 'Sale chốt gì', value: tagText(t.saleTags) }], definition: r.definitions.cohort })} />
+          <KpiCard icon={Repeat} tone="green" label={`Mua lại qua CSKH · đủ ${r.matureDays} ngày`} className={KPI_TIGHT} value={pct(t.repeatRateMature)} note={`${vi.format(t.repeatMature)}/${vi.format(t.mature)} khách · tất cả ${pct(t.repeatRate)}`}
+            progress={t.repeatRateMature === null ? undefined : { value: t.repeatRateMature, max: 100 }}
+            onClick={() => setWhy({ title: 'Mua lại qua CSKH', value: pct(t.repeatRateMature), scope,
+              rows: [{ label: `Khách đủ ${r.matureDays} ngày đã mua lại`, value: vi.format(t.repeatMature) }, { label: `Khách đủ ${r.matureDays} ngày`, value: vi.format(t.mature) }, { label: '= Tỷ lệ', value: pct(t.repeatRateMature), strong: true },
+                { label: 'Tất cả khách', value: `${vi.format(t.repeat)}/${vi.format(t.customers)} (${pct(t.repeatRate)})` }], definition: r.definitions.repeat })} />
+          <KpiCard icon={HeartHandshake} tone="teal" label="Doanh thu CSKH từ khách Sale" className={KPI_TIGHT} value={shortMoney(t.cskhNet)} note={`${vi.format(t.cskhOrders)} đơn · ${shortMoney(t.cskhNetPerCustomer)} / khách Sale`}
+            onClick={() => setWhy({ title: 'Doanh thu CSKH từ khách Sale', value: money(t.cskhNet), scope,
+              rows: [{ label: 'Đơn CSKH', value: vi.format(t.cskhOrders) }, { label: 'Doanh thu / khách Sale', value: shortMoney(t.cskhNetPerCustomer) }, { label: 'Đơn / khách mua lại', value: t.ordersPerRepeater === null ? '—' : t.ordersPerRepeater.toFixed(1).replace('.', ',') }, { label: 'Khách mua lại gì', value: tagText(t.repeatTags) }],
+              definition: r.definitions.repeat })} />
+          <KpiCard icon={ICON.returned} tone="orange" invert label="Hoàn đơn Sale" className={`${KPI_TIGHT} ${overRet(t.returnRate) ? KPI_RED : ''}`} value={pct(t.returnRate)} note={`${vi.format(t.returned)} đơn hoàn · quay lại sau ${days(t.avgDaysToRepeat)}`}
+            onClick={() => setWhy(whyRet('Đội Sale', t))} />
+        </div>
+        {staffCard(r, t)}
+        <div className="grid min-w-0 gap-3">
+          <FoldBlock icon={Repeat} title="Khách Sale đưa về · T0, T1, T2 theo nhóm sản phẩm" storageKey={k('ladder-group')}>
+            <SaleGroupLadderBlock posIds={posIds} start={start} end={end} label={label} staff={r.staff.map((x) => ({ id: x.staffId, name: x.name }))} />
+          </FoldBlock>
+          <FoldBlock icon={Repeat} title="Khách mới Sale đưa về · mua tiếp theo tháng" storageKey={k('ladder-month')}>
+            <SaleLadderBlock posIds={posIds} staff={r.staff.map((x) => ({ id: x.staffId, name: x.name }))} />
+          </FoldBlock>
+          <FoldBlock icon={Timer} title="Cách tính" storageKey={k('defs')}><Definitions items={r.definitions} /></FoldBlock>
+        </div>
+        {/* Bấm một dòng: danh sách khách của Sale đó mở khung giữa màn (bố cục cũ hiện ngay dưới bảng). */}
+        <Sheet open={!!pick} onOpenChange={(o) => { if (!o) setPick(null); }}>
+          <SheetContent className="overflow-y-auto p-3 sm:max-w-5xl">
+            <SheetTitle className="sr-only">{pick ? `Khách của ${pick.name}` : 'Khách'}</SheetTitle>
+            {pick && pickCard(pick)}
+          </SheetContent>
+        </Sheet>
+        <WhySheet spec={why} onClose={() => setWhy(null)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <PageHeader eyebrow={`${label} · theo dõi tới hôm nay`} title="Chất lượng khách của Sale"
+        subtitle="Sale chốt cho khách nào, sản phẩm gì, và khách có quay lại mua qua CSKH không — Sale tốt thì khách ít hoàn và CSKH upsell dễ"
+        actions={aiPack()} />
+      <PeriodToolbar preset={preset} start={start} end={end} loading={loading} onReload={reload}
+        onPreset={(v) => { setPreset(v); setPick(null); }} onStart={(v) => { setStart(v); setPick(null); }} onEnd={(v) => { setEnd(v); setPick(null); }} />
+      <PosChips posIds={posIds} onChange={(v) => { setPosIds(v); setPick(null); }} />
+      {error && !r && <ErrorBox error={error} onRetry={reload} />}
+      {!r && !error && <><SkeletonKpis count={4} className="xl:grid-cols-4" /><ChartCard title="Từng Sale" subtitle="Đang tải…"><ThinkingLine /><SkeletonTable rows={6} cols={8} /></ChartCard></>}
+      {r && t && (
+        <>
+          {followNote(r)}
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+            <KpiCard icon={UserCheck} tone="blue" label="Khách Sale chốt" value={vi.format(t.customers)} note={`${vi.format(t.saleOrders)} đơn Sale · ${vi.format(t.mature)} khách đủ ${r.matureDays} ngày`}
+              tooltip={{ period: label, current: `${vi.format(t.customers)} khách`, definition: r.definitions.cohort }} />
+            <KpiCard icon={Repeat} tone="green" label="Mua lại qua CSKH" value={pct(t.repeatRateMature)} note={`${vi.format(t.repeatMature)}/${vi.format(t.mature)} khách đủ ${r.matureDays} ngày · tất cả ${pct(t.repeatRate)}`}
+              progress={t.repeatRateMature === null ? undefined : { value: t.repeatRateMature, max: 100 }} tooltip={{ period: label, current: pct(t.repeatRateMature), rows: [['Tất cả khách', `${vi.format(t.repeat)}/${vi.format(t.customers)} (${pct(t.repeatRate)})`], ['Quay lại qua Sale', `${vi.format(t.saleAgain)} khách`]], definition: `${r.definitions.repeat} ${r.definitions.mature}` }} />
+            <KpiCard icon={HeartHandshake} tone="teal" label="Doanh thu CSKH từ khách Sale" value={shortMoney(t.cskhNet)} note={`${vi.format(t.cskhOrders)} đơn · ${shortMoney(t.cskhNetPerCustomer)} / khách Sale · ${t.ordersPerRepeater === null ? '—' : t.ordersPerRepeater.toFixed(1).replace('.', ',')} đơn / khách mua lại`}
+              tooltip={{ period: label, current: money(t.cskhNet), rows: [['Khách mua lại gì', tagText(t.repeatTags)]], definition: r.definitions.repeat }} />
+            <KpiCard icon={ICON.returned} tone="orange" invert label="Hoàn đơn Sale · quay lại sau" value={pct(t.returnRate)} note={`${vi.format(t.returned)} đơn hoàn · lần mua lại đầu sau ${days(t.avgDaysToRepeat)}`}
+              tooltip={{ period: label, current: pct(t.returnRate), rows: [['Ngày tới lần mua lại đầu (TB)', days(t.avgDaysToRepeat)]], definition: r.definitions.returnRate }} />
+          </div>
+
+          {staffCard(r, t)}
+
+          {pick && (
+            pickCard(pick)
           )}
           <SaleGroupLadderBlock posIds={posIds} start={start} end={end} label={label} staff={r.staff.map((x) => ({ id: x.staffId, name: x.name }))} />
           <SaleLadderBlock posIds={posIds} staff={r.staff.map((x) => ({ id: x.staffId, name: x.name }))} />
