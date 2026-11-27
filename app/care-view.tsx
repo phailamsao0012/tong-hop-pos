@@ -402,7 +402,7 @@ export function CareView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì b�
               tooltip={tip('Doanh thu tự chốt', [['Tự chốt', money(report.summary.ownNet ?? 0)], ['Số đơn', vi.format(report.summary.ownOrders ?? 0)], ['Doanh thu đơn chốt (ai bán cũng tính)', report.summary.closedNet === null ? '—' : money(report.summary.closedNet)]], 'Chỉ đơn chốt (sau giảm giá) mà chính nhân viên đang cầm khách đứng tên bán trên Pancake. Không tính đơn người khác bán cho cùng khách, kể cả người cầm trước đã nghỉ hoặc chuyển data.')} />
           </div>
           {staffRows.length > 0 && (
-            {staffCard()}
+            staffCard()
           )}
           {oneStaff && <CareLadderBlock assigned={assigned} name={assignedLabel} posIds={posIds} />}
           <div className={`grid gap-4 ${selected ? '2xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]' : ''}`}>
