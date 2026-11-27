@@ -12,11 +12,12 @@ import {
   GROWTH_DEPTS, GROWTH_DEPT_LABELS, JOIN_SOURCE_LABELS, MODES, cumulative, indexSeries, isSeries, peersFor, periodRows, summaries, tenureDays, workSpan,
   type Cmp, type GrowthData, type GrowthDept, type GrowthPerson, type Index, type Metric, type Mode,
 } from '@/lib/reports/growth-calc';
-import { Th, ChartCard, Definitions, EmptyState, ErrorBox, PageHeader, SegmentedControl, SkeletonTable, SortTh, StatusChip, TableWrap, ThinkingLine, pct, short, toast, useMotionOK, useSort, vi, barRadius } from './ui-kit';
+import { Th, ChartCard, Definitions, EmptyState, ErrorBox, FoldBlock, KpiCard, PageHeader, SkeletonKpis, posName, SegmentedControl, SkeletonTable, SortTh, StatusChip, TableWrap, ThinkingLine, pct, short, toast, useMotionOK, useSort, vi, barRadius } from './ui-kit';
 import { StaffPicker } from './staff-picker';
 import { useApi } from './use-api';
 import { usePosIds, usePosStaffFilter } from './pos-store';
 import { PosChips } from './overview-view';
+import { KPI_TIGHT, PageHeadMoi, WhySheet, tileGrid, type WhySpec } from './trang-moi';
 
 const dmy = (d: string | null) => d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : '—';
 const NAV_DEPT: Record<string, GrowthDept> = { sale: 'sale', cskh: 'cskh', mkt: 'mkt', 'van-don': 'vandon' };
@@ -30,7 +31,9 @@ const CMP_OPTIONS: { value: Cmp; label: string; title: string }[] = [
 const pctTone = (p: number | null) => p === null ? 'text-ink-3' : p >= 0 ? 'text-good' : 'text-bad';
 const signed = (p: number | null) => p === null ? '—' : `${p > 0 ? '+' : ''}${pct(p)}`;
 
-export function GrowthView({ navDept }: { navDept?: string }) {
+export function GrowthView({ navDept, uiMoi = false }: { navDept?: string; /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới, tắt thì y như cũ. */ uiMoi?: boolean }) {
+  // Giao diện mới: khung "Vì sao ra số này" đang mở (null = đóng).
+  const [why, setWhy] = useState<WhySpec | null>(null);
   const [dept, setDept] = useState<GrowthDept>(NAV_DEPT[navDept ?? ''] ?? 'sale');
   // Quy tắc POS (anh Vũ 12/11/2026): số tăng trưởng tính trên POS đang chọn, không chỉ ẩn người.
   const [posSel] = usePosIds();
@@ -50,11 +53,9 @@ export function GrowthView({ navDept }: { navDept?: string }) {
   const fmt = (n: number | null) => n === null ? '—' : data?.unit === 'orders' || metric === 'n' ? vi.format(Math.round(n * 10) / 10) : short(n);
   const choose = (id: string) => { setPickedId(id); window.scrollTo({ top: 0, behavior: 'smooth' }); };
 
-  return (
-    <div className="space-y-5">
-      <PageHeader eyebrow={`${GROWTH_DEPT_LABELS[dept]} · 1 năm gần nhất`} title="Tăng trưởng nhân viên"
-        subtitle="Số từng ngày của mỗi người tính từ ngày vào công ty, gom theo giai đoạn và so với người cùng bộ phận" />
-      <PosChips posIds={posIds} onChange={setPosIds} />
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  // fold: chỉ bố cục mới truyền (thu gọn thẻ); bố cục cũ không truyền nên thẻ y như trước.
+  const filterRow = () => (
       <div className="flex flex-wrap items-center gap-2">
         <SegmentedControl ariaLabel="Bộ phận" value={dept} onChange={(v) => { setDept(v); setPickedId(''); }}
           options={GROWTH_DEPTS.map((d) => ({ value: d, label: GROWTH_DEPT_LABELS[d] }))} />
@@ -67,6 +68,71 @@ export function GrowthView({ navDept }: { navDept?: string }) {
         {data?.unit === 'money' && <SegmentedControl size="sm" ariaLabel="Số đo" value={metric} onChange={setMetric}
           options={[{ value: 'v', label: dept === 'mkt' ? 'Doanh số MKT' : 'Doanh số' }, { value: 'n', label: dept === 'mkt' ? 'Đơn xác nhận' : 'Đơn chốt' }]} />}
       </div>
+  );
+  const defsBlock = () => (
+          <Definitions items={{
+            'Ngày vào': 'Lấy theo thứ tự: sửa tay ở trang này, web nhân sự, ngày tạo tài khoản Pancake, ngày có đơn đầu tiên trong khoảng xem.',
+            'Số đo': dept === 'vandon' ? 'Vận đơn: số đơn mỗi người xác nhận (theo ngày xác nhận), không tính người Sale / CSKH / MKT tự xác nhận.'
+              : dept === 'mkt' ? 'Marketing: doanh số đơn đã xác nhận của từng marketer, theo ngày xác nhận, như thẻ xu hướng trang Marketing.'
+              : `${GROWTH_DEPT_LABELS[dept]}: doanh số đơn chốt theo ngày chốt, chỉ người có hậu tố ${dept === 'sale' ? 'SALE' : 'CSKH'}, như thẻ xu hướng ở Tổng quan.`,
+            'So sánh': 'Chỉ so với người cùng bộ phận. Cùng thâm niên và Cùng đợt vào chỉ tính người vào trong 1 năm gần nhất và đã làm đủ số ngày đó.',
+            'Khoảng xem': 'Một năm gần nhất. Người vào trước đó được tính từ đầu khoảng xem.',
+          }} />
+  );
+  // [hết khối chung]
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trên xuống: đầu trang (PageHeadMoi: bộ phận, chọn người, số đo, POS) → một hàng 4 ô số của người đang xem (bấm mở "Vì sao ra số này")
+  // → dòng người đang xem (ngày vào, sửa) → lịch số từng ngày → bảng chính Toàn bộ bộ phận → khối phụ thu gọn: theo giai đoạn, Cách tính.
+  // Trang không có tỷ lệ chốt / hoàn / hủy nên không có dải "Cần xem".
+  if (uiMoi) {
+    const scope = `${GROWTH_DEPT_LABELS[dept]} · 1 năm gần nhất · ${posIds.length <= 3 ? posIds.map(posName).join(', ') : `${posIds.length} POS`} · ${unitLabel} · số từng ngày tính từ ngày vào`;
+    const mine = me ? sums.find((r) => r.id === me.id) ?? null : null;
+    const sc = me ? `${me.name} · ${scope}` : scope;
+    const k = (s: string) => `ui-moi:growth:${s}`;
+    return (
+      <div className="min-w-0 space-y-4">
+        <PageHeadMoi title="Tăng trưởng nhân viên" scope={scope} hint="Số từng ngày của mỗi người tính từ ngày vào công ty, gom theo giai đoạn và so với người cùng bộ phận"
+          tools={filterRow()} pos={<PosChips posIds={posIds} onChange={setPosIds} />} />
+        {error && !data && <ErrorBox error={error} onRetry={reload} />}
+        {!data && !error && <SkeletonKpis count={4} />}
+        {data && idx && !people.length && <EmptyState text={`Chưa có số của ${GROWTH_DEPT_LABELS[dept]} trong 1 năm gần nhất.`} />}
+        {data && idx && me && (
+          <div className="min-w-0 space-y-4" aria-busy={loading}>
+            {mine && <div className={tileGrid(4)}>
+              <KpiCard icon={CalendarDays} tone="blue" label={`Đã làm · ${me.name}`} className={KPI_TIGHT} value={mine.tenure == null ? '—' : `${vi.format(mine.tenure)} ngày`} note={`Vào ${dmy(mine.joined)}${mine.left ? ` · nghỉ ${dmy(mine.left)}` : ''}`}
+                onClick={() => setWhy({ title: 'Đã làm', value: mine.tenure == null ? '—' : `${vi.format(mine.tenure)} ngày`, scope: sc, rows: [{ label: 'Ngày vào', value: dmy(mine.joined) }, { label: 'Nguồn ngày vào', value: mine.source ? JOIN_SOURCE_LABELS[mine.source] : '—' }],
+                  definition: 'Ngày vào lấy theo thứ tự: sửa tay ở trang này, web nhân sự, ngày tạo tài khoản Pancake, ngày có đơn đầu tiên trong khoảng xem.' })} />
+              <KpiCard icon={TrendingUp} tone="green" label={`${unitLabel} · 30 ngày đầu`} className={KPI_TIGHT} value={fmt(mine.first30)} note="30 ngày tính từ ngày vào"
+                onClick={() => setWhy({ title: `${unitLabel} 30 ngày đầu`, value: fmt(mine.first30), scope: sc, definition: 'Cộng số của 30 ngày đầu kể từ ngày vào; người vào trước khoảng xem hoặc chưa đủ 30 ngày thì không có số.' })} />
+              <KpiCard icon={LineIcon} tone="teal" label={`${unitLabel} · 30 ngày gần nhất`} className={KPI_TIGHT} value={fmt(mine.last30)} note={`30 ngày trước đó: ${fmt(mine.prev30)}`}
+                delta={mine.pct} deltaLabel="so 30 ngày trước"
+                onClick={() => setWhy({ title: `${unitLabel} 30 ngày gần nhất`, value: fmt(mine.last30), scope: sc, previous: fmt(mine.prev30), rows: [{ label: 'Thay đổi', value: signed(mine.pct), tone: mine.pct === null ? undefined : mine.pct >= 0 ? 'good' : 'bad' }],
+                  definition: 'Cộng số 30 ngày tới ngày cuối có số (hoặc ngày nghỉ); so với 30 ngày liền trước đó.' })} />
+              <KpiCard icon={Users} tone="gray" label={`Người trong ${GROWTH_DEPT_LABELS[dept]}`} className={KPI_TIGHT} value={vi.format(people.length)} note={`${vi.format(people.filter((p) => !p.left).length)} đang làm · POS đang chọn`}
+                onClick={() => setWhy({ title: `Người trong ${GROWTH_DEPT_LABELS[dept]}`, value: vi.format(people.length), scope, rows: [{ label: 'Đang làm', value: vi.format(people.filter((p) => !p.left).length) }, { label: 'Đã nghỉ', value: vi.format(people.filter((p) => p.left).length) }],
+                  definition: 'Người có số trong 1 năm gần nhất, thuộc POS đang chọn; số so sánh trung bình vẫn tính cả bộ phận.' })} />
+            </div>}
+            <PersonLine key={me.id} me={me} data={data} onSaved={reload} />
+            <CalendarCard me={me} data={data} idx={idx} metric={metric} fmt={fmt} unitLabel={unitLabel} />
+            <AllPeople rows={sums} data={data} meId={me.id} fmt={fmt} unitLabel={unitLabel} onPick={choose} />
+            <FoldBlock icon={LineIcon} title="Theo giai đoạn · so với người cùng bộ phận" storageKey={k('period')}>
+              <PeriodCard me={me} data={data} idx={idx} metric={metric} fmt={fmt} unitLabel={unitLabel} />
+            </FoldBlock>
+            <FoldBlock icon={Pencil} title="Cách tính" storageKey={k('defs')}>{defsBlock()}</FoldBlock>
+          </div>
+        )}
+        <WhySheet spec={why} onClose={() => setWhy(null)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <PageHeader eyebrow={`${GROWTH_DEPT_LABELS[dept]} · 1 năm gần nhất`} title="Tăng trưởng nhân viên"
+        subtitle="Số từng ngày của mỗi người tính từ ngày vào công ty, gom theo giai đoạn và so với người cùng bộ phận" />
+      <PosChips posIds={posIds} onChange={setPosIds} />
+      {filterRow()}
       {error && !data && <ErrorBox error={error} onRetry={reload} />}
       {!data && !error && <ChartCard title="Đang tải số từng ngày"><ThinkingLine /><SkeletonTable rows={6} cols={6} /></ChartCard>}
       {data && idx && !people.length && <EmptyState text={`Chưa có số của ${GROWTH_DEPT_LABELS[dept]} trong 1 năm gần nhất.`} />}
@@ -76,14 +142,7 @@ export function GrowthView({ navDept }: { navDept?: string }) {
           <CalendarCard me={me} data={data} idx={idx} metric={metric} fmt={fmt} unitLabel={unitLabel} />
           <PeriodCard me={me} data={data} idx={idx} metric={metric} fmt={fmt} unitLabel={unitLabel} />
           <AllPeople rows={sums} data={data} meId={me.id} fmt={fmt} unitLabel={unitLabel} onPick={choose} />
-          <Definitions items={{
-            'Ngày vào': 'Lấy theo thứ tự: sửa tay ở trang này, web nhân sự, ngày tạo tài khoản Pancake, ngày có đơn đầu tiên trong khoảng xem.',
-            'Số đo': dept === 'vandon' ? 'Vận đơn: số đơn mỗi người xác nhận (theo ngày xác nhận), không tính người Sale / CSKH / MKT tự xác nhận.'
-              : dept === 'mkt' ? 'Marketing: doanh số đơn đã xác nhận của từng marketer, theo ngày xác nhận, như thẻ xu hướng trang Marketing.'
-              : `${GROWTH_DEPT_LABELS[dept]}: doanh số đơn chốt theo ngày chốt, chỉ người có hậu tố ${dept === 'sale' ? 'SALE' : 'CSKH'}, như thẻ xu hướng ở Tổng quan.`,
-            'So sánh': 'Chỉ so với người cùng bộ phận. Cùng thâm niên và Cùng đợt vào chỉ tính người vào trong 1 năm gần nhất và đã làm đủ số ngày đó.',
-            'Khoảng xem': 'Một năm gần nhất. Người vào trước đó được tính từ đầu khoảng xem.',
-          }} />
+          {defsBlock()}
         </div>
       )}
     </div>

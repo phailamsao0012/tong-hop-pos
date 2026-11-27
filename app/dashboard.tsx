@@ -1751,7 +1751,7 @@ export default function Dashboard({ user, initialView, demo = false, uiMoi = fal
           {!gated && view === 'shift' && <ShiftView />}
           {!gated && view === 'custom' && <CustomReportView />}
           {!gated && view === 'compare' && <CompareView uiMoi={uiMoi} />}
-          {!gated && canView(user, view) && view === 'growth' && <GrowthView key={activeDept} navDept={activeDept} />}
+          {!gated && canView(user, view) && view === 'growth' && <GrowthView key={activeDept} navDept={activeDept} uiMoi={uiMoi} />}
           {!gated && canView(user, view) && view === 'ho-so' && <StaffProfilePage onBack={profileBack ? () => { setView(profileBack); setProfileBack(null); } : undefined} />}
           {!gated && view === 'batches' && <BatchesView />}
           {!gated && view === 'raw-orders' && <RawOrdersView onSyncNow={() => { void syncRecentAll(true); }} syncing={autoSyncing} />}
