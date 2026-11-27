@@ -11,6 +11,7 @@ import { TaskChip, ConfirmWork, workDate } from './giao-viec-ui';
 import { workApi, vnToday, dayAfter } from './giao-viec-view';
 import { timeLabel, taskState, weekOfMonth, type Task } from '@/lib/zalo/zalo-work';
 import type { Conversation, ChatMessage, ChatMeeting, ChatGroup } from '@/lib/zalo/zalo-chat';
+import { PageHeadMoi } from './trang-moi';
 
 type Thread = { contact: { id: string; name: string; kind: string; team_name: string; dept: string; linked: boolean }; messages: ChatMessage[]; tasks: (Task & { assigner_name: string | null })[]; meetings: ChatMeeting[]; doneWeek: number; members?: { id: string; name: string; kind: string; team_name: string; linked: boolean }[] };
 type GroupEdit = { id?: string; name: string; memberIds: string[] };
@@ -32,7 +33,7 @@ const teamLabel = (c: { kind: string; team_name: string; dept: string }) => `${c
 const threadUrl = (id: string) => id.startsWith('group:') ? `/api/giao-viec/chat-nhom/${encodeURIComponent(id.slice(6))}` : `/api/giao-viec/chat/${encodeURIComponent(id)}`;
 const visible = () => typeof document === 'undefined' || document.visibilityState === 'visible';
 
-export function GiaoViecChatView() {
+export function GiaoViecChatView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới, tắt thì y như cũ. */ uiMoi?: boolean } = {}) {
   const [list, setList] = useState<Conversation[] | null>(null), [groups, setGroups] = useState<ChatGroup[]>([]), [listError, setListError] = useState(''), [groupEdit, setGroupEdit] = useState<GroupEdit | null>(null), [dropGroup, setDropGroup] = useState(false);
   const [selected, setSelected] = useState(''), [thread, setThread] = useState<Thread | null>(null), [threadError, setThreadError] = useState('');
   const [filter, setFilter] = useState<Filter>('all'), [q, setQ] = useState(''), [text, setText] = useState(''), [busy, setBusy] = useState(false), [older, setOlder] = useState(true);
@@ -187,11 +188,11 @@ export function GiaoViecChatView() {
     <section><h3 data-ui="sub-title" className="mb-2 text-xs font-semibold tracking-wide text-ink-3 uppercase">Họp sắp tới</h3>{!upcoming.length ? <p className="text-sm text-ink-3">Không có họp.</p> : <ul className="space-y-2">{upcoming.map(m => <li key={m.id} className="rounded-lg border border-line p-2 text-sm"><b>Họp số {m.no}</b> · {m.title}<small className="block text-ink-3">{workDate(m.start_at)} · {m.answer === 'co' ? 'Đi họp' : m.answer === 'khong' ? 'Không đi' : 'Chưa trả lời'}</small></li>)}</ul>}</section></>}
   </aside>;
 
-  return <section className="min-w-0 space-y-2">
-    <div className="grid h-[calc(100dvh-170px)] min-h-[520px] overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface shadow-card min-[700px]:grid-cols-[300px_minmax(0,1fr)] min-[1040px]:grid-cols-[300px_minmax(0,1fr)_280px]">
-      {people}{chat}{side}
-    </div>
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  const noteEl = () => (
     <p className="text-xs text-ink-3">Tin Zalo về web chậm khoảng 1 phút. Chỉ lưu 180 ngày.</p>
+  );
+  const assignSheet = () => (
     <Sheet open={assign} onOpenChange={setAssign}><SheetContent className="overflow-y-auto p-4 sm:max-w-lg"><SheetHeader><SheetTitle>Giao việc cho {thread?.contact.name}</SheetTitle></SheetHeader>
       <form className="space-y-3" onSubmit={submitTask}>
         <label htmlFor="chat-task-title" className="block">Tên việc<Input id="chat-task-title" required maxLength={200} value={title} onChange={e => setTitle(e.target.value)} /></label>
@@ -203,6 +204,8 @@ export function GiaoViecChatView() {
         <button className="btn primary" type="submit" disabled={busy || !title.trim()}>Giao việc và gửi Zalo</button>
       </form>
     </SheetContent></Sheet>
+  );
+  const groupSheet = () => (
     <Sheet open={!!groupEdit} onOpenChange={v => { if (!v) setGroupEdit(null); }}><SheetContent className="overflow-y-auto p-4 sm:max-w-lg"><SheetHeader><SheetTitle>{groupEdit?.id ? 'Sửa nhóm' : 'Tạo nhóm'}</SheetTitle></SheetHeader>
       {groupEdit && <form className="space-y-3" onSubmit={saveGroupEdit}>
         <label htmlFor="chat-group-name" className="block">Tên nhóm<Input id="chat-group-name" required maxLength={60} value={groupEdit.name} onChange={e => setGroupEdit({ ...groupEdit, name: e.target.value })} /></label>
@@ -214,7 +217,44 @@ export function GiaoViecChatView() {
         <div className="flex flex-wrap gap-2"><button className="btn primary" type="submit" disabled={busy || !groupEdit.name.trim() || !groupEdit.memberIds.length}>{groupEdit.id ? 'Lưu nhóm' : 'Tạo nhóm'} ({groupEdit.memberIds.length} người)</button>{groupEdit.id && <button type="button" className="btn text-bad" disabled={busy} onClick={() => setDropGroup(true)}>Xoá nhóm</button>}</div>
       </form>}
     </SheetContent></Sheet>
+  );
+  const dropConfirm = () => (
     <ConfirmWork title="Xoá nhóm này?" open={dropGroup} busy={busy} onClose={() => setDropGroup(false)} onConfirm={removeGroup} />
+  );
+  const cancelConfirm = () => (
     <ConfirmWork title={`Huỷ việc số ${cancelNo?.no ?? ''}?`} open={!!cancelNo} busy={busy} onClose={() => setCancelNo(null)} onConfirm={() => { const t = cancelNo!; setCancelNo(null); void run(() => workApi(`/api/giao-viec/${t.id}`, 'PATCH', { status: 'huy' }), 'Đã huỷ việc'); }} />
+  );
+  // [hết khối chung]
+  // Khung giao việc, nhóm và hộp xác nhận vẽ MỘT lần cho cả hai bố cục (bên trong có hàm đọc ref: cuộn khung chat sau khi gửi).
+  const assignEl = assignSheet();
+  const groupEl = groupSheet();
+  const dropEl = dropConfirm();
+  const cancelEl = cancelConfirm();
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trang chat toàn màn: giữ nguyên ba cột (người / khung chat / bên phải), chỉ thêm đầu trang PageHeadMoi và trừ chiều cao của đầu trang
+  // để khung chat vừa màn (không cuộn cả trang). Mốc chia cột đổi sang rem (43,75rem = 700px, 65rem = 1040px) như quy ước Tailwind v4.
+  if (uiMoi) {
+    return <section className="min-w-0 space-y-2">
+      <PageHeadMoi title="Chat Zalo" scope="Nhắn leader / nhân viên qua bot Zalo · tin về web chậm khoảng 1 phút · lưu 180 ngày" />
+      <div className="grid h-[calc(100dvh-14rem)] min-h-[32.5rem] overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface shadow-card min-[43.75rem]:grid-cols-[18.75rem_minmax(0,1fr)] min-[65rem]:grid-cols-[18.75rem_minmax(0,1fr)_17.5rem]">
+        {people}{chat}{side}
+      </div>
+      {assignEl}
+      {groupEl}
+      {dropEl}
+      {cancelEl}
+    </section>;
+  }
+
+  return <section className="min-w-0 space-y-2">
+    <div className="grid h-[calc(100dvh-170px)] min-h-[520px] overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface shadow-card min-[700px]:grid-cols-[300px_minmax(0,1fr)] min-[1040px]:grid-cols-[300px_minmax(0,1fr)_280px]">
+      {people}{chat}{side}
+    </div>
+    {noteEl()}
+    {assignEl}
+    {groupEl}
+    {dropEl}
+    {cancelEl}
   </section>;
 }

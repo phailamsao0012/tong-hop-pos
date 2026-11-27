@@ -1783,7 +1783,7 @@ export default function Dashboard({ user, initialView, demo = false, uiMoi = fal
           {!gated && view === 'security' && <SecurityPanel user={user} />}
           {!gated && view === 'ai-ask' && isOwner(user) && <AiAskView onNavigate={(v) => goTo(v as View)} />}
           {!gated && workBoss && view === 'giao-viec' && <GiaoViecView uiMoi={uiMoi} />}
-          {!gated && workBoss && view === 'giao-viec-chat' && <GiaoViecChatView />}
+          {!gated && workBoss && view === 'giao-viec-chat' && <GiaoViecChatView uiMoi={uiMoi} />}
           {!gated && workBoss && view === 'giao-viec-hop' && <GiaoViecHopView uiMoi={uiMoi} />}
           {!gated && workBoss && view === 'giao-viec-zalo' && <GiaoViecZaloView uiMoi={uiMoi} />}
           {!gated && canNavigate('giao-viec-kpi') && view === 'giao-viec-kpi' && <GiaoViecKpiView owner={isOwner(user)} onOpen={(v) => goTo(v)} />}
