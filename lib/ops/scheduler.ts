@@ -1,3 +1,4 @@
+import { maybeSlimFillNightly } from '@/lib/reports/mkt-slim-fill';
 import { SEGMENT_EPOCH, SEGMENT_READY_KEY, backfillSegmentMonth, segmentMonths, checkSegmentStatsNightly } from '@/lib/reports/stats';
 import { backfillMarketerIds } from '@/lib/teams/marketer-ids';
 import { backfillCallsCoverage } from '@/lib/reports/calls-coverage';
@@ -381,6 +382,9 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
           if (s.writesUsed < DEFAULT_BUDGET.backfillCap) s.writesUsed += await backfillCallsCoverage(statsDb);
           s.writesUsed += await this.buildPendingStats(s, statsDb);
           if (s.writesUsed < DEFAULT_BUDGET.backfillCap) s.writesUsed += await checkSegmentStatsNightly(statsDb);
+          // Bảng gọn Marketing (bước 2): điền / đối chiếu ban đêm khi THP_MKT_SLIM_WRITE=1. Ghi thẳng env.DB, không qua tracker:
+          // bảng gọn chỉ được đọc khi đã khớp bảng gốc nên không làm đổi số báo cáo, không cần xoá cache.
+          if (s.writesUsed < DEFAULT_BUDGET.backfillCap) s.writesUsed += await maybeSlimFillNightly(this.env.DB, this.env);
         } finally {
           if (tracker.changed()) {
             // Một dòng app_settings: cộng vào hạn mức ngày, không tính vào giai đoạn "stats" của bảng lượt ghi.

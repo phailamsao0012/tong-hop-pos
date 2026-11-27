@@ -19,7 +19,7 @@ export const PACKED_SQL = (a = 'o') =>
   `(CASE WHEN ${a}.status_code IN (8,9,2,3,16,4,15,5) THEN 1 WHEN ${a}.status_code=6 THEN EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(${a}.status_history_json) THEN CASE WHEN json_type(${a}.status_history_json)='array' THEN ${a}.status_history_json ELSE '[]' END ELSE '[]' END) h WHERE CASE WHEN h.type='object' THEN json_extract(h.value,'$.status')=8 ELSE 0 END) ELSE 0 END)`;
 
 /** Lịch sử đơn (alias a) từng có một trong các trạng thái `codes`. */
-const historyHas = (a: string, codes: string) =>
+export const historyHas = (a: string, codes: string) =>
   `EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(${a}.status_history_json) AND json_type(${a}.status_history_json)='array' THEN ${a}.status_history_json ELSE '[]' END) h WHERE h.type='object' AND json_extract(h.value,'$.status') IN (${codes}))`;
 
 /**

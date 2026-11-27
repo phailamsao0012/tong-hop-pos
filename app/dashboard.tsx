@@ -1618,7 +1618,7 @@ export default function Dashboard({ user, initialView, demo = false, uiMoi = fal
         <div className="refresh-bar" hidden={!refresh.busy} aria-hidden="true"><i /></div>
         <LongWaitNote />
         <RefreshStick busy={refresh.busy} />
-        <main className={`${refreshClass} ${presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1360px] px-4 pt-4 pb-[calc(88px+env(safe-area-inset-bottom,0px))] sm:pt-6 md:px-6 md:pb-12'}`} style={presenting ? { zoom: 1.15 } : undefined}>
+        <main className={`${refreshClass} ${presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1360px] 2xl:max-w-[2400px] px-4 pt-4 pb-[calc(88px+env(safe-area-inset-bottom,0px))] sm:pt-6 md:px-6 md:pb-12'}`} style={presenting ? { zoom: 1.15 } : undefined}>
           {snapshotAt && <p className="snapshot-line mb-3" role="note">Số liệu chụp lúc {dateTimeText(snapshotAt)} · bản chỉ xem, không cập nhật thêm</p>}
           {team !== 'all' && !hrUnit && !['config', 'audit'].includes(view) && (
             <div className="notice warn mb-4 items-center justify-between" role="status">

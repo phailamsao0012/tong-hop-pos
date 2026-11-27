@@ -13,7 +13,7 @@ import { STAGES, SOURCE_FIELD, itemKey, productExists, saleItemPredicate, stageS
 import { MARKETING_TEAMS_KEY, parseMarketingTeams, UNASSIGNED_TEAM, marketingTeamFilter, marketingTeamGroupSql } from '@/lib/teams/marketing-teams';
 import { parseTeam, MKT_STAFF, teamFilter, teamSubquery, leadSellerFilter, notSan } from '@/lib/teams/team';
 import { RANK_STAGES, type RankStage } from '@/lib/reports/mkt-rank';
-import { AFTER_PACK_CANCELLED_SQL, AFTER_PACK_RETURNED_SQL, NEVER_SENT_CANCELLED_SQL, PACKED_SQL } from '@/lib/reports/van-don';
+import { mktReadSource, withItems, type MktSource } from '@/lib/reports/mkt-source';
 import { saleTeamSql } from '@/lib/teams/sale-team-filter';
 import { mktClosedSql } from '@/lib/reports/mkt-closed';
 
@@ -61,12 +61,15 @@ export function marketingOverview(user: { role: Role }, p: URLSearchParams, posI
   for (const [k, v] of cache) if (now - v.at > CACHE_MS) cache.delete(k);
   const hit = cache.get(key);
   if (hit) return hit.value;
-  const value = marketingOverviewRaw(user, p, posIds, start, end, checkedLens);
+  // Nguồn đọc (bảng gốc / bảng gọn kỳ dài, lib/reports/mkt-source.ts): hai nguồn cho cùng số nên dùng chung khoá bộ nhớ 60 giây.
+  const value = mktReadSource(env.DB, env, start, end).then((src) => marketingOverviewRaw(user, p, posIds, start, end, checkedLens, src));
   cache.set(key, { at: now, value });
   value.catch(() => cache!.delete(key));
   return value;
 }
-async function marketingOverviewRaw(user: { role: Role }, p: URLSearchParams, posIds: string[], start: string, end: string, checkedLens: Lens) {
+/** src: nguồn đọc; test gọi thẳng để so hai nguồn. */
+export async function marketingOverviewRaw(user: { role: Role }, p: URLSearchParams, posIds: string[], start: string, end: string, checkedLens: Lens, src: MktSource) {
+  const PACKED_SQL = src.packed, AFTER_PACK_CANCELLED_SQL = src.afterPackCancelled, AFTER_PACK_RETURNED_SQL = src.afterPackReturned, NEVER_SENT_CANCELLED_SQL = src.neverSentCancelled;
   // SĐT khách đầy đủ chỉ cho chủ hệ thống, giám đốc; người khác thấy 3 số cuối (bảo vệ dữ liệu cá nhân, 10/10/2026).
   const phoneOut = (v: string | null) => (v && user.role !== 'owner' && user.role !== 'director' ? maskPhone(v) : v);
   const basis = BASES.includes(p.get('basis') as Basis) ? p.get('basis') as Basis : 'created';
@@ -101,7 +104,7 @@ async function marketingOverviewRaw(user: { role: Role }, p: URLSearchParams, po
   if (marketerId) { extra.push(`${marketer}=?`); extraBinds.push(marketerId); }
   if (sellerId) { extra.push('o.seller_id=?'); extraBinds.push(sellerId); }
   if (careId) { extra.push('o.care_id=?'); extraBinds.push(careId); }
-  if (productKey) { extra.push(productExists('o')); extraBinds.push(productKey); }
+  if (productKey) { extra.push(withItems(productExists('o'), src)); extraBinds.push(productKey); }
   if (source) { extra.push(`${SOURCE_FIELD}=?`); extraBinds.push(source); }
   // Team Sale (anh Vũ 12/11/2026): đơn của người bấm xác nhận thuộc team; chưa xác nhận thì theo Sale được gán.
   const saleTeam = saleTeamSql(p.get('saleTeam'));
@@ -110,7 +113,7 @@ async function marketingOverviewRaw(user: { role: Role }, p: URLSearchParams, po
   const scopeWith = (sellerSql: string) => `o.pos_id IN (${ph}) AND ${marketer} IS NOT NULL AND ${marketer} IN ${MKT_STAFF}${notSan('o.marketer_id')}${marketingTeam.sql}${sellerSql}${extra.length ? ` AND ${extra.join(' AND ')}` : ''}`;
   const scoped = scopeWith(teamFilter('o.seller_id', team));
   const period = `${timeCol}>=? AND ${timeCol}<?`;
-  const selectedWhere = `${scoped} AND ${period} AND ${stageSql(stage)}`;
+  const selectedWhere = `${scoped} AND ${period} AND ${stageSql(stage, 'o', PACKED_SQL)}`;
   const selectedBinds = [...posIds, ...marketingTeam.binds, ...extraBinds, startUtc, endUtc];
 
   // Phễu luôn là cohort đơn tạo trong kỳ. Đây là phần Pancake có đủ trên đơn, không suy ra lead chưa tạo đơn.
@@ -135,7 +138,7 @@ async function marketingOverviewRaw(user: { role: Role }, p: URLSearchParams, po
   // Ba lượt đọc có giới hạn kỳ: tổng, marketer, team. Mỗi lượt tính đủ bốn mốc.
   const rankNet = NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1');
   const rankSums = RANK_STAGES.flatMap((key) => {
-    const condition = stageSql(key);
+    const condition = stageSql(key, 'o', PACKED_SQL);
     const count = (extra = '1') => `COALESCE(SUM(CASE WHEN (${condition}) AND (${extra}) THEN 1 ELSE 0 END),0)`;
     const sum = (value: string, extra = '1') => `COALESCE(SUM(CASE WHEN (${condition}) AND (${extra}) THEN ${value} ELSE 0 END),0)`;
     const refund = 'o.status_code IN (4,5,15,6)';
@@ -170,29 +173,29 @@ async function marketingOverviewRaw(user: { role: Role }, p: URLSearchParams, po
     `COALESCE(SUM(CASE WHEN ${EVER_CONFIRMED} AND o.seller_id IN ${saleSellers} AND ${PACKED_SQL('o')} AND o.status_code IN (4,5,15,6) THEN ${rankNet} ELSE 0 END),0) AS xp_ship_refund_new`,
   ]).join(',');
   const rankFrom = basis === 'confirmed'
-    ? 'raw_pos_orders o INDEXED BY idx_raw_orders_pos_confirmed_status_money'
-    : 'raw_pos_orders o INDEXED BY idx_raw_orders_pos_created_status_phone';
+    ? src.from('o', 'idx_raw_orders_pos_confirmed_status_money')
+    : src.from('o', 'idx_raw_orders_pos_created_status_phone');
   const rankWhere = `${scoped} AND ${period}`;
   const [selected, cohort, selectedMarketers, cohortMarketers, selectedTeams, cohortTeams, products, productOptions, peopleOptions, sourceOptions, recentOrders, names, ...rankResults] = await env.DB.batch([
-    env.DB.prepare(`SELECT ${sums} FROM raw_pos_orders o WHERE ${selectedWhere}`).bind(...selectedBinds),
-    env.DB.prepare(`SELECT ${sums} FROM raw_pos_orders o WHERE ${cohortWhere}`).bind(...cohortBinds),
-    env.DB.prepare(`SELECT ${marketer} AS marketer_id,${sums} FROM raw_pos_orders o WHERE ${selectedWhere} GROUP BY 1`).bind(...selectedBinds),
-    env.DB.prepare(`SELECT ${marketer} AS marketer_id,${sums} FROM raw_pos_orders o WHERE ${cohortWhere} GROUP BY 1`).bind(...cohortBinds),
-    env.DB.prepare(`SELECT ${teamGroup.sql} AS marketing_team_id,${sums} FROM raw_pos_orders o WHERE ${selectedWhere} GROUP BY 1`).bind(...teamGroup.binds, ...selectedBinds),
-    env.DB.prepare(`SELECT ${teamGroup.sql} AS marketing_team_id,${sums} FROM raw_pos_orders o WHERE ${cohortWhere} GROUP BY 1`).bind(...teamGroup.binds, ...cohortBinds),
+    env.DB.prepare(`SELECT ${sums} FROM ${src.orders} o WHERE ${selectedWhere}`).bind(...selectedBinds),
+    env.DB.prepare(`SELECT ${sums} FROM ${src.orders} o WHERE ${cohortWhere}`).bind(...cohortBinds),
+    env.DB.prepare(`SELECT ${marketer} AS marketer_id,${sums} FROM ${src.orders} o WHERE ${selectedWhere} GROUP BY 1`).bind(...selectedBinds),
+    env.DB.prepare(`SELECT ${marketer} AS marketer_id,${sums} FROM ${src.orders} o WHERE ${cohortWhere} GROUP BY 1`).bind(...cohortBinds),
+    env.DB.prepare(`SELECT ${teamGroup.sql} AS marketing_team_id,${sums} FROM ${src.orders} o WHERE ${selectedWhere} GROUP BY 1`).bind(...teamGroup.binds, ...selectedBinds),
+    env.DB.prepare(`SELECT ${teamGroup.sql} AS marketing_team_id,${sums} FROM ${src.orders} o WHERE ${cohortWhere} GROUP BY 1`).bind(...teamGroup.binds, ...cohortBinds),
     env.DB.prepare(`SELECT ${itemKey('i')} AS product_key,MAX(i.name) AS product_name,COUNT(DISTINCT o.id) AS orders,COUNT(DISTINCT NULLIF(TRIM(o.phone),'')) AS phones,COALESCE(SUM(COALESCE(i.quantity,0)),0) AS quantity,COALESCE(SUM(COALESCE(i.line_total,0)),0) AS line_total
-      FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
+      FROM ${src.orders} o JOIN ${src.items} i ON i.order_id=o.id
       WHERE ${selectedWhere} AND ${saleItemPredicate('i')}${productKey ? ` AND ${itemKey('i')}=?` : ''}
       GROUP BY 1 ORDER BY line_total DESC,quantity DESC`).bind(...selectedBinds, ...(productKey ? [productKey] : [])),
     env.DB.prepare(`SELECT ${itemKey('i')} AS product_key,MAX(i.name) AS product_name,COUNT(DISTINCT o.id) AS orders
-      FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
+      FROM ${src.orders} o JOIN ${src.items} i ON i.order_id=o.id
       WHERE ${optionScope} AND ${saleItemPredicate('i')}
       GROUP BY 1 ORDER BY orders DESC,product_name`).bind(...optionBinds),
-    env.DB.prepare(`SELECT ${marketer} AS marketer_id,o.seller_id,o.care_id FROM raw_pos_orders o WHERE ${optionScope} GROUP BY 1,2,3`).bind(...optionBinds),
-    env.DB.prepare(`SELECT ${SOURCE_FIELD} AS source FROM raw_pos_orders o WHERE ${optionScope} AND ${SOURCE_FIELD} IS NOT NULL GROUP BY 1`).bind(...optionBinds),
+    env.DB.prepare(`SELECT ${marketer} AS marketer_id,o.seller_id,o.care_id FROM ${src.orders} o WHERE ${optionScope} GROUP BY 1,2,3`).bind(...optionBinds),
+    env.DB.prepare(`SELECT ${SOURCE_FIELD} AS source FROM ${src.orders} o WHERE ${optionScope} AND ${SOURCE_FIELD} IS NOT NULL GROUP BY 1`).bind(...optionBinds),
     env.DB.prepare(`SELECT o.id,o.source_order_id,o.pos_id,o.phone,o.created_at,o.first_confirmed_at,o.status_code,o.marketer_id,o.seller_id,o.care_id,
       ${NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1')} AS net,${SOURCE_FIELD} AS source,o.note
-      FROM raw_pos_orders o WHERE ${selectedWhere} ORDER BY ${timeCol} DESC,o.id DESC LIMIT 60`).bind(...selectedBinds),
+      FROM ${src.orders} o WHERE ${selectedWhere} ORDER BY ${timeCol} DESC,o.id DESC LIMIT 60`).bind(...selectedBinds),
     env.DB.prepare(namesSql),
     env.DB.prepare(`SELECT ${rankSums} FROM ${rankFrom} WHERE ${rankWhere}`).bind(...selectedBinds),
     env.DB.prepare(`SELECT ${marketer} AS marketer_id,${rankSums} FROM ${rankFrom} WHERE ${rankWhere} GROUP BY 1`).bind(...selectedBinds),

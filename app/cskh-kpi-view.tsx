@@ -13,6 +13,7 @@ import { OrderOriginFilter, useOrderOrigin } from './order-origin-filter';
 import type { Team } from '@/lib/teams/team';
 import { todayVn } from '@/lib/shared/report-time';
 import { kpiPace, parseRate, signedShort } from '@/lib/kpi/kpi-pace';
+import { kpiNeedPerDay, kpiNeedTotal } from '@/lib/kpi/kpi-need';
 import { closeRateOf, closeRateOfMany } from '@/lib/reports/metrics';
 import { useMetricSettings } from './metric-settings';
 import { Th, ChartCard, ErrorBox, InfoTip, KpiCard, PageHeader, ProgressBar, SkeletonTable, TableWrap, Tooltip, money, pct, short, toast, vi } from './ui-kit';
@@ -173,6 +174,30 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
   const isCurrent = month === today.slice(0, 7);
   // So tiến độ tới hết hôm qua (anh Vũ 12/11/2026), đã đạt tính tới lúc này.
   const daysElapsed = isCurrent ? Number(today.slice(8, 10)) - 1 : `${month}-01` > today ? 0 : dim;
+  // Cột Cần/ngày (anh Vũ 27/11/2026): phép tính ở lib/kpi/kpi-need.ts; bấm / rê vào số ra chi tiết.
+  const dm = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
+  const needCell = (name: string, goal: number | null, net: number) => {
+    if (!report) return <span className="text-xs text-ink-4">—</span>;
+    const n = kpiNeedPerDay(goal, net, month, today);
+    if (n.state === 'reached') return <span className="text-xs font-semibold text-good">Đạt</span>;
+    if (n.state !== 'need') return <span className="text-xs text-ink-4">—</span>;
+    return (
+      <Tooltip content={<><b>Cần/ngày · {name}</b><span className="r"><span>KPI doanh thu</span><span className="num">{money(n.goal)}</span></span><span className="r"><span>Đã đạt</span><span className="num">{money(n.done)}</span></span><span className="r"><span>Còn thiếu</span><span className="num">{money(n.remaining)}</span></span><span className="r"><span>Ngày còn lại ({dm(n.from)}–{dm(n.to)})</span><span className="num">{n.daysLeft}</span></span><span className="r"><span>{short(n.remaining)} ÷ {n.daysLeft}</span><span className="num">{money(n.perDay)}/ngày</span></span></>}>
+        <button type="button" className="num cursor-help text-xs font-semibold">{short(n.perDay)} ₫</button>
+      </Tooltip>
+    );
+  };
+  const needTotalCell = () => {
+    if (!report || hiddenKpi) return <span className="text-xs text-ink-4">—</span>;
+    const t = kpiNeedTotal(staff.map((e) => ({ goal: seesKpi(seen, e.id) ? goalOf(e.id) : null, done: done(e.id)?.closedNet ?? 0 })), month, today);
+    if (t.perDay === null) return <span className="text-xs text-ink-4">—</span>;
+    if (!t.people) return <span className="text-xs font-semibold text-good">Đạt</span>;
+    return (
+      <Tooltip content={<><b>Cần/ngày · cả bộ phận</b><span className="r"><span>Còn thiếu ({t.people} người chưa đạt)</span><span className="num">{money(t.remaining)}</span></span><span className="r"><span>Ngày còn lại ({dm(t.from)}–{dm(t.to)})</span><span className="num">{t.daysLeft}</span></span><span className="r"><span>{short(t.remaining)} ÷ {t.daysLeft}</span><span className="num">{money(t.perDay)}/ngày</span></span></>}>
+        <button type="button" className="num cursor-help text-xs font-semibold">{short(t.perDay)} ₫</button>
+      </Tooltip>
+    );
+  };
   const onTrack = withGoal.filter((e) => { const g = goalOf(e.id); const d = done(e.id)?.closedNet ?? 0; const elapsed = isCurrent ? Number(today.slice(8, 10)) : dim; return d / g >= elapsed / dim; }).length;
   const totalDaily = staff.reduce((a, e) => a + (goalOf(e.id) / dim), 0);
   const totalTodayNet = staff.reduce((a, e) => a + todayNet(e.id), 0);
@@ -243,16 +268,17 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
           {isSale && <Input id={`${team}-bulk-rate`} inputMode="decimal" className={`${NUM_INPUT} tap h-7 w-24 text-xs`} placeholder="Tỉ lệ chốt %" aria-label="KPI tỉ lệ chốt áp cho tất cả" value={bulk.rate} onChange={(e) => setBulk((b) => ({ ...b, rate: e.target.value }))} />}
           <Button size="sm" variant="outline" className="h-7 text-xs" onClick={applyBulk} disabled={!bulk.revenue && !bulk.rate && !bulk.days}>Áp dụng</Button>
         </div>}>
-        {!loaded ? <SkeletonTable rows={6} cols={9} /> : (
+        {!loaded ? <SkeletonTable rows={6} cols={isSale ? 9 : 8} /> : (
           <TableWrap maxHeight="36rem" sticky minWidth={840}>
             <table className="tbl sticky-first">
               <thead><tr>
                 <Th>Nhân viên</Th><Th className="n">KPI doanh thu</Th>{isSale && <Th className="n"><span className="inline-flex items-center gap-0.5">KPI tỉ lệ chốt<InfoTip text="Mục tiêu tỉ lệ chốt của tháng (%). Tỉ lệ thật tính theo Cách tính đang chọn (đơn lên hoặc data được chia)." /></span></Th>}
                 
-                <Th><span className="inline-flex items-center gap-0.5">Ca (giờ)<InfoTip text="Ca làm việc: giờ bắt đầu – giờ kết thúc (0–24). Dùng ở Trong ngày · chốt nóng, chế độ Ca cá nhân." /></span></Th>
+                {isSale && <Th><span className="inline-flex items-center gap-0.5">Ca (giờ)<InfoTip text="Ca làm việc: giờ bắt đầu – giờ kết thúc (0–24). Dùng ở Trong ngày · chốt nóng, chế độ Ca cá nhân." /></span></Th>}
                 <Th className="n">Đã đạt</Th><Th>% tháng</Th><Th className="n">KPI ngày</Th>
                 <Th className="n"><span className="inline-flex items-center gap-0.5">Hôm nay<InfoTip text="Doanh thu chốt hôm nay trừ KPI ngày: +3tr là vượt 3 triệu, −2tr là còn thiếu 2 triệu. Trang tự tải lại mỗi giờ." /></span></Th>
                 <Th className="n"><span className="inline-flex items-center gap-0.5">So tiến độ<InfoTip text="Đã đạt trong tháng trừ phần KPI phải có đến hôm nay (KPI ngày × số ngày đã qua trọn, tới hết hôm qua)." /></span></Th>
+                {!isSale && <Th className="n"><span className="inline-flex items-center gap-0.5">Cần/ngày<InfoTip text="KPI doanh thu còn thiếu chia cho số ngày còn lại của tháng, tính cả hôm nay. Đạt = đã đủ KPI. Bấm vào số để xem phép tính." /></span></Th>}
               </tr></thead>
               <tbody>
                 {staff.map((e) => {
@@ -265,7 +291,7 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
                       <td className="n">{seesKpi(seen, e.id) ? moneyInput(e.id, e.name) : <span className="text-xs text-ink-4" title="Không có quyền xem KPI người này">–</span>}</td>
                       {isSale && <td className="n">{seesKpi(seen, e.id) ? rateInput(e.id, e.name) : <span className="text-xs text-ink-4">–</span>}</td>}
                       
-                      <td><span className="inline-flex items-center gap-1"><Input type="number" min={0} max={23} className={`${NUM_INPUT} w-14`} placeholder="8" aria-label={`Giờ bắt đầu ca ${e.name}`} value={shifts[e.id]?.shiftStart ?? ''} onChange={(ev) => setShift(e.id, 'shiftStart', ev.target.value)} /><span className="text-xs text-ink-3">–</span><Input type="number" min={1} max={24} className={`${NUM_INPUT} w-14`} placeholder="17" aria-label={`Giờ kết thúc ca ${e.name}`} value={shifts[e.id]?.shiftEnd ?? ''} onChange={(ev) => setShift(e.id, 'shiftEnd', ev.target.value)} /></span></td>
+                      {isSale && <td><span className="inline-flex items-center gap-1"><Input type="number" min={0} max={23} className={`${NUM_INPUT} w-14`} placeholder="8" aria-label={`Giờ bắt đầu ca ${e.name}`} value={shifts[e.id]?.shiftStart ?? ''} onChange={(ev) => setShift(e.id, 'shiftStart', ev.target.value)} /><span className="text-xs text-ink-3">–</span><Input type="number" min={1} max={24} className={`${NUM_INPUT} w-14`} placeholder="17" aria-label={`Giờ kết thúc ca ${e.name}`} value={shifts[e.id]?.shiftEnd ?? ''} onChange={(ev) => setShift(e.id, 'shiftEnd', ev.target.value)} /></span></td>}
                       <td className="n">{report ? money(net) : '—'}{d ? <span className="ml-1 text-[11px] font-normal text-ink-3">{vi.format(d.closedOrders)} đơn</span> : null}{isSale && d ? (() => { const r = closeRateOf(d, ms.rateBase); return <span className={`block text-[11px] font-semibold ${rateTone(r, t?.closeRate)}`}>chốt {r === null ? '—' : pct(r, 1)}{t?.closeRate ? <span className="font-normal text-ink-3"> / {pct(t.closeRate, 1)}</span> : null}</span>; })() : null}</td>
                       <td>{p === null ? <span className="text-xs text-ink-4">—</span> : <span className="inline-flex items-center gap-2"><ProgressBar value={Math.min(100, p)} max={100} width={80} color={progressColor(p)} /><span className="num text-xs">{pct(p, 0)}</span></span>}</td>
                       <td className="n mut text-xs">{daily ? `${short(daily)} ₫` : '—'}</td>
@@ -279,20 +305,22 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
                           <span className={`num cursor-help text-xs font-semibold ${diffTone(pc.paceDiff)}`}>{signedShort(pc.paceDiff)}</span>
                         </Tooltip>
                       ) : <span className="text-xs text-ink-4">—</span>; })()}</td>
+                      {!isSale && <td className="n">{needCell(e.name, seesKpi(seen, e.id) ? g : null, net)}</td>}
                     </tr>
                   );
                 })}
                 {!staff.length && <tr><td colSpan={10} className="py-6 text-center text-xs text-ink-3">Chưa có nhân viên {label} (danh sách lấy từ bộ phận trên Pancake sau khi đồng bộ).</td></tr>}
               </tbody>
               {staff.length > 0 && <tfoot><tr>
-                <td className="bg-surface-2">Tổng · <span className="num">{vi.format(staff.length)}</span> người</td><td className="n">{hiddenKpi ? '–' : money(totalGoal)}</td>{isSale && <td className="n text-xs">{teamRate === null ? '—' : <span className={`font-semibold ${rateTone(teamRate, avgGoalRate)}`}>{pct(teamRate, 1)}</span>}{avgGoalRate ? <span className="block font-normal text-ink-3">KPI TB {pct(avgGoalRate, 1)}</span> : null}</td>}<td /><td />
+                <td className="bg-surface-2">Tổng · <span className="num">{vi.format(staff.length)}</span> người</td><td className="n">{hiddenKpi ? '–' : money(totalGoal)}</td>{isSale && <td className="n text-xs">{teamRate === null ? '—' : <span className={`font-semibold ${rateTone(teamRate, avgGoalRate)}`}>{pct(teamRate, 1)}</span>}{avgGoalRate ? <span className="block font-normal text-ink-3">KPI TB {pct(avgGoalRate, 1)}</span> : null}</td>}{isSale && <td />}
                 <td className="n">{report ? money(totalDone) : '—'}</td><td className="num text-xs">{totalGoal ? pct(totalDone / totalGoal * 100, 0) : '—'}</td><td className="n text-xs">{totalGoal ? `${short(totalDaily)} ₫` : '—'}</td><td className={`n text-xs font-semibold ${diffTone(totalTodayNet - totalDaily)}`}>{isCurrent && totalGoal ? <>{signedShort(totalTodayNet - totalDaily)} <span className="font-normal text-ink-3">{pct(totalTodayNet / totalDaily * 100, 0)}</span></> : '—'}</td>
                 <td className={`n text-xs font-semibold ${diffTone(totalPaceDiff)}`}>{report && totalGoal ? signedShort(totalPaceDiff) : '—'}</td>
+                {!isSale && <td className="n">{needTotalCell()}</td>}
               </tr></tfoot>}
             </table>
           </TableWrap>
         )}
-        <p className="mt-3 text-[11.5px] leading-relaxed text-ink-3">{isCurrent && <span suppressHydrationWarning>Số tải lúc {refreshedAt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}, tự tải lại mỗi giờ. </span>}KPI đặt riêng cho từng người. Chọn POS thì bảng chỉ còn người có tài khoản trên POS đó; Đã đạt vẫn cộng mọi POS của người đó. Đã đạt = doanh thu đơn chốt của nhân viên trong tháng (đơn đã xác nhận, không tính hủy).{isSale ? ' Tỉ lệ chốt tính theo Cách tính đang chọn; dòng Tổng là tỉ lệ cả đội so với KPI trung bình.' : ''} Hôm nay = doanh thu chốt hôm nay ÷ KPI ngày; ngày 300% hay 0% đều bình thường, chấm theo % tháng. Ca làm việc dùng ở Trong ngày · chốt nóng (chọn "Ca cá nhân").</p>
+        <p className="mt-3 text-[11.5px] leading-relaxed text-ink-3">{isCurrent && <span suppressHydrationWarning>Số tải lúc {refreshedAt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}, tự tải lại mỗi giờ. </span>}KPI đặt riêng cho từng người. Chọn POS thì bảng chỉ còn người có tài khoản trên POS đó; Đã đạt vẫn cộng mọi POS của người đó. Đã đạt = doanh thu đơn chốt của nhân viên trong tháng (đơn đã xác nhận, không tính hủy).{isSale ? ' Tỉ lệ chốt tính theo Cách tính đang chọn; dòng Tổng là tỉ lệ cả đội so với KPI trung bình.' : ''} Hôm nay = doanh thu chốt hôm nay ÷ KPI ngày; ngày 300% hay 0% đều bình thường, chấm theo % tháng.{isSale ? ' Ca làm việc dùng ở Trong ngày · chốt nóng (chọn "Ca cá nhân").' : ''}{isSale ? '' : ' Cần/ngày = KPI còn thiếu ÷ số ngày còn lại của tháng (tính cả hôm nay); dòng Tổng cộng phần thiếu của những người chưa đạt.'}</p>
       </ChartCard>
 
       <AlertDialog open={pendingMonth !== null} onOpenChange={(o) => { if (!o) setPendingMonth(null); }}>

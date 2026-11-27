@@ -208,7 +208,8 @@ export async function bossReportData(sendDay: string, hour: string, morning: boo
       leadsGoal: leadsGoalAll, cost: mToday.current.cost, prevNewNet: mPrev.current.newNet, prevLeads: webLeads(wPrev), costAt: (costRow.results as { at: string | null }[])[0]?.at ?? null, teams: mktTeamRows, people: mktPeople },
     pos: posRows,
     ship: { packed: ship?.total.orders ?? 0, closed: company.orders, vtp: ship?.rows.find((r) => r.carrier === 'VTP')?.orders ?? 0, spx: ship?.rows.find((r) => r.carrier === 'SPX')?.orders ?? 0,
-      others: (ship?.rows ?? []).filter((r) => r.carrier !== 'VTP' && r.carrier !== 'SPX' && r.orders > 0).map((r) => ({ name: r.carrier, orders: r.orders })) },
+      others: (ship?.rows ?? []).filter((r) => r.carrier !== 'VTP' && r.carrier !== 'SPX' && r.orders > 0).map((r) => ({ name: r.carrier, orders: r.orders })),
+      net: ship?.total.net ?? 0, nets: (ship?.rows ?? []).filter((r) => r.orders > 0).map((r) => ({ name: r.carrier === 'VTP' ? 'Viettel Post' : r.carrier === 'SPX' ? 'Shopee Express' : r.carrier, net: r.net })) },
     overdueTasks: Number((overdue.results as { n: number }[])[0]?.n ?? 0),
   };
 }

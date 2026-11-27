@@ -158,3 +158,28 @@ void test('hàng chờ ưu tiên: báo cáo Marketing chính chạy trước kh�
   for (let i = 0; i < 20; i++) await tick();
   assert.deepEqual(order, ['dau', 'main', 'trend', 'cross', 'cards']);
 });
+
+void test('nhịp gom: analytics tới trước 200 ms, báo cáo Marketing chính tới sau vẫn chạy trước; một lượt thì chạy sau nhịp gom', async () => {
+  const { longJob, resetLongJobs } = await import('../lib/ops/long-job');
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  resetLongJobs(600);
+  const order: string[] = [];
+  const job = (name: string) => async () => { order.push(name); return name; };
+  const a = longJob('analytics', job('analytics'), Date.now, '/api/marketing/analytics', 1);
+  assert.equal(a.state, 'queued', 'đang rảnh: chưa chạy ngay, chờ nhịp gom');
+  await wait(200);
+  longJob('main', job('main'), Date.now, '/api/reports/marketing', 0);
+  await wait(800);
+  for (let i = 0; i < 10; i++) await tick();
+  assert.deepEqual(order, ['main', 'analytics'], 'báo cáo chính chạy trước dù tới sau');
+  resetLongJobs(300);
+  const one: string[] = [];
+  const s = longJob('solo', async () => { one.push('solo'); return 1; }, Date.now, '/api/marketing/cross', 2);
+  assert.equal(s.state, 'queued');
+  await wait(100);
+  assert.deepEqual(one, [], 'chưa hết nhịp gom');
+  await wait(400);
+  for (let i = 0; i < 5; i++) await tick();
+  assert.deepEqual(one, ['solo'], 'hết nhịp gom thì chạy');
+  resetLongJobs();
+});

@@ -35,6 +35,10 @@ declare namespace Cloudflare {
     THP_SWR?: string;
     /** "1" chỉ ở bản PC chạy song song (lib/ops/read-only.ts): chặn mọi lệnh sửa, không nhắn tin ra ngoài. Cloudflare không đặt. */
     THP_READ_ONLY?: string;
+    /** "1": ghi kèm bảng gọn Marketing khi đồng bộ đơn (lib/reports/mkt-slim.ts, plan Marketing kỳ dài nhanh bước 1). Mặc định tắt. */
+    THP_MKT_SLIM_WRITE?: string;
+    /** "1": bốn báo cáo Marketing kỳ dài (> 62 ngày) đọc bảng gọn khi đã điền đủ (lib/reports/mkt-source.ts, bước 3). Mặc định tắt. */
+    THP_MKT_SLIM?: string;
     /** "1": bỏ mọi bước xác thực 2 lớp khi đăng nhập (lib/auth/mfa.ts noMfa). Anh Vũ 10/11/2026. */
     THP_NO_MFA?: string;
     /** Thông báo hiện ở trang đăng nhập (trống thì không hiện). Anh Vũ 10/11/2026: báo web cũ bảo trì. */

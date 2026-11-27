@@ -26,7 +26,7 @@ export function CustomerDetail({ customer, onClose }: { customer: { phone: strin
     return () => ctrl.abort();
   }, [query, retry]);
   return <Sheet open={!!customer} onOpenChange={(open) => { if (!open) onClose(); }}>
-    <SheetContent className="overflow-y-auto data-[side=right]:w-full data-[side=right]:max-w-full data-[side=right]:sm:max-w-2xl">
+    <SheetContent className="overflow-y-auto sm:max-w-2xl">
       <SheetHeader className="pr-12"><SheetTitle>{data?.name ?? 'Chi tiết khách hàng'}</SheetTitle><SheetDescription>{data?.phone ?? 'Số liệu trọn đời và dòng lịch sử khách'}</SheetDescription></SheetHeader>
       <div className="space-y-4 px-4 pb-6" aria-live="polite">
         {error ? <div role="alert"><p>{error}</p><button className="btn sm" onClick={() => setRetry((n) => n + 1)}>Thử lại</button></div> : !data ? <p>Đang tải hồ sơ khách…</p> : <>

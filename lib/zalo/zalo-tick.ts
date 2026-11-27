@@ -11,7 +11,7 @@ import { webOrigin } from '@/lib/notify/origin';
 import { logMessage, pruneMessages, type ChatKind } from '@/lib/zalo/zalo-chat';
 import { loadReportTargets } from '@/lib/zalo/team-link';
 import { buildBossSlotReport, bossSlotText, type BossSlotReport, type BossSlotTeam } from '@/lib/zalo/slot-report';
-import { bossText, type BossImage } from '@/lib/zalo/boss-report';
+import { BOSS_FIVE_KEY, bossImages, type BossImage } from '@/lib/zalo/boss-report';
 import { bossReportData } from '@/lib/zalo/boss-data';
 import { buildMorningReport, morningText, withHidden, type MorningData, type MorningReport } from '@/lib/zalo/morning-report';
 import { REPORT_SCHEDULE_KEY, hiddenSections, legacySlotKey, parseReportSchedule, previousTime, runsOn, timeKey, timeLabel } from '@/lib/zalo/report-schedule';
@@ -107,22 +107,30 @@ export async function zaloKpi2(leader: Contact, toDay: string, cache: Kpi2Shared
 
 /** Lệnh gửi ngay báo cáo sếp (anh Vũ 14/11/2026: "gửi ngay báo cáo sếp hôm nay 14/11 (mốc 22h, 2 ảnh)"): ghi app_settings
  *  key BOSS_NOW_KEY = {"day":"2026-11-14","hour":"22"} (trên PC), lượt cron kế tiếp gửi 2 ảnh cho mọi người nhận báo cáo sếp đã nối Zalo rồi xoá key.
- *  Gửi đúng số của mốc đó (cắt tại giờ đó, như báo cáo ca); hour "08" = báo cáo sáng của ngày day (số trọn ngày hôm trước). */
+ *  Gửi đúng số của mốc đó (cắt tại giờ đó, như báo cáo ca); hour "08" = báo cáo sáng của ngày day (số trọn ngày hôm trước).
+ *  Gửi thử 5 ảnh (27/11/2026): thêm "five": true và "to": "<id người nhận>" (chỉ người đó, kể cả không phải sếp) — vd {"day":"2026-11-27","hour":"12","five":true,"to":"<id>"}.
+ *  Không có "five": gửi 5 ảnh khi đã bật BOSS_FIVE_KEY, chưa bật thì 2 ảnh kiểu cũ. */
 export const BOSS_NOW_KEY = 'zalo_boss_now_v1';
-export async function sendBossReportNow(db: D1Database, day: string, hour: string, opts: { sendPhoto?: ZaloPhotoSend; send?: ZaloSend; bossData?: typeof bossReportData } = {}) {
+/** Đã bật gửi 5 ảnh cho mọi người nhận báo cáo sếp chưa (app_settings BOSS_FIVE_KEY = '1'). */
+export async function bossFiveOn(db: D1Database) {
+  const row = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(BOSS_FIVE_KEY).first<{ value: string }>().catch(() => null);
+  return row?.value === '1';
+}
+export async function sendBossReportNow(db: D1Database, day: string, hour: string, opts: { sendPhoto?: ZaloPhotoSend; send?: ZaloSend; bossData?: typeof bossReportData; five?: boolean; to?: string } = {}) {
   const morning = hour === '08', at = Date.parse(`${day}T${hour}:00:00+07:00`);
-  const bosses = (await listContacts(db)).filter((c) => c.active && c.kind === 'boss' && c.chat_id);
+  const all = (await listContacts(db)).filter((c) => c.active && c.chat_id);
+  const bosses = opts.to ? all.filter((c) => c.id === opts.to) : all.filter((c) => c.kind === 'boss');
   if (!bosses.length) return [];
   const data = await (opts.bossData ?? bossReportData)(day, hour, morning, at, db);
   const photo = opts.sendPhoto ?? ((chatId: string, url: string, caption: string) => sendZaloPhoto(env.ZALO_BOT_TOKEN, chatId, url, caption, db));
-  const out: { name: string; part: 1 | 2; photo: boolean }[] = [];
-  for (const c of bosses) for (const part of [1, 2] as const) {
-    const text = (part === 1 ? bossText(data) : `Chi tiết & cảnh báo · ${data.title}`).slice(0, 2000);
-    const id = await saveMorningImage(db, { kind: 'bossReport', part, data }, Date.now());
+  const list = bossImages(data, opts.five ?? await bossFiveOn(db));
+  const out: { name: string; label: string; photo: boolean }[] = [];
+  for (const c of bosses) for (const { img, text, label } of list) {
+    const id = await saveMorningImage(db, img, Date.now());
     const ok = await photo(c.chat_id!, `${webOrigin()}/api/zalo/anh/${id}`, text);
     // Ảnh chưa gửi được: chờ gửi lại ảnh (lib/zalo/photo-wait.ts), không gửi bản chữ thay ảnh (anh Vũ 20/11/2026).
-    if (!ok) await queuePhoto(db, { imageId: id, chatId: c.chat_id!, caption: text, label: `${part === 1 ? 'tổng quan' : 'chi tiết'} ${data.title}`, first: Date.now() }, Date.now());
-    out.push({ name: c.name, part, photo: ok });
+    if (!ok) await queuePhoto(db, { imageId: id, chatId: c.chat_id!, caption: text, label, first: Date.now() }, Date.now());
+    out.push({ name: c.name, label, photo: ok });
   }
   return out;
 }
@@ -133,9 +141,9 @@ async function maybeBossNow(db: D1Database) {
   const del = await db.prepare('DELETE FROM app_settings WHERE key=? AND value=?').bind(BOSS_NOW_KEY, row.value).run();
   if (!Number(del.meta?.changes ?? 0)) return;
   try {
-    const req = JSON.parse(row.value) as { day?: string; hour?: string };
+    const req = JSON.parse(row.value) as { day?: string; hour?: string; five?: boolean; to?: string };
     if (!/^\d{4}-\d{2}-\d{2}$/.test(req.day ?? '') || !/^(08|12|17|22)$/.test(req.hour ?? '')) return;
-    const out = await sendBossReportNow(db, req.day!, req.hour!);
+    const out = await sendBossReportNow(db, req.day!, req.hour!, { five: req.five === true ? true : undefined, to: typeof req.to === 'string' && req.to ? req.to : undefined });
     console.log('zalo boss now', req.day, req.hour, JSON.stringify(out));
   } catch (e) { console.error('zalo boss now failed', e); }
 }
@@ -274,12 +282,11 @@ export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database
       try {
         // Giờ báo cáo sáng (8h) gửi 2 báo cáo riêng (anh Vũ 15/11/2026): tổng kết trọn ngày hôm qua, rồi báo cáo hôm nay từ 0h tới giờ gửi.
         const kinds = morning && !slot ? [true, false] : [false];
+        // 5 ảnh Tổng quan / Sale / CSKH / MKT / Vận đơn khi đã bật (BOSS_FIVE_KEY, anh Vũ 27/11/2026), chưa bật thì 2 ảnh kiểu cũ.
+        const five = await bossFiveOn(db);
         for (const full of kinds) {
           const data = await (options.bossData ?? bossReportData)(day, key.slice(0, 2), full, now, db);
-          for (const boss of bosses) {
-            await sendImage(boss, { kind: 'bossReport', part: 1, data }, bossText(data), `tổng quan ${data.title}`);
-            await sendImage(boss, { kind: 'bossReport', part: 2, data }, `Chi tiết & cảnh báo · ${data.title}`, `chi tiết ${data.title}`);
-          }
+          for (const boss of bosses) for (const { img, text, label } of bossImages(data, five)) await sendImage(boss, img, text, label);
         }
       } catch (e) { console.error('zalo boss report failed', e); }
     } else if (slot && bossTeams.size && schedule.boss.send && options.legacyBossSlot) {

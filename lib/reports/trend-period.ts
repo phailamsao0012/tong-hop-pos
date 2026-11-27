@@ -5,6 +5,7 @@ import { CLOSED, sentAtReady } from '@/lib/reports/stats';
 import { SENT_CODES } from '@/lib/reports/shipping-lines';
 import { MARKETING_TEAMS_KEY, marketingTeamFilter, parseMarketingTeams } from '@/lib/teams/marketing-teams';
 import { mktClosedStatus } from '@/lib/reports/mkt-closed';
+import { RAW_SOURCE, type MktSource } from '@/lib/reports/mkt-source';
 
 export const TREND_DEPTS = ['sale', 'cskh', 'mkt', 'vandon'] as const;
 export type TrendDept = typeof TREND_DEPTS[number];
@@ -88,19 +89,24 @@ export function periodCard(points: TrendPoint[], opts: TrendOptions, profile: Pr
 }
 
 /** Khoảng thời gian có bind, mỗi nhánh dùng chỉ mục thời gian tương ứng. */
-/** byDay: gom theo ngày (hour luôn 0) kèm số đơn n, cho trang Tăng trưởng nhân viên. */
-export function trendQuery(dept: TrendDept, posIds: string[], startUtc: string, endUtc: string, scopeSql: string, scopeBinds: string[], bySent: boolean, byDay = false) {
+/** byDay: gom theo ngày (hour luôn 0) kèm số đơn n, cho trang Tăng trưởng nhân viên.
+ * src: nguồn đọc (lib/reports/mkt-source.ts). Chỉ nhánh mkt đổi bảng (bảng gọn, không INDEXED BY); sale, cskh, vận đơn luôn đọc bảng gốc, câu giữ nguyên. */
+export function trendQuery(dept: TrendDept, posIds: string[], startUtc: string, endUtc: string, scopeSql: string, scopeBinds: string[], bySent: boolean, byDay = false, src: MktSource = RAW_SOURCE) {
   const column = dept === 'mkt' ? 'first_confirmed_at' : dept === 'vandon' && bySent ? 'first_sent_at' : 'first_closed_at';
   const index = ` INDEXED BY idx_raw_orders_pos_${column === 'first_sent_at' ? 'sent' : dept === 'mkt' ? 'confirmed' : 'closed'}_status_money`;
   const person = dept === 'mkt' ? 'marketer_id' : 'seller_id';
   const condition = dept === 'mkt' ? `${mktClosedStatus('o.status_code')} AND o.marketer_id IN ${MKT_STAFF}` : dept === 'vandon' ? `o.status_code IN (${SENT_CODES.join(',')})${bySent ? '' : ` AND o.${CLOSED}`}` : `o.${CLOSED}${teamFilter('o.seller_id', dept)}`;
   const sql = `SELECT date(o.${column},'+7 hours') AS day, ${byDay ? '0' : `CAST(strftime('%H',o.${column},'+7 hours') AS INTEGER)`} AS hour, COALESCE(o.${person},'') AS id,
     ${dept === 'vandon' ? 'COUNT(*)' : 'SUM(COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0)))'} AS value${byDay ? ', COUNT(*) AS n' : ''}
-    FROM raw_pos_orders o${index} WHERE o.pos_id IN (${posIds.map(() => '?').join(',')}) AND o.${column} IS NOT NULL AND o.${column}>=? AND o.${column}<? AND ${condition}${scopeSql} GROUP BY ${byDay ? '1,3' : '1,2,3'}`;
+    FROM ${trendTable(dept, src)} o${dept === 'mkt' && src.slim ? '' : index} WHERE o.pos_id IN (${posIds.map(() => '?').join(',')}) AND o.${column} IS NOT NULL AND o.${column}>=? AND o.${column}<? AND ${condition}${scopeSql} GROUP BY ${byDay ? '1,3' : '1,2,3'}`;
   return { sql, binds: [...posIds, startUtc, endUtc, ...scopeBinds] };
 }
 
-export async function trendCards(db: D1Database, opts: TrendOptions, depts: TrendDept[], now = Date.now()) {
+/** Bảng đơn của một bộ phận: nhánh mkt theo nguồn đọc, các bộ phận khác luôn bảng gốc. */
+export const trendTable = (dept: TrendDept, src: MktSource) => dept === 'mkt' ? src.orders : RAW_SOURCE.orders;
+
+/** src: nguồn đọc cho nhánh mkt (route chọn bằng mktReadSource theo kỳ). */
+export async function trendCards(db: D1Database, opts: TrendOptions, depts: TrendDept[], now = Date.now(), src: MktSource = RAW_SOURCE) {
   const today = todayVn(now), period = periodKind(opts.start, opts.end, today, opts.preset);
   const saved = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(MARKETING_TEAMS_KEY).first<{ value: string }>();
   const mkt = marketingTeamFilter(opts.mktTeam ?? '', parseMarketingTeams(saved?.value), 'o.marketer_id');
@@ -122,12 +128,12 @@ export async function trendCards(db: D1Database, opts: TrendOptions, depts: Tren
   const cards: Partial<Record<TrendDept, Omit<ReturnType<typeof periodCard>, 'rows'> & { unit: 'money' | 'orders'; rows: (ReturnType<typeof periodCard>['rows'][number] & { name: string })[] }>> = {};
   for (const dept of depts) {
     if (!scoped[dept]) {
-      const q = trendQuery(dept, opts.posIds, vnDayStartUtc(addDays(today, -28)), vnDayStartUtc(today), scopeOf(dept), scopeBinds, bySent);
+      const q = trendQuery(dept, opts.posIds, vnDayStartUtc(addDays(today, -28)), vnDayStartUtc(today), scopeOf(dept), scopeBinds, bySent, false, src);
       const history = await db.prepare(q.sql).bind(...q.binds).all<TrendPoint>();
       scoped[dept] = hourlyProfile(history.results, today);
     }
     const end = opts.end > today ? today : opts.end;
-    const q = trendQuery(dept, opts.posIds, vnDayStartUtc(opts.start), end === today ? new Date(now).toISOString().slice(0, 19) : vnRangeUtc(opts.start, end).endUtc, scopeOf(dept), scopeBinds, bySent);
+    const q = trendQuery(dept, opts.posIds, vnDayStartUtc(opts.start), end === today ? new Date(now).toISOString().slice(0, 19) : vnRangeUtc(opts.start, end).endUtc, scopeOf(dept), scopeBinds, bySent, false, src);
     const points = await db.prepare(q.sql).bind(...q.binds).all<TrendPoint>();
     // Cắt kỳ trước chính xác tới giây hiện tại ngay trong SQL, trước khi gom theo giờ.
     let previousEnd = vnRangeUtc(period.prev.start, period.prev.end).endUtc;
@@ -136,7 +142,7 @@ export async function trendCards(db: D1Database, opts: TrendOptions, depts: Tren
       const elapsed = now - Date.parse(`${vnDayStartUtc(today)}Z`);
       previousEnd = new Date(Date.parse(`${vnDayStartUtc(prevDay)}Z`) + elapsed).toISOString().slice(0, 19);
     }
-    const previousQuery = trendQuery(dept, opts.posIds, vnDayStartUtc(period.prev.start), previousEnd, scopeOf(dept), scopeBinds, bySent);
+    const previousQuery = trendQuery(dept, opts.posIds, vnDayStartUtc(period.prev.start), previousEnd, scopeOf(dept), scopeBinds, bySent, false, src);
     const previous = await db.prepare(previousQuery.sql).bind(...previousQuery.binds).all<TrendPoint>();
     const card = periodCard([...points.results, ...previous.results], opts, scoped[dept]!, now);
     cards[dept] = { ...card, unit: dept === 'vandon' ? 'orders' : 'money', rows: card.rows.map((r) => ({ ...r, name: nameMap.get(r.id) ?? 'Chưa gắn nhân viên' })) };
@@ -150,7 +156,7 @@ export async function trendCards(db: D1Database, opts: TrendOptions, depts: Tren
 export type TrendCardsResponse = Awaited<ReturnType<typeof trendCards>>;
 
 /** Danh sách giải thích số thực tế, dùng cùng truy vấn và phạm vi với thẻ. */
-export async function trendOrderPage(db: D1Database, opts: TrendOptions, dept: TrendDept, staff: string | null, page: number, now = Date.now()) {
+export async function trendOrderPage(db: D1Database, opts: TrendOptions, dept: TrendDept, staff: string | null, page: number, now = Date.now(), src: MktSource = RAW_SOURCE) {
   const saved = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(MARKETING_TEAMS_KEY).first<{ value: string }>();
   const mkt = marketingTeamFilter(opts.mktTeam ?? '', parseMarketingTeams(saved?.value), 'o.marketer_id');
   if (!mkt) throw new Error('Không tìm thấy team MKT.');
@@ -165,7 +171,7 @@ export async function trendOrderPage(db: D1Database, opts: TrendOptions, dept: T
   const column = dept === 'mkt' ? 'first_confirmed_at' : dept === 'vandon' && bySent ? 'first_sent_at' : 'first_closed_at';
   const range = vnRangeUtc(opts.start, opts.end);
   const endUtc = opts.end >= todayVn(now) ? new Date(now).toISOString().slice(0, 19) : range.endUtc;
-  const q = trendQuery(dept, opts.posIds, range.startUtc, endUtc, scopeSql, binds, bySent);
-  const from = q.sql.slice(q.sql.indexOf('FROM raw_pos_orders')).replace(' GROUP BY 1,2,3', '');
+  const q = trendQuery(dept, opts.posIds, range.startUtc, endUtc, scopeSql, binds, bySent, false, src);
+  const from = q.sql.slice(q.sql.indexOf(`FROM ${trendTable(dept, src)} o`)).replace(' GROUP BY 1,2,3', '');
   return (await db.prepare(`SELECT o.id, o.source_order_id AS code, o.pos_id AS posId, o.${column} AS at, COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0)) AS net ${from} ORDER BY o.${column},o.id LIMIT 101 OFFSET ?`).bind(...q.binds, page * 100).all<{ id: string; code: string; posId: string; at: string; net: number }>()).results;
 }

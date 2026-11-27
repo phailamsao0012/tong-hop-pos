@@ -29,9 +29,10 @@ export async function resolveMktLens(db: D1Database, params: URLSearchParams): P
 
 /** Lọc ngay nguồn đơn, giữ nguyên bind và thời gian sự kiện của câu báo cáo cũ. */
 export function lensSql(sql: string, lens: MktLens): string {
-  return sql.replace(/\bFROM (raw_pos_orders|ad_costs)(?:\s+(o))?(?:\s+INDEXED BY (\w+))?/g,
+  // mkt_orders_slim: bảng gọn Marketing (báo cáo kỳ dài, lib/reports/mkt-source.ts) lọc đúng như bảng đơn gốc.
+  return sql.replace(/\bFROM (raw_pos_orders|mkt_orders_slim|ad_costs)(?:\s+(o))?(?:\s+INDEXED BY (\w+))?/g,
     (_match, table: string, alias: string | undefined, index: string | undefined) =>
-      `FROM (SELECT * FROM ${table}${index ? ` INDEXED BY ${index}` : ''} WHERE 1=1${lens.sql}${table === 'raw_pos_orders' ? lens.ordersSql ?? '' : ''}) AS ${alias ?? table}`);
+      `FROM (SELECT * FROM ${table}${index ? ` INDEXED BY ${index}` : ''} WHERE 1=1${lens.sql}${table !== 'ad_costs' ? lens.ordersSql ?? '' : ''}) AS ${alias ?? table}`);
 }
 
 export function lensDatabase(db: D1Database, lens: MktLens | null): D1Database {

@@ -9,20 +9,13 @@ import { Lock, LogOut, ScanFace } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
-export const IDLE_MINUTES = 30;
-const ACTIVE_KEY = 'thp_active_at', LOCK_KEY = 'thp_locked', MINUTES_KEY = 'thp_idle_minutes';
+import { IDLE_MINUTES, IDLE_OPTIONS, pickIdleMinutes } from '@/lib/auth/idle-minutes';
+export { IDLE_MINUTES, IDLE_OPTIONS };
+const ACTIVE_KEY = 'thp_active_at', LOCK_KEY = 'thp_locked', MINUTES_KEY = 'thp_idle_minutes_v2'; // v2 (27/11/2026): chủ hệ thống mặc định không khoá; lựa chọn cũ trên máy hết hiệu lực
 const read = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
 const write = (k: string, v: string | null) => { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch { /* bỏ qua */ } };
-/** Lựa chọn thời gian tự khóa (phút); 0 = không tự khóa, chỉ chủ hệ thống. */
-export const IDLE_OPTIONS: { value: number; label: string; ownerOnly?: boolean }[] = [
-  { value: 30, label: '30 phút' }, { value: 60, label: '1 giờ' }, { value: 240, label: '4 giờ' }, { value: 480, label: '8 giờ' }, { value: 0, label: 'Không tự khóa', ownerOnly: true },
-];
-/** Thời gian tự khóa đã chọn trên máy này; giá trị lạ hoặc "không tự khóa" của người không phải chủ hệ thống → 30 phút. */
-export const idleMinutes = (owner: boolean) => {
-  const v = Number(read(MINUTES_KEY) ?? IDLE_MINUTES);
-  const opt = IDLE_OPTIONS.find((o) => o.value === v);
-  return opt && (!opt.ownerOnly || owner) ? v : IDLE_MINUTES;
-};
+/** Thời gian tự khóa đã chọn trên máy này (lib/auth/idle-minutes.ts): chưa chọn thì chủ hệ thống không khoá, người khác 30 phút. */
+export const idleMinutes = (owner: boolean) => pickIdleMinutes(read(MINUTES_KEY), owner);
 export const setIdleMinutes = (v: number) => { write(MINUTES_KEY, String(v)); write(ACTIVE_KEY, String(Date.now())); };
 export const idleLabel = (v: number) => IDLE_OPTIONS.find((o) => o.value === v)?.label ?? `${v} phút`;
 
@@ -47,9 +40,11 @@ export function IdleLock({ paused, owner = false, onLogout }: { paused: boolean;
     const events = ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart'] as const;
     events.forEach((e) => window.addEventListener(e, mark, { passive: true }));
     const check = () => {
+      const minutes = idleMinutes(owner);
+      // Không tự khoá (chủ hệ thống, mặc định từ 27/11/2026): gỡ cả lần khoá cũ còn lưu trên máy.
+      if (minutes === 0) { if (read(LOCK_KEY) === '1') write(LOCK_KEY, null); setLocked(false); return; }
       if (read(LOCK_KEY) === '1') { setLocked(true); return; }
       const at = Number(read(ACTIVE_KEY) ?? Date.now());
-      const minutes = idleMinutes(owner);
       if (!paused && minutes > 0 && Date.now() - at > minutes * 60000) { write(LOCK_KEY, '1'); setLocked(true); }
       else setLocked(false);
     };

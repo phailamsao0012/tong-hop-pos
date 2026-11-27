@@ -3,8 +3,8 @@
 // Chiều cao tính trước theo số dòng (bossImageHeight) vì ImageResponse cần chiều cao cố định.
 import React from 'react';
 import {
-  BOSS_CLOSE_RED, COACH_MIN_BASE, closeRate, coach, coachMkt, money, num, prevWordOf, rateText, rateVsPrev, rateVsText, vsPrev, vsText, warnings,
-  type BossData, type BossImage, type TeamRow } from '@/lib/zalo/boss-report';
+  BOSS_CANCEL_RED, BOSS_CLOSE_RED, BOSS_RETURN_RED, COACH_MIN_BASE, closeRate, coach, coachMkt, money, num, prevWordOf, rateText, rateVsPrev, rateVsText, vsPrev, vsText, warnings,
+  pct, type BossData, type BossImage, type BossPage, type TeamRow } from '@/lib/zalo/boss-report';
 
 export const BOSS_IMAGE_WIDTH = 1080;
 const C = { ink: '#14231c', muted: '#5f6f67', line: '#e3ebe6', soft: '#f2f6f3', green: '#2f6b4f', good: '#2e7d32', bad: '#c62828', badSoft: '#fdecea', barBg: '#e3e9e5', head: '#d6efe3' };
@@ -100,6 +100,7 @@ const FOOT1 = `So hôm qua: cùng khoảng giờ hôm qua (báo cáo trọn ngà
 
 export function bossImageHeight(img: BossImage) {
   const d = img.data;
+  if (img.page) return pageHeight(img.page, d);
   if (img.part === 1) {
     const sale = Math.min(MAX_POS, d.sale.byPos?.length ?? 0), cskh = Math.min(MAX_POS, d.cskh.byPos?.length ?? 0), mkt = Math.min(MAX_MKT, d.mkt.teams.length);
     return H.head + H.gap + H.top + H.gap
@@ -219,5 +220,183 @@ function Part2({ d }: { d: BossData }) {
 }
 
 export function BossImageView({ img }: { img: BossImage }) {
+  if (img.page) return <PageView page={img.page} d={img.data} />;
   return img.part === 1 ? <Part1 d={img.data} /> : <Part2 d={img.data} />;
+}
+
+/** 5 ảnh mỗi mốc (anh Vũ 27/11/2026: "gửi 4 ảnh, 1 ảnh sale, 1 ảnh cskh, 1 ảnh mkt, 1 ảnh tổng quan, nếu được thêm vận đơn nữa"). */
+const TOP = 5;
+const kpiLine = (k: { goal: number | null; monthNet: number }) => (k.goal ? `KPI tháng ${rateText(pct(k.monthNet, k.goal), 0)} · ${money(k.monthNet)}/${money(k.goal)}` : 'Chưa đặt KPI tháng');
+const tableH = (rows: number) => H.secTitle + H.th + Math.max(1, rows) * H.tr + H.gap;
+const saleTeams = (d: BossData) => teamList(d.sale.teams).filter((t) => t.net || t.base || t.orders);
+const cskhTeams = (d: BossData) => teamList(d.cskh.teams).filter((t) => t.net || t.orders);
+const topSale = (d: BossData) => [...d.sale.people].sort((a, b) => b.net - a.net).slice(0, TOP);
+const topCskh = (d: BossData) => [...d.cskh.people].sort((a, b) => b.net - a.net).slice(0, TOP);
+const topMkt = (d: BossData) => [...d.mkt.people].sort((a, b) => b.newNet - a.newNet).slice(0, TOP);
+const carriers = (d: BossData) => [{ name: 'Viettel Post', orders: d.ship.vtp }, { name: 'Shopee Express', orders: d.ship.spx }, ...(d.ship.others ?? [])].filter((c) => c.orders > 0);
+
+function pageHeight(page: BossPage, d: BossData) {
+  const base = H.head + H.gap + H.foot + 10;
+  switch (page) {
+    case 'tong': return base + H.top + H.gap + H.top + H.gap + tableH(Math.min(MAX_POS, d.pos.length)) + H.secTitle + Math.max(1, warnings(d).length) * H.warn;
+    case 'sale': return base + H.top + H.gap + tableH(Math.min(MAX_POS, d.sale.byPos?.length ?? 0)) + tableH(saleTeams(d).length) + tableH(topSale(d).length) + H.warn;
+    case 'cskh': return base + H.top + H.gap + tableH(Math.min(MAX_POS, d.cskh.byPos?.length ?? 0)) + tableH(cskhTeams(d).length) + tableH(topCskh(d).length);
+    case 'mkt': return base + H.top + H.gap + tableH(Math.min(MAX_MKT, d.mkt.teams.length)) + (mktLeadsNote(d) ? H.mktNote : 0) + tableH(topMkt(d).length) + H.warn;
+    default: return base + H.cards + H.gap + tableH(carriers(d).length);
+  }
+}
+
+const tone = (v: number | null, fmt?: (n: number) => string): Cell => { const t = vsText(v, fmt); return { t, tone: toneOf(v, t) }; };
+const redRate = (r: number | null, base: number) => r != null && base >= COACH_MIN_BASE && r < BOSS_CLOSE_RED;
+const empty = (n: number): Cell[][] => [[{ t: 'Chưa có số' }, ...Array.from({ length: n - 1 }, () => ({ t: '' }))]];
+const Gap = () => <Box style={{ height: H.gap }}>{''}</Box>;
+const Table = ({ title, head, widths, rows }: { title: string; head: string[]; widths: number[]; rows: Cell[][] }) => (
+  <Col>
+    <Title>{title}</Title>
+    <RichTable head={head} widths={widths} rows={rows.length ? rows : empty(head.length)} />
+    <Gap />
+  </Col>
+);
+const Note = ({ children, bad }: { children: React.ReactNode; bad?: boolean }) => (
+  <Txt style={{ height: H.warn - 10, marginBottom: 10, alignItems: 'center', padding: '0 16px', borderRadius: 12, fontSize: 22, background: bad ? C.badSoft : C.soft, color: bad ? '#7f1d1d' : C.muted }}>{children}</Txt>
+);
+const pctMonth = (t: TeamRow): Cell => ({ t: t.goal ? rateText(pct(t.monthNet, t.goal), 0) : '–' });
+const aov = (net: number, n: number) => (n ? `${num(net / n / 1000)}k` : '–');
+const tileW = (BOSS_IMAGE_WIDTH - PAD * 2 - 48) / 3;
+
+function Overview({ d }: { d: BossData }) {
+  const so = `so ${prevWordOf(d)}`;
+  const cv = vsPrev(d.company.net, d.company.yesterday), saleVs = vsPrev(d.sale.kpi.todayNet, d.sale.prevNet);
+  const cskhVs = vsPrev(d.cskh.kpi.todayNet, d.cskh.prevNet), mktVs = vsPrev(d.mkt.kpi.todayNet, d.mkt.prevNewNet);
+  const w = warnings(d);
+  const posRows: Cell[][] = d.pos.slice(0, MAX_POS).map((p) => [{ t: p.name }, { t: money(p.net) }, tone(vsPrev(p.net, p.yesterday)), { t: num(p.orders) }, { t: aov(p.net, p.orders) }]);
+  return (
+    <Frame title="MEGATECH · Tổng quan" d={d} foot="Ảnh 1/5. Doanh thu công ty = cộng các POS. So hôm qua: cùng khoảng giờ hôm qua (báo cáo trọn ngày: trọn ngày trước), xanh nhiều hơn, đỏ ít hơn. KPI tháng: đã đạt từ đầu tháng ÷ KPI tháng. Chi tiết từng bộ phận ở ảnh 2–5.">
+      <Box style={{ height: H.top }}>
+        <Card width="100%" height={H.top}>
+          <Lab>DOANH THU CÔNG TY</Lab>
+          <Txt style={{ fontSize: 64, fontWeight: 700, marginTop: 4 }}>{money(d.company.net)}</Txt>
+          <Line>{''}<Tone v={cv} text={vsText(cv)} />{so}</Line>
+          <Line>{`${num(d.company.orders)} đơn chốt`}</Line>
+        </Card>
+      </Box>
+      <Gap />
+      <Box style={{ height: H.top }}>
+        <BigTile label="SALE" value={money(d.sale.kpi.todayNet)} width={tileW} lines={[<Line key="a">{''}<Tone v={saleVs} text={vsText(saleVs)} />{so}</Line>, <Line key="b">{kpiLine(d.sale.kpi)}</Line>]} />
+        <BigTile label="CSKH" value={money(d.cskh.kpi.todayNet)} width={tileW} lines={[<Line key="a">{''}<Tone v={cskhVs} text={vsText(cskhVs)} />{so}</Line>, <Line key="b">{kpiLine(d.cskh.kpi)}</Line>]} />
+        <BigTile label="MKT (DT New)" value={money(d.mkt.kpi.todayNet)} width={tileW} lines={[<Line key="a">{''}<Tone v={mktVs} text={vsText(mktVs)} />{so}</Line>, <Line key="b">{kpiLine(d.mkt.kpi)}</Line>]} />
+      </Box>
+      <Gap />
+      <Table title="DOANH THU THEO POS" head={['POS', 'Doanh thu', `So ${prevWordOf(d)}`, 'Đơn', 'TB đơn']} widths={[34, 18, 18, 12, 18]} rows={posRows} />
+      <Title>CẦN CHÚ Ý</Title>
+      {(w.length ? w : ['Không có gì cần chú ý']).map((t, i) => <Note key={i} bad={!!w.length}>{t}</Note>)}
+    </Frame>
+  );
+}
+
+function SalePage({ d }: { d: BossData }) {
+  const pw = prevWordOf(d), so = `so ${pw}`;
+  const rate = closeRate(d.sale), rv = rateVsPrev(d.sale), nv = vsPrev(d.sale.kpi.todayNet, d.sale.prevNet);
+  const pos: Cell[][] = (d.sale.byPos ?? []).slice(0, MAX_POS).map((p) => {
+    const r = closeRate(p), x = rateVsPrev(p);
+    return [{ t: p.name }, { t: money(p.net) }, tone(vsPrev(p.net, p.prevNet)), { t: num(p.orders) }, { t: rateText(r), red: redRate(r, p.base) }, { t: rateVsText(x), tone: toneOf(x, rateVsText(x)) }];
+  });
+  const teams: Cell[][] = saleTeams(d).map((t) => { const r = closeRate(t); return [{ t: t.name }, { t: money(t.net) }, { t: num(t.orders) }, { t: num(t.base) }, { t: rateText(r), red: redRate(r, t.base) }, pctMonth(t)]; });
+  const top: Cell[][] = topSale(d).map((p, i) => { const r = closeRate(p); return [{ t: `${i + 1}. ${p.name}` }, { t: p.team }, { t: money(p.net) }, { t: num(p.orders) }, { t: rateText(r, 0), red: redRate(r, p.base) }]; });
+  const c = coach(d.sale.people)[0];
+  return (
+    <Frame title="MEGATECH · Sale" d={d} foot={`Ảnh 2/5. TL chốt: đơn lên trong khoảng giờ đã chốt ÷ đơn lên (số chia). Đỏ: chốt dưới ${BOSS_CLOSE_RED}% (từ ${COACH_MIN_BASE} số). Cần kèm: người chốt thấp nhất dưới ${BOSS_CLOSE_RED}% trong người có từ ${COACH_MIN_BASE} số. KPI tháng: đã đạt ÷ KPI tháng của team.`}>
+      <Box style={{ height: H.top }}>
+        <BigTile label="DOANH THU SALE" value={money(d.sale.kpi.todayNet)} width={tileW} lines={[<Line key="a">{''}<Tone v={nv} text={vsText(nv)} />{so}</Line>, <Line key="b">{kpiLine(d.sale.kpi)}</Line>]} />
+        <BigTile label="TỈ LỆ CHỐT" value={rateText(rate)} width={tileW} lines={[<Line key="a">{''}<Tone v={rv} text={rateVsText(rv)} />{so}</Line>, <Line key="b">{`${num(Math.min(d.sale.base, d.sale.closed))}/${num(d.sale.base)} số đã chốt`}</Line>]} />
+        <BigTile label="ĐƠN ĐI TỪ ĐẦU THÁNG" value={num(d.sale.packed)} width={tileW} lines={[<Line key="a">{`Hoàn ${num(d.sale.returned)} · Hủy ${num(d.sale.cancelled)}`}</Line>, <Line key="b">tính từ ngày 1 tới mốc này</Line>]} />
+      </Box>
+      <Gap />
+      <Table title="SALE THEO POS" head={['POS', 'Doanh thu', `DT so ${pw}`, 'Đơn', 'TL chốt', `TLC so ${pw}`]} widths={[29, 15, 16, 9, 13, 18]} rows={pos} />
+      <Table title="SALE THEO TEAM" head={['Team', 'Doanh thu', 'Đơn', 'Số chia', 'TL chốt', 'KPI tháng']} widths={[32, 16, 10, 13, 14, 15]} rows={teams} />
+      <Table title={`TOP ${TOP} SALE`} head={['Nhân viên', 'Team', 'Doanh thu', 'Đơn', 'TL chốt']} widths={[34, 24, 16, 11, 15]} rows={top} />
+      <Note bad={!!c}>{c ? `Cần kèm: ${c.name} · chốt ${rateText(c.rate, 0)} / ${num(c.base)} số` : 'Cần kèm: không có'}</Note>
+    </Frame>
+  );
+}
+
+function CskhPage({ d }: { d: BossData }) {
+  const pw = prevWordOf(d), so = `so ${pw}`;
+  const nv = vsPrev(d.cskh.kpi.todayNet, d.cskh.prevNet), ov = vsPrev(d.cskh.orders, d.cskh.prevOrders);
+  const pos: Cell[][] = (d.cskh.byPos ?? []).slice(0, MAX_POS).map((p) => [{ t: p.name }, { t: money(p.net) }, tone(vsPrev(p.net, p.prevNet)), { t: num(p.orders) }, { t: aov(p.net, p.orders) }]);
+  const teams: Cell[][] = cskhTeams(d).map((t) => [{ t: t.name }, { t: money(t.net) }, { t: num(t.orders) }, { t: aov(t.net, t.orders) }, pctMonth(t)]);
+  const top: Cell[][] = topCskh(d).map((p, i) => [{ t: `${i + 1}. ${p.name}` }, { t: p.team }, { t: money(p.net) }, { t: num(p.orders) }, { t: aov(p.net, p.orders) }]);
+  return (
+    <Frame title="MEGATECH · CSKH" d={d} foot="Ảnh 3/5. Đơn: đơn chốt của nhân viên CSKH. TB đơn: doanh thu ÷ đơn. KPI tháng: đã đạt ÷ KPI tháng của team. CSKH không xét tỉ lệ chốt.">
+      <Box style={{ height: H.top }}>
+        <BigTile label="DOANH THU CSKH" value={money(d.cskh.kpi.todayNet)} width={tileW} lines={[<Line key="a">{''}<Tone v={nv} text={vsText(nv)} />{so}</Line>, <Line key="b">{kpiLine(d.cskh.kpi)}</Line>]} />
+        <BigTile label="ĐƠN CHỐT" value={num(d.cskh.orders)} width={tileW} lines={[<Line key="a">{''}<Tone v={ov} text={vsText(ov, num)} />{so}</Line>]} />
+        <BigTile label="TB ĐƠN" value={aov(d.cskh.kpi.todayNet, d.cskh.orders)} width={tileW} lines={[<Line key="a">doanh thu ÷ đơn</Line>]} />
+      </Box>
+      <Gap />
+      <Table title="CSKH THEO POS" head={['POS', 'Doanh thu', `So ${pw}`, 'Đơn', 'TB đơn']} widths={[34, 18, 18, 12, 18]} rows={pos} />
+      <Table title="CSKH THEO TEAM" head={['Team', 'Doanh thu', 'Đơn', 'TB đơn', 'KPI tháng']} widths={[36, 18, 12, 16, 18]} rows={teams} />
+      <Table title={`TOP ${TOP} CSKH`} head={['Nhân viên', 'Team', 'Doanh thu', 'Đơn', 'TB đơn']} widths={[34, 24, 16, 11, 15]} rows={top} />
+    </Frame>
+  );
+}
+
+function MktPage({ d }: { d: BossData }) {
+  const pw = prevWordOf(d), so = `so ${pw}`;
+  const nv = vsPrev(d.mkt.kpi.todayNet, d.mkt.prevNewNet), lv = vsPrev(d.mkt.leads, d.mkt.prevLeads);
+  const closedAll = d.mkt.teams.reduce((a, t) => a + t.closed, 0), rate = closeRate({ base: d.mkt.leads, closed: closedAll });
+  const teams: Cell[][] = d.mkt.teams.slice(0, MAX_MKT).map((t) => {
+    const r = closeRate({ base: t.leads, closed: t.closed }), x = vsPrev(t.leads, t.prevLeads), xt = vsText(x, num);
+    return [{ t: t.name }, { t: t.cost ? money(t.cost) : '–' }, { t: money(t.newNet) }, tone(vsPrev(t.newNet, t.prevNewNet)), { t: num(t.leads), extra: { t: xt, tone: toneOf(x, xt) } }, { t: rateText(r), red: redRate(r, t.leads) }];
+  });
+  const top: Cell[][] = topMkt(d).map((p, i) => { const r = closeRate({ base: p.leads, closed: p.closed ?? 0 }); return [{ t: `${i + 1}. ${p.name}` }, { t: p.team }, { t: p.cost ? money(p.cost) : '–' }, { t: money(p.newNet) }, { t: num(p.leads) }, { t: rateText(r, 0), red: redRate(r, p.leads) }]; });
+  const c = coachMkt(d.mkt.people)[0];
+  const note = mktLeadsNote(d);
+  return (
+    <Frame title="MEGATECH · Marketing" d={d} foot={`Ảnh 4/5. DT New: doanh thu đơn New. Số new: số điện thoại mới chia cho Sale; TL chốt = đơn New chốt ÷ số new. Chi phí "–": chưa có chi phí trên sheet. Đỏ: chốt dưới ${BOSS_CLOSE_RED}% (từ ${COACH_MIN_BASE} số new).`}>
+      <Box style={{ height: H.top }}>
+        <BigTile label="DT NEW" value={money(d.mkt.kpi.todayNet)} width={tileW} lines={[<Line key="a">{''}<Tone v={nv} text={vsText(nv)} />{so}</Line>, <Line key="b">{kpiLine(d.mkt.kpi)}</Line>]} />
+        <BigTile label="SỐ NEW" value={num(d.mkt.leads)} width={tileW} lines={[<Line key="a">{''}<Tone v={lv} text={vsText(lv, num)} />{so}</Line>, <Line key="b">{`TL chốt ${rateText(rate)}`}</Line>]} />
+        <BigTile label="CHI PHÍ QC" value={d.mkt.cost ? money(d.mkt.cost) : '–'} width={tileW} lines={[<Line key="a">{d.mkt.cost && d.mkt.kpi.todayNet ? `${rateText(pct(d.mkt.cost, d.mkt.kpi.todayNet), 0)} DT New` : 'chưa có chi phí'}</Line>]} />
+      </Box>
+      <Gap />
+      <Col>
+        <Title>MARKETING THEO TEAM</Title>
+        <RichTable head={['Team MKT', 'Chi phí', 'DT New', `DT so ${pw}`, 'Số new', 'TL chốt']} widths={[24, 13, 14, 16, 19, 14]} rows={teams.length ? teams : empty(6)} />
+        {note ? <Txt style={{ height: H.mktNote, paddingTop: 8, fontSize: 16, color: C.muted }}>{note}</Txt> : null}
+        <Gap />
+      </Col>
+      <Table title={`TOP ${TOP} MARKETING`} head={['Marketer', 'Team', 'Chi phí', 'DT New', 'Số new', 'TL chốt']} widths={[30, 20, 13, 14, 11, 12]} rows={top} />
+      <Note bad={!!c}>{c ? `Cần kèm: ${c.name} · chốt ${rateText(c.rate, 0)} / ${num(c.leads)} số new` : 'Cần kèm: không có'}</Note>
+    </Frame>
+  );
+}
+
+function ShipPage({ d }: { d: BossData }) {
+  const list = carriers(d), total = list.reduce((a, c) => a + c.orders, 0);
+  const netOf = new Map((d.ship.nets ?? []).map((x) => [x.name, x.net]));
+  const rows: Cell[][] = list.map((c) => [{ t: c.name }, { t: num(c.orders) }, { t: netOf.has(c.name) ? money(netOf.get(c.name)!) : '–' }, { t: rateText(pct(c.orders, total), 0) }]);
+  const ret = pct(d.sale.returned, d.sale.packed), can = pct(d.sale.cancelled, d.sale.packed);
+  return (
+    <Frame title="MEGATECH · Vận đơn" d={d} foot={`Ảnh 5/5. Đơn chuyển đi, Doanh số chuyển đi: đơn giao cho hãng vận chuyển trong ${d.range} (theo ngày chuyển đi, số riêng của Vận đơn, không cộng vào doanh thu). Hoàn / Hủy: trên đơn đi của Sale TỪ ĐẦU THÁNG tới mốc này.`}>
+      <Box style={{ height: H.cards }}>
+        <SmallCard width="23.5%" label="Đơn chuyển đi" value={num(d.ship.packed)} sub={d.range} />
+        <SmallCard width="23.5%" label="Doanh số chuyển đi" value={d.ship.net != null ? money(d.ship.net) : '–'} sub={d.range} />
+        <SmallCard width="23.5%" label="Hoàn từ đầu tháng" value={num(d.sale.returned)} sub={`${rateText(ret)} đơn đi Sale`} red={ret != null && ret >= BOSS_RETURN_RED} />
+        <SmallCard width="23.5%" label="Hủy từ đầu tháng" value={num(d.sale.cancelled)} sub={`${rateText(can)} đơn đi Sale`} red={can != null && can >= BOSS_CANCEL_RED} />
+      </Box>
+      <Gap />
+      <Table title="THEO HÃNG VẬN CHUYỂN" head={['Hãng', 'Đơn chuyển đi', 'Doanh số chuyển đi', 'Phần đơn']} widths={[34, 20, 26, 20]} rows={rows} />
+    </Frame>
+  );
+}
+
+function PageView({ page, d }: { page: BossPage; d: BossData }) {
+  switch (page) {
+    case 'tong': return <Overview d={d} />;
+    case 'sale': return <SalePage d={d} />;
+    case 'cskh': return <CskhPage d={d} />;
+    case 'mkt': return <MktPage d={d} />;
+    default: return <ShipPage d={d} />;
+  }
 }

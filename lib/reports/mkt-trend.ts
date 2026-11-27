@@ -6,6 +6,7 @@ import { MARKETING_TEAMS_KEY, UNASSIGNED_TEAM, parseMarketingTeams } from '@/lib
 import { addDays, daysBetween, todayVn, vnRangeUtc } from '@/lib/shared/report-time';
 import { metrics, trendChartRows, type Base } from '@/lib/reports/mkt-trend-rows';
 import { mktClosedStatus } from '@/lib/reports/mkt-closed';
+import { RAW_SOURCE, mktReadSource, type MktSource } from '@/lib/reports/mkt-source';
 
 export { metrics, trendChartRows, type Base };
 
@@ -52,18 +53,19 @@ export function trendNotes(rows: (ReturnType<typeof metrics> & { key: string; pa
 }
 
 /** fromStats: đọc số đơn / doanh số MKT từ bảng tính sẵn stats_daily_mkt (đã điền đủ lịch sử) thay vì quét đơn gốc. */
-export function trendQueries(posIds: string[], start: string, end: string, fromStats = false, team: Team = 'all') {
+export function trendQueries(posIds: string[], start: string, end: string, fromStats = false, team: Team = 'all', src: MktSource = RAW_SOURCE) {
   const range = vnRangeUtc(start, end), ph = posIds.map(() => '?').join(',');
   const scope = `o.pos_id IN (${ph})`, mk = "NULLIF(TRIM(o.marketer_id),'')";
   const net = NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1');
   return [
-    { sql: `SELECT ${mk} AS m, date(MIN(o.created_at), '+7 hours') AS day FROM raw_pos_orders o WHERE ${scope} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7 AND ${mk} IS NOT NULL AND o.phone IS NOT NULL${leadSellerFilter('o.seller_id', team)}${notSan('o.marketer_id')} GROUP BY 1,o.phone`, binds: [...posIds, range.startUtc, range.endUtc] },
+    { sql: `SELECT ${mk} AS m, date(MIN(o.created_at), '+7 hours') AS day FROM ${src.orders} o WHERE ${scope} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7 AND ${mk} IS NOT NULL AND o.phone IS NOT NULL${leadSellerFilter('o.seller_id', team)}${notSan('o.marketer_id')} GROUP BY 1,o.phone`, binds: [...posIds, range.startUtc, range.endUtc] },
     fromStats
       ? { sql: `SELECT NULLIF(TRIM(s.marketer_id),'') AS m, s.day, SUM(s.orders) AS newOrders, SUM(s.net) AS newNet FROM stats_daily_mkt s WHERE s.pos_id IN (${ph}) AND s.day>=? AND s.day<=? AND s.marketer_id IN ${MKT_STAFF} AND s.seller_id IN ${teamSubquery('sale')} GROUP BY 1,2`, binds: [...posIds, start, end] }
-      : { sql: `SELECT ${mk} AS m, date(o.first_confirmed_at, '+7 hours') AS day, COUNT(*) AS newOrders, SUM(${net}) AS newNet FROM raw_pos_orders o WHERE ${scope} AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND ${mktClosedStatus('o.status_code')} AND ${mk} IS NOT NULL AND o.marketer_id IN ${MKT_STAFF} AND o.seller_id IN ${teamSubquery('sale')} GROUP BY 1,2`, binds: [...posIds, range.startUtc, range.endUtc] },
+      : { sql: `SELECT ${mk} AS m, date(o.first_confirmed_at, '+7 hours') AS day, COUNT(*) AS newOrders, SUM(${net}) AS newNet FROM ${src.orders} o WHERE ${scope} AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND ${mktClosedStatus('o.status_code')} AND ${mk} IS NOT NULL AND o.marketer_id IN ${MKT_STAFF} AND o.seller_id IN ${teamSubquery('sale')} GROUP BY 1,2`, binds: [...posIds, range.startUtc, range.endUtc] },
   ];
 }
-export async function mktTrend(opts: { start: string; end: string; posIds: string[]; marketerId?: string | null; teamId?: string | null; bucket: Bucket; team?: string }) {
+/** source: nguồn đọc (mặc định chọn theo kỳ, lib/reports/mkt-source.ts); test truyền thẳng để so hai nguồn. */
+export async function mktTrend(opts: { start: string; end: string; posIds: string[]; marketerId?: string | null; teamId?: string | null; bucket: Bucket; team?: string; source?: MktSource }) {
   // Vite loại các import máy chủ khỏi bundle trình duyệt; node:test không có env.
   const server = (import.meta as ImportMeta & { env?: { SSR: boolean } }).env?.SSR !== false ? await Promise.all([import('cloudflare:workers'), import('@/lib/ops/ad-costs')]) : null;
   if (!server) throw new Error('mktTrend chỉ chạy trên máy chủ');
@@ -71,9 +73,10 @@ export async function mktTrend(opts: { start: string; end: string; posIds: strin
   await ensureAdCostSchema();
   const db = env.DB;
   const fromStats = await mktStatsReady(db);
+  const src = opts.source ?? await mktReadSource(db, env, opts.start, opts.end);
   const [costs, leads, closed, setting] = await db.batch([
-    db.prepare(`SELECT marketer_id AS m, day, SUM(amount) AS cost FROM ${adCostSource(opts.posIds, opts.start, opts.end)} WHERE day>=? AND day<=?${notSan('marketer_id')} GROUP BY 1,2`).bind(opts.start, opts.end),
-    ...trendQueries(opts.posIds, opts.start, opts.end, fromStats, opts.team === 'sale' || opts.team === 'cskh' ? opts.team : 'all').map(q => db.prepare(q.sql).bind(...q.binds)),
+    db.prepare(`SELECT marketer_id AS m, day, SUM(amount) AS cost FROM ${adCostSource(opts.posIds, opts.start, opts.end, src.orders)} WHERE day>=? AND day<=?${notSan('marketer_id')} GROUP BY 1,2`).bind(opts.start, opts.end),
+    ...trendQueries(opts.posIds, opts.start, opts.end, fromStats, opts.team === 'sale' || opts.team === 'cskh' ? opts.team : 'all', src).map(q => db.prepare(q.sql).bind(...q.binds)),
     db.prepare('SELECT value FROM app_settings WHERE key=?').bind(MARKETING_TEAMS_KEY),
   ]);
   const teams = parseMarketingTeams((setting.results[0] as { value?: string } | undefined)?.value);
