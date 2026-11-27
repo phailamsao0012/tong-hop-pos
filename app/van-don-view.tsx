@@ -310,7 +310,7 @@ export function VanDonView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì 
             </ChartCard>
           ))
   );
-  const sellersCard = () => (
+  const sellersCard = (report: Report) => (
           <ChartCard id="vd-sellers" icon={ShoppingCart} title="Phía lên đơn (Sale, CSKH)" subtitle="Hoàn cao và nhiều đơn không xác nhận được ở người lên đơn là dấu hiệu lên đơn kém." info={report.definitions['Người lên đơn']}>
             <LineTable rows={sellers} cols={SELLER_COLS} level={level} first={first} />
           </ChartCard>
@@ -397,7 +397,7 @@ export function VanDonView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì 
         </div>
         {waitNote(t)}
         <ReturnBreakdown t={t} period={period} bySent={bySent} estimated={report?.sentEstimated} />
-        {sellersCard()}
+        {sellersCard(report)}
         <div className="grid min-w-0 gap-3">
           <FoldBlock icon={Undo2} title="Sale, CSKH · đơn chuyển đi và đơn hoàn theo người" storageKey={k('dept')}><div className="grid min-w-0 gap-4">{deptCards(report)}</div></FoldBlock>
           <FoldBlock icon={Send} title="Đơn vị vận chuyển" storageKey={k('carriers')}><VanDonCarriersCard start={start} end={end} posIds={posIds} /></FoldBlock>
@@ -445,7 +445,7 @@ export function VanDonView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì 
           {deptCards(report)}
 
           <VanDonCarriersCard start={start} end={end} posIds={posIds} />
-          {sellersCard()}
+          {sellersCard(report)}
 
           {confirmCard(report)}
 

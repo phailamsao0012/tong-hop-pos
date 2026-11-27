@@ -460,7 +460,7 @@ export function MarketingView({ onManageTeams, onOpenRoas, uiMoi = false }: { on
           </div>
         </ChartCard>
   );
-  const rankCard = (data: Report) => (
+  const rankCard = () => (
         <ChartCard icon={BarChart3} title={rankingMode === 'team' ? 'Xếp hạng team Marketing' : 'Xếp hạng marketer'} subtitle={`Chỉ số theo mốc: ${STAGES[otherStages ? stage : rankStage]} · phễu theo đơn tạo trong kỳ`}
           action={<div className="flex flex-wrap items-center gap-2">
             <fieldset data-ui="pill-group" className="flex flex-wrap rounded-lg border border-line p-0.5"><legend className="sr-only">Mốc xếp hạng</legend>
@@ -548,7 +548,7 @@ export function MarketingView({ onManageTeams, onOpenRoas, uiMoi = false }: { on
               onClick={() => setWhy({ title: 'Đã nhận / thu tiền', value: vi.format(s.deliveredOrders), scope, rows: [{ label: 'Đơn đã gửi', value: vi.format(s.shippedOrders) }, { label: '% trên đơn đã gửi', value: pct(s.deliveryRate) }], definition: 'Đơn đã nhận / thu tiền ÷ đơn đã gửi.' })} />
           </div>
           {funnelCard(s)}
-          {rankCard(data)}
+          {rankCard()}
           <MktProductsCard rows={data.byProduct} totalOrders={s.orders} totalNet={s.net} />
           <MktRecentCard rows={data.recentOrders} basis={basis} />
           <div className="grid min-w-0 gap-3">
@@ -596,7 +596,7 @@ export function MarketingView({ onManageTeams, onOpenRoas, uiMoi = false }: { on
 
         {funnelCard(s)}
 
-        {rankCard(data)}
+        {rankCard()}
 
         {crossCard()}
         <MktProductsCard rows={data.byProduct} totalOrders={s.orders} totalNet={s.net} />
