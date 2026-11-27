@@ -325,6 +325,14 @@ export function StaffProfilePage({ onBack, uiMoi = false }: { onBack?: () => voi
   }, [id, key]);
   const loading = state?.id === id && state?.key !== key;
   const shown = useMemo(() => (people ? filterPeople(people, q, dept, (pid) => status[pid] === 'left') : []), [people, q, dept, status]);
+  // Giao diện mới (cờ THP_UI_MOI): chưa chọn ai thì tự mở hồ sơ người đầu danh sách, khỏi khung trống bên phải.
+  // Chỉ màn từ 64rem (danh sách và hồ sơ đứng cạnh nhau); điện thoại vẫn thấy danh sách trước.
+  const firstShown = shown[0];
+  useEffect(() => {
+    if (!uiMoi || id || !firstShown) return;
+    if (!window.matchMedia('(min-width: 64rem)').matches) return;
+    openStaffProfile(firstShown.id, firstShown.name);
+  }, [uiMoi, id, firstShown]);
   const name = (state?.id === id ? state?.data?.name : undefined) || target?.name || people?.find((p) => p.id === id)?.name;
 
   const list = (
