@@ -1,0 +1,258 @@
+<title>Bộ thiết kế web tổng</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap">
+<style>
+:root{color-scheme:light;--bg:#f4f5f4;--card:#ffffff;--fg:#0e1512;--fg2:#3c4743;--muted:#75807b;--line:#e5e9e6;--soft:#f1f3f2;--ink:#0e1512;--accent:#17684b;--accent-soft:#e6f2ec;--bad:#c8402d;--bad-soft:#fbeae7;--warn:#a96600;--warn-soft:#fdf2d9;--grey:#cfd6d2;--r:14px;--font:'Be Vietnam Pro',system-ui,sans-serif}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:14px;line-height:1.5;margin:0;font-variant-numeric:tabular-nums}
+.wrap{max-width:1360px;margin:0 auto;padding-block:28px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:34px}
+h1{font-size:1.5rem;margin:0;font-weight:700;letter-spacing:-.01em}
+h2{font-size:1.05rem;margin:0 0 4px;font-weight:700}
+p{margin:0}.muted{color:var(--muted)}
+.tag{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.sec>p{color:var(--muted);margin-bottom:14px;max-width:70ch}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:18px;min-width:0}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}.g3{grid-template-columns:repeat(3,minmax(0,1fr))}.g4{grid-template-columns:repeat(4,minmax(0,1fr))}.g6{grid-template-columns:repeat(6,minmax(0,1fr))}
+.rowx{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.cap{font-size:.72rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+svg.i{width:18px;height:18px;fill:currentColor;flex:none}
+
+/* màu */
+.sw{display:flex;flex-direction:column;gap:6px;font-size:.78rem}
+.sw i{display:block;height:54px;border-radius:12px;border:1px solid var(--line)}
+.sw b{font-weight:600}.sw span{color:var(--muted)}
+/* chữ */
+.ty div{display:flex;align-items:baseline;gap:16px;padding:8px 0;border-top:1px solid var(--line)}
+.ty div:first-child{border-top:0}.ty small{width:150px;flex:none;color:var(--muted);font-size:.76rem}
+
+/* nút */
+.btn{display:inline-flex;align-items:center;gap:7px;border-radius:10px;padding:8px 14px;font-size:.84rem;font-weight:600;background:var(--ink);color:#fff;border:1px solid var(--ink);white-space:nowrap}
+.btn.sec2{background:var(--card);color:var(--fg);border-color:var(--line)}
+.btn.txt{background:transparent;border-color:transparent;color:var(--accent);padding-inline:6px}
+.btn.del{background:var(--bad);border-color:var(--bad)}
+.btn.sm{padding:5px 10px;font-size:.78rem;border-radius:8px}
+.seg{display:inline-flex;background:var(--soft);border-radius:11px;padding:3px;gap:2px}
+.seg span{padding:6px 14px;border-radius:9px;font-size:.82rem;font-weight:500;color:var(--fg2)}
+.seg span.on{background:var(--card);color:var(--fg);font-weight:600;box-shadow:0 1px 2px rgb(14 21 18/.12)}
+.tabs{display:flex;gap:22px;border-bottom:1px solid var(--line)}
+.tabs span{padding:8px 0;font-size:.86rem;font-weight:500;color:var(--muted);display:inline-flex;gap:6px;align-items:center;margin-bottom:-1px}
+.tabs span.on{color:var(--fg);font-weight:600;border-bottom:2px solid var(--ink)}
+.tabs em{font-style:normal;font-size:.7rem;font-weight:600;background:var(--soft);border-radius:999px;padding:0 7px;color:var(--fg2)}
+.pill{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:2px 9px;font-size:.74rem;font-weight:600;background:var(--soft);color:var(--fg2)}
+.pill.ok{background:var(--accent-soft);color:var(--accent)}.pill.warn{background:var(--warn-soft);color:var(--warn)}.pill.bad{background:var(--bad-soft);color:var(--bad)}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.pill.nd::before{display:none}
+.inp{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--card);border-radius:10px;padding:7px 12px;font-size:.84rem;color:var(--muted);min-width:200px}
+.inp.sel{color:var(--fg);min-width:0;font-weight:500}
+
+/* ô số */
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.kpi .top{display:flex;align-items:center;justify-content:space-between;gap:6px;color:var(--muted)}
+.kpi label{font-size:.78rem;font-weight:500;color:var(--fg2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi strong{font-size:1.7rem;font-weight:700;letter-spacing:-.02em;line-height:1.2}
+.kpi strong small{font-size:.85rem;font-weight:600;margin-left:3px;color:var(--fg2)}
+.kpi .ft{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;margin-top:4px}
+.kpi .ft span.s{font-size:.72rem;color:var(--muted)}
+.kpi svg.sp{width:74px;height:26px;flex:none}
+#kpage .ft .s{display:none}
+.sp path{fill:none;stroke:var(--ink);stroke-width:1.800;stroke-linecap:round;stroke-linejoin:round}
+.kpi.is-warn{border-color:#ecd9a8;background:#fffcf3}.kpi.is-warn .sp path{stroke:var(--warn)}
+.kpi.is-bad{border-color:#efc4bc;background:#fff8f6}.kpi.is-bad .sp path{stroke:var(--bad)}
+
+/* việc cần xử lý */
+.todo{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:flex;gap:12px;align-items:flex-start;min-width:0}
+.todo .ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--bad-soft);color:var(--bad);flex:none}
+.todo.w .ic{background:var(--warn-soft);color:var(--warn)}
+.todo div{flex:1;min-width:0}
+.todo b{display:block;font-size:.9rem;line-height:1.35}
+.todo p{font-size:.78rem;color:var(--muted);margin:2px 0 10px}
+
+/* biểu đồ */
+.bars{display:flex;align-items:flex-end;gap:10px;height:170px;position:relative;margin-top:14px;border-bottom:1px solid var(--line)}
+.bars .th{position:absolute;left:0;right:0;border-top:1px dashed var(--grey);font-size:.68rem;color:var(--muted)}
+.bars .th span{position:absolute;right:0;top:-18px;background:var(--card);padding-left:6px}
+.bars div.c{flex:1;display:flex;align-items:flex-end;gap:3px;height:100%;position:relative}
+.bars u,.bars s{flex:1;border-radius:5px 5px 0 0;text-decoration:none}
+.bars u{background:var(--grey)}.bars s{background:var(--ink)}.bars .now s{background:var(--accent)}
+.axis{display:flex;gap:10px;font-size:.7rem;color:var(--muted);margin-top:6px}.axis span{flex:1;text-align:center}
+.lg{display:flex;flex-wrap:wrap;gap:16px;font-size:.76rem;color:var(--muted)}
+.lg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+
+/* bảng */
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:680px;font-size:.84rem}
+th{font-size:.72rem;font-weight:600;color:var(--muted);text-align:right;padding:8px 12px;white-space:nowrap;border-bottom:1px solid var(--line)}
+td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+th:first-child,td:first-child{text-align:left}
+tr.sel td{background:var(--accent-soft)}
+.who{display:flex;align-items:center;gap:10px}
+.av{width:30px;height:30px;border-radius:50%;background:var(--soft);color:var(--fg2);display:grid;place-items:center;font-size:.7rem;font-weight:700;flex:none}
+.who small{display:block;color:var(--muted);font-size:.74rem}
+.rate{display:inline-flex;align-items:center;gap:8px}
+.rate i{width:70px;height:6px;border-radius:999px;background:var(--soft);overflow:hidden;display:block}
+.rate i b{display:block;height:100%;background:var(--ink);border-radius:999px}
+.rate.bad i b{background:var(--bad)}.rate.bad span{color:var(--bad);font-weight:600}
+
+/* khung giữa màn, toast, rỗng */
+.stage{background:#dfe3e1;border-radius:var(--r);padding:26px;display:grid;place-items:center}
+.modal{background:var(--card);border-radius:18px;padding:22px;width:100%;max-width:460px;box-shadow:0 24px 60px -20px rgb(14 21 18/.35)}
+.modal h3{margin:0;font-size:1.05rem}.modal>p{color:var(--muted);font-size:.82rem;margin:2px 0 14px}
+.calc{border:1px solid var(--line);border-radius:12px;font-size:.84rem}
+.calc div{display:flex;justify-content:space-between;padding:9px 12px;border-top:1px solid var(--line)}
+.calc div:first-child{border-top:0}.calc div:last-child{background:var(--soft);font-weight:700;border-radius:0 0 12px 12px}
+.modal .act{display:flex;justify-content:space-between;gap:8px;margin-top:16px}
+.toast{display:inline-flex;align-items:center;gap:10px;background:var(--ink);color:#fff;border-radius:12px;padding:10px 14px;font-size:.84rem}
+.toast i{width:22px;height:22px;border-radius:50%;background:#2fbf85;display:grid;place-items:center;font-style:normal;font-size:.75rem;color:#06281c;font-weight:700}
+.toast u{color:#9fe3c4;text-decoration:none;font-weight:600;margin-left:8px}
+.banner{display:flex;align-items:center;gap:10px;background:var(--warn-soft);color:#6f4300;border-radius:12px;padding:10px 14px;font-size:.84rem;font-weight:500}
+.empty{text-align:center;padding:22px 10px;color:var(--muted);font-size:.84rem}
+.empty b{display:block;color:var(--fg);font-size:.95rem;margin-bottom:2px}
+.sk{display:flex;flex-direction:column;gap:8px}.sk i{display:block;height:12px;border-radius:6px;background:linear-gradient(90deg,var(--soft),#e7eae8,var(--soft))}
+.icons{display:flex;flex-wrap:wrap;gap:8px}
+.icons span{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:10px;padding:7px 11px;font-size:.8rem;background:var(--card)}
+
+/* trang mẫu */
+.page{background:var(--bg);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+.nav{display:flex;align-items:center;gap:22px;background:var(--card);border-bottom:1px solid var(--line);padding:10px 20px;font-size:.86rem;overflow-x:auto}
+.nav b.logo{display:inline-flex;align-items:center;gap:8px;font-size:.95rem;white-space:nowrap}
+.nav b.logo i{width:24px;height:24px;border-radius:7px;background:var(--accent);display:block}
+.nav span{color:var(--muted);font-weight:500;white-space:nowrap}.nav span.on{color:var(--fg);font-weight:600}
+.pbody{padding:20px;display:flex;flex-direction:column;gap:14px}
+.phead{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
+.phead h3{margin:0;font-size:1.3rem;font-weight:700}.phead h3 small{font-size:.84rem;font-weight:400;color:var(--muted);margin-left:8px}
+.split{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+.rules{columns:2;column-gap:40px;padding-left:1.200em;margin:0}.rules li{margin-bottom:6px;break-inside:avoid}
+@media (max-width:1000px){.g6{grid-template-columns:repeat(3,minmax(0,1fr))}.g4{grid-template-columns:repeat(2,minmax(0,1fr))}.g3,.split{grid-template-columns:minmax(0,1fr)}.rules{columns:1}}
+@media (max-width:620px){.g6,.g2{grid-template-columns:repeat(2,minmax(0,1fr))}.g2.one{grid-template-columns:minmax(0,1fr)}.pbody{padding:12px}}
+</style>
+<svg style="position:absolute;width:0;height:0" aria-hidden="true">
+<symbol id="i-cash" viewBox="0 0 24 24"><path d="M3.500 5h17C21.300 5 22 5.700 22 6.500v11c0 .8-.7 1.500-1.500 1.500h-17C2.700 19 2 18.300 2 17.500v-11C2 5.700 2.700 5 3.500 5ZM12 8.500a3.500 3.500 0 1 0 0 7 3.500 3.500 0 0 0 0-7Z"/></symbol>
+<symbol id="i-in" viewBox="0 0 24 24"><path d="M12 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm0 12c4.400 0 8 2.200 8 5v1.500c0 .8-.7 1.500-1.500 1.500h-13C4.700 22 4 21.300 4 20.500V19c0-2.800 3.600-5 8-5Z"/></symbol>
+<symbol id="i-ok" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20Zm4.700 7.300a1 1 0 0 0-1.400 0L11 13.600l-2.300-2.300a1 1 0 1 0-1.400 1.400l3 3a1 1 0 0 0 1.400 0l5-5a1 1 0 0 0 0-1.400Z"/></symbol>
+<symbol id="i-rate" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10h-9a1 1 0 0 1-1-1V2Zm2 0v8h8a8 8 0 0 0-8-8Z"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20ZM9.700 8.300a1 1 0 0 0-1.400 1.400l2.300 2.300-2.300 2.300a1 1 0 1 0 1.400 1.400l2.300-2.300 2.300 2.300a1 1 0 0 0 1.400-1.400L13.400 12l2.300-2.300a1 1 0 0 0-1.400-1.400L12 10.600 9.700 8.300Z"/></symbol>
+<symbol id="i-back" viewBox="0 0 24 24"><path d="M9.700 4.300a1 1 0 0 1 0 1.400L7.400 8H14a7 7 0 1 1 0 14H8a1 1 0 1 1 0-2h6a5 5 0 0 0 0-10H7.400l2.300 2.300a1 1 0 1 1-1.400 1.400l-4-4a1 1 0 0 1 0-1.400l4-4a1 1 0 0 1 1.400 0Z"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20Zm0 4a1 1 0 0 0-1 1v5c0 .3.100.5.300.7l3 3a1 1 0 0 0 1.400-1.400L13 11.600V7a1 1 0 0 0-1-1Z"/></symbol>
+<symbol id="i-warn" viewBox="0 0 24 24"><path d="M10.300 3.600c.8-1.300 2.600-1.300 3.400 0l8 13.400c.8 1.300-.2 3-1.700 3H4c-1.500 0-2.500-1.700-1.700-3l8-13.400ZM12 8a1 1 0 0 0-1 1v4a1 1 0 1 0 2 0V9a1 1 0 0 0-1-1Zm0 7.500a1.200 1.200 0 1 0 0 2.400 1.200 1.200 0 0 0 0-2.400Z"/></symbol>
+<symbol id="i-truck" viewBox="0 0 24 24"><path d="M3 5h10c.6 0 1 .4 1 1v2h3.200c.4 0 .8.200 1 .6l2.600 4.200c.1.200.2.400.2.600V16c0 .6-.4 1-1 1h-1.100a2.900 2.900 0 0 1-5.800 0h-2.200a2.900 2.900 0 0 1-5.800 0H3c-.6 0-1-.4-1-1V6c0-.6.4-1 1-1Zm11 5v3h4.600l-1.900-3H14Z"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><path d="M10.500 3a7.500 7.500 0 0 1 5.900 12.100l4.300 4.200a1 1 0 0 1-1.400 1.400l-4.200-4.300A7.500 7.500 0 1 1 10.500 3Zm0 2a5.500 5.500 0 1 0 0 11 5.500 5.500 0 0 0 0-11Z"/></symbol>
+</svg>
+
+<div class="wrap">
+<header><p class="tag">Bộ thiết kế chờ anh chốt · 27/11/2026 · nền sáng · màn máy tính · số ảo</p>
+<h1>Một bộ thiết kế dùng chung cho cả web</h1>
+<p class="muted" style="margin-top:6px;max-width:75ch">Lấy từ các mẫu anh đã dạy em. Chốt bộ này xong thì mọi trang chỉ ghép từ đúng các mảnh dưới đây, không trang nào vẽ riêng.</p></header>
+
+<section class="sec"><h2>1. Luật chung</h2><p>Sáu luật em rút ra từ các mẫu, áp cho mọi trang.</p>
+<div class="card"><ol class="rules">
+<li><b>Màu chỉ để phán quyết.</b> Bình thường là đen, trắng, xám. Xanh khi đạt, vàng khi sắp chạm mốc, đỏ khi vượt mốc.</li>
+<li><b>Việc cần xử lý lên trước biểu đồ.</b> Mỗi việc nói rõ chuyện gì, vì sao, và có một nút đi thẳng tới chỗ sửa.</li>
+<li><b>Một màu nhấn duy nhất:</b> xanh lá của công ty. Nút chính màu đen.</li>
+<li><b>Ô số một kiểu:</b> nhãn nhỏ, số to, nhãn tăng giảm, đường xu hướng. Ghi rõ số gì, phạm vi nào.</li>
+<li><b>Biểu đồ:</b> kỳ trước xám, kỳ này đen, cột đang chạy màu xanh.</li>
+<li><b>Bấm số nào cũng mở khung giữa màn</b> giải thích vì sao ra số đó, giữ nguyên bộ lọc.</li>
+</ol></div></section>
+
+<section class="sec"><h2>2. Màu và chữ</h2><p>Chỉ dùng đúng chín màu này. Một phông chữ, năm cỡ.</p>
+<div class="grid g2 one">
+<div class="card"><div class="grid g3" style="gap:12px">
+<div class="sw"><i style="background:#f4f5f4"></i><b>Nền trang</b><span>#f4f5f4</span></div>
+<div class="sw"><i style="background:#fff"></i><b>Thẻ</b><span>#ffffff, viền mảnh</span></div>
+<div class="sw"><i style="background:#0e1512"></i><b>Chữ, nút chính</b><span>#0e1512</span></div>
+<div class="sw"><i style="background:#17684b"></i><b>Màu nhấn, đạt</b><span>#17684b</span></div>
+<div class="sw"><i style="background:#a96600"></i><b>Sắp chạm mốc</b><span>#a96600</span></div>
+<div class="sw"><i style="background:#c8402d"></i><b>Vượt mốc, lỗi</b><span>#c8402d</span></div>
+<div class="sw"><i style="background:#e6f2ec"></i><b>Dòng đang chọn</b><span>xanh nhạt</span></div>
+<div class="sw"><i style="background:#cfd6d2"></i><b>Kỳ trước</b><span>xám</span></div>
+<div class="sw"><i style="background:#75807b"></i><b>Chữ phụ</b><span>#75807b</span></div>
+</div></div>
+<div class="card ty">
+<div><small>Tên trang · 21</small><span style="font-size:1.3rem;font-weight:700">Tổng quan Sale</span></div>
+<div><small>Số chính · 27</small><span style="font-size:1.7rem;font-weight:700;letter-spacing:-.02em">1.240</span></div>
+<div><small>Tên khối · 15</small><span style="font-size:.95rem;font-weight:700">Doanh thu Sale theo giờ</span></div>
+<div><small>Chữ thường · 14</small><span>Sale A01 chốt 31 đơn hôm nay</span></div>
+<div><small>Nhãn, ghi chú · 12</small><span class="muted" style="font-size:.78rem">Tất cả POS · hôm nay tới 15h</span></div>
+</div></div></section>
+
+<section class="sec"><h2>3. Nút, bộ chọn, nhãn</h2><p>Nút POS và chọn kỳ là hàng nút bấm thẳng, nền nhạt, mục đang chọn nổi trắng.</p>
+<div class="grid g2 one">
+<div class="card"><div class="cap">Nút</div><div class="rowx"><span class="btn">Nút chính</span><span class="btn sec2">Nút phụ</span><span class="btn txt">Chỉ chữ</span><span class="btn del">Xoá</span><span class="btn sm">Nhỏ</span></div>
+<div class="cap" style="margin-top:18px">Chọn POS, chọn kỳ</div><div class="rowx"><span class="seg"><span class="on">Tất cả</span><span>POS A</span><span>POS B</span><span>POS C</span></span><span class="seg"><span class="on">Hôm nay</span><span>7 ngày</span><span>Tháng này</span></span></div>
+<div class="cap" style="margin-top:18px">Ô tìm, ô chọn</div><div class="rowx"><span class="inp"><svg class="i"><use href="#i-search"/></svg>Tìm nhân viên</span><span class="inp sel">Team A ▾</span></div></div>
+<div class="card"><div class="cap">Nhãn trạng thái</div><div class="rowx"><span class="pill ok">Đạt</span><span class="pill warn">Sắp chạm mốc</span><span class="pill bad">Vượt mốc</span><span class="pill">Xong</span><span class="pill ok nd">▲ 12%</span><span class="pill bad nd">▼ 4%</span></div>
+<div class="cap" style="margin-top:18px">Tab trong trang</div><div class="tabs"><span class="on">Tổng quan</span><span>Theo team <em>5</em></span><span>Nhân viên <em>24</em></span><span>Phân tích</span></div>
+<div class="cap" style="margin-top:18px">Icon: một kiểu đặc, một màu</div><div class="icons"><span><svg class="i"><use href="#i-cash"/></svg>Tiền</span><span><svg class="i"><use href="#i-in"/></svg>Khách</span><span><svg class="i"><use href="#i-ok"/></svg>Chốt</span><span><svg class="i"><use href="#i-rate"/></svg>Tỷ lệ</span><span><svg class="i"><use href="#i-x"/></svg>Hủy</span><span><svg class="i"><use href="#i-back"/></svg>Hoàn</span><span><svg class="i"><use href="#i-truck"/></svg>Chuyển đi</span><span><svg class="i"><use href="#i-clock"/></svg>Quá hạn</span></div></div>
+</div></section>
+
+<section class="sec"><h2>4. Ô số và việc cần xử lý</h2><p>Ô số chỉ đổi màu khi có chuyện. Việc cần xử lý luôn có nút.</p>
+<div class="grid g4" id="kdemo"></div>
+<div class="grid g3" style="margin-top:14px">
+<div class="todo"><span class="ic"><svg class="i"><use href="#i-rate"/></svg></span><div><b>Team B chốt 36%, dưới mốc 40%</b><p>4 người dưới mốc, kéo cả Sale xuống 1,2 điểm</p><span class="btn sm">Xem team B</span></div><span class="pill bad">Vượt mốc</span></div>
+<div class="todo w"><span class="ic"><svg class="i"><use href="#i-clock"/></svg></span><div><b>38 số quá 2 giờ chưa gọi</b><p>Nhiều nhất ở POS A, ca chiều</p><span class="btn sm">Mở danh sách</span></div><span class="pill warn">Cần xem</span></div>
+<div class="todo w"><span class="ic"><svg class="i"><use href="#i-back"/></svg></span><div><b>Tỷ lệ hoàn 6,2%, sắp chạm mốc 7%</b><p>Tăng 0,9 điểm so với hôm qua cùng giờ</p><span class="btn sm">Xem đơn hoàn</span></div><span class="pill warn">Sắp chạm</span></div>
+</div></section>
+
+<section class="sec"><h2>5. Khung giữa màn, thông báo, lúc trống</h2><p>Bấm một con số là mở khung này. Thao tác xong có thông báo ngắn. Dữ liệu trễ thì báo rõ, không hiện số cũ như thật.</p>
+<div class="grid g2 one">
+<div class="stage"><div class="modal"><h3>Vì sao tỷ lệ chốt là 41,3%</h3><p>Sale · Tất cả POS · hôm nay tới 15h</p>
+<div class="calc"><div><span>Đơn chốt</span><b>512</b></div><div><span>Số được chia cho Sale</span><b>1.240</b></div><div><span>512 ÷ 1.240</span><span>41,3%</span></div></div>
+<div class="act"><span class="btn sec2">Đóng</span><span class="btn">Mở danh sách 512 đơn</span></div></div></div>
+<div class="card" style="display:flex;flex-direction:column;gap:16px">
+<div><div class="cap">Thông báo sau thao tác</div><span class="toast"><i>✓</i>Đã lưu KPI tháng 11 <u>Hoàn tác</u></span></div>
+<div><div class="cap">Dữ liệu trễ</div><div class="banner"><svg class="i"><use href="#i-warn"/></svg>Pancake trễ 12 phút. Số trên trang tính tới 14h48.</div></div>
+<div class="grid g2"><div><div class="cap">Lúc trống</div><div class="card empty"><b>Không có việc cần xử lý</b>Mọi tỷ lệ đang trong mốc.</div></div>
+<div><div class="cap">Lúc đang tải</div><div class="card sk"><i style="width:40%"></i><i style="width:70%;height:22px"></i><i></i><i style="width:85%"></i></div></div></div>
+</div></div></section>
+
+<section class="sec"><h2>6. Ghép lại: trang Tổng quan Sale</h2><p>Mọi trang khác theo đúng thứ tự này: đầu trang, việc cần xử lý, hàng ô số, biểu đồ, bảng.</p>
+<div class="page">
+ <div class="nav"><b class="logo"><i></i>Web tổng</b><span>Điều hành</span><span class="on">Sale</span><span>CSKH</span><span>Marketing</span><span>Vận đơn</span><span>Sản phẩm</span><span>Khách hàng</span><span>Báo cáo</span><span>Giao việc</span><span>Cài đặt</span></div>
+ <div class="pbody">
+  <div class="phead"><h3>Tổng quan Sale<small>Tất cả POS · hôm nay tới 15h</small></h3><div class="rowx"><span class="seg"><span class="on">Tất cả</span><span>POS A</span><span>POS B</span><span>POS C</span></span><span class="seg"><span class="on">Hôm nay</span><span>7 ngày</span><span>Tháng này</span></span></div></div>
+  <div class="tabs"><span class="on">Tổng quan</span><span>Theo team <em>5</em></span><span>Nhân viên <em>24</em></span><span>Phân tích</span><span>Trong ngày</span></div>
+  <div class="grid g3">
+   <div class="todo"><span class="ic"><svg class="i"><use href="#i-rate"/></svg></span><div><b>Team B chốt 36%, dưới mốc 40%</b><p>4 người dưới mốc</p><span class="btn sm">Xem team B</span></div></div>
+   <div class="todo w"><span class="ic"><svg class="i"><use href="#i-clock"/></svg></span><div><b>38 số quá 2 giờ chưa gọi</b><p>Nhiều nhất ở POS A</p><span class="btn sm">Mở danh sách</span></div></div>
+   <div class="todo w"><span class="ic"><svg class="i"><use href="#i-back"/></svg></span><div><b>Tỷ lệ hoàn 6,2%, sắp chạm 7%</b><p>Tăng 0,9 điểm so với hôm qua</p><span class="btn sm">Xem đơn hoàn</span></div></div>
+  </div>
+  <div class="grid g6" id="kpage"></div>
+  <div class="split">
+   <div class="card"><div class="phead"><div><h2>Doanh thu Sale theo giờ</h2><p class="muted" style="font-size:.78rem">Theo ngày tạo đơn, so với hôm qua cùng mốc giờ</p></div><div class="lg"><span><i style="background:var(--ink)"></i>Hôm nay</span><span><i style="background:var(--grey)"></i>Hôm qua</span><span><i style="background:var(--accent)"></i>Giờ đang chạy</span><span>- - Mức cần mỗi giờ để đạt mục tiêu ngày</span></div></div>
+    <div class="bars"><div class="th" style="bottom:62%"></div>
+     <div class="c"><u style="height:22%"></u><s style="height:28%"></s></div><div class="c"><u style="height:48%"></u><s style="height:55%"></s></div><div class="c"><u style="height:70%"></u><s style="height:84%"></s></div><div class="c"><u style="height:62%"></u><s style="height:76%"></s></div><div class="c"><u style="height:30%"></u><s style="height:26%"></s></div><div class="c"><u style="height:58%"></u><s style="height:68%"></s></div><div class="c"><u style="height:64%"></u><s style="height:72%"></s></div><div class="c now"><u style="height:66%"></u><s style="height:34%"></s></div></div>
+    <div class="axis"><span>8h</span><span>9h</span><span>10h</span><span>11h</span><span>12h</span><span>13h</span><span>14h</span><span>15h</span></div></div>
+   <div class="card"><h2>Tỷ lệ chốt theo team</h2><p class="muted" style="font-size:.78rem;margin-bottom:8px">Mốc 40%, hôm nay</p>
+    <table style="min-width:0"><tr><th>Team</th><th>Đơn chốt</th><th>Tỷ lệ chốt</th></tr>
+    <tr><td>Team A</td><td>142</td><td><span class="rate"><i><b style="width:92%"></b></i><span>46,1%</span></span></td></tr>
+    <tr><td>Team C</td><td>118</td><td><span class="rate"><i><b style="width:86%"></b></i><span>43,0%</span></span></td></tr>
+    <tr><td>Team D</td><td>101</td><td><span class="rate"><i><b style="width:82%"></b></i><span>41,2%</span></span></td></tr>
+    <tr><td>Team E</td><td>79</td><td><span class="rate"><i><b style="width:80%"></b></i><span>40,1%</span></span></td></tr>
+    <tr><td>Team B</td><td>72</td><td><span class="rate bad"><i><b style="width:72%"></b></i><span>36,0%</span></span></td></tr></table></div>
+  </div>
+  <div class="card"><div class="phead" style="margin-bottom:6px"><h2>Nhân viên Sale <span class="muted" style="font-weight:400">· 24 người, xếp theo doanh thu</span></h2><div class="rowx"><span class="inp"><svg class="i"><use href="#i-search"/></svg>Tìm nhân viên</span><span class="btn sec2">Xem tất cả</span></div></div>
+   <div class="tbl"><table>
+   <tr><th>Nhân viên</th><th>Được chia</th><th>Đơn chốt</th><th>Tỷ lệ chốt</th><th>Doanh thu</th><th>Hủy</th><th>Hoàn</th></tr>
+   <tr><td><div class="who"><span class="av">A1</span><div>Sale A01<small>Team A · POS A</small></div></div></td><td>62</td><td>31</td><td><span class="rate"><i><b style="width:100%"></b></i><span>50,0%</span></span></td><td><b>82,4 tr</b></td><td><span class="pill ok nd">3,1%</span></td><td><span class="pill ok nd">4,0%</span></td></tr>
+   <tr class="sel"><td><div class="who"><span class="av">A7</span><div>Sale A07<small>Team A · POS B</small></div></div></td><td>58</td><td>26</td><td><span class="rate"><i><b style="width:90%"></b></i><span>44,8%</span></span></td><td><b>71,0 tr</b></td><td><span class="pill ok nd">4,2%</span></td><td><span class="pill warn nd">5,6%</span></td></tr>
+   <tr><td><div class="who"><span class="av">C3</span><div>Sale C03<small>Team C · POS A</small></div></div></td><td>55</td><td>23</td><td><span class="rate"><i><b style="width:84%"></b></i><span>41,8%</span></span></td><td><b>60,2 tr</b></td><td><span class="pill warn nd">5,3%</span></td><td><span class="pill ok nd">3,8%</span></td></tr>
+   <tr><td><div class="who"><span class="av">B4</span><div>Sale B04<small>Team B · POS C</small></div></div></td><td>60</td><td>21</td><td><span class="rate bad"><i><b style="width:70%"></b></i><span>35,0%</span></span></td><td><b>49,7 tr</b></td><td><span class="pill ok nd">4,8%</span></td><td><span class="pill bad nd">7,9%</span></td></tr>
+   </table></div></div>
+ </div>
+</div></section>
+</div>
+
+<script>
+const K=[
+ ['i-cash','Doanh thu Sale','1,28','tỷ','▲ 12%','ok','so với hôm qua cùng giờ','',[3,5,9,8,4,7,8,10]],
+ ['i-in','Số được chia cho Sale','1.240','','▲ 6%','ok','so với hôm qua','',[6,7,6,8,7,8,9,9]],
+ ['i-ok','Đơn chốt','512','','▲ 9%','ok','so với hôm qua','',[4,5,6,6,5,7,8,9]],
+ ['i-rate','Tỷ lệ chốt','41,3','%','Đạt','ok','mốc 40%','',[38,39,40,39,41,40,41,41.300]],
+ ['i-x','Tỷ lệ hủy','4,1','%','Đạt','ok','mốc 5%','',[5,4.800,4.600,4.700,4.300,4.200,4.200,4.100]],
+ ['i-back','Tỷ lệ hoàn','6,2','%','Sắp chạm','warn','mốc 7%','is-warn',[5,5.200,5.300,5.600,5.800,5.900,6.100,6.200]]];
+function sp(v){const w=74,h=26,p=3,mn=Math.min(...v),mx=Math.max(...v),s=(w-2*p)/(v.length-1);return 'M'+v.map((y,i)=>(p+i*s).toFixed(1)+','+(h-p-(y-mn)/((mx-mn)||1)*(h-2*p)).toFixed(1)).join(' L')}
+function tile(x){return '<div class="kpi '+x[7]+'"><div class="top"><label>'+x[1]+'</label><svg class="i"><use href="#'+x[0]+'"/></svg></div><strong>'+x[2]+'<small>'+x[3]+'</small></strong><div class="ft"><div><span class="pill nd '+x[5]+'">'+x[4]+'</span> <span class="s">'+x[6]+'</span></div><svg class="sp" viewBox="0 0 74 26"><path d="'+sp(x[8])+'"/></svg></div></div>'}
+document.getElementById('kpage').innerHTML=K.map(tile).join('');
+const bad=['i-rate','Tỷ lệ chốt · Team B','36,0','%','Vượt mốc','bad','mốc 40%','is-bad',[41,40,39,38,38,37,36.500,36]];
+document.getElementById('kdemo').innerHTML=[K[0],K[3],K[5],bad].map(tile).join('');
+</script>
