@@ -338,7 +338,8 @@ export function CareView() {
   );
 }
 
-type LadderRes = { data: number; noDelivered: number; other: number; approx: number; steps: number; groups: (LadderLine & { label: string })[]; total: LadderLine; definitions: Record<string, string> };
+type LadderRes = { data: number; noDelivered: number; other: number; approx: number; steps: number; groups: (LadderLine & { label: string })[]; total: LadderLine; definitions: Record<string, string>;
+  /** Khách bắt nguồn POS khác (đơn đã nhận đầu tiên ở POS không chọn): không tính, chỉ ghi chú (27/11/2026). */ fromOther?: { posId: string; name: string; customers: number }[] };
 
 /** Data đang cầm của một nhân viên: khách mua lần đầu (đã nhận) nhóm gì, bao nhiêu khách mua tiếp lần 2, 3… (yêu cầu 29/09/2026). */
 function CareLadderBlock({ assigned, name, posIds }: { assigned: string; name: string; posIds: string[] }) {
@@ -348,13 +349,18 @@ function CareLadderBlock({ assigned, name, posIds }: { assigned: string; name: s
   const [pick, setPick] = useState<LadderPick | null>(null);
   return (
     <ChartCard icon={Sprout} title={`Data của ${name}: mua lần đầu gì, mua tiếp mấy lần`} loading={api.loading && !r} info={r ? Object.values(r.definitions).join(' ') : undefined}
-      subtitle="T0 = đơn đầu tiên khách đã nhận hàng, xếp theo Kháng sinh / Combo · T1 = lần mua thứ 2, T2 = lần thứ 3… (mọi đơn đã nhận, ai bán cũng tính) · mỗi ô: số khách, % so với T0, % so với bậc trước, sau bao lâu (trung vị) · bấm số để xem danh sách khách chưa mua / đã mua và xuất Excel">
+      subtitle="T0 = đơn đầu tiên khách đã nhận hàng ở POS đang chọn, xếp theo thẻ sản phẩm của POS · T1 = lần mua thứ 2, T2 = lần thứ 3… (đơn đã nhận ở POS đang chọn, ai bán cũng tính) · mỗi ô: số khách, % so với T0, % so với bậc trước, sau bao lâu (trung vị) · bấm số để xem danh sách khách chưa mua / đã mua và xuất Excel">
       {api.error && !r ? <ErrorBox error={api.error} onRetry={api.reload} /> : !r ? <SkeletonTable rows={3} cols={8} /> : (
         <>
           <LadderTable first="Đơn đầu (T0)" steps={r.steps} rows={r.groups.map((g) => ({ key: g.label, label: g.label, line: g }))}
-            extra={[ladderExtras.cross, ladderExtras.own, ladderExtras.later]} total={{ label: 'Tổng 2 nhóm', line: r.total }} onPick={setPick} picked={pick} />
+            extra={[{ ...ladderExtras.cross, head: 'Up sang thẻ khác' }, ladderExtras.own, ladderExtras.later]} total={{ label: `Tổng ${r.groups.length} thẻ`, line: r.total }} onPick={setPick} picked={pick} />
           {pick && <LadderMembers key={`${assigned}|${pick.row}|${pick.step}`} baseUrl={base} pick={pick} onClose={() => setPick(null)} title={`khach-${name}`} />}
-          <p className="m-0 mt-2 text-[12px] text-ink-3">Data đang cầm {vi.format(r.data)} khách · {vi.format(r.data - r.noDelivered)} khách đã từng nhận hàng · {vi.format(r.total.t0)} khách có đơn đầu là Kháng sinh hoặc Combo{r.other ? ` · ${vi.format(r.other)} khách đơn đầu là sản phẩm khác (không tính)` : ''}{r.noDelivered ? ` · ${vi.format(r.noDelivered)} khách chưa có đơn đã nhận` : ''}.{r.approx ? ` Data lớn: ${vi.format(r.approx)} đơn chưa gắn thẻ nên chưa xét tên sản phẩm (đang tính vào "sản phẩm khác") — gắn thẻ đơn đầy đủ để số chính xác hơn.` : ''}</p>
+          <p className="m-0 mt-2 text-[12px] text-ink-3">Data đang cầm {vi.format(r.data)} khách · {vi.format(r.data - r.noDelivered)} khách đã từng nhận hàng · {vi.format(r.total.t0)} khách có đơn đầu ở POS đang chọn{r.other ? ` · ${vi.format(r.other)} khách đơn đầu là sản phẩm khác (không tính)` : ''}{r.noDelivered ? ` · ${vi.format(r.noDelivered)} khách chưa có đơn đã nhận` : ''}.{r.approx ? ` Data lớn: ${vi.format(r.approx)} đơn chưa gắn thẻ nên chưa xét tên sản phẩm (đang tính vào "sản phẩm khác") — gắn thẻ đơn đầy đủ để số chính xác hơn.` : ''}</p>
+          {!!r.fromOther?.length && (
+            <p className="m-0 mt-1 text-[12px] text-ink-3">
+              Không tính {vi.format(r.fromOther.reduce((a, x) => a + x.customers, 0))} khách bắt nguồn POS khác (đơn đã nhận đầu tiên ở POS không chọn): {r.fromOther.map((x) => `${x.name} ${vi.format(x.customers)}`).join(' · ')}.
+            </p>
+          )}
         </>
       )}
     </ChartCard>
