@@ -14,6 +14,8 @@ import type { OverviewReport } from './overview-view';
 import { useMetricSettings } from './metric-settings';
 import { ChartCard, DeltaPill, EmptyState, SkeletonTable, SortTh, TableWrap, delta, pct, shortMoney, useSort, vi } from './ui-kit';
 import { useApi } from './use-api';
+import { useState } from 'react';
+import { SegmentDetail } from './segment-detail';
 
 type Seg = typeof SEGMENT_KEYS[number];
 // Bộ thẻ mới 27/11/2026 (lib/pancake/order-segments.ts): thẻ theo thuốc chính từng POS, bỏ SK GK.
@@ -43,6 +45,9 @@ export function SaleSegmentBlock({ q, periodLabel }: { q: string; periodLabel: s
     khac: useApi<OverviewReport>(url(q, 'khac', segs)).data,
   };
   const sort = useSort<SortKey>('total');
+  // Bấm một thẻ: mở khung chi tiết thẻ đó (27/11/2026).
+  const [open, setOpen] = useState<Seg | null>(null);
+  const allNet = segs.reduce((n, k) => n + (reports[k]?.current.total.closedNet ?? 0), 0);
   const people = new Map<string, { id: string; name: string } & Record<Seg | `${Seg}N`, number>>();
   for (const seg of segs) for (const r of reports[seg]?.current.byEmployee ?? []) {
     if (!r.sellerId) continue;
@@ -62,7 +67,7 @@ export function SaleSegmentBlock({ q, periodLabel }: { q: string; periodLabel: s
           const r = reports[seg], cur = r?.current.total, prev = r?.compare?.total;
           return (
             <div key={seg} className="rounded-xl border border-line p-4" style={{ borderTop: `3px solid ${COLOR[seg]}` }}>
-              <div className="flex items-baseline justify-between gap-2"><strong className="text-ink">{LABEL[seg]}</strong>
+              <div className="flex items-baseline justify-between gap-2"><button type="button" onClick={() => setOpen(seg)} className="text-left font-bold text-ink hover:underline">{LABEL[seg]}</button>
                 {cur && prev && <DeltaPill value={delta(cur.closedNet, prev.closedNet)} label="so kỳ trước" />}</div>
               {!cur ? <div className="mt-3 h-14 animate-pulse rounded-lg bg-surface-2" /> : (
                 <>
@@ -73,6 +78,7 @@ export function SaleSegmentBlock({ q, periodLabel }: { q: string; periodLabel: s
                   {prev && <p className="m-0 mt-0.5 text-[12px] text-ink-3">Kỳ trước {shortMoney(prev.closedNet)} · {vi.format(prev.closedOrders)} đơn</p>}
                 </>
               )}
+              <button type="button" onClick={() => setOpen(seg)} className="mt-2 text-[12px] font-semibold text-primary hover:underline" aria-label={`Xem chi tiết thẻ ${LABEL[seg]}`}>Xem chi tiết →</button>
             </div>
           );
         })}
@@ -113,6 +119,7 @@ export function SaleSegmentBlock({ q, periodLabel }: { q: string; periodLabel: s
           </TableWrap>
         )}
       </div>
+      <SegmentDetail seg={open} label={open ? LABEL[open] : ''} color={open ? COLOR[open] : 'var(--primary)'} report={open ? reports[open] : null} allNet={allNet} q={q} onClose={() => setOpen(null)} />
     </ChartCard>
   );
 }
