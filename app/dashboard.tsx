@@ -1750,7 +1750,7 @@ export default function Dashboard({ user, initialView, demo = false, uiMoi = fal
           {!gated && uiMoi && view === 'overview-moi' && <OverviewMoiView onNavigate={(v) => goTo(v as View)} userName={user.displayName} />}
           {!gated && view === 'shift' && <ShiftView />}
           {!gated && view === 'custom' && <CustomReportView />}
-          {!gated && view === 'compare' && <CompareView />}
+          {!gated && view === 'compare' && <CompareView uiMoi={uiMoi} />}
           {!gated && canView(user, view) && view === 'growth' && <GrowthView key={activeDept} navDept={activeDept} />}
           {!gated && canView(user, view) && view === 'ho-so' && <StaffProfilePage onBack={profileBack ? () => { setView(profileBack); setProfileBack(null); } : undefined} />}
           {!gated && view === 'batches' && <BatchesView />}

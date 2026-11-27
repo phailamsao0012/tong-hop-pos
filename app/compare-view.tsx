@@ -6,7 +6,9 @@ import { StaffName } from './staff-name';
 import { usePosIds } from './pos-store';
 import { compareText } from '@/lib/shared/periods';
 import { usePeriod } from './period-store';
-import { RATE_THRESHOLDS, cancelRateOf, closeRateBase, closeRateOf, closeRateTop, rateTextClass, returnRateOf } from '@/lib/reports/metrics';
+import { RATE_THRESHOLDS, cancelRateOf, closeRateBase, closeRateOf, closeRateTop, rateTextClass, returnRateOf, METRIC_DEFS, RATE_BASES } from '@/lib/reports/metrics';
+import { BOSS_CANCEL_RED, BOSS_CLOSE_RED, BOSS_RETURN_RED, COACH_MIN_BASE } from '@/lib/zalo/boss-report';
+import { CanXemStrip, DuoSpark, KPI_RED, KPI_TIGHT, PageHeadMoi, WhySheet, overCancel, overClose, overRet, tileGrid, type CanXemItem, type WhySpec } from './trang-moi';
 import { useMetricSettings } from './metric-settings';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { PosBadge } from './pos-badge';
@@ -19,7 +21,7 @@ import { POS } from '@/lib/shared/report-model';
 import { todayVn } from '@/lib/shared/report-time';
 import { PeriodToolbar, PosChips, type OverviewReport } from './overview-view';
 import { posName } from './ui-kit-pos';
-import { Th, Avatar, ChartCard, ContextLine, Definitions, DeltaPill, ErrorBox, EmptyState, HoverReveal, KpiCard, PageHeader, ProgressBar, SkeletonKpis, SortTh, Sparkline, StatusChip, TableWrap, Toolbar, Tooltip, delta, dmy, money, pct, posVar, short, toast, useMotionOK, useSort, vi, barRadius } from './ui-kit';
+import { Th, Avatar, ChartCard, ContextLine, Definitions, DeltaPill, ErrorBox, EmptyState, FoldBlock, HoverReveal, KpiCard, PageHeader, ProgressBar, SkeletonKpis, SortTh, Sparkline, StatusChip, TableWrap, Toolbar, Tooltip, delta, dmy, money, pct, posVar, short, toast, useMotionOK, useSort, vi, barRadius } from './ui-kit';
 import { daysInMonth, fetchTargets, type TargetItem } from './targets-panel';
 import { OrderOriginFilter, useOrderOrigin } from './order-origin-filter';
 import { useTeam } from './team-store';
@@ -57,7 +59,7 @@ function TipBox({ title, children }: { title: string; children: ReactNode }) {
 }
 const TipRow = ({ label, value }: { label: string; value: ReactNode }) => <div className="flex items-center justify-between gap-3"><span className="text-ink-3">{label}</span><span className="num text-[12.5px]">{value}</span></div>;
 
-export function CompareView() {
+export function CompareView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới, tắt thì y như cũ. */ uiMoi?: boolean } = {}) {
   const ms = useMetricSettings();
   const today = todayVn();
   const team = useTeam();
@@ -68,6 +70,8 @@ export function CompareView() {
   const [department, setDepartment] = useState('all');
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
+  // Giao diện mới: khung "Vì sao ra số này" đang mở (null = đóng).
+  const [why, setWhy] = useState<WhySpec | null>(null);
   const sort = useSort<SortKey>('rate');
   const { setKey: setSortKey, setDesc: setSortDesc } = sort;
   const [targets, setTargets] = useState<Record<string, TargetItem>>({});
@@ -263,7 +267,7 @@ export function CompareView() {
           {selected.length > 0 && <Button size="sm" variant="ghost" onClick={() => setSelected([])}>Bỏ chọn</Button>}
         </Toolbar>
   );
-  const perfCard = () => (
+  const perfCard = (moi?: boolean) => (
             <ChartCard icon={BarChart3} title="Hiệu suất đội ngũ" subtitle={`Tỷ lệ chốt (%) của ${chartRows.length} nhân viên cao nhất · vạch xám: trung vị ${pct(totals.median)} · vạch xanh: mục tiêu ${TARGET}%`}>
               {chartRows.length ? (
                 <ChartContainer className="w-full aspect-auto" style={{ height: Math.max(220, chartRows.length * 30) }} config={{ rate: { label: 'Tỷ lệ chốt %', color: 'var(--primary)' } }}>
@@ -277,7 +281,7 @@ export function CompareView() {
                     {totals.median !== null && <ReferenceLine x={Number(totals.median.toFixed(1))} stroke="var(--ink-4)" strokeDasharray="4 4" />}
                     <ReferenceLine x={TARGET} stroke="var(--good)" strokeDasharray="4 4" />
                     <Bar dataKey="rate" radius={barRadius([0, 4, 4, 0])} barSize={16} isAnimationActive={motionOn}>
-                      {chartRows.map((r) => <Cell key={r.key} fill={r.rate >= TARGET ? 'var(--primary)' : r.rate >= (totals.median ?? 0) ? 'var(--ring)' : 'var(--t-orange)'} />)}
+                      {chartRows.map((r) => <Cell key={r.key} fill={moi && overClose(r.rate) ? 'var(--bad)' : r.rate >= TARGET ? 'var(--primary)' : r.rate >= (totals.median ?? 0) ? 'var(--ring)' : 'var(--t-orange)'} />)}
                       <LabelList dataKey="rate" position="right" formatter={(v) => pct(Number(v))} fontSize={11} fill="var(--ink-2)" className="num" />
                     </Bar>
                   </BarChart>
@@ -457,6 +461,93 @@ export function CompareView() {
           ]} />
   );
   // [hết khối chung]
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trên xuống: đầu trang (PageHeadMoi) → lọc nguồn đơn, bộ phận, tìm tên → "Cần xem" (người chốt dưới 40%, hủy từ 5%, hoàn từ 7%)
+  // → một hàng 5 ô số (bấm mở "Vì sao ra số này") → Hiệu suất đội ngũ (cột đỏ dưới 40%) → bảng chính So sánh chi tiết
+  // → khối phụ thu gọn: Đơn chia vs. tỷ lệ chốt, Góc nhìn nhanh, Cách tính.
+  if (uiMoi && !report) return (
+    <div className="min-w-0 space-y-4">
+      <PageHeadMoi title="So sánh nhân viên" scope={`${dmy(start)} – ${dmy(end)} · ${vi.format(posIds.length)} POS`}
+        tools={<PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset} onStart={setStart} onEnd={setEnd} loading={loading} onReload={update} />}
+        pos={<PosChips posIds={posIds} onChange={setPosIds} />} />
+      {error ? <ErrorBox error={error} onRetry={reload} /> : <SkeletonKpis count={5} className="lg:grid-cols-5" />}
+    </div>
+  );
+  if (uiMoi && report) {
+    const scope = [`${dmy(start)} – ${dmy(end)}`, splitPos ? `${vi.format(posIds.length)} POS, tách dòng theo POS` : posName(posIds[0] ?? ''), `tỷ lệ chốt = ${RATE_BASES[ms.rateBase].short}`, cmpLabel, ...(selected.length ? [`đang so sánh ${selected.length} người`] : [])].join(' · ');
+    const who = (r: Emp) => splitPos ? `${r.name} · ${posName(r.posId)}` : r.name;
+    const whyEmp = (r: Emp, kind: 'close' | 'cancel' | 'ret'): WhySpec => {
+      const v = kind === 'close' ? closeRateOf(r, ms.rateBase) : kind === 'cancel' ? cancelRateOf(r) : returnRateOf(r, ms.returnBase);
+      const over = kind === 'close' ? overClose(v) : kind === 'cancel' ? overCancel(v) : overRet(v);
+      return {
+        title: `${kind === 'close' ? 'Tỷ lệ chốt' : kind === 'cancel' ? 'Hủy' : 'Hoàn'} · ${who(r)}`, value: pct(v), tone: over ? 'bad' : undefined, scope,
+        previous: kind === 'close' && r.prevRate !== null ? pct(r.prevRate) : undefined,
+        mark: kind === 'close' ? `Đỏ khi dưới ${BOSS_CLOSE_RED}%` : kind === 'cancel' ? `Đỏ từ ${BOSS_CANCEL_RED}%` : `Đỏ từ ${BOSS_RETURN_RED}%`,
+        rows: kind === 'close' ? [
+          { label: 'Đã chốt (tử số)', value: vi.format(closeRateTop(r, ms.rateBase)) },
+          { label: `${ms.rateBase === 'assigned' ? 'Đơn được chia' : 'Đơn lên'} (mẫu số)`, value: vi.format(closeRateBase(r, ms.rateBase)) },
+          { label: '= Tỷ lệ chốt', value: pct(v), strong: true, tone: over ? 'bad' : undefined },
+          { label: 'Doanh thu đơn chốt', value: money(r.closedNet) },
+        ] : [
+          { label: kind === 'cancel' ? 'Đơn hủy' : 'Đơn hoàn', value: vi.format(kind === 'cancel' ? r.groups.cancelled.orders : r.groups.returned.orders) },
+          ...(kind === 'cancel' ? [{ label: 'Trong đó đã xóa (không tính)', value: vi.format(r.deletedOrders ?? 0) }] : [{ label: 'Giao thành công', value: vi.format(r.groups.delivered.orders) }, { label: 'Đơn chốt', value: vi.format(r.closedOrders) }]),
+          { label: 'Đơn lên', value: vi.format(r.orders) },
+          { label: kind === 'cancel' ? '= Tỷ lệ hủy' : '= Tỷ lệ hoàn', value: pct(v), strong: true, tone: over ? 'bad' : undefined },
+        ],
+        definition: kind === 'close' ? METRIC_DEFS.rate(ms.rateBase).def : kind === 'cancel' ? METRIC_DEFS.cancelled.def : METRIC_DEFS.returned(ms.returnBase).def,
+        more: <button type="button" className="btn sm self-start" onClick={() => { setWhy(null); if (!selected.includes(r.sellerId)) toggle(r.sellerId); }}>{selected.includes(r.sellerId) ? 'Đang trong so sánh' : 'Thêm vào so sánh'}</button>,
+      };
+    };
+    // Cần xem: cả nhóm trước, rồi từng người (Sale / CSKH tuyến đầu, từ COACH_MIN_BASE đơn ở mẫu số). CSKH không xem tỷ lệ chốt.
+    const need: CanXemItem[] = [];
+    if (team !== 'cskh' && overClose(totals.rate)) need.push({ key: 'all-close', team: true, text: `Cả nhóm: chốt ${pct(totals.rate)}`, gap: BOSS_CLOSE_RED - (totals.rate ?? 0),
+      onClick: () => setWhy({ title: 'Tỷ lệ chốt chung', value: pct(totals.rate), tone: 'bad', scope, mark: `Đỏ khi dưới ${BOSS_CLOSE_RED}%`, rows: [{ label: 'Tổng đơn chia', value: vi.format(totals.assigned) }, { label: 'Tổng đơn chốt', value: vi.format(totals.closed) }], definition: 'Tỷ lệ chốt chung = cộng số chia đã chốt ÷ cộng số chia của những người đang xem (không vượt 100%).' }) });
+    for (const r of active.filter((x) => frontline(x.department))) {
+      const c = closeRateOf(r, ms.rateBase), x = cancelRateOf(r), h = returnRateOf(r, ms.returnBase);
+      if (team !== 'cskh' && overClose(c) && closeRateBase(r, ms.rateBase) >= COACH_MIN_BASE) need.push({ key: `c-${r.posId}-${r.sellerId}`, text: `${who(r)}: chốt ${pct(c)}`, gap: BOSS_CLOSE_RED - (c ?? 0), onClick: () => setWhy(whyEmp(r, 'close')) });
+      if (overCancel(x) && r.orders >= COACH_MIN_BASE) need.push({ key: `x-${r.posId}-${r.sellerId}`, text: `${who(r)}: hủy ${pct(x)}`, gap: (x ?? 0) - BOSS_CANCEL_RED, onClick: () => setWhy(whyEmp(r, 'cancel')) });
+      if (overRet(h) && r.closedOrders >= COACH_MIN_BASE) need.push({ key: `h-${r.posId}-${r.sellerId}`, text: `${who(r)}: hoàn ${pct(h)}`, gap: (h ?? 0) - BOSS_RETURN_RED, onClick: () => setWhy(whyEmp(r, 'ret')) });
+    }
+    const k = (s: string) => `ui-moi:compare:${s}`;
+    return (
+      <div className="min-w-0 space-y-4">
+        <PageHeadMoi title="So sánh nhân viên" hint="Tỷ lệ chốt = trong số đơn chia trong kỳ, bao nhiêu đơn đã chốt (không vượt 100%)" scope={scope}
+          tools={<PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset} onStart={setStart} onEnd={setEnd} loading={loading} onReload={update} />}
+          right={<><StaleChip stale={stale} at={at} loading={loading} error={error} onRetry={reload} /><Button variant="outline" onClick={exportSlides}>Xuất slide</Button><Button onClick={exportExcel}>Xuất Excel</Button></>}
+          pos={<PosChips posIds={posIds} onChange={setPosIds} info={report.pos} />} />
+        <OrderOriginFilter team={team} marketers={report.origins} />
+        {filterBar(report)}
+        <CanXemStrip items={need} note={`Người từ ${COACH_MIN_BASE} đơn ở mẫu số · ${team !== 'cskh' ? `chốt dưới ${BOSS_CLOSE_RED}%, ` : ''}hủy từ ${BOSS_CANCEL_RED}%, hoàn từ ${BOSS_RETURN_RED}%`} />
+        <div className={tileGrid(5)}>
+          <KpiCard icon={Users} tone="green" label="Nhân sự có đơn trong kỳ" className={KPI_TIGHT} value={vi.format(active.length)} note={`Có đơn chia hoặc đơn chốt${selected.length ? ' · đang so sánh' : ''}`}
+            onClick={() => setWhy({ title: 'Nhân sự có đơn', value: `${vi.format(active.length)} người`, scope, definition: 'Nhân viên có đơn chia hoặc đơn chốt trong kỳ, theo bộ phận và POS đã chọn (đang so sánh thì chỉ tính người đã chọn).' })} />
+          <KpiCard icon={ClipboardList} tone="blue" label="Tổng đơn chia" className={KPI_TIGHT} value={vi.format(totals.assigned)} delta={delta(totals.assigned, totals.prevAssigned)} deltaLabel={cmpLabel} note={`Trung bình ${vi.format(Math.round(totals.avgAssigned))} đơn/người`}
+            onClick={() => setWhy({ title: 'Tổng đơn chia', value: vi.format(totals.assigned), scope, previous: hasCmp ? vi.format(totals.prevAssigned) : undefined,
+              rows: [{ label: 'Số người', value: vi.format(active.length) }, { label: 'Trung bình mỗi người', value: vi.format(Math.round(totals.avgAssigned)) }], definition: 'Số đơn được chia cho nhân viên trong kỳ (Pancake "Phân công cho NV").' })} />
+          <KpiCard icon={CheckCircle2} tone="teal" label="Tổng đơn chốt" className={`${KPI_TIGHT} ${team !== 'cskh' && overClose(totals.rate) ? '[&_.note]:!text-bad' : ''}`} value={vi.format(totals.closed)} delta={delta(totals.closed, totals.prevClosed)} deltaLabel={cmpLabel} note={`Tỷ lệ chốt chung ${pct(totals.rate)}`}
+            chart={<DuoSpark cur={closedByDay} />}
+            onClick={() => setWhy({ title: 'Tổng đơn chốt', value: vi.format(totals.closed), scope, previous: hasCmp ? vi.format(totals.prevClosed) : undefined,
+              rows: [{ label: 'Tổng đơn chia', value: vi.format(totals.assigned) }, { label: 'Tỷ lệ chốt chung', value: pct(totals.rate), tone: team !== 'cskh' && overClose(totals.rate) ? 'bad' : undefined }],
+              definition: 'Đơn đã xác nhận trong kỳ (như Pancake, không tính hủy/xóa). Tỷ lệ chốt chung = số chia đã chốt ÷ số chia. Cột Đơn chốt đếm theo ngày chốt nên có cả đơn chia từ trước.' })} />
+          <KpiCard icon={BarChart3} tone="orange" label="Trung vị tỷ lệ chốt" className={`${KPI_TIGHT} ${overClose(totals.median) ? KPI_RED : ''}`} value={pct(totals.median)} delta={totals.median !== null && totals.prevMedian !== null ? totals.median - totals.prevMedian : null} deltaLabel={`điểm % ${cmpLabel}`} note={`Mục tiêu tham chiếu ${TARGET}% · đỏ dưới ${BOSS_CLOSE_RED}%`}
+            onClick={() => setWhy({ title: 'Trung vị tỷ lệ chốt', value: pct(totals.median), tone: overClose(totals.median) ? 'bad' : undefined, scope, previous: hasCmp ? pct(totals.prevMedian) : undefined, mark: `Đỏ khi dưới ${BOSS_CLOSE_RED}%`,
+              definition: `Trung vị tỷ lệ chốt của từng nhân viên (số chia đã chốt ÷ số chia); mục tiêu tham chiếu ${TARGET}%.` })} />
+          <KpiCard icon={Trophy} tone="lime" label="Nhân viên nổi bật" className={KPI_TIGHT} value={totals.best ? pct(closeRateOf(totals.best, ms.rateBase)) : '—'}
+            note={totals.best ? `${totals.best.name} · ${closeRateTop(totals.best, ms.rateBase)} / ${closeRateBase(totals.best, ms.rateBase)} đơn` : 'Chưa đủ dữ liệu'}
+            onClick={totals.best ? () => setWhy({ ...whyEmp(totals.best!, 'close'), title: `Nhân viên nổi bật · ${who(totals.best!)}`, definition: 'Người có tỷ lệ chốt cao nhất trong số nhân viên có ≥ 10 đơn chia (không đủ thì lấy cao nhất chung).' }) : undefined} />
+        </div>
+        {perfCard(true)}
+        {detailCard(report)}
+        <div className="grid min-w-0 gap-3">
+          {scatterCard({ storageKey: k('scatter'), summary: `${vi.format(employees.length)} người` })}
+          <FoldBlock icon={Award} title="Góc nhìn nhanh" summary="Nổi bật · Cần hỗ trợ · Cân bằng data" storageKey={k('quick')}>{quickList()}</FoldBlock>
+          <FoldBlock icon={ClipboardList} title="Cách tính" storageKey={k('defs')}>{defsBlock()}</FoldBlock>
+        </div>
+        <WhySheet spec={why} onClose={() => setWhy(null)} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
