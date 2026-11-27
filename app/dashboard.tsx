@@ -1749,7 +1749,7 @@ export default function Dashboard({ user, initialView, demo = false, uiMoi = fal
           {!gated && view === 'overview' && <OverviewView onNavigate={(v) => goTo(v as View)} canRewriteAi={isOwner(user)} uiMoi={uiMoi} />}
           {!gated && uiMoi && view === 'overview-moi' && <OverviewMoiView onNavigate={(v) => goTo(v as View)} userName={user.displayName} />}
           {!gated && view === 'shift' && <ShiftView uiMoi={uiMoi} />}
-          {!gated && view === 'custom' && <CustomReportView />}
+          {!gated && view === 'custom' && <CustomReportView uiMoi={uiMoi} />}
           {!gated && view === 'compare' && <CompareView uiMoi={uiMoi} />}
           {!gated && canView(user, view) && view === 'growth' && <GrowthView key={activeDept} navDept={activeDept} uiMoi={uiMoi} />}
           {!gated && canView(user, view) && view === 'ho-so' && <StaffProfilePage uiMoi={uiMoi} onBack={profileBack ? () => { setView(profileBack); setProfileBack(null); } : undefined} />}

@@ -19,6 +19,7 @@ import { useTeam } from './team-store';
 import { useApi } from './use-api';
 import { Th, ChartCard, EmptyState, ErrorBox, PageHeader, SegmentedControl, SkeletonTable, SortTh, TableWrap, dmy, pct, posName, shortMoney, toast, useSort, vi, barRadius } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
+import { PageHeadMoi } from './trang-moi';
 
 type M = OverviewReport['current']['total'];
 type Dim = 'employee' | 'pos' | 'day' | 'week' | 'month';
@@ -38,7 +39,7 @@ function sumPivotMetrics(values: Record<string, unknown>[]): Record<string, unkn
   }));
 }
 
-export function CustomReportView() {
+export function CustomReportView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới, tắt thì y như cũ. */ uiMoi?: boolean } = {}) {
   const ms = useMetricSettings();
   const team = useTeam();
   const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
@@ -136,21 +137,22 @@ export function CustomReportView() {
       [dimLabel, ...metrics.map((k) => METRICS[k].label)], ...sorted.map((x) => [x.label, ...metrics.map((k) => { const v = METRICS[k].value(x.m); return v === null ? '' : Math.round(v * 100) / 100; })])]), 'Báo cáo');
     saveXlsx(XLSX, wb, `bao-cao-tuy-chinh_${start}_${end}.xlsx`);
   };
-  return (
-    <div className="space-y-5">
-      <PageHeader eyebrow={periodLabel} title="Báo cáo tùy chỉnh" subtitle="Tự chọn chiều xem, chỉ số và dạng hiển thị · cùng cách tính với các trang khác (theo Cách tính và bộ lọc Trạng thái trên thanh trên cùng)"
-        actions={<>
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  const headActions = () => (
+        <>
           <AiPackButton disabled={display === 'pivot' ? !pivot.rows.length || !pivotMetric : !sorted.length} pack={() => ({ page: `Báo cáo tùy chỉnh theo ${dimLabel.toLowerCase()}`, period: periodLabel,
             tables: display === 'pivot' ? [{ title: `Bảng xoay · ${pivotMetric ? METRICS[pivotMetric].label : ''}`, staffCol: pivotRow === 'employee' ? 0 : undefined, columns: pivotColumns, rows: pivotData }] : [{ title: `Theo ${dimLabel.toLowerCase()}`, staffCol: dim === 'employee' ? 0 : undefined, columns: [dimLabel, ...metrics.map((k) => METRICS[k].label)], rows: sorted.slice(0, 80).map((x) => [x.label, ...metrics.map((k) => METRICS[k].fmt(METRICS[k].value(x.m)))]) }],
             definitions: metrics.map((k) => METRICS[k].def).filter((d): d is string => !!d),
             questions: ['Điểm nổi bật và bất thường trong bảng này là gì?', 'Nhóm nào tốt nhất / kém nhất, chênh bao nhiêu?', 'Nên làm gì tiếp theo?'] })} />
           <Button variant="outline" onClick={() => void exportExcel()} disabled={!sorted.length}><FileDown size={14} />Xuất Excel</Button>
-        </>} />
+        </>
+  );
+  const periodBar = () => (
       <PeriodToolbar preset={preset} start={start} end={end} loading={loading} onReload={reload}
         onPreset={setPreset}
         onStart={setStart} onEnd={setEnd} />
-      <PosChips posIds={posIds} onChange={setPosIds} />
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
+  );
+  const configCard = () => (
         <ChartCard icon={SlidersHorizontal} title="Tùy chỉnh" subtitle="Chọn chiều, chỉ số, cách hiện">
           <div className="space-y-4 text-[13px]">
             <div><p className="m-0 mb-1.5 text-[11.5px] font-semibold uppercase tracking-wide text-ink-3">{display === 'pivot' ? 'Hàng' : 'Xem theo'}</p><SegmentedControl size="sm" value={display === 'pivot' ? pivotRow : dim} onChange={(v) => display === 'pivot' ? setPivotRow(v) : setDim(v)} options={DIMS} ariaLabel={display === 'pivot' ? 'Hàng bảng xoay' : 'Chiều xem'} /></div>
@@ -172,6 +174,8 @@ export function CustomReportView() {
             </div>
           </div>
         </ChartCard>
+  );
+  const resultCard = () => (
         <ChartCard icon={display === 'table' || display === 'pivot' ? Table2 : BarChart3} title={display === 'pivot' ? `Bảng xoay · ${pivotMetric ? METRICS[pivotMetric].label : ''}` : `Theo ${dimLabel.toLowerCase()} · ${vi.format(sorted.length)} dòng`} subtitle={display === 'pivot' ? 'Tổng tính từ số gốc; ô thiếu dữ liệu hiện —. Khách duy nhất không cộng giữa các nhóm.' : dim === 'employee' || dim === 'pos' ? 'Bấm tiêu đề cột để sắp xếp' : 'Theo thứ tự thời gian'}>
           {error && !r ? <ErrorBox error={error} onRetry={reload} /> : !r ? <SkeletonTable rows={6} cols={1 + metrics.length} /> : !metrics.length ? <EmptyState text="Chọn ít nhất một chỉ số." /> : display === 'pivot' ? (pivotUnsupported ? <EmptyState text="Báo cáo hiện tại chưa có dữ liệu Nhân viên × tháng. Hãy chọn cột POS." /> : !pivot.rows.length ? <EmptyState text="Không có số trong kỳ." /> : <TableWrap minWidth={240 + pivot.columns.length * 120} maxHeight="40rem" stickyFirst><table className="tbl"><thead><tr>{pivotColumns.map((label, i) => <Th key={i} scope="col">{label}</Th>)}</tr></thead><tbody>{pivot.rows.map((row) => <tr key={row.key}><th scope="row" className="text-left">{row.label}</th>{[...row.values, row.total].map((v, i) => <td key={i} className="n">{METRICS[pivotMetric].fmt(v)}</td>)}</tr>)}</tbody><tfoot><tr><th scope="row" className="text-left">Tổng</th>{[...pivot.totals, pivot.total].map((v, i) => <td key={i} className="n font-semibold">{METRICS[pivotMetric].fmt(v)}</td>)}</tr></tfoot></table></TableWrap>) : !sorted.length ? <EmptyState text="Không có số trong kỳ." /> : display === 'table' ? (
             <TableWrap minWidth={320 + metrics.length * 120} maxHeight="40rem" stickyFirst>
@@ -205,6 +209,35 @@ export function CustomReportView() {
           )}
           {display !== 'table' && display !== 'pivot' && metrics.length > 1 && <p className="m-0 mt-2 text-[11.5px] text-ink-3">Các chỉ số khác đơn vị (tiền, số đơn, %) dùng chung một trục; nên chọn 1–2 chỉ số cùng loại khi xem biểu đồ.</p>}
         </ChartCard>
+  );
+  // [hết khối chung]
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trang công cụ: đầu trang (PageHeadMoi: chọn kỳ, Tải lại; Gói AI, Excel; POS) → một khối chính: Tùy chỉnh (cột hẹp) + kết quả.
+  // Không có ô số / "Cần xem" vì số do người xem tự chọn. Cột Tùy chỉnh chỉ đứng cạnh kết quả từ 80rem, màn hẹp hơn thì nằm trên.
+  if (uiMoi) {
+    const posLabel = posIds.length <= 3 ? posIds.map(posName).join(', ') : `${vi.format(posIds.length)} POS`;
+    return (
+      <div className="min-w-0 space-y-4">
+        <PageHeadMoi title="Báo cáo tùy chỉnh" scope={`${periodLabel} · ${posLabel} · theo ${dimLabel.toLowerCase()} · cùng cách tính với các trang khác`}
+          hint="Tự chọn chiều xem, chỉ số và dạng hiển thị" tools={periodBar()} right={headActions()} pos={<PosChips posIds={posIds} onChange={setPosIds} />} />
+        <div className="grid min-w-0 grid-cols-1 gap-4 min-[80rem]:grid-cols-[18rem_minmax(0,1fr)]">
+          {configCard()}
+          {resultCard()}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <PageHeader eyebrow={periodLabel} title="Báo cáo tùy chỉnh" subtitle="Tự chọn chiều xem, chỉ số và dạng hiển thị · cùng cách tính với các trang khác (theo Cách tính và bộ lọc Trạng thái trên thanh trên cùng)"
+        actions={headActions()} />
+      {periodBar()}
+      <PosChips posIds={posIds} onChange={setPosIds} />
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
+        {configCard()}
+        {resultCard()}
       </div>
     </div>
   );
