@@ -1767,7 +1767,7 @@ export default function Dashboard({ user, initialView, demo = false, uiMoi = fal
           {!gated && view === 'sale-overview' && <TeamOverviewView key="sale" team="sale" uiMoi={uiMoi} onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
           {/* Bỏ hẳn Việc của tôi (anh Vũ 31/10/2026: "xóa hẳn ngay cái việc của tôi"): khối này đọc D1 nhiều nhất kỳ 17/10. */}
           {!gated && view === 'mentor' && canView(user, 'mentor') && <MentorView />}
-          {!gated && view === 'care' && <CareView />}
+          {!gated && view === 'care' && <CareView uiMoi={uiMoi} />}
           {!gated && view === 'cskh-kpi' && canView(user, 'cskh-kpi') && <CskhKpiView uiMoi={uiMoi} />}
           {!gated && view === 'sale-kpi' && canView(user, 'sale-kpi') && <SaleKpiView uiMoi={uiMoi} />}
           {!gated && view === 'sale-teams' && <TeamGroupsView key="sale" team="sale" owner={isOwner(user)} uiMoi={uiMoi} />}

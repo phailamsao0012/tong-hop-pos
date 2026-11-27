@@ -20,10 +20,12 @@ import { useApi } from './use-api';
 import { LadderMembers, LadderTable, ladderExtras, type LadderLine, type LadderPick } from './ladder-table';
 import { StaleChip } from './stale-chip';
 import { Th,
-  Avatar, BackfillNotice, ChartCard, Definitions, EmptyState, ErrorBox, HoverReveal, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, Toolbar,
+  Avatar, BackfillNotice, ChartCard, Definitions, EmptyState, ErrorBox, FoldBlock, HoverReveal, KpiCard, posName, PageHeader, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, Toolbar,
   dmy, dt, money, pct, posVar, scrollToEl, short, shortMoney, timeOnly, TipContent, toast, Tooltip, useSort, vi, type SortState,
 } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { KPI_TIGHT, PageHeadMoi, WhySheet, tileGrid, type WhySpec } from './trang-moi';
 
 type Note = { id: string; author: string; message: string; createdAt: string };
 type Row = { id: string; posId: string; posName: string; shopId: string | null; customerId: string; name: string; phone: string | null; assignedId: string | null; assignedName: string | null; level: string | null; orderCount: number; succeedOrders: number; purchased: number; lastOrderAt: string | null; insertedAt: string | null; tags: string[]; noteCount: number; lastNoteAt: string | null; daysSinceNote: number | null; notes: Note[] };
@@ -52,7 +54,9 @@ const rowKeys = (fn: () => void) => (e: KeyboardEvent<HTMLElement>) => {
   if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); }
 };
 
-export function CareView() {
+export function CareView({ uiMoi = false }: { /** Cờ THP_UI_MOI: bật thì bố cục kiểu mới, tắt thì y như cũ. */ uiMoi?: boolean } = {}) {
+  // Giao diện mới: khung "Vì sao ra số này" đang mở (null = đóng).
+  const [why, setWhy] = useState<WhySpec | null>(null);
   const team = 'cskh'; // trang này chỉ hiện nhân viên CSKH (bỏ qua nút Tất cả/Sale/CSKH ở thanh trên)
   const [posIds, setPosIds] = usePosIds();
   const [assignedLocal, setAssigned] = useState('all');
@@ -148,11 +152,12 @@ export function CareView() {
   }, [posEmployees, report]);
   const searching = loading && q.trim() !== '' && q.trim() === query;
 
-  return (
-    <div className="space-y-5">
-      <PageHeader eyebrow="CSKH" title="Khách theo nhân viên" subtitle="Khách được phân công và ghi chú trao đổi, như mục Khách hàng Pancake"
-        actions={<><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} /><Button variant="outline" onClick={() => void exportExcel()} disabled={!report || exporting}><FileDown size={14} />{exporting ? 'Đang xuất…' : 'Xuất Excel danh sách'}</Button></>} />
-      <CskhFocusBar />
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  // fold: chỉ bố cục mới truyền (thu gọn thẻ); bố cục cũ không truyền nên thẻ y như trước.
+  const headActions = () => (
+        <><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} /><Button variant="outline" onClick={() => void exportExcel()} disabled={!report || exporting}><FileDown size={14} />{exporting ? 'Đang xuất…' : 'Xuất Excel danh sách'}</Button></>
+  );
+  const filterBar = () => (
       <Toolbar>
         <span className="px-1 text-sm font-semibold text-ink-2">Phân công</span>
         <Select value={assigned} items={{ all: 'Tất cả nhân viên', ...Object.fromEntries(staffOptions), __none: 'Chưa phân công' }} onValueChange={(v) => setAssigned(String(v))}>
@@ -182,34 +187,12 @@ export function CareView() {
         </form>
         <Button variant="ghost" size="sm" onClick={reload} disabled={loading}><RefreshCw size={14} className={loading ? 'animate-spin motion-reduce:animate-none' : ''} />Tải lại</Button>
       </Toolbar>
-      <PosChips posIds={posIds} onChange={setPosIds} />
-      {error && !report && <ErrorBox error={error} onRetry={reload} />}
-      {exportError && <ErrorBox error={exportError} onRetry={() => void exportExcel()} />}
-      {!report && !error && (
-        <>
-          <SkeletonKpis count={5} className="sm:grid-cols-3 xl:grid-cols-5" />
-          <ChartCard icon={MessageSquareText} title="Danh sách khách" subtitle="Đang tải…"><SkeletonTable rows={8} cols={7} /></ChartCard>
-        </>
-      )}
-      {report && (
-        <>
-          <BackfillNotice backfill={report.backfill} />
-          <div className="grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 sm:grid-cols-3 xl:grid-cols-5" aria-busy={loading}>
-            <KpiCard icon={Users} tone="green" label="Khách theo bộ lọc" value={vi.format(report.summary.total)} countUp rawValue={report.summary.total} note={assignedLabel}
-              tooltip={tip('Khách theo bộ lọc', [['Số khách', `${vi.format(report.summary.total)} khách`], ['Phân công', assignedLabel]], 'Số khách được phân công khớp bộ lọc hiện tại (nhân viên, ngày chưa note, POS, từ khoá).')} />
-            <KpiCard icon={MessageSquareText} tone={report.summary.neverNoted + report.summary.over20 ? 'red' : 'green'} label="Cần note" value={vi.format(report.summary.neverNoted + report.summary.over20)} countUp rawValue={report.summary.neverNoted + report.summary.over20}
-              note={`Chưa note ${vi.format(report.summary.neverNoted)} · quá 20 ngày ${vi.format(report.summary.over20)}${report.summary.total ? ` · ${Math.round((report.summary.neverNoted + report.summary.over20) / report.summary.total * 100)}% khách` : ''}`}
-              onClick={() => setMinDays(minDays === 20 ? 0 : 20)} active={minDays === 20}
-              tooltip={tip('Cần note', [['Chưa note lần nào', `${vi.format(report.summary.neverNoted)} khách`], ['Quá 20 ngày chưa note', `${vi.format(report.summary.over20)} khách`], ['Tỷ lệ', pct(report.summary.total ? (report.summary.neverNoted + report.summary.over20) / report.summary.total * 100 : null)]], `Khách chưa có ghi chú nào, cộng khách có ghi chú mới nhất cách đây hơn 20 ngày. ${report.definitions.days} Bấm để lọc danh sách.`)} />
-            <KpiCard icon={Wallet} tone="teal" label="Khách đã từng mua" value={vi.format(report.summary.buyers)} countUp rawValue={report.summary.buyers} note={report.summary.total ? `${Math.round(report.summary.buyers / report.summary.total * 100)}% khách` : '—'}
-              tooltip={tip('Khách đã từng mua', [['Số khách', `${vi.format(report.summary.buyers)} khách`], ['Doanh số theo hồ sơ', money(report.summary.purchased)]], `Trong số khách được phân công (Data cầm), bao nhiêu khách đã từng có đơn thành công theo hồ sơ khách Pancake — ai bán cũng tính (thường là Sale bán đơn đầu rồi chuyển khách cho CSKH). Khác ô "Khách NV đã bán thành công" ở trang Mua lại & Upsell: ô đó chỉ đếm đơn do chính nhân viên đứng tên bán. ${report.definitions.source}`)} />
-            <KpiCard icon={ICON.revenue} tone="blue" label="Doanh thu đơn chốt" value={report.summary.closedNet === null ? '—' : shortMoney(report.summary.closedNet)} note={report.summary.closedNet === null ? 'Bộ lọc quá rộng để tính' : `${vi.format(report.summary.closedOrders ?? 0)} đơn chốt · sau giảm giá · doanh số ${shortMoney(report.summary.purchased)} theo hồ sơ`}
-              tooltip={tip('Doanh thu đơn chốt', [['Đơn chốt', report.summary.closedNet === null ? '—' : money(report.summary.closedNet)], ['Số đơn', vi.format(report.summary.closedOrders ?? 0)], ['Doanh số theo hồ sơ', money(report.summary.purchased)]], 'Tổng tiền đơn chốt (sau giảm giá và quà) của các khách trong bộ lọc, theo định nghĩa "Phân công cho NV" của Pancake. Doanh số theo hồ sơ = số tiền đã chi Pancake ghi trên hồ sơ khách. Ai bán cũng tính; xem ô "Doanh thu tự chốt" để chỉ tính đơn của chính nhân viên.')} />
-            <KpiCard icon={ICON.revenue} tone="purple" label="Doanh thu tự chốt" value={shortMoney(report.summary.ownNet ?? 0)} note={`${vi.format(report.summary.ownOrders ?? 0)} đơn do chính người cầm data bán${report.summary.closedNet ? ` · ${pct((report.summary.ownNet ?? 0) / report.summary.closedNet * 100, 0)} doanh thu đơn chốt` : ''}`}
-              tooltip={tip('Doanh thu tự chốt', [['Tự chốt', money(report.summary.ownNet ?? 0)], ['Số đơn', vi.format(report.summary.ownOrders ?? 0)], ['Doanh thu đơn chốt (ai bán cũng tính)', report.summary.closedNet === null ? '—' : money(report.summary.closedNet)]], 'Chỉ đơn chốt (sau giảm giá) mà chính nhân viên đang cầm khách đứng tên bán trên Pancake. Không tính đơn người khác bán cho cùng khách, kể cả người cầm trước đã nghỉ hoặc chuyển data.')} />
-          </div>
-          {staffRows.length > 0 && (
-            <ChartCard icon={Users} title={`Theo nhân viên · ${staffRows.length} người`} subtitle="Bấm một dòng để lọc danh sách theo nhân viên đó · bấm tiêu đề cột để sắp xếp">
+  );
+  const exportErr = (/*{}*/) => (
+      exportError && <ErrorBox error={exportError} onRetry={() => void exportExcel()} />
+  );
+  const staffCard = (fold?: { storageKey: string; summary?: string }) => (
+            <ChartCard collapse={fold} icon={Users} title={`Theo nhân viên · ${staffRows.length} người`} subtitle="Bấm một dòng để lọc danh sách theo nhân viên đó · bấm tiêu đề cột để sắp xếp">
               <TableWrap maxHeight="18rem" minWidth={720}>
                 <table className="tbl">
                   <thead><tr><SortTh k="name" label="Nhân viên" sort={staffSort} align="left" /><SortTh k="assigned" label="Data cầm" sort={staffSort} /><Th className="text-left">Tình trạng note</Th><SortTh k="need" label="Cần note" sort={staffSort} /><Th className="n">Chưa note lần nào</Th><SortTh k="notedToday" label="Note hôm nay" sort={staffSort} /><SortTh k="ownNet" label="DT tự chốt" sort={staffSort} /></tr></thead>
@@ -235,9 +218,8 @@ export function CareView() {
                 </table>
               </TableWrap>
             </ChartCard>
-          )}
-          {oneStaff && <CareLadderBlock assigned={assigned} name={assignedLabel} posIds={posIds} />}
-          <div className={`grid gap-4 ${selected ? '2xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]' : ''}`}>
+  );
+  const listCard = (report: Report) => (
             <ChartCard icon={MessageSquareText} title={`Danh sách khách · ${vi.format(report.total)}`} subtitle={`${assignedLabel}${noteFilterText(minDays)}${basket !== 'all' ? ` · ${CARE_BASKETS[basket]}` : ''}${query ? ` · "${query}"` : ''} · bấm một dòng để xem toàn bộ ghi chú`}
               action={<span className="num text-xs text-ink-3">{viewAll ? 'Toàn bộ' : `Trang ${report.page}/${pages}`}</span>} bodyClassName="transition-opacity duration-[var(--dur)]">
               {report.rows.length ? (
@@ -299,8 +281,8 @@ export function CareView() {
                 </div>
               </div>
             </ChartCard>
-            {selected && (
-              <div id="care-detail" className="scroll-mt-16">
+  );
+  const detailCard = (selected: Row) => (
                 <ChartCard icon={MessageSquareText} title={selected.name || selected.phone || 'Khách hàng'} subtitle={`${selected.posName} · ${selected.phone ?? 'không có SĐT'} · ${selected.assignedName ? `phân công: ${selected.assignedName}` : 'chưa phân công'}`}
                   action={<Button size="sm" variant="ghost" onClick={close}>Đóng</Button>}>
                   <div className="mb-3 grid grid-cols-2 gap-2 text-xs">
@@ -328,6 +310,106 @@ export function CareView() {
                     </ol>
                   )}
                 </ChartCard>
+  );
+  // [hết khối chung]
+
+  // ===== Bố cục kiểu mới (cờ THP_UI_MOI; plan "giao diện mới cả trang trong" 27/11/2026). Cờ tắt thì nhánh này không chạy. =====
+  // Trên xuống: đầu trang (PageHeadMoi: thanh lọc của trang; StaleChip, Excel; POS) → chọn riêng NV CSKH → nhắc dữ liệu đang gom
+  // → một hàng 5 ô số (ô Cần note bấm lọc như cũ; ô khác bấm mở "Vì sao ra số này") → bảng chính Danh sách khách
+  // (bấm khách: ghi chú mở khung giữa màn) → khối phụ thu gọn: Theo nhân viên, khối mua lần đầu / mua tiếp (CareLadderBlock giữ nguyên), Cách tính.
+  // "Cần note" chưa có mốc chung nên không có dải "Cần xem".
+  if (uiMoi) {
+    const scope = `CSKH · ${assignedLabel}${noteFilterText(minDays)} · ${posIds.length <= 3 ? posIds.map(posName).join(', ') : `${vi.format(posIds.length)} POS`} · khách được phân công hiện tại (không theo kỳ), như mục Khách hàng Pancake`;
+    const k = (s: string) => `ui-moi:care:${s}`;
+    const s = report?.summary;
+    return (
+      <div className="min-w-0 space-y-4">
+        <PageHeadMoi title="Khách theo nhân viên" scope={scope} hint="Khách được phân công và ghi chú trao đổi, như mục Khách hàng Pancake" tools={filterBar()} right={headActions()}
+          pos={<PosChips posIds={posIds} onChange={setPosIds} />} />
+        <CskhFocusBar />
+        {error && !report && <ErrorBox error={error} onRetry={refetch} />}
+        {exportErr()}
+        {!report && !error && <SkeletonKpis count={5} className="lg:grid-cols-5" />}
+        {report && s && (
+          <>
+            <BackfillNotice backfill={report.backfill} />
+            <div className={tileGrid(5)} aria-busy={loading}>
+              <KpiCard icon={Users} tone="green" label="Khách theo bộ lọc" className={KPI_TIGHT} value={vi.format(s.total)} note={assignedLabel}
+                onClick={() => setWhy({ title: 'Khách theo bộ lọc', value: `${vi.format(s.total)} khách`, scope, rows: [{ label: 'Phân công', value: assignedLabel }],
+                  definition: 'Số khách được phân công khớp bộ lọc hiện tại (nhân viên, ngày chưa note, POS, tìm kiếm).' })} />
+              <KpiCard icon={MessageSquareText} tone={s.neverNoted + s.over20 ? 'red' : 'green'} label="Cần note · bấm để lọc" className={KPI_TIGHT} value={vi.format(s.neverNoted + s.over20)}
+                note={`Chưa note ${vi.format(s.neverNoted)} · quá 20 ngày ${vi.format(s.over20)}`} onClick={() => setMinDays(minDays === 20 ? 0 : 20)} active={minDays === 20} />
+              <KpiCard icon={Wallet} tone="teal" label="Khách đã từng mua" className={KPI_TIGHT} value={vi.format(s.buyers)} note={s.total ? `${Math.round(s.buyers / s.total * 100)}% khách · ${shortMoney(s.purchased)}` : '—'}
+                onClick={() => setWhy({ title: 'Khách đã từng mua', value: `${vi.format(s.buyers)} khách`, scope, rows: [{ label: 'Khách được phân công', value: vi.format(s.total) }, { label: 'Doanh số theo hồ sơ', value: money(s.purchased) }],
+                  definition: 'Trong số khách được phân công (Data cầm), bao nhiêu khách đã từng mua (theo hồ sơ khách Pancake).' })} />
+              <KpiCard icon={ICON.revenue} tone="blue" label="Doanh thu đơn chốt" className={KPI_TIGHT} value={s.closedNet === null ? '—' : shortMoney(s.closedNet)} note={s.closedNet === null ? 'Bộ lọc quá rộng để tính' : `${vi.format(s.closedOrders ?? 0)} đơn · ai bán cũng tính`}
+                onClick={() => setWhy({ title: 'Doanh thu đơn chốt', value: s.closedNet === null ? '—' : money(s.closedNet), scope, rows: [{ label: 'Số đơn', value: vi.format(s.closedOrders ?? 0) }, { label: 'Doanh số theo hồ sơ', value: money(s.purchased) }],
+                  definition: report.definitions.closedNet ?? 'Doanh thu đơn chốt của khách đang được phân công, ai bán cũng tính.' })} />
+              <KpiCard icon={ICON.revenue} tone="purple" label="Doanh thu tự chốt" className={KPI_TIGHT} value={shortMoney(s.ownNet ?? 0)} note={`${vi.format(s.ownOrders ?? 0)} đơn do chính người cầm data bán`}
+                onClick={() => setWhy({ title: 'Doanh thu tự chốt', value: money(s.ownNet ?? 0), scope, rows: [{ label: 'Số đơn', value: vi.format(s.ownOrders ?? 0) }, { label: 'Doanh thu đơn chốt (ai bán cũng tính)', value: s.closedNet === null ? '—' : money(s.closedNet) }],
+                  definition: 'Doanh thu đơn chốt do chính người đang cầm khách bán.' })} />
+            </div>
+            {listCard(report)}
+            <div className="grid min-w-0 gap-3">
+              {staffRows.length > 0 && staffCard({ storageKey: k('staff'), summary: `${vi.format(staffRows.length)} người` })}
+              {oneStaff && <FoldBlock icon={Users} title={`Data của ${assignedLabel}: mua lần đầu gì, mua tiếp mấy lần`} storageKey={k('ladder')}><CareLadderBlock assigned={assigned} name={assignedLabel} posIds={posIds} /></FoldBlock>}
+              <FoldBlock icon={MessageSquareText} title="Cách tính" storageKey={k('defs')}><Definitions items={report.definitions} /></FoldBlock>
+            </div>
+          </>
+        )}
+        {/* Bấm một khách: ghi chú mở khung giữa màn (bố cục cũ đứng cạnh danh sách). */}
+        <Sheet open={!!selected} onOpenChange={(o) => { if (!o) setSelected(null); }}>
+          <SheetContent className="overflow-y-auto p-3 sm:max-w-2xl">
+            <SheetTitle className="sr-only">Ghi chú khách</SheetTitle>
+            {selected && detailCard(selected)}
+          </SheetContent>
+        </Sheet>
+        <WhySheet spec={why} onClose={() => setWhy(null)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <PageHeader eyebrow="CSKH" title="Khách theo nhân viên" subtitle="Khách được phân công và ghi chú trao đổi, như mục Khách hàng Pancake"
+        actions={headActions()} />
+      <CskhFocusBar />
+      {filterBar()}
+      <PosChips posIds={posIds} onChange={setPosIds} />
+      {error && !report && <ErrorBox error={error} onRetry={reload} />}
+      {exportErr()}
+      {!report && !error && (
+        <>
+          <SkeletonKpis count={5} className="sm:grid-cols-3 xl:grid-cols-5" />
+          <ChartCard icon={MessageSquareText} title="Danh sách khách" subtitle="Đang tải…"><SkeletonTable rows={8} cols={7} /></ChartCard>
+        </>
+      )}
+      {report && (
+        <>
+          <BackfillNotice backfill={report.backfill} />
+          <div className="grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 sm:grid-cols-3 xl:grid-cols-5" aria-busy={loading}>
+            <KpiCard icon={Users} tone="green" label="Khách theo bộ lọc" value={vi.format(report.summary.total)} countUp rawValue={report.summary.total} note={assignedLabel}
+              tooltip={tip('Khách theo bộ lọc', [['Số khách', `${vi.format(report.summary.total)} khách`], ['Phân công', assignedLabel]], 'Số khách được phân công khớp bộ lọc hiện tại (nhân viên, ngày chưa note, POS, từ khoá).')} />
+            <KpiCard icon={MessageSquareText} tone={report.summary.neverNoted + report.summary.over20 ? 'red' : 'green'} label="Cần note" value={vi.format(report.summary.neverNoted + report.summary.over20)} countUp rawValue={report.summary.neverNoted + report.summary.over20}
+              note={`Chưa note ${vi.format(report.summary.neverNoted)} · quá 20 ngày ${vi.format(report.summary.over20)}${report.summary.total ? ` · ${Math.round((report.summary.neverNoted + report.summary.over20) / report.summary.total * 100)}% khách` : ''}`}
+              onClick={() => setMinDays(minDays === 20 ? 0 : 20)} active={minDays === 20}
+              tooltip={tip('Cần note', [['Chưa note lần nào', `${vi.format(report.summary.neverNoted)} khách`], ['Quá 20 ngày chưa note', `${vi.format(report.summary.over20)} khách`], ['Tỷ lệ', pct(report.summary.total ? (report.summary.neverNoted + report.summary.over20) / report.summary.total * 100 : null)]], `Khách chưa có ghi chú nào, cộng khách có ghi chú mới nhất cách đây hơn 20 ngày. ${report.definitions.days} Bấm để lọc danh sách.`)} />
+            <KpiCard icon={Wallet} tone="teal" label="Khách đã từng mua" value={vi.format(report.summary.buyers)} countUp rawValue={report.summary.buyers} note={report.summary.total ? `${Math.round(report.summary.buyers / report.summary.total * 100)}% khách` : '—'}
+              tooltip={tip('Khách đã từng mua', [['Số khách', `${vi.format(report.summary.buyers)} khách`], ['Doanh số theo hồ sơ', money(report.summary.purchased)]], `Trong số khách được phân công (Data cầm), bao nhiêu khách đã từng có đơn thành công theo hồ sơ khách Pancake — ai bán cũng tính (thường là Sale bán đơn đầu rồi chuyển khách cho CSKH). Khác ô "Khách NV đã bán thành công" ở trang Mua lại & Upsell: ô đó chỉ đếm đơn do chính nhân viên đứng tên bán. ${report.definitions.source}`)} />
+            <KpiCard icon={ICON.revenue} tone="blue" label="Doanh thu đơn chốt" value={report.summary.closedNet === null ? '—' : shortMoney(report.summary.closedNet)} note={report.summary.closedNet === null ? 'Bộ lọc quá rộng để tính' : `${vi.format(report.summary.closedOrders ?? 0)} đơn chốt · sau giảm giá · doanh số ${shortMoney(report.summary.purchased)} theo hồ sơ`}
+              tooltip={tip('Doanh thu đơn chốt', [['Đơn chốt', report.summary.closedNet === null ? '—' : money(report.summary.closedNet)], ['Số đơn', vi.format(report.summary.closedOrders ?? 0)], ['Doanh số theo hồ sơ', money(report.summary.purchased)]], 'Tổng tiền đơn chốt (sau giảm giá và quà) của các khách trong bộ lọc, theo định nghĩa "Phân công cho NV" của Pancake. Doanh số theo hồ sơ = số tiền đã chi Pancake ghi trên hồ sơ khách. Ai bán cũng tính; xem ô "Doanh thu tự chốt" để chỉ tính đơn của chính nhân viên.')} />
+            <KpiCard icon={ICON.revenue} tone="purple" label="Doanh thu tự chốt" value={shortMoney(report.summary.ownNet ?? 0)} note={`${vi.format(report.summary.ownOrders ?? 0)} đơn do chính người cầm data bán${report.summary.closedNet ? ` · ${pct((report.summary.ownNet ?? 0) / report.summary.closedNet * 100, 0)} doanh thu đơn chốt` : ''}`}
+              tooltip={tip('Doanh thu tự chốt', [['Tự chốt', money(report.summary.ownNet ?? 0)], ['Số đơn', vi.format(report.summary.ownOrders ?? 0)], ['Doanh thu đơn chốt (ai bán cũng tính)', report.summary.closedNet === null ? '—' : money(report.summary.closedNet)]], 'Chỉ đơn chốt (sau giảm giá) mà chính nhân viên đang cầm khách đứng tên bán trên Pancake. Không tính đơn người khác bán cho cùng khách, kể cả người cầm trước đã nghỉ hoặc chuyển data.')} />
+          </div>
+          {staffRows.length > 0 && (
+            {staffCard()}
+          )}
+          {oneStaff && <CareLadderBlock assigned={assigned} name={assignedLabel} posIds={posIds} />}
+          <div className={`grid gap-4 ${selected ? '2xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]' : ''}`}>
+            {listCard(report)}
+            {selected && (
+              <div id="care-detail" className="scroll-mt-16">
+                detailCard(selected)
               </div>
             )}
           </div>
