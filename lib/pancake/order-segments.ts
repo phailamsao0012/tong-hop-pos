@@ -3,33 +3,54 @@ import { CLOSED, NET, STAT_COLUMNS, STATUS_GROUPS, dayExpr } from '@/lib/reports
 import { countedFilter, teamFilter, type HrUnit, type Team } from '@/lib/teams/team';
 import { parseStatus, statusSql, type StatusFilter } from '@/lib/pancake/order-status';
 
-export type ProductSegment = 'all' | 'gentadox' | 'skgk' | 'khac' | 'oxy';
-export const SEGMENT_KEYS = ['gentadox', 'skgk', 'khac', 'oxy'] as const;
+// Bộ thẻ mới (anh Vũ 27/11/2026 8h38 "ok plan thẻ sản phẩm mới…", plan docs/plans/2026-11-27-the-san-pham-moi): thẻ theo THUỐC CHÍNH của đơn,
+// từng POS một bộ; bỏ thẻ SK GK (đã ngừng bán). Khoá cũ 'gentadox', 'oxy', 'khac' giữ nguyên; 'skgk' cũ đọc như 'khac'.
+export const SEGMENT_KEYS = ['gentadox', 'oxy', 'sat-trung', 'doxytylo', 'khac'] as const;
 export type SegmentKey = typeof SEGMENT_KEYS[number];
+export type ProductSegment = 'all' | SegmentKey;
 /** POS chỉ bán một combo (anh Vũ 04/11/2026: "bên pos oxytetra chỉ bán duy nhất combo oxytetra và bổ đậm đặc, không có cái khác"):
  *  mọi đơn POS này là một nhóm riêng, không chia vào Kháng sinh / SK GK / Khác. */
 export const COMBO_OXY_POS = 'oxytetra';
-/** Nhóm đơn cần hiện theo POS đang chọn: chỉ POS Oxytetra thì chỉ nhóm Combo; không có POS đó thì bỏ nhóm Combo. */
+/** POS Siêu Vô Gạo: Gentadox → Combo Oxytetra → Sát trùng / Glucan / Điện giải → Khác. */
+export const GENTADOX_POS = 'sieu-vo-gao';
+/** POS BIO NANO: Doxytylo → Khác. */
+export const DOXYTYLO_POS = 'bio-nano';
+/** Thẻ (trừ Khác) của từng POS, theo thứ tự xét; POS không có trong bảng chỉ có Khác. POS Oxytetra chỉ có Combo (không có Khác). */
+export const POS_SEGMENTS: Record<string, readonly SegmentKey[]> = {
+  [GENTADOX_POS]: ['gentadox', 'oxy', 'sat-trung'],
+  [DOXYTYLO_POS]: ['doxytylo'],
+  [COMBO_OXY_POS]: ['oxy'],
+};
+/** Thẻ cần hiện theo POS đang chọn: hợp thẻ của các POS, không lặp, theo thứ tự SEGMENT_KEYS. */
 export function segmentsFor(posIds: readonly string[]): SegmentKey[] {
-  const hasOxy = posIds.includes(COMBO_OXY_POS);
-  if (hasOxy && posIds.length === 1) return ['oxy'];
-  return hasOxy ? [...SEGMENT_KEYS] : SEGMENT_KEYS.filter((k) => k !== 'oxy');
+  const keys = new Set<SegmentKey>();
+  for (const pos of posIds) {
+    for (const k of POS_SEGMENTS[pos] ?? []) keys.add(k);
+    if (pos !== COMBO_OXY_POS) keys.add('khac');
+  }
+  return SEGMENT_KEYS.filter((k) => keys.has(k));
 }
-export const isSegment = (v: string | null): v is typeof SEGMENT_KEYS[number] => (SEGMENT_KEYS as readonly (string | null)[]).includes(v);
+export const isSegment = (v: string | null): v is SegmentKey => (SEGMENT_KEYS as readonly (string | null)[]).includes(v);
+/** Đọc khoá thẻ từ URL / gợi ý: khoá cũ 'skgk' (thẻ đã bỏ 27/11/2026) đọc như 'khac'; khoá lạ → null. */
+export const parseSegment = (v: string | null | undefined): SegmentKey | null => v === 'skgk' ? 'khac' : v !== undefined && isSegment(v) ? v : null;
 export type OrderOrigin = 'all' | 'self' | 'mkt';
 export type OrderFilters = { productSegment: ProductSegment; orderOrigin: OrderOrigin; marketerId: string; status: StatusFilter };
-// Anh Vũ 29/10/2026: kháng sinh là Gentadox + Detox, SK GK là SK, GK, Godkill; loại khác báo "Khác" và ghi rõ sản phẩm.
-// Anh Vũ 31/10/2026: Oxy + Bổ huyết và Bio Nano Shield cũng là kháng sinh, nhưng chỉ ở POS Siêu Vô Gạo ("oxy pos khác không cần quan tâm").
-// Mỗi đơn chỉ thuộc một nhóm: đơn POS Oxytetra → Combo Oxytetra + Bổ đậm đặc; còn lại có kháng sinh → kháng sinh; không thì có SK / GK → SK GK; còn lại → Khác.
-export const PRODUCT_SEGMENTS = { all: 'Tất cả sản phẩm', gentadox: 'Kháng sinh', skgk: 'SK GK', khac: 'Khác', oxy: 'Combo Oxytetra + Bổ đậm đặc' };
-/** POS duy nhất tính Oxy + Bổ huyết và Bio Nano Shield là kháng sinh. */
-export const ANTIBIOTIC_EXTRA_POS = 'sieu-vo-gao';
+// Mỗi đơn đúng MỘT thẻ, xét theo thuốc chính (món đi kèm như men tỏi, detox, bổ đậm đặc không quyết định thẻ):
+//   POS Oxytetra → Combo Oxytetra (POS chỉ bán combo này, anh Vũ 04/11/2026);
+//   POS Siêu Vô Gạo → Gentadox (gồm các cỡ, mã cũ, và tên cũ Oxy + Bổ huyết, Bio Nano Shield) → Combo Oxytetra (đơn có Oxytetra)
+//     → Sát trùng, Glucan, Điện giải (đơn có Bencid / Glucan / Gluco) → Khác;
+//   POS BIO NANO → Doxytylo (mọi cỡ) → Khác; POS khác → Khác.
+export const PRODUCT_SEGMENTS: Record<ProductSegment, string> = {
+  all: 'Tất cả sản phẩm', gentadox: 'Gentadox', oxy: 'Combo Oxytetra + Bổ đậm đặc', 'sat-trung': 'Sát trùng, Glucan, Điện giải', doxytylo: 'Doxytylo', khac: 'Khác',
+};
+/** POS tính tên cũ Oxy + Bổ huyết và Bio Nano Shield vào Gentadox (giữ cách cũ của 31/10/2026; lib/reports/care-basket.ts dùng). */
+export const ANTIBIOTIC_EXTRA_POS = GENTADOX_POS;
 export const ORDER_ORIGINS = { all: 'Cả hai nguồn', self: 'Tự ups · không MKT', mkt: 'Từ MKT' };
 export function parseOrderFilters(p: URLSearchParams, team: Team): OrderFilters {
   const product = p.get('productSegment');
   const origin = p.get('orderOrigin');
   return {
-    productSegment: isSegment(product) ? product : 'all',
+    productSegment: parseSegment(product) ?? 'all',
     orderOrigin: team === 'cskh' && (origin === 'self' || origin === 'mkt') ? origin : 'all',
     marketerId: team === 'cskh' && origin === 'mkt' ? (p.get('marketerId') ?? '').trim().slice(0, 100) : '',
     status: parseStatus(p.get('status')),
@@ -41,26 +62,32 @@ export const closedDate = (f: OrderFilters, alias = '') => f.status.isDefault ? 
 export const closedWhere = (f: OrderFilters, alias = '') => f.status.isDefault ? `${alias}${CLOSED}` : statusSql(f.status, `${alias}status_code`);
 // The Marketer field, not arbitrary order tags, determines the CSKH acquisition source.
 export const marketerValue = (alias = 'o') => `NULLIF(TRIM(${alias}.marketer_id),'')`;
-function segmentParts(alias: string) {
-  const item = (match: string) => `EXISTS (SELECT 1 FROM raw_pos_order_items si WHERE si.order_id=${alias}.id AND si.is_bonus=0 AND si.quantity>0 AND (${match}))`;
-  const antibiotic = item(`LOWER(si.name) LIKE '%gentadox%' OR LOWER(si.name) LIKE '%detox%' OR (${alias}.pos_id='${ANTIBIOTIC_EXTRA_POS}' AND (LOWER(si.name) LIKE '%oxy%huy%' OR LOWER(si.name) LIKE '%nano shield%'))`);
-  // SK, GK là chữ riêng trong tên (như loại đơn ở Vận đơn, lib/shipping-lines.ts); thiếu sản phẩm khớp thì theo nhãn đơn SK + GK.
-  const word = `(' '||REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(si.name),'+',' '),'-',' '),'(',' '),')',' '),'/',' ')||' ')`;
-  const skgk = `(${item(`${word} LIKE '% sk %' OR ${word} LIKE '% gk %' OR LOWER(si.name) LIKE '%godkill%' OR LOWER(si.name) LIKE '%god kill%'`)} OR EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(${alias}.tags_json) THEN ${alias}.tags_json ELSE '[]' END) st WHERE REPLACE(UPPER(TRIM(json_extract(st.value,'$.name'))),' ','')='SK+GK'))`;
-  const notOxy = `${alias}.pos_id<>'${COMBO_OXY_POS}'`;
-  return { antibiotic, skgk, notOxy };
+/** Điều kiện "đơn có món (không phải quà, số lượng > 0) mà tên chứa một trong các mẫu" (so chữ thường). */
+function hasItem(alias: string, likes: readonly string[]) {
+  return `EXISTS (SELECT 1 FROM raw_pos_order_items si WHERE si.order_id=${alias}.id AND si.is_bonus=0 AND si.quantity>0 AND (${likes.map((l) => `LOWER(si.name) LIKE '${l}'`).join(' OR ')}))`;
 }
+/** Mẫu tên món của từng thẻ (chữ thường, LIKE). */
+export const SEGMENT_ITEM_LIKES: Record<Exclude<SegmentKey, 'khac'>, readonly string[]> = {
+  gentadox: ['%gentadox%', '%oxy%huy%', '%nano shield%'],
+  oxy: ['%oxytetra%'],
+  'sat-trung': ['%bencid%', '%glucan%', '%gluco%'],
+  doxytylo: ['%doxytylo%', '%doxy%tylo%'],
+};
+/** Khoá thẻ của một đơn (bí danh bảng đơn `alias`), một biểu thức SQL. Đổi luật thì tăng SEGMENT_EPOCH (lib/reports/stats.ts). */
 export function segmentKeyExpr(alias = 'o') {
-  const { antibiotic, skgk, notOxy } = segmentParts(alias);
-  return `CASE WHEN NOT (${notOxy}) THEN 'oxy' WHEN ${antibiotic} THEN 'gentadox' WHEN ${skgk} THEN 'skgk' ELSE 'khac' END`;
+  const pos = `${alias}.pos_id`;
+  const whens = [`WHEN ${pos}='${COMBO_OXY_POS}' THEN 'oxy'`];
+  for (const [p, keys] of Object.entries(POS_SEGMENTS)) {
+    if (p === COMBO_OXY_POS) continue;
+    for (const k of keys) whens.push(`WHEN ${pos}='${p}' AND ${hasItem(alias, SEGMENT_ITEM_LIKES[k as Exclude<SegmentKey, 'khac'>])} THEN '${k}'`);
+  }
+  return `CASE ${whens.join(' ')} ELSE 'khac' END`;
 }
 export function orderFilterSql(filters: OrderFilters, team: Team, alias = 'o') {
   const conditions: string[] = [], binds: string[] = [];
-  const { antibiotic, skgk, notOxy } = segmentParts(alias);
-  if (filters.productSegment === 'gentadox') conditions.push(`${notOxy} AND ${antibiotic}`);
-  if (filters.productSegment === 'skgk') conditions.push(`${notOxy} AND NOT ${antibiotic} AND ${skgk}`);
-  if (filters.productSegment === 'khac') conditions.push(`${notOxy} AND NOT ${antibiotic} AND NOT ${skgk}`);
-  if (filters.productSegment === 'oxy') conditions.push(`${alias}.pos_id='${COMBO_OXY_POS}'`);
+  // Lọc thẻ = đúng biểu thức xếp thẻ (một chỗ định nghĩa), nên các thẻ cộng lại luôn bằng tổng.
+  // Khoá thẻ ghi thẳng (chỉ nhận khoá trong SEGMENT_KEYS), không thêm bind: vài nơi chỉ dùng .sql (sections-report, trends-report).
+  if (filters.productSegment !== 'all' && isSegment(filters.productSegment)) conditions.push(`(${segmentKeyExpr(alias)})='${filters.productSegment}'`);
   if (team === 'cskh') {
     if (filters.orderOrigin === 'self') conditions.push(`${marketerValue(alias)} IS NULL`);
     if (filters.orderOrigin === 'mkt') conditions.push(`${marketerValue(alias)} IS NOT NULL`);

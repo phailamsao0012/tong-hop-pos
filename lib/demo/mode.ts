@@ -111,7 +111,7 @@ export async function ensureDemoSeed() {
  * Phiên bản dữ liệu ảo: tăng khi đổi cách sinh đơn (lib/demo/world.ts). Khác bản đã nạp thì xóa đơn ảo và số liệu ngày rồi cho đồng bộ
  * kéo lại từ đầu, vì đơn đã nạp không tự đổi lịch sử. Chỉ chạy ở bản demo (D1 riêng, dữ liệu ảo). 2 = thêm team Vận đơn (08/10/2026).
  */
-const WORLD_VERSION = '5'; // R2: thêm đơn hủy sau khi đã vào Đang đóng hàng.
+const WORLD_VERSION = '6'; // 27/11/2026: sản phẩm cho thẻ mới (Doxytylo, Oxytetra, Bencid), bỏ SK + GK khỏi các POS. (5: R2 thêm đơn hủy sau đóng hàng.)
 async function resetWorldIfChanged() {
   const db = env.DB;
   const cur = await db.prepare("SELECT value FROM app_settings WHERE key='demo_world'").first<{ value: string }>();
@@ -133,7 +133,7 @@ const yesterdayVn = () => addDay(vnDayOfMs(Date.now()), -1);
 /** Tên cột "Sản phẩm" kiểu sheet CPQC Daily cho từng sản phẩm ảo (viết thường, ngắn như marketer hay ghi). */
 const SHEET_PRODUCT: Record<string, string> = {
   gentadox: 'Gentadox', shield: 'Bio Nano Shield', oxy: 'Oxy bổ huyết', clean: 'Bio Nano Clean', godkill: 'Godkill', skgk: 'SK + GK',
-  megaroot: 'Megaroot', apex: 'Apex', vogao: 'Siêu vỏ gạo', vitc: 'Vitamin C', men: 'Men tiêu hóa',
+  megaroot: 'Megaroot', apex: 'Apex', vogao: 'Siêu vỏ gạo', vitc: 'Vitamin C', men: 'Men tiêu hóa', doxytylo: 'Doxytylo', oxytetra: 'Oxytetra', bencid: 'Bencid',
 };
 
 /** Chi phí quảng cáo ảo theo marketer, sản phẩm và ngày (giống sheet CPQC Daily): số data marketer mang về cho sản phẩm chính của đơn × giá mỗi data (90–140 nghìn).

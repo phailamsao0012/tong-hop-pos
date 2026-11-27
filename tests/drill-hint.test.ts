@@ -9,7 +9,7 @@ void test('drill-hint: chỉ gửi nhóm đơn hợp lệ, "Tất cả" thì kh�
   assert.deepEqual(segmentDrillHint('oxy'), { [SEGMENT_HINT]: 'oxy' });
   assert.equal(segmentDrillHint('all'), null);
   assert.equal(segmentDrillHint('khong-co'), null);
-  assert.equal(segmentFromHint('skgk'), 'skgk');
+  assert.equal(segmentFromHint('skgk'), 'khac', 'khoá cũ SK GK (đã bỏ 27/11/2026) đọc như Khác');
   assert.equal(segmentFromHint(undefined), null);
   assert.equal(segmentFromHint('all'), null);
   assert.equal(segmentFromHint('<script>'), null);

@@ -154,15 +154,19 @@ export const PRODUCTS: Product[] = [
   { key: 'vogao', name: 'Siêu Vỏ Gạo men vi sinh 1kg', price: 240000, tag: 'SIÊU VỎ GẠO' },
   { key: 'vitc', name: 'Vitamin C tạt 1kg', price: 180000, tag: null },
   { key: 'men', name: 'Men tiêu hóa đường ruột 500g', price: 220000, tag: null },
+  // Thẻ mới 27/11/2026 (lib/pancake/order-segments.ts): Doxytylo ở BIO NANO; Combo Oxytetra, Sát trùng ở Siêu Vô Gạo.
+  { key: 'doxytylo', name: 'Thuốc thú y Doxytylo 10g', price: 350000, tag: null },
+  { key: 'oxytetra', name: 'Thuốc thú y Oxytetra', price: 320000, tag: null },
+  { key: 'bencid', name: 'Sát trùng Bencid', price: 270000, tag: null },
   { key: 'gift', name: 'Quà tặng: găng tay cao su', price: 0, tag: null, bonus: true },
 ];
 const productOf = (key: string) => PRODUCTS.find((p) => p.key === key)!;
 /** Sản phẩm chủ lực của từng POS (trọng số). */
 const POS_MIX: Record<string, [string, number][]> = {
-  'sieu-vo-gao': [['vogao', 5], ['men', 3], ['vitc', 2], ['gentadox', 1]],
+  'sieu-vo-gao': [['gentadox', 5], ['vogao', 2], ['men', 2], ['oxytetra', 1], ['bencid', 1]],
   'mgt-apex': [['apex', 5], ['gentadox', 2], ['vitc', 2], ['megaroot', 1]],
-  'thuy-san': [['gentadox', 4], ['oxy', 3], ['skgk', 3], ['godkill', 2], ['clean', 1]],
-  'bio-nano': [['shield', 4], ['clean', 3], ['skgk', 1], ['men', 1]],
+  'thuy-san': [['gentadox', 4], ['oxy', 3], ['godkill', 2], ['clean', 1]],
+  'bio-nano': [['doxytylo', 5], ['shield', 2], ['clean', 1], ['men', 1]],
   'megaroot': [['megaroot', 5], ['apex', 2], ['vogao', 1]],
   'oxytetra': [['oxy', 5], ['gentadox', 3], ['vitc', 1]],
 };

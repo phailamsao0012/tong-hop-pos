@@ -4,7 +4,7 @@
 import { env } from 'cloudflare:workers';
 import { POS } from '@/lib/shared/report-model';
 import { DATE_RE } from '@/lib/shared/report-time';
-import { isSegment } from '@/lib/pancake/order-segments';
+import { parseSegment } from '@/lib/pancake/order-segments';
 import { MARKETING_TEAMS_KEY, parseMarketingTeams } from '@/lib/teams/marketing-teams';
 import { EMPTY_ORDER_FILTERS, orderFilterSql, type ProductSegment } from '@/lib/pancake/order-segments';
 import { addDays, todayVn, vnRangeUtc } from '@/lib/shared/report-time';
@@ -38,7 +38,7 @@ export function parseTrendsParams(p: URLSearchParams): TrendsOpts | { error: str
   const requested = (p.get('posIds') ?? '').split(',').filter(Boolean);
   if (requested.some((id) => !validPos.has(id))) return { error: 'POS không hợp lệ.' };
   const pp = p.get('productSegment');
-  return { posIds: requested.length ? requested : POS.map((x) => x.id), productSegment: isSegment(pp) ? pp : 'all', start, end };
+  return { posIds: requested.length ? requested : POS.map((x) => x.id), productSegment: parseSegment(pp) ?? 'all', start, end };
 }
 
 /** Thân JSON mà /api/reports/trends trả: số liệu kèm chú giải. */

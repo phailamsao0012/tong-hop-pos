@@ -1,6 +1,6 @@
 'use client';
 
-// Thẻ Kháng sinh (Gentadox + Detox), SK GK và Khác ở Tổng quan Sale, kèm từng người bán được bao nhiêu (anh Vũ 29/10/2026
+// Thẻ nhóm đơn (27/11/2026: Gentadox, Combo Oxytetra, Sát trùng…, Doxytylo, Khác; trước đây Kháng sinh, SK GK, Khác) ở Tổng quan Sale, kèm từng người bán được bao nhiêu (anh Vũ 29/10/2026
 // "ở sale tôi cũng muốn có các thẻ gentadox và thẻ sk gk, kháng sinh ấy, để xem mọi người bán được như thế nào";
 // "gentadox + detox là kháng sinh, còn lại là sk gk"; "nếu có loại khác thì báo khác, ghi rõ loại nào";
 // 31/10: Siêu Vô Gạo tính thêm Oxy + Bổ huyết, Bio Nano Shield là kháng sinh).
@@ -16,8 +16,9 @@ import { ChartCard, DeltaPill, EmptyState, SkeletonTable, SortTh, TableWrap, del
 import { useApi } from './use-api';
 
 type Seg = typeof SEGMENT_KEYS[number];
-const LABEL: Record<Seg, string> = { gentadox: PRODUCT_SEGMENTS.gentadox, skgk: PRODUCT_SEGMENTS.skgk, khac: PRODUCT_SEGMENTS.khac, oxy: PRODUCT_SEGMENTS.oxy };
-const COLOR: Record<Seg, string> = { gentadox: 'var(--primary)', skgk: 'var(--t-blue)', khac: 'var(--t-orange)', oxy: 'var(--t-purple, #6d4bc3)' };
+// Bộ thẻ mới 27/11/2026 (lib/pancake/order-segments.ts): thẻ theo thuốc chính từng POS, bỏ SK GK.
+const LABEL = PRODUCT_SEGMENTS as Record<Seg, string>;
+const COLOR: Record<Seg, string> = { gentadox: 'var(--primary)', oxy: 'var(--t-purple, #6d4bc3)', 'sat-trung': 'var(--t-blue)', doxytylo: 'var(--t-teal, #0f8b8d)', khac: 'var(--t-orange)' };
 type SortKey = 'name' | Seg | `${Seg}N` | 'total';
 const url = (q: string, seg: Seg, segs: Seg[]) => segs.includes(seg) ? `/api/reports/overview?${q}&groupBy=day&compare=previous&productSegment=${seg}` : null;
 
@@ -33,23 +34,25 @@ export function SaleSegmentBlock({ q, periodLabel }: { q: string; periodLabel: s
   const ms = useMetricSettings();
   // POS Oxytetra chỉ bán Combo Oxytetra + Bổ đậm đặc (anh Vũ 04/11/2026): chỉ hiện nhóm có trong các POS đang chọn.
   const segs = segmentsFor((new URLSearchParams(q).get('posIds') ?? '').split(',').filter(Boolean));
+  // Mỗi thẻ một lượt gọi overview (thẻ không có ở POS đang chọn thì không gọi). SEGMENT_KEYS cố định nên số hook không đổi.
   const reports: Record<Seg, OverviewReport | null> = {
     gentadox: useApi<OverviewReport>(url(q, 'gentadox', segs)).data,
-    skgk: useApi<OverviewReport>(url(q, 'skgk', segs)).data,
-    khac: useApi<OverviewReport>(url(q, 'khac', segs)).data,
     oxy: useApi<OverviewReport>(url(q, 'oxy', segs)).data,
+    'sat-trung': useApi<OverviewReport>(url(q, 'sat-trung', segs)).data,
+    doxytylo: useApi<OverviewReport>(url(q, 'doxytylo', segs)).data,
+    khac: useApi<OverviewReport>(url(q, 'khac', segs)).data,
   };
   const sort = useSort<SortKey>('total');
   const people = new Map<string, { id: string; name: string } & Record<Seg | `${Seg}N`, number>>();
   for (const seg of segs) for (const r of reports[seg]?.current.byEmployee ?? []) {
     if (!r.sellerId) continue;
-    const p = people.get(r.sellerId) ?? { id: r.sellerId, name: r.name, gentadox: 0, skgk: 0, khac: 0, oxy: 0, gentadoxN: 0, skgkN: 0, khacN: 0, oxyN: 0 };
+    const p = people.get(r.sellerId) ?? { id: r.sellerId, name: r.name, ...Object.fromEntries(SEGMENT_KEYS.flatMap((k) => [[k, 0], [`${k}N`, 0]])) } as { id: string; name: string } & Record<Seg | `${Seg}N`, number>;
     p[seg] = r.closedNet; p[`${seg}N`] = r.closedOrders;
     people.set(r.sellerId, p);
   }
-  const total = (r: Record<Seg, number>) => r.gentadox + r.skgk + r.khac + r.oxy;
-  const rows = sort.apply([...people.values()].filter((p) => p.gentadoxN || p.skgkN || p.khacN || p.oxyN), (r, k) => k === 'total' ? total(r) : r[k]);
-  const max = Math.max(1, ...rows.map((r) => Math.max(r.gentadox, r.skgk, r.khac, r.oxy)));
+  const total = (r: Record<Seg, number>) => segs.reduce((n, k) => n + r[k], 0);
+  const rows = sort.apply([...people.values()].filter((p) => segs.some((k) => p[`${k}N`])), (r, k) => k === 'total' ? total(r) : r[k]);
+  const max = Math.max(1, ...rows.map((r) => Math.max(...segs.map((k) => r[k]))));
   const loading = segs.some((s) => !reports[s]);
   const others = otherProducts(reports.khac);
   return (

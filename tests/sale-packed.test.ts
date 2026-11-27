@@ -68,7 +68,7 @@ void test('sale-packed: phân trang không mất đơn, team và nhóm sản ph�
     assert.equal(second.length, 5);
     assert.equal(new Set([...first.slice(0, 100), ...second].map((o) => o.id)).size, 105);
     const { EMPTY_ORDER_FILTERS } = await import('../lib/pancake/order-segments');
-    assert.equal((await packedBySeller(db, { ...opts, scope: { filters: { ...EMPTY_ORDER_FILTERS, productSegment: 'skgk' } } }))[0].packedNet, 10500);
+    assert.equal((await packedBySeller(db, { ...opts, scope: { filters: { ...EMPTY_ORDER_FILTERS, productSegment: 'khac' } } }))[0].packedNet, 10500); // POS ảo 'p' không có thẻ riêng: mọi đơn là Khác (27/11/2026, thay SK GK)
     assert.equal((await packedBySeller(db, { ...opts, scope: { filters: { ...EMPTY_ORDER_FILTERS, productSegment: 'gentadox' } } }))[0]?.packedNet ?? 0, 0);
     assert.deepEqual(await packedBySeller(db, { ...opts, scope: { unit: { id: 'empty-team', name: 'Team MKT 1', dept: 'sale' } } }), []);
   } finally { raw.close(); }
@@ -94,7 +94,7 @@ void test('sale-packed: demo tổng cột = khối Sale, danh sách giữ POS/ng
       assert.ok(employee);
       assert.ok(r.packedNet <= employee.closedNet);
     }
-    for (const segment of ['all', 'skgk', 'gentadox']) {
+    for (const segment of ['all', 'khac', 'gentadox']) {
       const q = new URLSearchParams(base); q.set('productSegment', segment);
       const grouped = await (await overview(new Request('http://local/api/reports/overview?' + q))).json() as TestOverview;
       const groupedCards = await (await sections(new Request('http://local/api/reports/sections?' + q))).json() as TestSections;
