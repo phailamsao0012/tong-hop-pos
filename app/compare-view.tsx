@@ -235,16 +235,9 @@ export function CompareView() {
     { icon: Scale, title: 'Cân bằng data', subtitle: 'Chốt tốt nhưng ít data, hoặc nhiều data chốt thấp', rows: quick.balance },
   ];
 
-  return (
-    <div className="space-y-5">
-      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)} · so với kỳ liền trước`} title="So sánh nhân viên" subtitle="Tỷ lệ chốt = trong số đơn chia trong kỳ, bao nhiêu đơn đã chốt (không vượt 100%)"
-        badge={<StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} />}
-        actions={<><Button variant="outline" onClick={exportSlides} disabled={!report}>Xuất slide</Button><Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button></>} />
-      <PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset}
-        onStart={setStart} onEnd={setEnd} loading={loading} onReload={update} />
-      <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
-      <OrderOriginFilter team={team} marketers={report?.origins} />
-      {report && (
+  // [khối chung] Các khối dùng chung cho bố cục cũ và bố cục kiểu mới (cờ THP_UI_MOI): cùng JSX, chỉ chỗ đặt khác nhau.
+  // fold: chỉ bố cục mới truyền (thu gọn thẻ); bố cục cũ không truyền nên thẻ y như trước.
+  const filterBar = (report: Report) => (
         <Toolbar>
           <span className="px-1 text-[12.5px] font-semibold text-ink-2">Bộ phận</span>
           <Select value={department} items={{ all: 'Tất cả bộ phận', ...Object.fromEntries(report.departments.map((d) => [d, d])), __none: 'Chưa có bộ phận' }} onValueChange={(v) => { setDepartment(String(v)); setSelected([]); }}>
@@ -269,35 +262,8 @@ export function CompareView() {
           </Select>
           {selected.length > 0 && <Button size="sm" variant="ghost" onClick={() => setSelected([])}>Bỏ chọn</Button>}
         </Toolbar>
-      )}
-      {error && !report && <ErrorBox error={error} onRetry={reload} />}
-      {!report && !error && (
-        <>
-          <SkeletonKpis count={5} className="xl:grid-cols-5" />
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.9fr)]">
-            <ChartCard icon={BarChart3} title="Hiệu suất đội ngũ" loading><div className="h-56" /></ChartCard>
-            <ChartCard icon={Scale} title="Đơn chia vs. tỷ lệ chốt" loading><div className="h-56" /></ChartCard>
-            <ChartCard icon={Award} title="Góc nhìn nhanh" loading><div className="h-56" /></ChartCard>
-          </div>
-          <ChartCard icon={Users} title="So sánh chi tiết nhân viên" loading><div className="h-64" /></ChartCard>
-        </>
-      )}
-      {report && (
-        <>
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
-            <KpiCard icon={Users} tone="green" label="Tổng nhân sự" value={vi.format(active.length)} countUp rawValue={active.length} format={(n) => vi.format(Math.round(n))} note={`Có đơn chia hoặc đơn chốt trong kỳ${selected.length ? ' · đang so sánh' : ''}`}
-              tooltip={{ period: periodText, current: `${vi.format(active.length)} người`, definition: 'Nhân viên có đơn chia hoặc đơn chốt trong kỳ, theo bộ phận và POS đã chọn (đang so sánh thì chỉ tính người đã chọn).' }} />
-            <KpiCard icon={ClipboardList} tone="blue" label="Tổng đơn chia" value={vi.format(totals.assigned)} countUp rawValue={totals.assigned} format={(n) => vi.format(Math.round(n))} delta={delta(totals.assigned, totals.prevAssigned)} deltaLabel={cmpLabel} note={`Trung bình ${vi.format(Math.round(totals.avgAssigned))} đơn/người`}
-              tooltip={{ period: periodText, current: vi.format(totals.assigned), previous: hasCmp ? vi.format(totals.prevAssigned) : undefined, previousLabel: prevLabel, diff: hasCmp ? diffText(totals.assigned, totals.prevAssigned) : undefined, definition: 'Số đơn được chia cho nhân viên trong kỳ (Pancake "Phân công cho NV").' }} />
-            <KpiCard icon={CheckCircle2} tone="teal" label="Tổng đơn chốt" value={vi.format(totals.closed)} countUp rawValue={totals.closed} format={(n) => vi.format(Math.round(n))} delta={delta(totals.closed, totals.prevClosed)} deltaLabel={cmpLabel} note={`Tỷ lệ chốt chung ${pct(totals.rate)}`} sparkline={closedByDay}
-              tooltip={{ period: periodText, current: vi.format(totals.closed), previous: hasCmp ? vi.format(totals.prevClosed) : undefined, previousLabel: prevLabel, diff: hasCmp ? diffText(totals.closed, totals.prevClosed) : undefined, definition: 'Đơn đã xác nhận trong kỳ (như Pancake, không tính hủy/xóa). Tỷ lệ chốt chung = số chia đã chốt ÷ số chia. Cột Đơn chốt đếm theo ngày chốt nên có cả đơn chia từ trước.' }} />
-            <KpiCard icon={BarChart3} tone="orange" label="Trung vị tỷ lệ chốt" value={pct(totals.median)} countUp rawValue={totals.median ?? undefined} format={(n) => pct(n)} delta={totals.median !== null && totals.prevMedian !== null ? totals.median - totals.prevMedian : null} deltaLabel={`điểm % ${cmpLabel}`} note={`Mục tiêu tham chiếu ${TARGET}%`}
-              tooltip={{ period: periodText, current: pct(totals.median), previous: hasCmp ? pct(totals.prevMedian) : undefined, previousLabel: prevLabel, diff: totals.median !== null && totals.prevMedian !== null ? `${totals.median - totals.prevMedian >= 0 ? '+' : '−'}${Math.abs(totals.median - totals.prevMedian).toFixed(1).replace('.', ',')} điểm` : undefined, definition: `Trung vị tỷ lệ chốt của từng nhân viên (số chia đã chốt ÷ số chia); mục tiêu tham chiếu ${TARGET}%.` }} />
-            <KpiCard icon={Trophy} tone="lime" label="Nhân viên nổi bật" className="max-xl:col-span-2" value={totals.best ? pct(closeRateOf(totals.best, ms.rateBase)) : '—'} countUp rawValue={(totals.best ? closeRateOf(totals.best, ms.rateBase) : null) ?? undefined} format={(n) => pct(n)}
-              note={totals.best ? `${totals.best.name} · ${closeRateTop(totals.best, ms.rateBase)} / ${closeRateBase(totals.best, ms.rateBase)} đơn` : 'Chưa đủ dữ liệu'}
-              tooltip={{ period: periodText, current: totals.best?.name ?? '—', definition: 'Người có tỷ lệ chốt cao nhất trong số nhân viên có ≥ 10 đơn chia (không đủ thì lấy cao nhất chung).' }} />
-          </div>
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.9fr)]">
+  );
+  const perfCard = () => (
             <ChartCard icon={BarChart3} title="Hiệu suất đội ngũ" subtitle={`Tỷ lệ chốt (%) của ${chartRows.length} nhân viên cao nhất · vạch xám: trung vị ${pct(totals.median)} · vạch xanh: mục tiêu ${TARGET}%`}>
               {chartRows.length ? (
                 <ChartContainer className="w-full aspect-auto" style={{ height: Math.max(220, chartRows.length * 30) }} config={{ rate: { label: 'Tỷ lệ chốt %', color: 'var(--primary)' } }}>
@@ -318,7 +284,9 @@ export function CompareView() {
                 </ChartContainer>
               ) : <EmptyState text="Không có nhân viên có đơn trong kỳ." />}
             </ChartCard>
-            <ChartCard icon={Scale} title="Đơn chia vs. tỷ lệ chốt" subtitle="Mỗi chấm một người · cỡ chấm theo doanh thu · bấm chấm để so sánh">
+  );
+  const scatterCard = (fold?: { storageKey: string; summary?: string }) => (
+            <ChartCard collapse={fold} icon={Scale} title="Đơn chia vs. tỷ lệ chốt" subtitle="Mỗi chấm một người · cỡ chấm theo doanh thu · bấm chấm để so sánh">
               {scatterRows.length ? (
                 <ChartContainer className="h-72 w-full aspect-auto" config={{ y: { label: 'Tỷ lệ chốt', color: 'var(--primary)' } }}>
                   <ScatterChart margin={{ top: 10, right: 16, bottom: 8, left: 0 }}>
@@ -339,6 +307,8 @@ export function CompareView() {
               ) : <EmptyState text="Không có dữ liệu." />}
               <div className="mt-2 grid grid-cols-2 gap-1 text-[11px] text-ink-3"><span>↖ Chốt tốt, cần thêm data</span><span className="text-right">Hiệu suất cao ↗</span><span>↙ Cần hỗ trợ, ưu tiên coaching</span><span className="text-right">Cân bằng data ↘</span></div>
             </ChartCard>
+  );
+  const quickList = () => (
             <div className="space-y-3">
               {quickBlocks.map((b) => (
                 <ChartCard key={b.title} icon={b.icon} title={b.title} subtitle={b.subtitle}>
@@ -364,7 +334,8 @@ export function CompareView() {
                 </ChartCard>
               ))}
             </div>
-          </div>
+  );
+  const detailCard = (report: Report) => (
           <ChartCard icon={Users} title={`So sánh chi tiết nhân viên (${rows.length} nhân viên)`} subtitle="Bấm tên để so sánh · bấm tiêu đề cột để sắp xếp · rê chuột vào dòng xem 7 ngày đơn chốt gần nhất"
             action={team === 'cskh' ? <Button size="sm" variant="outline" onClick={() => setShowClose(!showClose)} aria-pressed={showClose}>{showClose ? 'Ẩn cột chốt' : 'Hiện cột chốt'}</Button> : undefined}>
             <TableWrap maxHeight="36rem" sticky minWidth={720}>
@@ -476,12 +447,63 @@ export function CompareView() {
               </table>
             </TableWrap>
           </ChartCard>
+  );
+  const defsBlock = () => (
           <Definitions items={[
             `Hoàn thành mục tiêu = doanh thu đơn chốt so với mục tiêu tháng đã đặt trong Cấu hình (chưa đặt thì dùng tỷ lệ chốt so với ${TARGET}%).`,
             `Nhận xét dựa trên trung vị đội ngũ và mục tiêu tham chiếu ${TARGET}%: Hiệu suất cao = tỷ lệ ≥ mục tiêu với lượng đơn chia từ trung vị trở lên; Cần hỗ trợ = ≥ 10 đơn chia nhưng tỷ lệ dưới 80% trung vị; Cân bằng data = nhận nhiều hơn 150% trung vị mà tỷ lệ dưới trung vị.`,
             'Tỷ lệ chốt = trong số đơn chia trong kỳ, bao nhiêu đơn đã chốt (không vượt 100%). Cột Đơn chốt đếm theo ngày chốt (như Pancake) nên có cả đơn chia từ trước. Đơn chốt = đơn đã xác nhận trở đi, không tính hủy/xóa; doanh thu sau giảm giá và quà.',
             'Ô tìm tên chỉ lọc bảng chi tiết; thẻ số, biểu đồ và file xuất theo lựa chọn so sánh (tối đa 8 người).',
           ]} />
+  );
+  // [hết khối chung]
+
+  return (
+    <div className="space-y-5">
+      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)} · so với kỳ liền trước`} title="So sánh nhân viên" subtitle="Tỷ lệ chốt = trong số đơn chia trong kỳ, bao nhiêu đơn đã chốt (không vượt 100%)"
+        badge={<StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} />}
+        actions={<><Button variant="outline" onClick={exportSlides} disabled={!report}>Xuất slide</Button><Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button></>} />
+      <PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset}
+        onStart={setStart} onEnd={setEnd} loading={loading} onReload={update} />
+      <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
+      <OrderOriginFilter team={team} marketers={report?.origins} />
+      {report && (
+        filterBar(report)
+      )}
+      {error && !report && <ErrorBox error={error} onRetry={reload} />}
+      {!report && !error && (
+        <>
+          <SkeletonKpis count={5} className="xl:grid-cols-5" />
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.9fr)]">
+            <ChartCard icon={BarChart3} title="Hiệu suất đội ngũ" loading><div className="h-56" /></ChartCard>
+            <ChartCard icon={Scale} title="Đơn chia vs. tỷ lệ chốt" loading><div className="h-56" /></ChartCard>
+            <ChartCard icon={Award} title="Góc nhìn nhanh" loading><div className="h-56" /></ChartCard>
+          </div>
+          <ChartCard icon={Users} title="So sánh chi tiết nhân viên" loading><div className="h-64" /></ChartCard>
+        </>
+      )}
+      {report && (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
+            <KpiCard icon={Users} tone="green" label="Tổng nhân sự" value={vi.format(active.length)} countUp rawValue={active.length} format={(n) => vi.format(Math.round(n))} note={`Có đơn chia hoặc đơn chốt trong kỳ${selected.length ? ' · đang so sánh' : ''}`}
+              tooltip={{ period: periodText, current: `${vi.format(active.length)} người`, definition: 'Nhân viên có đơn chia hoặc đơn chốt trong kỳ, theo bộ phận và POS đã chọn (đang so sánh thì chỉ tính người đã chọn).' }} />
+            <KpiCard icon={ClipboardList} tone="blue" label="Tổng đơn chia" value={vi.format(totals.assigned)} countUp rawValue={totals.assigned} format={(n) => vi.format(Math.round(n))} delta={delta(totals.assigned, totals.prevAssigned)} deltaLabel={cmpLabel} note={`Trung bình ${vi.format(Math.round(totals.avgAssigned))} đơn/người`}
+              tooltip={{ period: periodText, current: vi.format(totals.assigned), previous: hasCmp ? vi.format(totals.prevAssigned) : undefined, previousLabel: prevLabel, diff: hasCmp ? diffText(totals.assigned, totals.prevAssigned) : undefined, definition: 'Số đơn được chia cho nhân viên trong kỳ (Pancake "Phân công cho NV").' }} />
+            <KpiCard icon={CheckCircle2} tone="teal" label="Tổng đơn chốt" value={vi.format(totals.closed)} countUp rawValue={totals.closed} format={(n) => vi.format(Math.round(n))} delta={delta(totals.closed, totals.prevClosed)} deltaLabel={cmpLabel} note={`Tỷ lệ chốt chung ${pct(totals.rate)}`} sparkline={closedByDay}
+              tooltip={{ period: periodText, current: vi.format(totals.closed), previous: hasCmp ? vi.format(totals.prevClosed) : undefined, previousLabel: prevLabel, diff: hasCmp ? diffText(totals.closed, totals.prevClosed) : undefined, definition: 'Đơn đã xác nhận trong kỳ (như Pancake, không tính hủy/xóa). Tỷ lệ chốt chung = số chia đã chốt ÷ số chia. Cột Đơn chốt đếm theo ngày chốt nên có cả đơn chia từ trước.' }} />
+            <KpiCard icon={BarChart3} tone="orange" label="Trung vị tỷ lệ chốt" value={pct(totals.median)} countUp rawValue={totals.median ?? undefined} format={(n) => pct(n)} delta={totals.median !== null && totals.prevMedian !== null ? totals.median - totals.prevMedian : null} deltaLabel={`điểm % ${cmpLabel}`} note={`Mục tiêu tham chiếu ${TARGET}%`}
+              tooltip={{ period: periodText, current: pct(totals.median), previous: hasCmp ? pct(totals.prevMedian) : undefined, previousLabel: prevLabel, diff: totals.median !== null && totals.prevMedian !== null ? `${totals.median - totals.prevMedian >= 0 ? '+' : '−'}${Math.abs(totals.median - totals.prevMedian).toFixed(1).replace('.', ',')} điểm` : undefined, definition: `Trung vị tỷ lệ chốt của từng nhân viên (số chia đã chốt ÷ số chia); mục tiêu tham chiếu ${TARGET}%.` }} />
+            <KpiCard icon={Trophy} tone="lime" label="Nhân viên nổi bật" className="max-xl:col-span-2" value={totals.best ? pct(closeRateOf(totals.best, ms.rateBase)) : '—'} countUp rawValue={(totals.best ? closeRateOf(totals.best, ms.rateBase) : null) ?? undefined} format={(n) => pct(n)}
+              note={totals.best ? `${totals.best.name} · ${closeRateTop(totals.best, ms.rateBase)} / ${closeRateBase(totals.best, ms.rateBase)} đơn` : 'Chưa đủ dữ liệu'}
+              tooltip={{ period: periodText, current: totals.best?.name ?? '—', definition: 'Người có tỷ lệ chốt cao nhất trong số nhân viên có ≥ 10 đơn chia (không đủ thì lấy cao nhất chung).' }} />
+          </div>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.9fr)]">
+            {perfCard()}
+            {scatterCard()}
+            {quickList()}
+          </div>
+          {detailCard(report)}
+          {defsBlock()}
         </>
       )}
     </div>
