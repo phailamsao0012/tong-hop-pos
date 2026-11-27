@@ -293,9 +293,10 @@ export function TeamOverviewView({
         )
     : null;
   const periodLabel = `${dmy(start)} – ${dmy(end)}`;
+  // Mỗi con số ghi rõ phạm vi (27/11/2026): doanh thu / đơn chốt theo ngày tạo đơn.
   const statusNote = status.isDefault
-    ? 'đơn đã xác nhận trở đi'
-    : `trạng thái: ${status.label.toLowerCase()}`;
+    ? 'đơn đã xác nhận trở đi, theo ngày tạo đơn'
+    : `trạng thái: ${status.label.toLowerCase()}, theo ngày tạo đơn`;
   const rateOf = (m: Metrics) =>
     team === 'sale' ? closeRateOf(m, ms.rateBase) : closeRateOf(m, ms.rateBase);
   const tip = (definition: string, current: string, previous?: string) => ({
@@ -345,7 +346,7 @@ export function TeamOverviewView({
       )}
       {!cur && !api.error && (
         <>
-          <SkeletonKpis count={6} className="lg:grid-cols-3 2xl:grid-cols-6" />
+          <SkeletonKpis count={team === 'sale' ? 7 : 6} className={team === 'sale' ? 'lg:grid-cols-4 min-[1600px]:grid-cols-7' : 'lg:grid-cols-3 2xl:grid-cols-6'} />
           <ChartCard title="Theo ngày" subtitle="Đang tải…">
             <SkeletonTable rows={5} cols={5} />
           </ChartCard>
@@ -354,10 +355,13 @@ export function TeamOverviewView({
       {cur && report && (
         <>
           <div
-            className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 2xl:grid-cols-6 transition-opacity"
+            // Sale 7 ô (thêm DT đã nhận, 27/11/2026): từ 1600px một hàng 7 cột; 1024–1599px lưới 4 cột, ô Doanh thu rộng 2 ô → hai hàng đủ chỗ, không ô trống.
+            // CSKH 6 ô: 3 cột / 6 cột như cũ.
+            className={`stagger grid grid-cols-2 gap-3 sm:gap-4 ${team === 'sale' ? 'lg:grid-cols-4 min-[1600px]:grid-cols-7' : 'lg:grid-cols-3 2xl:grid-cols-6'} transition-opacity`}
             aria-busy={api.loading}
           >
             <KpiCard
+              className={team === 'sale' ? 'col-span-2 sm:col-span-2 lg:col-span-2 min-[1600px]:col-span-1' : ''}
               id={`${team}-revenue`}
               icon={ICON.revenue}
               tone="green"
