@@ -404,6 +404,23 @@ export const SEGMENT_EPOCH = 3;
 /** Giá trị cờ ready của bảng nhóm = cũng là cờ "bảng tính sẵn đã theo ngày tạo đơn" (revenueStatsReady). Luôn suy từ SEGMENT_EPOCH, không
  *  viết số: khi gộp nhánh khác cũng tăng SEGMENT_EPOCH thì chỉ cần tăng lên số kế tiếp, mọi nơi theo. */
 export const SEGMENT_READY_VALUE = String(SEGMENT_EPOCH);
+// Tăng số này khi đổi cách tính stats_daily để bộ hẹn giờ dựng lại toàn bộ từ đơn đã lưu (trước ở lib/ops/scheduler.ts).
+// 8: doanh thu / đơn chốt theo ngày tạo đơn + cột received_* (27/11/2026).
+export const STATS_EPOCH = 8;
+/** Mốc "stats_daily đã dựng lại xong theo STATS_EPOCH": bộ hẹn giờ ghi khi hết danh sách (POS, tháng) phải dựng (27/11/2026).
+ *  Lệnh tính lại thẻ chạy tay (scripts/pc/tinh-lai-the.ts) chỉ chạy khi có mốc này, để không bật cờ bảng thẻ (cũng là cờ doanh thu
+ *  theo ngày tạo) trong lúc stats_daily còn nửa cũ nửa mới. */
+export const STATS_DONE_KEY = 'stats_daily_done_epoch';
+export async function statsDailyDone(db: D1Database) {
+  const r = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(STATS_DONE_KEY).first<{ value: string }>().catch(() => null);
+  return r?.value === String(STATS_EPOCH);
+}
+export async function markStatsDailyDone(db: D1Database) {
+  if (await statsDailyDone(db)) return 0;
+  await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at')
+    .bind(STATS_DONE_KEY, String(STATS_EPOCH), new Date().toISOString()).run();
+  return 1;
+}
 /** Chưa điền đủ lịch sử luôn đọc đường cũ; nhớ cờ 60 giây mỗi isolate. */
 let segmentReady = { value: false, at: 0 };
 export async function segmentStatsReady(db: D1Database) {

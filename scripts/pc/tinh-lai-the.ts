@@ -35,6 +35,7 @@ const r = await recomputeSegments(db, {
   pauseMs: pauseS * 1000, stop,
   onStep: (s, i, total) => console.log(`${new Date().toLocaleTimeString('vi-VN')} ${i + 1}/${total} ${s.key}: ${(s.ms / 1000).toFixed(1)}s, ${s.writes} dòng ghi`),
 });
+if (r.statsNotReady) { console.error('stats_daily chưa dựng xong, chưa tính lại thẻ. Không ghi gì. Chờ bộ hẹn giờ dựng xong (mốc stats_daily_done_epoch) rồi chạy lại.'); await db.close(); process.exit(3); }
 console.log(`Xong ${r.done}/${r.total} tháng trong ${Math.round((Date.now() - t0) / 1000)}s. Mốc sẵn sàng: ${r.ready ? 'ĐÃ BẬT' : 'chưa'}.${r.stopped ? ` Dừng vì ${why ?? 'yêu cầu'}.` : ''}`);
 const after = await sums();
 const old = new Map(before.map((x) => [x.m, x]));

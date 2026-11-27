@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { demoWorld } from './support/d1-sqlite';
 import { recomputeSegments } from '../lib/reports/segment-recompute';
-import { SEGMENT_EPOCH, SEGMENT_READY_KEY, resetSegmentReadyMemo, segmentStatsReady } from '../lib/reports/stats';
+import { SEGMENT_EPOCH, SEGMENT_READY_KEY, STATS_DONE_KEY, STATS_EPOCH, resetSegmentReadyMemo, segmentStatsReady } from '../lib/reports/stats';
 import { EMPTY_ORDER_FILTERS, segmentedStats, segmentsFor, type ProductSegment } from '../lib/pancake/order-segments';
 import { SHOPS } from '../lib/demo/world';
 import { vnDayStartUtc } from '../lib/shared/report-time';
@@ -16,6 +16,18 @@ void test('tính lại thẻ: dọn thẻ cũ, tổng từng tháng không đổ
   const { raw, db } = await demoWorld(DAYS, Date.parse('2026-11-06T03:00:00Z'));
   try {
     const sums = () => raw.prepare("SELECT substr(day,1,7) m, SUM(closed_net) net, SUM(closed_orders) n, SUM(orders) o FROM stats_daily_segment GROUP BY 1 ORDER BY 1").all();
+    // stats_daily chưa dựng xong theo STATS_EPOCH (chưa có mốc): lệnh dừng ngay, không ghi gì, không bật mốc thẻ (27/11/2026).
+    const count = () => { let seg = -1; try { seg = Number(raw.prepare('SELECT COUNT(*) AS n FROM stats_daily_segment').get()?.n); } catch { /* chưa có bảng */ } return [raw.prepare('SELECT key, value FROM app_settings ORDER BY key').all(), seg]; };
+    const n0 = count();
+    const blocked = await recomputeSegments(db);
+    assert.equal(blocked.statsNotReady, true);
+    assert.equal(blocked.ready, false);
+    assert.equal(blocked.done, 0);
+    assert.deepEqual(count(), n0, 'không ghi gì (app_settings, bảng thẻ)');
+    // Mốc sai epoch cũng chưa tính.
+    raw.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?)').run(STATS_DONE_KEY, String(STATS_EPOCH - 1), '2026-11-06T03:00:00Z');
+    assert.equal((await recomputeSegments(db)).statsNotReady, true);
+    raw.prepare('UPDATE app_settings SET value=? WHERE key=?').run(String(STATS_EPOCH), STATS_DONE_KEY);
     // Lần đầu: điền đủ, rồi giả có dòng thẻ cũ SK GK còn sót trong bảng (như DB thật trước khi đổi thẻ).
     const first = await recomputeSegments(db);
     assert.equal(first.ready, true);

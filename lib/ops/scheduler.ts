@@ -7,6 +7,7 @@ import { markDataChanged, trackDataWrites } from '@/lib/ops/data-version';
 import { DurableObject } from 'cloudflare:workers';
 import { DEFAULT_BUDGET, WRITE_LIMIT_ERROR, buildStatsMonth, runScheduledSync } from '@/lib/pancake/sync';
 import { MKT_EPOCH, MKT_READY_KEY, buildMktMonth } from '@/lib/reports/stats-mkt';
+import { STATS_EPOCH, markStatsDailyDone } from '@/lib/reports/stats';
 import { SELLER_PRODUCT_EPOCH, SELLER_PRODUCT_READY_KEY, SENT_AT_EPOCH, SENT_AT_READY_KEY, buildSellerProductMonth, countSentEstimatedMonth, fillClosedAtMonth, fillSentAtMonth } from '@/lib/reports/stats';
 import { DAY_EXPR } from '@/lib/reports/stats';
 import { buildCustomerStatsMonth } from '@/lib/reports/customer-stats';
@@ -29,10 +30,8 @@ export const D1_DAILY_WRITE_LIMIT = 1_200_000;
 // Tăng số này để xóa trạng thái "bị chặn ghi" đã lưu (ví dụ sau khi nâng gói).
 const BLOCK_EPOCH = 6;
 const WEBHOOK_ORIGIN = 'https://tonghopposmegatech.io.vn';
-// Tăng số này khi đổi cách tính stats_daily để dựng lại toàn bộ từ đơn đã lưu.
-// 8: doanh thu / đơn chốt theo ngày tạo đơn + cột received_* (27/11/2026). Đổi cùng SEGMENT_EPOCH / SELLER_PRODUCT_EPOCH (lib/reports/stats.ts):
+// STATS_EPOCH nay ở lib/reports/stats.ts (dùng chung với mốc stats_daily_done_epoch). Đổi cùng SEGMENT_EPOCH / SELLER_PRODUCT_EPOCH:
 // cờ nhóm sản phẩm chỉ bật sau khi stats_daily dựng lại xong, nơi đọc dùng cờ đó (revenueStatsReady) để biết bảng đã theo cách mới.
-const STATS_EPOCH = 8;
 const CUSTOMER_EPOCH = 7; // 7: đơn chốt của khách tính cả Chờ xác nhận (08/10/2026)
 
 type State = {
@@ -208,6 +207,8 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
       s.statsPending.shift();
       await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes });
     }
+    // Hết danh sách: ghi mốc stats_daily đã dựng xong theo STATS_EPOCH (một lần) cho lệnh tính lại thẻ chạy tay.
+    if (!s.statsPending.length) writes += await markStatsDailyDone(db);
     // Số liệu khách dựng sau khi số liệu ngày xong, để hai việc nặng không chồng nhau.
     while (!s.statsPending.length && s.customerPending.length && ok()) {
       const [posId, month] = s.customerPending[0].split(':');
