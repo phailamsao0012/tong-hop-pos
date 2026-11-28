@@ -946,13 +946,14 @@ table th { white-space: nowrap; font-weight: 600; font-size: 11.5px; letter-spac
 /* Đợt 2 giao diện mới (plan 2026-11-26-tong-quan-kieu-moi), cập nhật theo bộ thiết kế anh duyệt 28/11/2026 (bo-thiet-ke.html):
    nền #f4f5f4, thẻ trắng viền mảnh bo 14px, nút / ô nhập bo 10px, chọn kỳ / POS là hàng nút nền xám nhạt (mục chọn nổi trắng).
    Chỉ áp dưới .ui-moi-root (thẻ <html> khi cờ THP_UI_MOI bật) hoặc .ui-moi (SidebarInset); cờ tắt thì không phần tử nào mang class này nên web thật y như cũ.
-   Không đổi số, chữ, quyền: chỉ màu, bo góc, khoảng cách. Xanh --primary là màu nhấn duy nhất; nút chính đen; đỏ chỉ ở số vượt mốc đang có. */
+   Không đổi số, chữ, quyền: chỉ màu, bo góc, khoảng cách. Xanh logo (--brand #186932, mốc 5) là màu nhấn duy nhất, nút chính xanh logo; đỏ chỉ ở số vượt mốc đang có. */
 @layer components {
   .ui-moi { --radius-card: 14px; background: var(--bg); overflow-x: clip; }
   .ui-moi main { overflow-x: clip; }
   /* 27/11/2026 (anh Vũ: "mới được màn ngoài, còn chi tiết bên trong vẫn như cũ"): mọi luật con dưới đây gắn vào .ui-moi-root (thẻ <html>) thay cho
      .ui-moi (SidebarInset), để phủ cả khung chi tiết, danh sách đơn, hồ sơ… bật ra ở portal ngoài SidebarInset. */
-  .ui-moi-root { --radius-card: 14px; }
+  /* Màu nhấn logo (mốc 5, 28/11/2026): mặc định (nền tối khi cờ bật) giữ như trước = chữ chính / nhấn cũ; nền sáng đặt #186932 / #7dbe34 / #e9f3e1 ở khối (A). */
+  .ui-moi-root { --radius-card: 14px; --brand: var(--ink); --brand-2: var(--primary); --brand-soft: var(--tint); }
   .snapshot-line { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 500; color: var(--warn); background: var(--warn-bg); }
 
   /* Tiêu đề trang: 21px (cỡ "Tên trang" của bộ thiết kế) */
@@ -965,14 +966,14 @@ table th { white-space: nowrap; font-weight: 600; font-size: 11.5px; letter-spac
   /* Ô số: thẻ trắng viền mảnh, bo 14, đệm 14×16; nhãn thường 12.5px; biểu tượng góc phải là icon trơn 18px màu chữ phụ (bỏ ô vuông màu) */
   .ui-moi-root .kpi { border-radius: 14px; border-color: var(--line); background: var(--surface); box-shadow: none; padding: 14px 16px; gap: 2px; }
   .ui-moi-root .kpi:hover, .ui-moi-root .kpi.is-open { border-color: var(--line-3); }
-  .ui-moi-root .kpi.is-active { border-color: var(--ink); outline: 1.5px solid var(--ink); outline-offset: 0; }
+  .ui-moi-root .kpi.is-active { border-color: var(--brand); outline: 1.5px solid var(--brand); outline-offset: 0; }
   .ui-moi-root .kpi .lbl { text-transform: none; letter-spacing: 0; font-size: 12.5px; font-weight: 500; color: var(--ink-2); padding-right: 26px; }
   .ui-moi-root .kpi .tile { top: 14px; right: 16px; width: 18px; height: 18px; border-radius: 0; background: transparent !important; color: var(--ink-3) !important; }
   .ui-moi-root .kpi .tile svg { width: 18px; height: 18px; }
   .ui-moi-root .kpi .val { letter-spacing: -.01em; font-weight: 700; font-feature-settings: normal; line-height: 1.2; --kpi-val-max: 27px; }
   .ui-moi-root .kpi .note { font-size: 12px; color: var(--ink-3); }
   .ui-moi-root .kpi .kpi-footer { margin-top: auto; padding-top: 4px; align-items: flex-end; }
-  .ui-moi-root .kpi .bar > i { background: var(--ink); }
+  .ui-moi-root .kpi .bar > i { background: var(--brand); }
 
   /* Chọn kỳ: hàng nút nền #f1f3f2 bo 11px, mục đang chọn nổi trắng có bóng nhẹ */
   .ui-moi-root .seg { border-radius: 11px; border-color: transparent; background: var(--surface-2); padding: 3px; }
@@ -987,8 +988,8 @@ table th { white-space: nowrap; font-weight: 600; font-size: 11.5px; letter-spac
   /* Nút: bo 10px; nút chính đen; nút phụ trắng viền mảnh; ghost = chỉ chữ màu nhấn */
   .ui-moi-root .btn { border-radius: 10px; border-color: var(--line); font-weight: 600; }
   .ui-moi-root .btn.sm { border-radius: 8px; }
-  .ui-moi-root .btn.primary { background: var(--ink); border-color: var(--ink); color: var(--surface); }
-  .ui-moi-root .btn.primary:hover { background: color-mix(in srgb, var(--ink) 85%, var(--surface)); box-shadow: none; }
+  .ui-moi-root .btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+  .ui-moi-root .btn.primary:hover { background: color-mix(in srgb, var(--brand) 85%, #000); border-color: color-mix(in srgb, var(--brand) 85%, #000); box-shadow: none; }
   .ui-moi-root .btn.ghost { color: var(--primary); }
 
   /* Bảng: tiêu đề 12px chữ phụ, dòng kẻ mảnh, rê chuột nền xám nhạt */
@@ -1025,9 +1026,9 @@ table th { white-space: nowrap; font-weight: 600; font-size: 11.5px; letter-spac
    Nút trong nhóm nút (button-group) giữ bo cũ để các nút liền nhau không hở. */
 :is(.ui-moi, .ui-moi-root) [data-slot="button"]:not([data-slot="button-group"] *) { border-radius: 10px; }
 :is(.ui-moi, .ui-moi-root) [data-slot="button"][class*="bg-primary "],
-:is(.ui-moi, .ui-moi-root) [data-slot="button"][class$="bg-primary"] { background: var(--ink); border-color: var(--ink); color: var(--surface); box-shadow: none; }
+:is(.ui-moi, .ui-moi-root) [data-slot="button"][class$="bg-primary"] { background: var(--brand); border-color: var(--brand); color: #fff; box-shadow: none; }
 :is(.ui-moi, .ui-moi-root) [data-slot="button"][class*="bg-primary "]:hover,
-:is(.ui-moi, .ui-moi-root) [data-slot="button"][class$="bg-primary"]:hover { background: color-mix(in srgb, var(--ink) 85%, var(--surface)); border-color: color-mix(in srgb, var(--ink) 85%, var(--surface)); }
+:is(.ui-moi, .ui-moi-root) [data-slot="button"][class$="bg-primary"]:hover { background: color-mix(in srgb, var(--brand) 85%, #000); border-color: color-mix(in srgb, var(--brand) 85%, #000); }
 :is(.ui-moi, .ui-moi-root) [data-slot="button"][class*="border-line "] { border-color: var(--line); font-weight: 600; }
 
 /* (2) Khung nổi portal ra <body> (chỉ dưới .ui-moi-root): bo lớn, viền nhạt, bóng mềm như thẻ; nút đóng / nút trong khung ăn luật (1). */
@@ -1044,7 +1045,7 @@ table th { white-space: nowrap; font-weight: 600; font-size: 11.5px; letter-spac
 .ui-moi-root .dept-name { color: var(--ink-3); font-size: 12.5px; font-weight: 600; border-right: 0; margin-right: 0; padding: 8px 0; }
 .ui-moi-root .dept-tab { border-radius: 0; padding: 8px 0; margin-bottom: -1px; border-bottom: 2px solid transparent; background: transparent; color: var(--ink-3); font-size: 13.5px; font-weight: 500; }
 .ui-moi-root .dept-tab:hover { background: transparent; color: var(--ink); }
-.ui-moi-root .dept-tab.is-active { background: transparent; color: var(--ink); font-weight: 600; border-bottom-color: var(--ink); box-shadow: none; }
+.ui-moi-root .dept-tab.is-active { background: transparent; color: var(--ink); font-weight: 600; border-bottom-color: var(--brand); box-shadow: none; }
 .ui-moi-root .dept-tab .cnt { background: var(--surface-2); color: var(--ink-2); font-size: 11px; font-weight: 600; padding: 0 7px; }
 .ui-moi-root .dept-tab.is-active .cnt { background: var(--surface-2); color: var(--ink-2); }
 .ui-moi-root .dept-tab.is-active .cnt.hot { background: var(--bad-bg); color: var(--bad); }
@@ -1072,7 +1073,7 @@ table th { white-space: nowrap; font-weight: 600; font-size: 11.5px; letter-spac
 .ui-moi-root .ministat:hover, .ui-moi-root .ministat:focus-visible { background: var(--surface-2); }
 .ui-moi-root .ministat.is-static:hover { background: var(--surface); }
 .ui-moi-root .ministat > span:first-child { background: var(--surface-2) !important; color: var(--ink-3) !important; border-radius: 10px; }
-.ui-moi-root .ministat.is-active { box-shadow: inset 0 0 0 1.5px var(--ink); }
+.ui-moi-root .ministat.is-active { box-shadow: inset 0 0 0 1.5px var(--brand); }
 .ui-moi-root [data-ui="section-title"], .ui-moi-root [data-ui="surface-title"], .ui-moi-root [data-ui="settings-title"] { font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
 .ui-moi-root [data-ui="skeleton-table"] th { background: transparent; }
 .ui-moi-root [data-ui="skeleton-table"] tr { border-color: var(--line); }
@@ -1085,7 +1086,7 @@ table th { white-space: nowrap; font-weight: 600; font-size: 11.5px; letter-spac
 .ui-moi-root [data-ui="tile"]:hover { border-color: var(--line-3); box-shadow: none; }
 .ui-moi-root [data-ui="tile-in"] { border-radius: 14px; border-color: transparent; background: var(--surface-2); }
 .ui-moi-root [data-ui="tile-pick"] { border-radius: 12px; border-color: transparent; background: var(--surface-2); }
-.ui-moi-root [data-ui="tile-pick"][aria-pressed="true"] { background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--ink); }
+.ui-moi-root [data-ui="tile-pick"][aria-pressed="true"] { background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--brand); }
 .ui-moi-root [data-ui="box"] { border-radius: 12px; border-color: var(--line); }
 .ui-moi-root [data-ui="pill-group"] { border-radius: 11px; border-color: transparent; background: var(--surface-2); padding: 3px; gap: 2px; }
 .ui-moi-root [data-ui="pill-group"] > button { border-radius: 9px; padding: 5px 12px; background: transparent; color: var(--ink-2); font-weight: 500; }
@@ -1132,24 +1133,26 @@ table th { white-space: nowrap; font-weight: 600; font-size: 11.5px; letter-spac
    Ngoài @layer để thắng utility Tailwind trên từng phần tử (cỡ chữ tiêu đề, màu avatar…); chỉ đụng đúng thuộc tính bộ thiết kế quy định.
    ============================================================ */
 
-/* (A) Token: đúng 9 màu của bộ (nền #f4f5f4, thẻ trắng viền #e5e9e6, chữ #0e1512, nhấn #17684b, vàng #a96600, đỏ #c8402d,
-   dòng chọn #e6f2ec, kỳ trước #cfd6d2, chữ phụ #75807b) + nền nhạt #f1f3f2, chữ phụ đậm #3c4743. Một phông Be Vietnam Pro.
+/* (A) Token: đúng 9 màu của bộ (nền #f4f5f4, thẻ trắng viền #e5e9e6, chữ #0e1512, nhấn xanh logo #186932 (mốc 5; đang chạy #7dbe34), vàng #a96600, đỏ #c8402d,
+   dòng chọn #e9f3e1, kỳ trước #cfd6d2, chữ phụ #75807b) + nền nhạt #f1f3f2, chữ phụ đậm #3c4743. Một phông Be Vietnam Pro.
    Chỉ nền sáng (:not(.dark)): nền tối giữ token tối cũ để không vỡ, làm sau. Màu POS / trạng thái đơn là dữ liệu nhận diện, giữ. */
 html.ui-moi-root:not(.dark) {
   --bg: #f4f5f4; --surface: #ffffff; --surface-2: #f1f3f2; --surface-3: #e9ecea; --card-line: #e5e9e6;
   --line: #e5e9e6; --line-2: #e5e9e6; --line-3: #cfd6d2;
   --ink: #0e1512; --ink-2: #3c4743; --ink-3: #75807b; --ink-4: #75807b;
-  --primary: #17684b; --primary-2: #145a41; --ring: #17684b; --tint: #e6f2ec; --tint-2: #e6f2ec;
-  --good: #17684b; --good-bg: #e6f2ec; --bad: #c8402d; --bad-bg: #fbeae7; --warn: #a96600; --warn-bg: #fdf2d9;
-  --t-green: #17684b; --t-green-bg: #e6f2ec; --t-red: #c8402d; --t-red-bg: #fbeae7; --t-orange: #a96600; --t-orange-bg: #fdf2d9; --t-gray: #3c4743; --t-gray-bg: #f1f3f2;
+  --primary: #186932; --primary-2: #13552a; --ring: #186932; --tint: #e9f3e1; --tint-2: #e9f3e1;
+  /* Màu logo (mốc 5): --brand = nhấn / nút chính / kỳ này, --brand-2 = giờ / cột đang chạy, --brand-soft = nền dòng chọn / nổi bật. */
+  --brand: #186932; --brand-2: #7dbe34; --brand-soft: #e9f3e1;
+  --good: #186932; --good-bg: #e9f3e1; --bad: #c8402d; --bad-bg: #fbeae7; --warn: #a96600; --warn-bg: #fdf2d9;
+  --t-green: #186932; --t-green-bg: #e9f3e1; --t-red: #c8402d; --t-red-bg: #fbeae7; --t-orange: #a96600; --t-orange-bg: #fdf2d9; --t-gray: #3c4743; --t-gray-bg: #f1f3f2;
   --chart-grid: #e5e9e6; --chart-fill: rgb(14 21 18 / .06); --chart-bar: #cfd6d2;
-  /* Biểu đồ: kỳ này đen, kỳ trước xám (components/ui/chart.tsx đổi màu cấu hình var(--primary) / var(--ink-4) sang hai token này khi cờ bật). */
-  --chart-cur: #0e1512; --chart-prev: #cfd6d2;
+  /* Biểu đồ: kỳ này xanh logo, kỳ trước xám (components/ui/chart.tsx đổi màu cấu hình var(--primary) / var(--ink-4) sang hai token này khi cờ bật). */
+  --chart-cur: #186932; --chart-prev: #cfd6d2;
   /* Biểu đồ tự vẽ / màu đặt thẳng trong trang: var(--chart-ky-nay, var(--primary)) = kỳ này, var(--chart-dang-chay, var(--primary)) = cột / kỳ đang chạy.
      Chỉ đặt ở đây (cờ bật, nền sáng); cờ tắt không ai đặt nên rơi về var(--primary) như cũ. */
-  --chart-ky-nay: #0e1512; --chart-dang-chay: #17684b;
-  /* Số chính Marketing (app/mkt-headline.tsx): dải tách doanh thu đen / xám đậm / xám nhạt (cột nhỏ: xem data-ui="mkt-bars"). */
-  --mkt-tach-1: #0e1512; --mkt-tach-2: #75807b; --mkt-tach-3: #cfd6d2;
+  --chart-ky-nay: #186932; --chart-dang-chay: #7dbe34;
+  /* Số chính Marketing (app/mkt-headline.tsx): dải tách doanh thu xanh logo / xám đậm / xám nhạt (cột nhỏ: xem data-ui="mkt-bars"). */
+  --mkt-tach-1: #186932; --mkt-tach-2: #75807b; --mkt-tach-3: #cfd6d2;
   --skel-1: #f1f3f2; --skel-2: #e7eae8;
   --shadow: none;
   --font-display: var(--font-ui);
@@ -1172,7 +1175,7 @@ html.ui-moi-root body { font-size: 14px; line-height: 1.5; }
 .ui-moi-root .kpi > span.mt-1:has(> .duo-spark) { grid-column: 2; grid-row: 3 / span 2; align-self: end; width: 74px; height: 26px; min-height: 0; margin: 0; flex: none; }
 .ui-moi-root .kpi .duo-spark { height: 26px; }
 .ui-moi-root .kpi .kpi-spark { width: 74px; height: 26px; }
-.ui-moi-root .kpi .kpi-spark polyline { stroke: var(--ink); }
+.ui-moi-root .kpi .kpi-spark polyline { stroke: var(--brand); }
 .ui-moi-root .kpi .kpi-spark polygon { display: none; }
 /* Nhãn tăng giảm (DeltaPill) trong ô: viên xanh / đỏ nhạt như mẫu. */
 .ui-moi-root .kpi .d { font-size: 12px; color: var(--ink-3); }
@@ -1212,17 +1215,17 @@ html.ui-moi-root:not(.dark) .skel { background: linear-gradient(90deg, var(--sur
 .ui-moi-root .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
 .ui-moi-root .pill.nd::before { display: none; }
 
-/* (G) Bảng: tiêu đề cột 12px chữ phụ, số căn phải (td.n sẵn có), dòng đang chọn nền xanh nhạt #e6f2ec, avatar chữ cái 30px nền xám nhạt,
-   thanh tỷ lệ 70×6 màu đen (đỏ khi dưới mốc: ProgressBar low), ô hoàn / hủy thành nhãn có chấm thay cho chữ tô màu rời:
+/* (G) Bảng: tiêu đề cột 12px chữ phụ, số căn phải (td.n sẵn có), dòng đang chọn nền xanh nhạt #e9f3e1 (--brand-soft), avatar chữ cái 30px nền xám nhạt,
+   thanh tỷ lệ 70×6 xanh logo (đỏ khi dưới mốc: ProgressBar low), ô hoàn / hủy thành nhãn có chấm thay cho chữ tô màu rời:
    RateCells lấy màu từ lớp td; bảng nhân viên Sale / Marketing gắn data-tone="ok" | "bad" ngay trên span (cùng mốc trang đang dùng). */
 .ui-moi-root [data-ui="rate-pill"].block { display: flex; width: fit-content; margin-left: auto; margin-top: 2px; }
 .ui-moi-root :is(table.tbl, [data-ui="tbl"]) th { font-size: 12px; }
-.ui-moi-root :is(table.tbl, [data-ui="tbl"]) tbody tr:is([aria-selected="true"], [data-state="selected"]) > td { background: var(--tint); }
+.ui-moi-root :is(table.tbl, [data-ui="tbl"]) tbody tr:is([aria-selected="true"], [data-state="selected"]) > td { background: var(--brand-soft); }
 .ui-moi-root table.tbl tbody tr:is(:hover, :focus-within) td:first-child { box-shadow: none; }
 .ui-moi-root [data-ui="av"] { width: 30px; height: 30px; font-size: 11px; font-weight: 700; background: var(--surface-2); color: var(--ink-2); }
 .ui-moi-root [data-ui="av-sm"] { background: var(--surface-2); color: var(--ink-2); font-weight: 700; }
 .ui-moi-root .pbar { height: 6px !important; background: var(--surface-2); }
-.ui-moi-root .pbar > i[style*="var(--primary)"] { background: var(--ink) !important; }
+.ui-moi-root .pbar > i[style*="var(--primary)"] { background: var(--brand) !important; }
 .ui-moi-root [data-ui="rate-pill"] { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 600; background: var(--surface-2); color: var(--ink-2); }
 .ui-moi-root [data-ui="rate-pill"]::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
 .ui-moi-root :is(td.text-good > [data-ui="rate-pill"], [data-ui="rate-pill"][data-tone="ok"]) { background: var(--good-bg); color: var(--good); }
@@ -1239,12 +1242,12 @@ html.ui-moi-root:not(.dark) .skel { background: linear-gradient(90deg, var(--sur
 /* (I) Khung giữa màn (Dialog / Sheet căn giữa của WhySheet): bo 18, bóng mềm; bảng tính (data-ui="calc") viền mảnh bo 12. */
 .ui-moi-root [data-ui="calc"] { border-radius: 12px; }
 
-/* (J) Toast tối: nền chữ chính, chấm xanh có dấu tích, nút "Hoàn tác" chữ xanh nhạt (toast({ undo })). */
-html.ui-moi-root:not(.dark) .toast { border-radius: 12px; background: var(--ink); color: #fff; font-size: 13.5px; padding: 10px 14px; }
-html.ui-moi-root:not(.dark) .toast .ok { width: 22px; height: 22px; background: #2fbf85; color: #06281c; }
+/* (J) Toast: nền xanh logo (mốc 5), chấm trắng có dấu tích, nút "Hoàn tác" chữ trắng gạch dưới (toast({ undo })). */
+html.ui-moi-root:not(.dark) .toast { border-radius: 12px; background: var(--brand); color: #fff; font-size: 13.5px; padding: 10px 14px; }
+html.ui-moi-root:not(.dark) .toast .ok { width: 22px; height: 22px; background: #fff; color: var(--brand); }
 html.ui-moi-root:not(.dark) .toast .ok.error { background: var(--bad); color: #fff; }
-html.ui-moi-root:not(.dark) .toast .ok.info { background: #fff; color: var(--ink); }
-html.ui-moi-root:not(.dark) .toast .u { flex: none; margin-left: 4px; padding: 2px 4px; border: 0; border-radius: 6px; background: none; color: #9fe3c4; font: inherit; font-weight: 600; }
+html.ui-moi-root:not(.dark) .toast .ok.info { background: #fff; color: var(--brand); }
+html.ui-moi-root:not(.dark) .toast .u { flex: none; margin-left: 4px; padding: 2px 4px; border: 0; border-radius: 6px; background: none; color: #fff; font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
 html.ui-moi-root:not(.dark) .toast .u:hover { background: rgb(255 255 255 / .1); }
 
 /* (K) Dữ liệu trễ / cảnh báo: dải vàng nhạt không viền, chữ nâu đậm như mẫu; dòng "số chụp lúc…" cùng màu. */
@@ -1284,9 +1287,9 @@ html.ui-moi-root:not(.dark) .snapshot-line { border-radius: 12px; color: #6f4300
 .ui-moi-root :is(.kpi .val, [data-ui="plain-num"]) .odo > .sr-only { position: static; width: auto; height: auto; margin: 0; padding: 0; overflow: visible; clip: auto; clip-path: none; white-space: nowrap; }
 
 /* (O) Cột nhỏ Số chính Marketing (mốc 4): hàng cột HTML thay SVG khi cờ bật (SVG kéo giãn làm cột rộng ~75px dính nhau ở kỳ 7 ngày, 1920px).
-   Cột rộng tối đa 12px, bo trên 3px, cách đều, căn phải, khu cột cao tối đa 36px; kỳ này #3c4743, kỳ trước #cfd6d2, cột cuối (đang chạy) xanh nhấn. */
+   Cột rộng tối đa 12px, bo trên 3px, cách đều, căn phải, khu cột cao tối đa 36px; kỳ này xanh logo #186932, kỳ trước #cfd6d2, cột cuối (đang chạy) xanh sáng #7dbe34 (mốc 5). */
 .ui-moi-root [data-ui="mkt-spark-svg"] { display: none; }
 .ui-moi-root [data-ui="mkt-bars"] { display: flex; align-items: flex-end; justify-content: flex-end; gap: clamp(1px, 1.5%, 4px); width: 100%; height: 36px; overflow: hidden; }
-.ui-moi-root [data-ui="mkt-bars"] > i { flex: 0 1 12px; min-width: 2px; max-width: 12px; border-radius: 3px 3px 0 0; background: var(--ink-2); }
+.ui-moi-root [data-ui="mkt-bars"] > i { flex: 0 1 12px; min-width: 2px; max-width: 12px; border-radius: 3px 3px 0 0; background: var(--brand); }
 .ui-moi-root [data-ui="mkt-bars"] > i[data-tone="truoc"] { background: var(--line-3); }
-.ui-moi-root [data-ui="mkt-bars"] > i[data-tone="chay"] { background: var(--primary); }
+.ui-moi-root [data-ui="mkt-bars"] > i[data-tone="chay"] { background: var(--brand-2); }

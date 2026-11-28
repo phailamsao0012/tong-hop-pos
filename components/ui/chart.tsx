@@ -81,7 +81,7 @@ function ChartContainer({
   );
 }
 
-// Bộ thiết kế 28/11/2026 (chỉ khi cờ THP_UI_MOI bật, nền sáng): kỳ này màu đen, kỳ trước màu xám. Luật chỉ khớp dưới html.ui-moi-root:not(.dark),
+// Bộ thiết kế 28/11/2026 (chỉ khi cờ THP_UI_MOI bật, nền sáng): kỳ này xanh logo (--chart-cur), kỳ trước màu xám. Luật chỉ khớp dưới html.ui-moi-root:not(.dark),
 // nên cờ tắt thì không luật nào ăn và biểu đồ y như cũ. Chỉ đổi đúng các màu cấu hình "chung" (nhấn xanh = kỳ này; ink-4 = kỳ trước; line-3 vốn đã là xám #cfd6d2 khi cờ bật);
 // màu POS, trạng thái đơn và màu riêng khác giữ nguyên. Token --chart-cur / --chart-prev ở app/globals.css.
 const UI_MOI_CHART: Record<string, string> = { 'var(--primary)': 'var(--chart-cur)', 'var(--ink-4)': 'var(--chart-prev)' };
