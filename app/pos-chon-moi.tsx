@@ -44,7 +44,7 @@ const KIEU: { v: KieuPos; label: string; title: string }[] = [
 /** Công tắc nhỏ "Kiểu chọn POS: A · B · C" (TẠM, chỉ đầu trang kiểu mới). */
 export function KieuPosSwitch({ value }: { value: KieuPos }) {
   return (
-    <span className="inline-flex shrink-0 items-center gap-1 text-[11.5px] text-ink-3" role="group" aria-label="Kiểu chọn POS (thử)">
+    <span className="inline-flex shrink-0 items-center gap-1 text-[11.5px] text-ink-3">
       Kiểu chọn POS:
       {KIEU.map((k) => (
         <button key={k.v} type="button" aria-pressed={value === k.v} title={k.title} onClick={() => setKieuPos(k.v)}

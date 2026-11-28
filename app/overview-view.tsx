@@ -199,13 +199,18 @@ export function PosChips({ posIds, onChange, info, nums }: { posIds: string[]; o
   // Lựa chọn POS dùng chung mọi trang và nhớ qua lần mở sau (app/pos-store.ts).
   const filterNote = visible.some((p) => !posIds.includes(p.id)) && <span className="text-[11.5px] text-ink-3">Đang lọc {posIds.filter((id) => visible.some((p) => p.id === id)).length}/{visible.length} POS, giữ nguyên khi sang trang khác</span>;
   const all = visible.every((p) => posIds.includes(p.id));
+  // Chọn đủ POS: chỉ thẻ / vòng "Tất cả" có dấu chọn (is-all-on), các POS hiện màu bình thường không dấu tích; aria-pressed vẫn đúng trạng thái thật.
   if (kieu === 'b') {
+    // Thẻ "Tất cả": tổng các dòng số đang có, CHỈ khi chọn đủ POS (lúc đó các dòng là đủ mọi POS). Đang lọc thì để trống, vì tổng đó
+    // chỉ là của POS đang chọn mà nằm dưới chữ "Tất cả" dễ đọc nhầm. Cộng các số trang đã tải, không gọi API.
+    const allSum = nums && all && nums.rows.length ? nums.rows.reduce((t, r) => t + r.value, 0) : null;
     return (
       <div className="flex min-w-0 flex-col gap-1">
-        <div className="pos-cards" role="group" aria-label="Chọn POS" style={{ '--n': visible.length + 1 } as React.CSSProperties}>
+        <div className={`pos-cards ${all ? 'is-all-on' : ''}`} style={{ '--n': visible.length + 1 } as React.CSSProperties}>
           <button type="button" aria-pressed={all} className="pos-card is-all" onClick={selectAll}>
             <span className="pos-card-all" aria-hidden="true"><LayoutGrid size={15} /></span>
             <span className="pos-card-nm">Tất cả</span>
+            {allSum !== null && nums && <span className="pos-card-v"><span className="pos-card-lb">{nums.label}</span><b className="num">{nums.format(allSum)}</b></span>}
           </button>
           {visible.map((p) => {
             const on = posIds.includes(p.id);
@@ -216,7 +221,7 @@ export function PosChips({ posIds, onChange, info, nums }: { posIds: string[]; o
                 <button type="button" aria-pressed={on} onClick={() => toggle(p.id)} className="pos-card" style={{ '--c': posVar(p.id) } as React.CSSProperties}>
                   <PosBadge posId={p.id} size={28} solid={on} muted={!on} />
                   <span className="pos-card-nm">{p.name}{flagOf(p.id, on)}</span>
-                  {n && nums && <span className="pos-card-v" title={nums.label}><b className="num">{nums.format(n.value)}</b>{d !== null && <DeltaPill value={d} variant="plain" />}</span>}
+                  {n && nums && <span className="pos-card-v"><span className="pos-card-lb">{nums.label}</span><b className="num">{nums.format(n.value)}</b>{d !== null && <DeltaPill value={d} variant="plain" />}</span>}
                 </button>
               </Tooltip>
             );
@@ -229,7 +234,7 @@ export function PosChips({ posIds, onChange, info, nums }: { posIds: string[]; o
   if (kieu === 'c') {
     return (
       <div className="flex min-w-0 flex-col gap-1">
-        <div className="pos-dock" role="group" aria-label="Chọn POS">
+        <div className={`pos-dock ${all ? 'is-all-on' : ''}`}>
           <button type="button" aria-pressed={all} className="pos-dot is-all" onClick={selectAll}>
             <span className="pos-dot-all" aria-hidden="true"><LayoutGrid size={20} /></span>
             <span className="pos-dot-nm">Tất cả</span>

@@ -1218,7 +1218,11 @@ html.ui-moi-root:not(.dark) .skel { background: linear-gradient(90deg, var(--sur
 .ui-moi-root .pos-card-v { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; font-size: 12px; color: var(--ink-2); }
 .ui-moi-root .pos-card-v b { font-size: 13.5px; font-weight: 700; color: var(--ink); letter-spacing: -.01em; }
 .ui-moi-root .pos-card-all { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: var(--surface-2); color: var(--ink-3); }
-.ui-moi-root .pos-card.is-all[aria-pressed="true"] .pos-card-all { background: var(--ink); color: var(--surface); }
+.ui-moi-root .pos-card.is-all[aria-pressed="true"] .pos-card-all { background: var(--brand); color: #fff; }
+.ui-moi-root .pos-card-lb { flex-basis: 100%; font-size: 11px; font-weight: 400; color: var(--ink-3); }
+/* Chọn đủ POS (mốc 6b): chỉ thẻ "Tất cả" có viền + dấu tích; thẻ POS hiện màu bình thường, viền mảnh, không dấu tích. */
+.ui-moi-root .pos-cards.is-all-on .pos-card:not(.is-all) { border-color: var(--line); }
+.ui-moi-root .pos-cards.is-all-on .pos-card:not(.is-all)::after { display: none; }
 /* c: icon tròn 46px, tên 11.5px bên dưới; POS đang chọn có vòng 2.5px màu --brand; "Tất cả" đứng đầu. */
 .ui-moi-root .pos-dock { display: flex; flex-wrap: wrap; gap: 6px 10px; min-width: 0; }
 @media (width < 40rem) { .ui-moi-root .pos-dock { flex-wrap: nowrap; overflow-x: auto; padding: 4px 2px; scrollbar-width: thin; } }
@@ -1226,7 +1230,10 @@ html.ui-moi-root:not(.dark) .skel { background: linear-gradient(90deg, var(--sur
 .ui-moi-root .pos-dot .posb, .ui-moi-root .pos-dot-all { border-radius: 50%; transition: box-shadow .15s; }
 .ui-moi-root .pos-dot[aria-pressed="true"] :is(.posb, .pos-dot-all) { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4.5px var(--brand); }
 .ui-moi-root .pos-dot-all { display: grid; place-items: center; width: 46px; height: 46px; background: var(--surface-2); color: var(--ink-2); }
-.ui-moi-root .pos-dot.is-all[aria-pressed="true"] .pos-dot-all { background: var(--ink); color: var(--surface); }
+.ui-moi-root .pos-dot.is-all[aria-pressed="true"] .pos-dot-all { background: var(--brand); color: #fff; }
+/* Chọn đủ POS: chỉ "Tất cả" có vòng; các POS hiện màu bình thường không vòng, tên chữ thường. */
+.ui-moi-root .pos-dock.is-all-on .pos-dot:not(.is-all) .posb { box-shadow: none; }
+.ui-moi-root .pos-dock.is-all-on .pos-dot:not(.is-all) .pos-dot-nm { color: var(--ink-2); font-weight: 500; }
 .ui-moi-root .pos-dot-nm { font-size: 11.5px; font-weight: 500; line-height: 1.25; text-align: center; overflow-wrap: anywhere; }
 .ui-moi-root .pos-dot[aria-pressed="true"] .pos-dot-nm { color: var(--ink); font-weight: 600; }
 .ui-moi-root .pos-dot > .rounded-full { position: absolute; top: 0; right: 6px; }
