@@ -76,7 +76,7 @@ import {
   ChartTooltipContent,
 } from '@/components/ui/chart';
 import { POS } from '@/lib/shared/report-model';
-import { PeriodToolbar, PosChips, type OverviewReport } from './overview-view';
+import { PeriodToolbar, PosChips, posNumsOf, type OverviewReport } from './overview-view';
 import { GlobalStatusFilter } from './status-filter';
 import { parseStatus } from '@/lib/pancake/order-status';
 import { useOrderStatus } from './status-store';
@@ -813,7 +813,7 @@ export function TeamOverviewView({
           tools={<PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset} onStart={setStart} onEnd={setEnd}
             loading={api.loading} onReload={api.reload} extra={<GlobalStatusFilter size="md" />} />}
           right={<StaleChip stale={api.stale} at={api.at} loading={api.loading} error={report ? api.error : null} onRetry={api.reload} />}
-          pos={<PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />} />
+          pos={<PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} nums={report ? posNumsOf(report) : undefined} />} />
         {segment && (
           <output className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-primary/40 bg-tint px-3 py-2 text-[13px] text-ink">
             <span>Đang lọc nhóm đơn <b>{PRODUCT_SEGMENTS[segment]}</b> như ở Tổng quan POS: ô số, biểu đồ và bảng nhân viên tính theo nhóm này; các khối khác vẫn tính mọi nhóm.</span>

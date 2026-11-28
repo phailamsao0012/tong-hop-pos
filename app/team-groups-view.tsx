@@ -22,7 +22,7 @@ import { managedBy } from '@/lib/teams/managed-by';
 import { usePosIds, usePosStaffFilter } from './pos-store';
 import { useGoalShare } from './goal-share-store';
 import { useMetricSettings } from './metric-settings';
-import { PeriodToolbar, PosChips, type OverviewReport } from './overview-view';
+import { PeriodToolbar, PosChips, posNumsOf, type OverviewReport } from './overview-view';
 import { GlobalStatusFilter } from './status-filter';
 import { useApi } from './use-api';
 import { unitFor, useHrUnit } from './team-store';
@@ -332,7 +332,7 @@ export function TeamGroupsView({ team, owner, uiMoi = false }: { team: Dept; own
         <PageHeadMoi title={`${LABEL[team]} theo team`} scope={scope}
           hint={`So sánh các team ${LABEL[team]} theo chi nhánh. Tạo team và xếp người bên web nhân sự.`}
           tools={<PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset} onStart={setStart} onEnd={setEnd} loading={api.loading} onReload={api.reload} extra={<GlobalStatusFilter size="md" />} />}
-          pos={<PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />}
+          pos={<PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} nums={report ? posNumsOf(report) : undefined} />}
           right={<>
             <a href={`${CRM_URL}/?view=org`} target="_blank" rel="noreferrer" title="Web nhân sự: Danh mục → thêm Team (chọn phòng và văn phòng), rồi ở Sơ đồ tổ chức kéo thả người vào team"
               className="inline-flex h-8 items-center gap-1.5 rounded-md border border-line bg-surface px-3 text-[13px] font-medium hover:bg-surface-2"><UsersRound size={14} />Tạo team / xếp người<ExternalLink size={12} className="text-ink-3" /></a>

@@ -16,9 +16,10 @@ import { RATE_BASES, closeRateBase, closeRateOf, closeRateTop, rateLevel, rateTe
 import { BOSS_CANCEL_RED, BOSS_CLOSE_RED, BOSS_RETURN_RED, COACH_MIN_BASE } from '@/lib/zalo/boss-report';
 import { CanXemStrip, PageHeadMoi, WhySheet, overCancel, overClose, overRet, tileGrid, type CanXemItem, type WhySpec } from './trang-moi';
 import { useMetricSettings } from './metric-settings';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { PosKieuContext, type PosNums } from './pos-chon-moi';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
-import { ArrowRight, BarChart3, CalendarDays, CheckCircle2, ClipboardList, Eye, FileCheck2, PackageCheck, RotateCcw, ShoppingCart } from 'lucide-react';
+import { ArrowRight, BarChart3, CalendarDays, CheckCircle2, ClipboardList, Eye, FileCheck2, LayoutGrid, PackageCheck, RotateCcw, ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Input } from '@/components/ui/input';
@@ -168,10 +169,88 @@ export function PeriodToolbar(props: {
 }
 
 // Hàng nút bấm từng POS, xổ sẵn để chọn nhanh (anh Vũ 21/10/2026 bỏ ô thả xuống "Tất cả n POS" vì khó dùng).
-export function PosChips({ posIds, onChange, info }: { posIds: string[]; onChange: (v: string[]) => void; info?: OverviewReport['pos'] }) {
+// Đầu trang kiểu mới (cờ THP_UI_MOI, PageHeadMoi đặt PosKieuContext): TẠM ba kiểu trình bày a / b / c để anh chọn (app/pos-chon-moi.tsx);
+// cùng một cách chọn (bật / tắt từng POS, Tất cả, không bỏ được POS cuối), cùng tooltip đồng bộ và nhãn lỗi. Ngoài đầu trang kiểu mới (context null) vẽ y như cũ.
+// nums: số từng POS trang đã tải sẵn (chỉ thẻ kiểu b hiện), không tính mới.
+export function PosChips({ posIds, onChange, info, nums }: { posIds: string[]; onChange: (v: string[]) => void; info?: OverviewReport['pos']; nums?: PosNums }) {
   const scope = useScope();
+  const kieu = useContext(PosKieuContext);
   const visible = scopedPos(scope);
   if (visible.length <= 1) return null;
+  const toggle = (id: string) => { const on = posIds.includes(id); onChange(on ? (posIds.length > 1 ? posIds.filter((x) => x !== id) : posIds) : [...posIds, id]); };
+  const selectAll = () => onChange(visible.map((p) => p.id));
+  const tipOf = (id: string, name: string) => {
+    const i = info?.find((x) => x.id === id);
+    // Trạng thái kết nối / đồng bộ / lịch sử hiện trong tooltip (rê chuột, focus, chạm) thay vì title chỉ hiện khi rê chuột.
+    return i ? (
+      <>
+        <b>{name}</b>
+        <span className="r"><span>Trạng thái</span><span>{i.lastError ? 'Lỗi đồng bộ' : i.status === 'connected' ? 'Đã kết nối' : i.status}</span></span>
+        <span className="r"><span>Đồng bộ</span><span className="num">{dt(i.syncedAt, true)}</span></span>
+        <span className="r"><span>Lịch sử</span><span>{i.backfillDone ? 'Đã lấy đủ' : i.backfillMonth ? `đang lấy tháng ${i.backfillMonth.slice(5)}/${i.backfillMonth.slice(0, 4)}` : 'chưa lấy'}</span></span>
+        {i.lastError && <span className="how block whitespace-normal">Lỗi: {i.lastError}</span>}
+      </>
+    ) : null;
+  };
+  const flagOf = (id: string, on: boolean) => {
+    const i = info?.find((x) => x.id === id);
+    return i?.lastError ? <span className="rounded-full bg-bad-bg px-1.5 text-[10.5px] font-bold text-bad">lỗi</span> : i && !i.backfillDone && on ? <span className="rounded-full bg-warn-bg px-1.5 text-[10.5px] font-bold text-warn" title="Đang lấy lịch sử cũ">…</span> : null;
+  };
+  // Lựa chọn POS dùng chung mọi trang và nhớ qua lần mở sau (app/pos-store.ts).
+  const filterNote = visible.some((p) => !posIds.includes(p.id)) && <span className="text-[11.5px] text-ink-3">Đang lọc {posIds.filter((id) => visible.some((p) => p.id === id)).length}/{visible.length} POS, giữ nguyên khi sang trang khác</span>;
+  const all = visible.every((p) => posIds.includes(p.id));
+  if (kieu === 'b') {
+    return (
+      <div className="flex min-w-0 flex-col gap-1">
+        <div className="pos-cards" role="group" aria-label="Chọn POS" style={{ '--n': visible.length + 1 } as React.CSSProperties}>
+          <button type="button" aria-pressed={all} className="pos-card is-all" onClick={selectAll}>
+            <span className="pos-card-all" aria-hidden="true"><LayoutGrid size={15} /></span>
+            <span className="pos-card-nm">Tất cả</span>
+          </button>
+          {visible.map((p) => {
+            const on = posIds.includes(p.id);
+            const n = nums?.rows.find((r) => r.posId === p.id);
+            const d = n ? delta(n.value, n.prev) : null;
+            return (
+              <Tooltip key={p.id} content={tipOf(p.id, p.name)}>
+                <button type="button" aria-pressed={on} onClick={() => toggle(p.id)} className="pos-card" style={{ '--c': posVar(p.id) } as React.CSSProperties}>
+                  <PosBadge posId={p.id} size={28} solid={on} muted={!on} />
+                  <span className="pos-card-nm">{p.name}{flagOf(p.id, on)}</span>
+                  {n && nums && <span className="pos-card-v" title={nums.label}><b className="num">{nums.format(n.value)}</b>{d !== null && <DeltaPill value={d} variant="plain" />}</span>}
+                </button>
+              </Tooltip>
+            );
+          })}
+        </div>
+        {filterNote}
+      </div>
+    );
+  }
+  if (kieu === 'c') {
+    return (
+      <div className="flex min-w-0 flex-col gap-1">
+        <div className="pos-dock" role="group" aria-label="Chọn POS">
+          <button type="button" aria-pressed={all} className="pos-dot is-all" onClick={selectAll}>
+            <span className="pos-dot-all" aria-hidden="true"><LayoutGrid size={20} /></span>
+            <span className="pos-dot-nm">Tất cả</span>
+          </button>
+          {visible.map((p) => {
+            const on = posIds.includes(p.id);
+            return (
+              <Tooltip key={p.id} content={tipOf(p.id, p.name)}>
+                <button type="button" aria-pressed={on} onClick={() => toggle(p.id)} className="pos-dot" style={{ '--c': posVar(p.id) } as React.CSSProperties}>
+                  <PosBadge posId={p.id} size={46} solid={on} muted={!on} />
+                  <span className="pos-dot-nm">{p.name}</span>{flagOf(p.id, on)}
+                </button>
+              </Tooltip>
+            );
+          })}
+        </div>
+        {filterNote}
+      </div>
+    );
+  }
+  // Kiểu cũ (và kiểu a ở đầu trang kiểu mới: CSS .phm-pos vẽ thành hàng nút sáng, icon màu POS 22px, mục chọn nổi trắng).
   return (
     // Một dòng duy nhất (anh Vũ 21/10/2026 "đừng chia 2 dòng"): màn hẹp thì vuốt ngang.
     <div className="flex min-w-0 flex-col gap-1">
@@ -179,37 +258,32 @@ export function PosChips({ posIds, onChange, info }: { posIds: string[]; onChang
       <span className="shrink-0 text-[12.5px] font-semibold text-ink-2">POS:</span>
       {visible.map((p) => {
         const on = posIds.includes(p.id);
-        const i = info?.find((x) => x.id === p.id);
-        // Trạng thái kết nối / đồng bộ / lịch sử hiện trong tooltip (rê chuột, focus, chạm) thay vì title chỉ hiện khi rê chuột.
-        const tip = i ? (
-          <>
-            <b>{p.name}</b>
-            <span className="r"><span>Trạng thái</span><span>{i.lastError ? 'Lỗi đồng bộ' : i.status === 'connected' ? 'Đã kết nối' : i.status}</span></span>
-            <span className="r"><span>Đồng bộ</span><span className="num">{dt(i.syncedAt, true)}</span></span>
-            <span className="r"><span>Lịch sử</span><span>{i.backfillDone ? 'Đã lấy đủ' : i.backfillMonth ? `đang lấy tháng ${i.backfillMonth.slice(5)}/${i.backfillMonth.slice(0, 4)}` : 'chưa lấy'}</span></span>
-            {i.lastError && <span className="how block whitespace-normal">Lỗi: {i.lastError}</span>}
-          </>
-        ) : null;
         return (
-          <Tooltip key={p.id} content={tip}>
+          <Tooltip key={p.id} content={tipOf(p.id, p.name)}>
             <button type="button" aria-pressed={on}
-              onClick={() => onChange(on ? (posIds.length > 1 ? posIds.filter((id) => id !== p.id) : posIds) : [...posIds, p.id])}
+              onClick={() => toggle(p.id)}
               className={`poschip ${on ? '' : 'is-off'}`} style={{ '--c': posVar(p.id) } as React.CSSProperties}>
               <PosBadge posId={p.id} size={22} muted={!on} />
               {p.name}
-              {i?.lastError ? <span className="rounded-full bg-bad-bg px-1.5 text-[10.5px] font-bold text-bad">lỗi</span> : i && !i.backfillDone && on ? <span className="rounded-full bg-warn-bg px-1.5 text-[10.5px] font-bold text-warn" title="Đang lấy lịch sử cũ">…</span> : null}
+              {flagOf(p.id, on)}
               <span className="ck" aria-hidden="true"><svg viewBox="0 0 12 12" width="9" height="9" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m2.5 6.2 2.3 2.3 4.7-5" /></svg></span>
             </button>
           </Tooltip>
         );
       })}
-      <button type="button" className="link shrink-0 text-[12.5px]" onClick={() => onChange(visible.map((p) => p.id))}>Tất cả</button>
+      <button type="button" className="link shrink-0 text-[12.5px]" onClick={selectAll}>Tất cả</button>
     </div>
-      {/* Lựa chọn POS dùng chung mọi trang và nhớ qua lần mở sau (app/pos-store.ts). */}
-      {visible.some((p) => !posIds.includes(p.id)) && <span className="text-[11.5px] text-ink-3">Đang lọc {posIds.filter((id) => visible.some((p) => p.id === id)).length}/{visible.length} POS, giữ nguyên khi sang trang khác</span>}
+      {filterNote}
     </div>
   );
 }
+
+/** Số từng POS cho thẻ kiểu b: "Doanh thu đơn chốt" (current.byPos[].closedNet) và kỳ so sánh (compare.byPos[].closedNet) của chính báo cáo
+ *  tổng quan trang đã tải. Không tính mới; POS không có trong dữ liệu (đang bỏ chọn) thì thẻ không hiện số. */
+export const posNumsOf = (r: OverviewReport): PosNums => ({
+  label: 'Doanh thu đơn chốt', format: shortMoney,
+  rows: r.current.byPos.map((p) => ({ posId: p.posId, value: p.closedNet, prev: r.compare?.byPos.find((x) => x.posId === p.posId)?.closedNet ?? null })),
+});
 
 export function OverviewView({ onNavigate, canRewriteAi = false, uiMoi = false }: {
   /** Mở trang khác từ ngăn kéo chi tiết của 4 bảng. */ onNavigate?: (view: string) => void; /** Chủ hệ thống: nút Viết lại nhận xét AI. */ canRewriteAi?: boolean;
@@ -761,7 +835,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false, uiMoi = false }
     }
     return (
       <div className="min-w-0 space-y-4">
-        <PageHeadMoi title="Tổng quan POS" scope={scope} tools={periodEl} right={actionsEl} pos={<PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />} />
+        <PageHeadMoi title="Tổng quan POS" scope={scope} tools={periodEl} right={actionsEl} pos={<PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} nums={report ? posNumsOf(report) : undefined} />} />
         {segRow()}
         <OrderOriginFilter team={team} marketers={report?.origins} />
         {backfillNote()}

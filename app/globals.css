@@ -1198,9 +1198,39 @@ html.ui-moi-root:not(.dark) .skel { background: linear-gradient(90deg, var(--sur
 .ui-moi-root .phm-pos .poschip { height: auto; padding: 5px 12px; gap: 5px; border: 0; border-radius: 9px; background: var(--surface); color: var(--ink); font-size: 13px; font-weight: 600; box-shadow: 0 1px 2px rgb(14 21 18 / .12); }
 .ui-moi-root .phm-pos .poschip:is(.is-off, .posrow:not(:has(.is-off)) *) { background: transparent; color: var(--ink-2); font-weight: 500; box-shadow: none; }
 .ui-moi-root .phm-pos .poschip:hover { color: var(--ink); }
-.ui-moi-root .phm-pos .poschip :is(.posb, .ck) { display: none; }
+/* Kiểu a: giữ icon riêng từng POS (PosBadge 22px màu POS, xám khi bỏ chọn) trước tên; chỉ ẩn dấu tích nhỏ vì mục chọn đã nổi trắng (mốc 6). */
+.ui-moi-root .phm-pos .poschip .ck { display: none; }
 .ui-moi-root .phm-pos .posrow > .link { order: -1; padding: 5px 12px; border-radius: 9px; color: var(--ink-2); font-size: 13px; font-weight: 500; text-decoration: none; }
 .ui-moi-root .phm-pos .posrow:not(:has(.is-off)) > .link { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgb(14 21 18 / .12); }
+/* TẠM (mốc 6): kiểu b "Thẻ POS có số" và kiểu c "Dải icon tròn" (PosChips, app/overview-view.tsx; công tắc app/pos-chon-moi.tsx). Anh chọn xong thì xoá kiểu thừa. */
+.ui-moi-root .phm-pos:has(.pos-cards, .pos-dock) { flex-basis: 100%; }
+/* b: một hàng thẻ chia đều (Tất cả + từng POS), từ 64rem trở lên không cuộn ngang; hẹp hơn thì cuộn ngang trong chính hàng thẻ. */
+.ui-moi-root .pos-cards { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 8px; min-width: 0; }
+@media (width < 64rem) { .ui-moi-root .pos-cards { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 8.5rem; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; } }
+.ui-moi-root .pos-card { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; padding: 10px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); text-align: left; transition: border-color .15s, background .15s; }
+.ui-moi-root .pos-card:hover { border-color: var(--line-3); }
+.ui-moi-root .pos-card:focus-visible, .ui-moi-root .pos-dot:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.ui-moi-root .pos-card[aria-pressed="true"] { border-color: var(--brand); }
+.ui-moi-root .pos-card[aria-pressed="true"]::after { content: "✓"; position: absolute; top: 8px; right: 8px; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--brand); color: #fff; font-size: 11px; font-weight: 700; }
+.ui-moi-root .pos-card[aria-pressed="false"] { background: transparent; }
+.ui-moi-root .pos-card[aria-pressed="false"] :is(.pos-card-nm, .pos-card-v) { opacity: .6; }
+.ui-moi-root .pos-card-nm { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding-right: 18px; font-size: 12.5px; font-weight: 600; line-height: 1.3; white-space: normal; overflow-wrap: anywhere; }
+.ui-moi-root .pos-card-v { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; font-size: 12px; color: var(--ink-2); }
+.ui-moi-root .pos-card-v b { font-size: 13.5px; font-weight: 700; color: var(--ink); letter-spacing: -.01em; }
+.ui-moi-root .pos-card-all { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: var(--surface-2); color: var(--ink-3); }
+.ui-moi-root .pos-card.is-all[aria-pressed="true"] .pos-card-all { background: var(--ink); color: var(--surface); }
+/* c: icon tròn 46px, tên 11.5px bên dưới; POS đang chọn có vòng 2.5px màu --brand; "Tất cả" đứng đầu. */
+.ui-moi-root .pos-dock { display: flex; flex-wrap: wrap; gap: 6px 10px; min-width: 0; }
+@media (width < 40rem) { .ui-moi-root .pos-dock { flex-wrap: nowrap; overflow-x: auto; padding: 4px 2px; scrollbar-width: thin; } }
+.ui-moi-root .pos-dot { position: relative; display: flex; flex: none; flex-direction: column; align-items: center; gap: 6px; width: 4.75rem; padding: 4px 2px; border-radius: 12px; color: var(--ink-3); }
+.ui-moi-root .pos-dot .posb, .ui-moi-root .pos-dot-all { border-radius: 50%; transition: box-shadow .15s; }
+.ui-moi-root .pos-dot[aria-pressed="true"] :is(.posb, .pos-dot-all) { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4.5px var(--brand); }
+.ui-moi-root .pos-dot-all { display: grid; place-items: center; width: 46px; height: 46px; background: var(--surface-2); color: var(--ink-2); }
+.ui-moi-root .pos-dot.is-all[aria-pressed="true"] .pos-dot-all { background: var(--ink); color: var(--surface); }
+.ui-moi-root .pos-dot-nm { font-size: 11.5px; font-weight: 500; line-height: 1.25; text-align: center; overflow-wrap: anywhere; }
+.ui-moi-root .pos-dot[aria-pressed="true"] .pos-dot-nm { color: var(--ink); font-weight: 600; }
+.ui-moi-root .pos-dot > .rounded-full { position: absolute; top: 0; right: 6px; }
+@media (prefers-reduced-motion: reduce) { .ui-moi-root :is(.pos-card, .pos-dot .posb, .pos-dot-all) { transition: none; } }
 
 /* (E) Việc cần xử lý (CanXemStrip): thẻ trắng, ô icon 34px bo 10 (đỏ nhạt / vàng nhạt), tên đậm, lý do chữ phụ, một nút nhỏ đen, nhãn trạng thái bên phải. */
 .ui-moi-root .todo { display: flex; align-items: flex-start; gap: 12px; min-width: 0; padding: 14px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }

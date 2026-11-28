@@ -17,7 +17,7 @@ import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartToo
 import { Input } from '@/components/ui/input';
 import { POS } from '@/lib/shared/report-model';
 import { addDays, todayVn } from '@/lib/shared/report-time';
-import { GoalCell, PosChips, type OverviewReport } from './overview-view';
+import { GoalCell, PosChips, posNumsOf, type OverviewReport } from './overview-view';
 import { Th,
   ChartCard, DeltaPill, ErrorBox, FoldBlock, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SortTh, STATUS_VARS, StatusChip, TableWrap, Toolbar,
   delta, dmy, dt, money, pct, posColor, posName, posVar, short, shortMoney, toast, useMotionOK, useSort, vi, type TipRows, barRadius,
@@ -426,7 +426,7 @@ export function MonthlyView({ onNavigate, uiMoi = false }: { /** Mở trang khá
     return (
       <div className="min-w-0 space-y-4">
         <PageHeadMoi title="Báo cáo cuối tháng" scope={scope} hint="So với tháng trước · số liệu Pancake tại lúc đồng bộ" tools={toolbarEl}
-          right={<>{badgeEl()}{headEl}</>} pos={<PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />} />
+          right={<>{badgeEl()}{headEl}</>} pos={<PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} nums={report ? posNumsOf(report) : undefined} />} />
         {error && !report && <ErrorBox error={error} onRetry={reload} />}
         {!report && !error && <SkeletonKpis count={5} className="xl:grid-cols-5" />}
         {report && cur && (
