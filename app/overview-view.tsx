@@ -16,7 +16,7 @@ import { RATE_BASES, closeRateBase, closeRateOf, closeRateTop, rateLevel, rateTe
 import { BOSS_CANCEL_RED, BOSS_CLOSE_RED, BOSS_RETURN_RED, COACH_MIN_BASE } from '@/lib/zalo/boss-report';
 import { CanXemStrip, PageHeadMoi, WhySheet, overCancel, overClose, overRet, tileGrid, type CanXemItem, type WhySpec } from './trang-moi';
 import { useMetricSettings } from './metric-settings';
-import { PosKieuContext, type PosNums } from './pos-chon-moi';
+import { PosVienContext, type PosNums } from './pos-chon-moi';
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 import { ArrowRight, BarChart3, CalendarDays, CheckCircle2, ClipboardList, Eye, FileCheck2, LayoutGrid, PackageCheck, RotateCcw, ShoppingCart } from 'lucide-react';
@@ -169,28 +169,34 @@ export function PeriodToolbar(props: {
 }
 
 // Hàng nút bấm từng POS, xổ sẵn để chọn nhanh (anh Vũ 21/10/2026 bỏ ô thả xuống "Tất cả n POS" vì khó dùng).
-// Đầu trang kiểu mới (cờ THP_UI_MOI, PageHeadMoi đặt PosKieuContext): TẠM ba kiểu trình bày a / b / c để anh chọn (app/pos-chon-moi.tsx);
-// cùng một cách chọn (bật / tắt từng POS, Tất cả, không bỏ được POS cuối), cùng tooltip đồng bộ và nhãn lỗi. Ngoài đầu trang kiểu mới (context null) vẽ y như cũ.
-// nums: số từng POS trang đã tải sẵn (chỉ thẻ kiểu b hiện), không tính mới.
+// Đầu trang kiểu mới (cờ THP_UI_MOI, PageHeadMoi đặt PosVienContext): kiểu E "Viên POS màu" anh chọn 28/11/2026 (app/pos-chon-moi.tsx);
+// cùng một cách chọn (bật / tắt từng POS, Tất cả, không bỏ được POS cuối), cùng tooltip đồng bộ và nhãn lỗi. Ngoài đầu trang kiểu mới vẽ y như cũ.
+// nums: số từng POS trang đã tải sẵn (hiện dưới tên POS ở kiểu E), không tính mới.
 export function PosChips({ posIds, onChange, info, nums }: { posIds: string[]; onChange: (v: string[]) => void; info?: OverviewReport['pos']; nums?: PosNums }) {
   const scope = useScope();
-  const kieu = useContext(PosKieuContext);
+  const vien = useContext(PosVienContext);
   const visible = scopedPos(scope);
   if (visible.length <= 1) return null;
   const toggle = (id: string) => { const on = posIds.includes(id); onChange(on ? (posIds.length > 1 ? posIds.filter((x) => x !== id) : posIds) : [...posIds, id]); };
   const selectAll = () => onChange(visible.map((p) => p.id));
   const tipOf = (id: string, name: string) => {
     const i = info?.find((x) => x.id === id);
+    // Kiểu E: dòng "<tên số>: <số>, so kỳ trước <tăng giảm>" từ nums (chỉ ở đầu trang kiểu mới; ngoài đó vien = false nên tooltip y như cũ).
+    const n = vien && nums ? nums.rows.find((r) => r.posId === id) : undefined;
+    const d = n ? delta(n.value, n.prev) : null;
+    const numLine = n && nums ? <span className="how block whitespace-normal">{`${nums.label}: ${nums.format(n.value)}${d === null ? '' : `, so kỳ trước ${deltaText(d)}`}`}</span> : null;
+    if (!i) return numLine ? <><b>{name}</b>{numLine}</> : null;
     // Trạng thái kết nối / đồng bộ / lịch sử hiện trong tooltip (rê chuột, focus, chạm) thay vì title chỉ hiện khi rê chuột.
-    return i ? (
+    return (
       <>
         <b>{name}</b>
+        {numLine}
         <span className="r"><span>Trạng thái</span><span>{i.lastError ? 'Lỗi đồng bộ' : i.status === 'connected' ? 'Đã kết nối' : i.status}</span></span>
         <span className="r"><span>Đồng bộ</span><span className="num">{dt(i.syncedAt, true)}</span></span>
         <span className="r"><span>Lịch sử</span><span>{i.backfillDone ? 'Đã lấy đủ' : i.backfillMonth ? `đang lấy tháng ${i.backfillMonth.slice(5)}/${i.backfillMonth.slice(0, 4)}` : 'chưa lấy'}</span></span>
         {i.lastError && <span className="how block whitespace-normal">Lỗi: {i.lastError}</span>}
       </>
-    ) : null;
+    );
   };
   const flagOf = (id: string, on: boolean) => {
     const i = info?.find((x) => x.id === id);
@@ -199,29 +205,24 @@ export function PosChips({ posIds, onChange, info, nums }: { posIds: string[]; o
   // Lựa chọn POS dùng chung mọi trang và nhớ qua lần mở sau (app/pos-store.ts).
   const filterNote = visible.some((p) => !posIds.includes(p.id)) && <span className="text-[11.5px] text-ink-3">Đang lọc {posIds.filter((id) => visible.some((p) => p.id === id)).length}/{visible.length} POS, giữ nguyên khi sang trang khác</span>;
   const all = visible.every((p) => posIds.includes(p.id));
-  // Chọn đủ POS: chỉ thẻ / vòng "Tất cả" có dấu chọn (is-all-on), các POS hiện màu bình thường không dấu tích; aria-pressed vẫn đúng trạng thái thật.
-  if (kieu === 'b') {
-    // Thẻ "Tất cả": tổng các dòng số đang có, CHỈ khi chọn đủ POS (lúc đó các dòng là đủ mọi POS). Đang lọc thì để trống, vì tổng đó
-    // chỉ là của POS đang chọn mà nằm dưới chữ "Tất cả" dễ đọc nhầm. Cộng các số trang đã tải, không gọi API.
-    const allSum = nums && all && nums.rows.length ? nums.rows.reduce((t, r) => t + r.value, 0) : null;
+  if (vien) {
+    // Kiểu E "Viên POS màu": chọn đủ POS thì chỉ viên "Tất cả" sáng (is-all-on), các POS hiện bình thường; đang lọc thì POS chọn sáng màu riêng,
+    // POS bỏ chọn chìm xám. aria-pressed luôn là trạng thái thật. Số dưới tên: nums (dữ liệu trang đã tải), tooltip ghi tên số + so kỳ trước.
     return (
       <div className="flex min-w-0 flex-col gap-1">
-        <div className={`pos-cards ${all ? 'is-all-on' : ''}`} style={{ '--n': visible.length + 1 } as React.CSSProperties}>
-          <button type="button" aria-pressed={all} className="pos-card is-all" onClick={selectAll}>
-            <span className="pos-card-all" aria-hidden="true"><LayoutGrid size={15} /></span>
-            <span className="pos-card-nm">Tất cả</span>
-            {allSum !== null && nums && <span className="pos-card-v"><span className="pos-card-lb">{nums.label}</span><b className="num">{nums.format(allSum)}</b></span>}
+        <div className={`pos-vien ${all ? 'is-all-on' : ''}`}>
+          <button type="button" aria-pressed={all} className="pos-v is-all" onClick={selectAll}>
+            <span className="pos-v-all" aria-hidden="true"><LayoutGrid size={15} /></span>
+            <span className="pos-v-tx"><b>Tất cả</b><span className="num">{vi.format(visible.length)} POS</span></span>
           </button>
           {visible.map((p) => {
             const on = posIds.includes(p.id);
             const n = nums?.rows.find((r) => r.posId === p.id);
-            const d = n ? delta(n.value, n.prev) : null;
             return (
               <Tooltip key={p.id} content={tipOf(p.id, p.name)}>
-                <button type="button" aria-pressed={on} onClick={() => toggle(p.id)} className="pos-card" style={{ '--c': posVar(p.id) } as React.CSSProperties}>
-                  <PosBadge posId={p.id} size={28} solid={on} muted={!on} />
-                  <span className="pos-card-nm">{p.name}{flagOf(p.id, on)}</span>
-                  {n && nums && <span className="pos-card-v"><span className="pos-card-lb">{nums.label}</span><b className="num">{nums.format(n.value)}</b>{d !== null && <DeltaPill value={d} variant="plain" />}</span>}
+                <button type="button" aria-pressed={on} onClick={() => toggle(p.id)} className="pos-v" style={{ '--c': posVar(p.id) } as React.CSSProperties}>
+                  <PosBadge posId={p.id} size={30} />
+                  <span className="pos-v-tx"><b>{p.name}{flagOf(p.id, on)}</b>{n && nums && <span className="num">{nums.format(n.value)}</span>}</span>
                 </button>
               </Tooltip>
             );
@@ -231,31 +232,7 @@ export function PosChips({ posIds, onChange, info, nums }: { posIds: string[]; o
       </div>
     );
   }
-  if (kieu === 'c') {
-    return (
-      <div className="flex min-w-0 flex-col gap-1">
-        <div className={`pos-dock ${all ? 'is-all-on' : ''}`}>
-          <button type="button" aria-pressed={all} className="pos-dot is-all" onClick={selectAll}>
-            <span className="pos-dot-all" aria-hidden="true"><LayoutGrid size={20} /></span>
-            <span className="pos-dot-nm">Tất cả</span>
-          </button>
-          {visible.map((p) => {
-            const on = posIds.includes(p.id);
-            return (
-              <Tooltip key={p.id} content={tipOf(p.id, p.name)}>
-                <button type="button" aria-pressed={on} onClick={() => toggle(p.id)} className="pos-dot" style={{ '--c': posVar(p.id) } as React.CSSProperties}>
-                  <PosBadge posId={p.id} size={46} solid={on} muted={!on} />
-                  <span className="pos-dot-nm">{p.name}</span>{flagOf(p.id, on)}
-                </button>
-              </Tooltip>
-            );
-          })}
-        </div>
-        {filterNote}
-      </div>
-    );
-  }
-  // Kiểu cũ (và kiểu a ở đầu trang kiểu mới: CSS .phm-pos vẽ thành hàng nút sáng, icon màu POS 22px, mục chọn nổi trắng).
+  // Kiểu cũ (ngoài đầu trang kiểu mới).
   return (
     // Một dòng duy nhất (anh Vũ 21/10/2026 "đừng chia 2 dòng"): màn hẹp thì vuốt ngang.
     <div className="flex min-w-0 flex-col gap-1">
@@ -283,10 +260,10 @@ export function PosChips({ posIds, onChange, info, nums }: { posIds: string[]; o
   );
 }
 
-/** Số từng POS cho thẻ kiểu b: "Doanh thu đơn chốt" (current.byPos[].closedNet) và kỳ so sánh (compare.byPos[].closedNet) của chính báo cáo
+/** Số từng POS cho viên POS (kiểu E, dạng rút gọn "43,1 tr"): "Doanh thu đơn chốt" (current.byPos[].closedNet) và kỳ so sánh (compare.byPos[].closedNet) của chính báo cáo
  *  tổng quan trang đã tải. Không tính mới; POS không có trong dữ liệu (đang bỏ chọn) thì thẻ không hiện số. */
 export const posNumsOf = (r: OverviewReport): PosNums => ({
-  label: 'Doanh thu đơn chốt', format: shortMoney,
+  label: 'Doanh thu đơn chốt', format: short,
   rows: r.current.byPos.map((p) => ({ posId: p.posId, value: p.closedNet, prev: r.compare?.byPos.find((x) => x.posId === p.posId)?.closedNet ?? null })),
 });
 

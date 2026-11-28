@@ -981,7 +981,7 @@ table th { white-space: nowrap; font-weight: 600; font-size: 11.5px; letter-spac
   .ui-moi-root .seg-btn { border-radius: 9px; padding: 5px 12px; font-size: 13px; color: var(--ink-2); font-weight: 500; }
   .ui-moi-root .seg-btn.is-active { color: var(--ink); font-weight: 600; }
 
-  /* Hàng POS: cùng kiểu hàng nút với chọn kỳ (xem .phm-pos ở khối "Bộ thiết kế" cuối file); ngoài đầu trang chỉ đổi bo */
+  /* Hàng POS: đầu trang kiểu mới vẽ thành viên POS màu (khối (D) "Bộ thiết kế" cuối file); ngoài đầu trang chỉ đổi bo */
   .ui-moi-root .posrow { flex-wrap: nowrap; overflow-x: auto; }
   .ui-moi-root .poschip { border-radius: 10px; }
 
@@ -1190,54 +1190,38 @@ html.ui-moi-root:not(.dark) .kpi.kpi-bad { border-color: #efc4bc; background: #f
 .ui-moi-root :is(.kpi.is-loading, .is-loading > .kpi)::before { display: none; }
 html.ui-moi-root:not(.dark) .skel { background: linear-gradient(90deg, var(--surface-2) 30%, #e7eae8 50%, var(--surface-2) 70%) 0 0 / 200% 100%; border-radius: 6px; }
 
-/* (D) Đầu trang (PageHeadMoi): thanh chọn kỳ nằm phẳng trên nền trang (không khung thẻ); hàng POS thành hàng nút như chọn kỳ:
-   nền #f1f3f2, mục đang chọn nổi trắng. "Tất cả" đứng đầu và sáng khi chọn đủ POS (lúc đó các POS lẻ không sáng). */
+/* (D) Đầu trang (PageHeadMoi): thanh chọn kỳ nằm phẳng trên nền trang (không khung thẻ); hàng POS kiểu E "Viên POS màu" (mốc 7, anh chọn 28/11/2026):
+   viên bo tròn cao 44px, icon tròn 30px, tên 12.5px không xuống dòng + dòng số 11px chữ phụ (nums; trang không có số thì chỉ tên, căn giữa).
+   Chọn đủ POS: chỉ "Tất cả" sáng (viền + vòng 1px --brand, nền --brand 9%, icon đặc --brand); các POS bình thường.
+   Đang lọc: POS chọn sáng màu riêng (viền + vòng 1px, nền 9%, icon đặc), POS bỏ chọn nền trong, mờ 50%, xám. Mọi màu trộn với --surface nên theo nền sáng / tối. */
 .ui-moi-root .phm-tools .toolbar { background: transparent; border: 0; box-shadow: none; padding: 0; }
-.ui-moi-root .phm-pos .posrow { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; margin: 0; border-radius: 11px; background: var(--surface-2); overflow: visible; width: fit-content; max-width: 100%; }
-.ui-moi-root .phm-pos .posrow > span:first-child { display: none; }
-.ui-moi-root .phm-pos .poschip { height: auto; padding: 5px 12px; gap: 5px; border: 0; border-radius: 9px; background: var(--surface); color: var(--ink); font-size: 13px; font-weight: 600; box-shadow: 0 1px 2px rgb(14 21 18 / .12); }
-.ui-moi-root .phm-pos .poschip:is(.is-off, .posrow:not(:has(.is-off)) *) { background: transparent; color: var(--ink-2); font-weight: 500; box-shadow: none; }
-.ui-moi-root .phm-pos .poschip:hover { color: var(--ink); }
-/* Kiểu a: giữ icon riêng từng POS (PosBadge 22px màu POS, xám khi bỏ chọn) trước tên; chỉ ẩn dấu tích nhỏ vì mục chọn đã nổi trắng (mốc 6). */
-.ui-moi-root .phm-pos .poschip .ck { display: none; }
-.ui-moi-root .phm-pos .posrow > .link { order: -1; padding: 5px 12px; border-radius: 9px; color: var(--ink-2); font-size: 13px; font-weight: 500; text-decoration: none; }
-.ui-moi-root .phm-pos .posrow:not(:has(.is-off)) > .link { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgb(14 21 18 / .12); }
-/* TẠM (mốc 6): kiểu b "Thẻ POS có số" và kiểu c "Dải icon tròn" (PosChips, app/overview-view.tsx; công tắc app/pos-chon-moi.tsx). Anh chọn xong thì xoá kiểu thừa. */
-.ui-moi-root .phm-pos:has(.pos-cards, .pos-dock) { flex-basis: 100%; }
-/* b: một hàng thẻ chia đều (Tất cả + từng POS), từ 64rem trở lên không cuộn ngang; hẹp hơn thì cuộn ngang trong chính hàng thẻ. */
-.ui-moi-root .pos-cards { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 8px; min-width: 0; }
-@media (width < 64rem) { .ui-moi-root .pos-cards { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 8.5rem; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; } }
-.ui-moi-root .pos-card { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; padding: 10px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); text-align: left; transition: border-color .15s, background .15s; }
-.ui-moi-root .pos-card:hover { border-color: var(--line-3); }
-.ui-moi-root .pos-card:focus-visible, .ui-moi-root .pos-dot:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
-.ui-moi-root .pos-card[aria-pressed="true"] { border-color: var(--brand); }
-.ui-moi-root .pos-card[aria-pressed="true"]::after { content: "✓"; position: absolute; top: 8px; right: 8px; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--brand); color: #fff; font-size: 11px; font-weight: 700; }
-.ui-moi-root .pos-card[aria-pressed="false"] { background: transparent; }
-.ui-moi-root .pos-card[aria-pressed="false"] :is(.pos-card-nm, .pos-card-v) { opacity: .6; }
-.ui-moi-root .pos-card-nm { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding-right: 18px; font-size: 12.5px; font-weight: 600; line-height: 1.3; white-space: normal; overflow-wrap: anywhere; }
-.ui-moi-root .pos-card-v { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; font-size: 12px; color: var(--ink-2); }
-.ui-moi-root .pos-card-v b { font-size: 13.5px; font-weight: 700; color: var(--ink); letter-spacing: -.01em; }
-.ui-moi-root .pos-card-all { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: var(--surface-2); color: var(--ink-3); }
-.ui-moi-root .pos-card.is-all[aria-pressed="true"] .pos-card-all { background: var(--brand); color: #fff; }
-.ui-moi-root .pos-card-lb { flex-basis: 100%; font-size: 11px; font-weight: 400; color: var(--ink-3); }
-/* Chọn đủ POS (mốc 6b): chỉ thẻ "Tất cả" có viền + dấu tích; thẻ POS hiện màu bình thường, viền mảnh, không dấu tích. */
-.ui-moi-root .pos-cards.is-all-on .pos-card:not(.is-all) { border-color: var(--line); }
-.ui-moi-root .pos-cards.is-all-on .pos-card:not(.is-all)::after { display: none; }
-/* c: icon tròn 46px, tên 11.5px bên dưới; POS đang chọn có vòng 2.5px màu --brand; "Tất cả" đứng đầu. */
-.ui-moi-root .pos-dock { display: flex; flex-wrap: wrap; gap: 6px 10px; min-width: 0; }
-@media (width < 40rem) { .ui-moi-root .pos-dock { flex-wrap: nowrap; overflow-x: auto; padding: 4px 2px; scrollbar-width: thin; } }
-.ui-moi-root .pos-dot { position: relative; display: flex; flex: none; flex-direction: column; align-items: center; gap: 6px; width: 4.75rem; padding: 4px 2px; border-radius: 12px; color: var(--ink-3); }
-.ui-moi-root .pos-dot .posb, .ui-moi-root .pos-dot-all { border-radius: 50%; transition: box-shadow .15s; }
-.ui-moi-root .pos-dot[aria-pressed="true"] :is(.posb, .pos-dot-all) { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4.5px var(--brand); }
-.ui-moi-root .pos-dot-all { display: grid; place-items: center; width: 46px; height: 46px; background: var(--surface-2); color: var(--ink-2); }
-.ui-moi-root .pos-dot.is-all[aria-pressed="true"] .pos-dot-all { background: var(--brand); color: #fff; }
-/* Chọn đủ POS: chỉ "Tất cả" có vòng; các POS hiện màu bình thường không vòng, tên chữ thường. */
-.ui-moi-root .pos-dock.is-all-on .pos-dot:not(.is-all) .posb { box-shadow: none; }
-.ui-moi-root .pos-dock.is-all-on .pos-dot:not(.is-all) .pos-dot-nm { color: var(--ink-2); font-weight: 500; }
-.ui-moi-root .pos-dot-nm { font-size: 11.5px; font-weight: 500; line-height: 1.25; text-align: center; overflow-wrap: anywhere; }
-.ui-moi-root .pos-dot[aria-pressed="true"] .pos-dot-nm { color: var(--ink); font-weight: 600; }
-.ui-moi-root .pos-dot > .rounded-full { position: absolute; top: 0; right: 6px; }
-@media (prefers-reduced-motion: reduce) { .ui-moi-root :is(.pos-card, .pos-dot .posb, .pos-dot-all) { transition: none; } }
+.ui-moi-root .phm-pos:has(.pos-vien) { flex-basis: 100%; }
+.ui-moi-root .pos-vien { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.ui-moi-root .pos-v { --c: var(--brand); display: inline-flex; flex: none; align-items: center; gap: 8px; height: 44px; padding: 0 16px 0 7px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); text-align: left; transition: border-color .15s, background .15s, box-shadow .15s, opacity .15s; }
+.ui-moi-root .pos-v:hover { border-color: color-mix(in srgb, var(--c) 45%, var(--surface)); }
+.ui-moi-root .pos-v:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.ui-moi-root .pos-v .posb, .ui-moi-root .pos-v-all { display: grid; place-items: center; width: 30px; height: 30px; flex: none; border-radius: 50%; box-shadow: none; filter: none; opacity: 1; transition: background .15s, color .15s; }
+.ui-moi-root .pos-v .posb { background: color-mix(in srgb, var(--c) 13%, var(--surface)); color: var(--c); }
+.ui-moi-root .pos-v .posb svg { width: 18px; height: 18px; }
+.ui-moi-root .pos-v-all { background: color-mix(in srgb, var(--brand) 13%, var(--surface)); color: var(--brand); }
+.ui-moi-root .pos-v-tx { display: flex; flex-direction: column; justify-content: center; min-width: 0; line-height: 1.25; }
+.ui-moi-root .pos-v-tx > b { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.ui-moi-root .pos-v-tx > span { font-size: 11px; color: var(--ink-3); white-space: nowrap; }
+/* Đang lọc: POS chọn sáng màu riêng; POS bỏ chọn chìm. */
+.ui-moi-root .pos-vien:not(.is-all-on) .pos-v[aria-pressed="true"] { border-color: var(--c); box-shadow: 0 0 0 1px var(--c); background: color-mix(in srgb, var(--c) 9%, var(--surface)); }
+.ui-moi-root .pos-vien:not(.is-all-on) .pos-v[aria-pressed="true"] .posb { background: var(--c); color: #fff; }
+.ui-moi-root .pos-vien:not(.is-all-on) .pos-v:not(.is-all)[aria-pressed="false"] { background: transparent; }
+.ui-moi-root .pos-vien:not(.is-all-on) .pos-v:not(.is-all)[aria-pressed="false"] > * { opacity: .5; filter: grayscale(1); }
+/* Chọn đủ POS: chỉ "Tất cả" sáng. */
+.ui-moi-root .pos-vien.is-all-on .pos-v.is-all { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand); background: color-mix(in srgb, var(--brand) 9%, var(--surface)); }
+.ui-moi-root .pos-vien.is-all-on .pos-v.is-all .pos-v-all { background: var(--brand); color: #fff; }
+/* 1366–1600px: 7 viên vẫn một hàng, bớt lề / khoảng cách (không cắt tên). Dưới 85.375rem (1366px) được xuống hàng. */
+@media (85.375rem <= width < 100rem) {
+  .ui-moi-root .pos-vien { gap: 6px; }
+  .ui-moi-root .pos-v { gap: 6px; padding: 0 12px 0 6px; }
+  .ui-moi-root .pos-v-tx > b { font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { .ui-moi-root :is(.pos-v, .pos-v .posb, .pos-v-all) { transition: none; } }
 
 /* (E) Việc cần xử lý (CanXemStrip): thẻ trắng, ô icon 34px bo 10 (đỏ nhạt / vàng nhạt), tên đậm, lý do chữ phụ, một nút nhỏ đen, nhãn trạng thái bên phải. */
 .ui-moi-root .todo { display: flex; align-items: flex-start; gap: 12px; min-width: 0; padding: 14px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }

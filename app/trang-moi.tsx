@@ -8,7 +8,7 @@
 import { useState, type ReactNode } from 'react';
 import { AlertTriangle, Info, type LucideIcon } from 'lucide-react';
 import { ICON } from './icons';
-import { KieuPosSwitch, PosKieuContext, useKieuPos } from './pos-chon-moi';
+import { PosVienContext } from './pos-chon-moi';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { BOSS_CANCEL_RED, BOSS_CLOSE_RED, BOSS_RETURN_RED } from '@/lib/zalo/boss-report';
 
@@ -20,8 +20,6 @@ import { BOSS_CANCEL_RED, BOSS_CLOSE_RED, BOSS_RETURN_RED } from '@/lib/zalo/bos
  *  Màn hẹp hơn cả hàng (điện thoại) thì nút tự xuống hàng trong ô.
  *  Khối tên + phạm vi tối thiểu 28rem: thiếu chỗ thì nằm riêng một dòng để dòng phạm vi giãn hết bề ngang. */
 export function PageHeadMoi({ title, hint, scope, tools, pos, right }: { title: string; hint?: string; scope: string; tools?: ReactNode; pos?: ReactNode; right?: ReactNode }) {
-  // TẠM (mốc 6): kiểu trình bày hàng POS a / b / c theo công tắc nhỏ, PosChips đọc qua PosKieuContext (app/pos-chon-moi.tsx).
-  const kieu = useKieuPos();
   return (
     <header className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
       <div className="flex min-w-0 flex-[1_1_28rem] flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -30,8 +28,7 @@ export function PageHeadMoi({ title, hint, scope, tools, pos, right }: { title: 
       </div>
       {tools && <div className="phm-tools min-w-0 max-w-full flex-[0_1_auto]">{tools}</div>}
       {right && <div className="flex min-w-0 flex-wrap items-center gap-2">{right}</div>}
-      {pos && <KieuPosSwitch value={kieu} />}
-      {pos && <div className="phm-pos max-w-full flex-[1_0_auto] empty:hidden [&_.posrow]:!flex-wrap [&_.posrow]:!overflow-visible"><PosKieuContext.Provider value={kieu}>{pos}</PosKieuContext.Provider></div>}
+      {pos && <div className="phm-pos max-w-full flex-[1_0_auto] empty:hidden [&_.posrow]:!flex-wrap [&_.posrow]:!overflow-visible"><PosVienContext.Provider value>{pos}</PosVienContext.Provider></div>}
     </header>
   );
 }
